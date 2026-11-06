@@ -3,6 +3,9 @@ const router = express.Router();
 const { getDb } = require('../database/db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const crypto = require('crypto');
+// v3.4.60 -- two brands: email colors come from the brand's theme sheet (public/css/themes/campaignia.css), read once at start-up.
+// Email programs ignore CSS var(), so the server writes the actual color into each email.
+const TC = require('../services/themeColors');
 const EMAIL_ASSET_BASE = (process.env.APP_URL || 'https://chroniclemygame.com').replace(/\/$/, '') + '/images';
 // Point at OUR font sheet, not Google's. Most mail clients strip webfonts entirely, so this is not
 // about reliability -- it is about not handing a third party a request every time someone opens an
@@ -50,16 +53,16 @@ function passwordResetHTML(name, resetUrl) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
-    .header { background: #0a0806; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
-    .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; vertical-align: middle; }
+    body { font-family: Georgia, serif; background: ${TC['panel']}; color: ${TC['accent-pale']}; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: ${TC['page-bg']}; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    .header { background: ${TC['page-bg']}; padding: 32px; text-align: center; border-bottom: 1px solid rgba(${TC['accent-rgb']},0.2); }
+    .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: ${TC['accent']}; letter-spacing: 4px; vertical-align: middle; }
     .body { padding: 32px; }
-    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
-    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
-    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
+    .title { font-size: 20px; color: ${TC['accent']}; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: ${TC['accent-pale']}; margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 14px 32px; background: ${TC['button-cta']}; color: ${TC['on-panel']}; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(${TC['accent-rgb']},0.15); font-size: 12px; color: rgba(${TC['accent-rgb']},0.4); text-align: center; }
+    .divider { width: 40px; height: 1px; background: rgba(${TC['accent-rgb']},0.4); margin: 16px auto; }
   </style>
 </head>
 <body>
@@ -72,7 +75,7 @@ function passwordResetHTML(name, resetUrl) {
       <div style="text-align:center;margin:28px 0;">
         <a href="${resetUrl}" class="btn">Reset My Password</a>
       </div>
-      <div class="text" style="font-size:12px;color:rgba(201,168,76,0.5);">If you didn't request this, you can safely ignore this email. Your password won't change.</div>
+      <div class="text" style="font-size:12px;color:rgba(${TC['accent-rgb']},0.5);">If you didn't request this, you can safely ignore this email. Your password won't change.</div>
     </div>
     <div class="footer">
       campaignia.com &nbsp;·&nbsp; You make it legendary. Campaignia makes it forever.
@@ -92,13 +95,13 @@ function verifyEmailHTML(name, verifyUrl) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    body { font-family: Georgia, serif; background: ${TC['panel']}; color: ${TC['accent-pale']}; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: ${TC['page-bg']}; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
     .body { padding: 32px; }
-    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
-    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .title { font-size: 20px; color: ${TC['accent']}; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: ${TC['accent-pale']}; margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 14px 32px; background: ${TC['button-cta']}; color: ${TC['on-panel']}; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(${TC['accent-rgb']},0.15); font-size: 12px; color: rgba(${TC['accent-rgb']},0.4); text-align: center; }
   </style>
 </head>
 <body>
@@ -111,7 +114,7 @@ function verifyEmailHTML(name, verifyUrl) {
       <div style="text-align:center;margin:28px 0;">
         <a href="${verifyUrl}" class="btn">Confirm my email</a>
       </div>
-      <div class="text" style="font-size:12px;color:rgba(201,168,76,0.5);">Your 30-day free trial begins the moment you confirm. If you didn't create a Campaignia account, you can safely ignore this email.</div>
+      <div class="text" style="font-size:12px;color:rgba(${TC['accent-rgb']},0.5);">Your 30-day free trial begins the moment you confirm. If you didn't create a Campaignia account, you can safely ignore this email.</div>
     </div>
     <div class="footer">
       campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
@@ -131,17 +134,17 @@ function welcomeHTML(name) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
-    .header { background: #0a0806; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
-    .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; vertical-align: middle; }
+    body { font-family: Georgia, serif; background: ${TC['panel']}; color: ${TC['accent-pale']}; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: ${TC['page-bg']}; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    .header { background: ${TC['page-bg']}; padding: 32px; text-align: center; border-bottom: 1px solid rgba(${TC['accent-rgb']},0.2); }
+    .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: ${TC['accent']}; letter-spacing: 4px; vertical-align: middle; }
     .body { padding: 32px; }
-    .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
-    .feature { padding: 10px 14px; background: rgba(201,168,76,0.06); margin-bottom: 8px; font-size: 13px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
-    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
-    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .title { font-size: 22px; color: ${TC['accent']}; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: ${TC['accent-pale']}; margin-bottom: 16px; }
+    .feature { padding: 10px 14px; background: rgba(${TC['accent-rgb']},0.06); margin-bottom: 8px; font-size: 13px; }
+    .btn { display: inline-block; padding: 14px 32px; background: ${TC['button-cta']}; color: ${TC['on-panel']}; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .divider { width: 40px; height: 1px; background: rgba(${TC['accent-rgb']},0.4); margin: 16px auto; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(${TC['accent-rgb']},0.15); font-size: 12px; color: rgba(${TC['accent-rgb']},0.4); text-align: center; }
   </style>
 </head>
 <body>
@@ -287,8 +290,8 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
     ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
     : 'your character';
   const charBlock = character_name
-    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Playing as</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>`
+    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);margin-top:10px;">Playing as</div>
+        <div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${charLine}</div>`
     : '';
   const expiresDate = expires_at ? new Date(expires_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '';
   // Inline styles: strict mail clients strip <head><style>, so style every element directly.
@@ -299,25 +302,25 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
-<body style="margin:0;padding:24px 0;background:#1a1008;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+<body style="margin:0;padding:24px 0;background:${TC['panel']};">
+  <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
-      <div style="font-size:20px;color:#c9a84c;margin-bottom:12px;">${dm_name} invited you to a campaign</div>
-      <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">A place in the story awaits you.</div>
-      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Campaign</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
+      <div style="font-size:20px;color:${TC['accent']};margin-bottom:12px;">${dm_name} invited you to a campaign</div>
+      <div style="font-size:14px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:20px;">A place in the story awaits you.</div>
+      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(${TC['accent-rgb']},0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);">Campaign</div>
+        <div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${campaign_name}</div>
         ${charBlock}
-        ${expiresDate ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Invitation expires</div><div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${expiresDate}</div>` : ''}
+        ${expiresDate ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);margin-top:10px;">Invitation expires</div><div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${expiresDate}</div>` : ''}
       </div>
       <div style="text-align:center;margin:28px 0;">
-        <a href="${invite_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Accept Invitation</a>
+        <a href="${invite_url}" style="display:inline-block;padding:14px 32px;background:${TC['button-cta']};color:${TC['on-panel']};text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Accept Invitation</a>
       </div>
-      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">If you don't have a Campaignia account yet, the link will let you create one and join in the same step.</div>
-      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">If the button doesn't work, paste this link into your browser:<br/><span style="color:#c9a84c;word-break:break-all;">${invite_url}</span></div>
+      <div style="font-size:12px;line-height:1.7;color:rgba(${TC['accent-rgb']},0.55);margin-bottom:20px;">If you don't have a Campaignia account yet, the link will let you create one and join in the same step.</div>
+      <div style="font-size:12px;line-height:1.7;color:rgba(${TC['accent-rgb']},0.55);margin-bottom:20px;">If the button doesn't work, paste this link into your browser:<br/><span style="color:${TC['accent']};word-break:break-all;">${invite_url}</span></div>
     </div>
-    <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
+    <div style="padding:20px 32px;border-top:1px solid rgba(${TC['accent-rgb']},0.15);font-size:12px;color:rgba(${TC['accent-rgb']},0.4);text-align:center;">
       campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
     </div>
   </div>
@@ -330,13 +333,13 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
     ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
     : 'a character';
   const charBlock = character_name
-    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Now playing</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>`
+    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);margin-top:10px;">Now playing</div>
+        <div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${charLine}</div>`
     : '';
   const bonusBlock = (bonus_tokens && bonus_tokens > 0)
-    ? `<div style="background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.4);border-radius:0;padding:18px;margin:16px 0;text-align:center;">
-        <div style="font-size:18px;color:#c9a84c;font-weight:700;">You earned ${bonus_tokens} free tokens!</div>
-        <div style="font-size:13px;line-height:1.6;color:#e8d5a3;margin-top:6px;">Our thanks for bringing a new adventurer to Campaignia. They are already in your balance.</div>
+    ? `<div style="background:rgba(${TC['accent-rgb']},0.12);border:1px solid rgba(${TC['accent-rgb']},0.4);border-radius:0;padding:18px;margin:16px 0;text-align:center;">
+        <div style="font-size:18px;color:${TC['accent']};font-weight:700;">You earned ${bonus_tokens} free tokens!</div>
+        <div style="font-size:13px;line-height:1.6;color:${TC['accent-pale']};margin-top:6px;">Our thanks for bringing a new adventurer to Campaignia. They are already in your balance.</div>
       </div>`
     : '';
   // NOTE: styles are INLINE on purpose. Several mail clients (Gmail, Outlook)
@@ -349,26 +352,26 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
-<body style="margin:0;padding:24px 0;background:#1a1008;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+<body style="margin:0;padding:24px 0;background:${TC['panel']};">
+  <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
-      <div style="font-size:20px;color:#c9a84c;margin-bottom:12px;">${player_name} joined ${campaign_name}</div>
-      <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Greetings, ${dm_name}.</div>
-      <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Your invitation has been accepted. The party grows.</div>
+      <div style="font-size:20px;color:${TC['accent']};margin-bottom:12px;">${player_name} joined ${campaign_name}</div>
+      <div style="font-size:14px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:20px;">Greetings, ${dm_name}.</div>
+      <div style="font-size:14px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:20px;">Your invitation has been accepted. The party grows.</div>
       ${bonusBlock}
-      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Player</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${player_name} <span style="color:rgba(201,168,76,0.6);font-size:13px;">&nbsp;${player_email}</span></div>
+      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(${TC['accent-rgb']},0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);">Player</div>
+        <div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${player_name} <span style="color:rgba(${TC['accent-rgb']},0.6);font-size:13px;">&nbsp;${player_email}</span></div>
         ${charBlock}
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">In campaign</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);margin-top:10px;">In campaign</div>
+        <div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${campaign_name}</div>
       </div>
       <div style="text-align:center;margin:28px 0;">
-        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Open Campaign</a>
+        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:${TC['button-cta']};color:${TC['on-panel']};text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Open Campaign</a>
       </div>
     </div>
-    <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
+    <div style="padding:20px 32px;border-top:1px solid rgba(${TC['accent-rgb']},0.15);font-size:12px;color:rgba(${TC['accent-rgb']},0.4);text-align:center;">
       campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
     </div>
   </div>
@@ -381,8 +384,8 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
     ? (character_class ? character_name + ' &mdash; ' + character_class : character_name)
     : 'your character';
   const charBlock = character_name
-    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Your character</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${charLine}</div>`
+    ? `<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);margin-top:10px;">Your character</div>
+        <div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${charLine}</div>`
     : '';
   // Inline styles: strict mail clients strip <head><style>, so style every element directly.
   return `
@@ -392,26 +395,26 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
-<body style="margin:0;padding:24px 0;background:#1a1008;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+<body style="margin:0;padding:24px 0;background:${TC['panel']};">
+  <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
-      <div style="font-size:20px;color:#c9a84c;margin-bottom:12px;">Welcome to ${campaign_name}</div>
-      <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">Greetings, ${player_name}.</div>
-      <div style="font-size:14px;line-height:1.7;color:#e8d5a3;margin-bottom:20px;">You've successfully joined ${dm_name}'s campaign. Your place in the story is secured.</div>
-      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);">Campaign</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${campaign_name}</div>
+      <div style="font-size:20px;color:${TC['accent']};margin-bottom:12px;">Welcome to ${campaign_name}</div>
+      <div style="font-size:14px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:20px;">Greetings, ${player_name}.</div>
+      <div style="font-size:14px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:20px;">You've successfully joined ${dm_name}'s campaign. Your place in the story is secured.</div>
+      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(${TC['accent-rgb']},0.18);border-radius:0;padding:16px 18px;margin:16px 0;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);">Campaign</div>
+        <div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${campaign_name}</div>
         ${charBlock}
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(201,168,76,0.7);margin-top:10px;">Run by</div>
-        <div style="font-size:15px;color:#e8d5a3;margin-top:2px;">${dm_name}</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(${TC['accent-rgb']},0.7);margin-top:10px;">Run by</div>
+        <div style="font-size:15px;color:${TC['accent-pale']};margin-top:2px;">${dm_name}</div>
       </div>
       <div style="text-align:center;margin:28px 0;">
-        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:#c0392b;color:#f0e8d0;text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Enter the Campaign</a>
+        <a href="${campaign_url}" style="display:inline-block;padding:14px 32px;background:${TC['button-cta']};color:${TC['on-panel']};text-decoration:none;border-radius:0;font-weight:700;font-size:14px;letter-spacing:1px;">Enter the Campaign</a>
       </div>
-      <div style="font-size:12px;line-height:1.7;color:rgba(201,168,76,0.55);margin-bottom:20px;">From here you can view storyboards, see your fellow adventurers, and follow the story as it unfolds. Create your own version, build your own storyboard &mdash; the adventure begins.</div>
+      <div style="font-size:12px;line-height:1.7;color:rgba(${TC['accent-rgb']},0.55);margin-bottom:20px;">From here you can view storyboards, see your fellow adventurers, and follow the story as it unfolds. Create your own version, build your own storyboard &mdash; the adventure begins.</div>
     </div>
-    <div style="padding:20px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:12px;color:rgba(201,168,76,0.4);text-align:center;">
+    <div style="padding:20px 32px;border-top:1px solid rgba(${TC['accent-rgb']},0.15);font-size:12px;color:rgba(${TC['accent-rgb']},0.4);text-align:center;">
       campaignia.com &nbsp;&middot;&nbsp; You make it legendary. Campaignia makes it forever.
     </div>
   </div>
@@ -521,13 +524,13 @@ async function sendAlertEmail(subject, message, opts) {
     const ts = new Date().toISOString();
     const safe = String(message == null ? '' : message)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const html = `<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;background:#0a0806;color:#e8d5a3;margin:0;padding:24px;">
-  <div style="max-width:560px;margin:0 auto;background:#0a0806;border:1px solid rgba(201,168,76,0.25);border-radius:0;overflow:hidden;">
-    <div style="background:#0a0806;padding:18px 24px;border-bottom:1px solid rgba(201,168,76,0.2);font-weight:700;letter-spacing:1px;color:#c9a84c;">CAMPAIGNIA MONITOR</div>
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;background:${TC['page-bg']};color:${TC['accent-pale']};margin:0;padding:24px;">
+  <div style="max-width:560px;margin:0 auto;background:${TC['page-bg']};border:1px solid rgba(${TC['accent-rgb']},0.25);border-radius:0;overflow:hidden;">
+    <div style="background:${TC['page-bg']};padding:18px 24px;border-bottom:1px solid rgba(${TC['accent-rgb']},0.2);font-weight:700;letter-spacing:1px;color:${TC['accent']};">CAMPAIGNIA MONITOR</div>
     <div style="padding:24px;">
-      <div style="font-size:18px;color:#f0e8d0;margin-bottom:14px;">${subject}</div>
-      <pre style="white-space:pre-wrap;font-family:Consolas,monospace;font-size:13px;line-height:1.6;color:#e8d5a3;background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.15);border-radius:0;padding:14px;margin:0 0 18px;">${safe}</pre>
-      <div style="font-size:12px;color:rgba(201,168,76,0.55);line-height:1.8;">
+      <div style="font-size:18px;color:${TC['on-panel']};margin-bottom:14px;">${subject}</div>
+      <pre style="white-space:pre-wrap;font-family:Consolas,monospace;font-size:13px;line-height:1.6;color:${TC['accent-pale']};background:rgba(0,0,0,0.25);border:1px solid rgba(${TC['accent-rgb']},0.15);border-radius:0;padding:14px;margin:0 0 18px;">${safe}</pre>
+      <div style="font-size:12px;color:rgba(${TC['accent-rgb']},0.55);line-height:1.8;">
         Environment: ${env}<br>App: ${appUrl}<br>Time: ${ts}
       </div>
     </div>
@@ -562,8 +565,8 @@ function orderConfirmationHTML(name, order) {
   // already fetches and does not yet pass, and a book title is whatever the reader typed.
   function row(label, value) {
     if (value == null || value === '') return '';
-    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
-      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(' + TC['accent-rgb'] + ',0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:' + TC['accent-pale'] + ';font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
   }
   var fmt = [order.binding, order.colorTier, order.coverFinish].filter(Boolean).join(', ');
   var total = (order.total != null) ? ('$' + Number(order.total).toFixed(2) + ' ' + (order.currency || 'USD')) : '';
@@ -592,16 +595,16 @@ function orderConfirmationHTML(name, order) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
-    .header { background: #0a0806; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
-    .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; vertical-align: middle; }
+    body { font-family: Georgia, serif; background: ${TC['panel']}; color: ${TC['accent-pale']}; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: ${TC['page-bg']}; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    .header { background: ${TC['page-bg']}; padding: 32px; text-align: center; border-bottom: 1px solid rgba(${TC['accent-rgb']},0.2); }
+    .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: ${TC['accent']}; letter-spacing: 4px; vertical-align: middle; }
     .body { padding: 32px; }
-    .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
-    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
-    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .title { font-size: 22px; color: ${TC['accent']}; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: ${TC['accent-pale']}; margin-bottom: 16px; }
+    .btn { display: inline-block; padding: 14px 32px; background: ${TC['button-cta']}; color: ${TC['on-panel']}; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .divider { width: 40px; height: 1px; background: rgba(${TC['accent-rgb']},0.4); margin: 16px auto; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(${TC['accent-rgb']},0.15); font-size: 12px; color: rgba(${TC['accent-rgb']},0.4); text-align: center; }
     table { width: 100%; border-collapse: collapse; }
   </style>
 </head>
@@ -611,11 +614,11 @@ function orderConfirmationHTML(name, order) {
     <div class="body">
       <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
       <div class="text">Your print order for <strong>${esc(bookTitle)}</strong> has been received and sent to print. Here are the details:</div>
-      <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
+      <div style="margin:18px 0;padding:14px 16px;background:rgba(${TC['accent-rgb']},0.06);border:1px solid rgba(${TC['accent-rgb']},0.2);border-radius:0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">${rows}</table>
       </div>
       ${trackBtn}
-      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">You can view this order any time on your My Orders page.</div>
+      <div class="text" style="font-size:13px;color:rgba(${TC['accent-rgb']},0.6);">You can view this order any time on your My Orders page.</div>
     </div>
     <div class="footer">Campaignia &middot; Order confirmation for your print purchase.</div>
   </div>
@@ -651,8 +654,8 @@ function purchaseReceiptHTML(name, receipt) {
   // vertical-align:top keeps a wrapped value level with its label rather than floating.
   function row(label, value) {
     if (value == null || value === '') return '';
-    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
-      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(' + TC['accent-rgb'] + ',0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:' + TC['accent-pale'] + ';font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
   }
   function money(cents, currency) {
     if (cents == null || !isFinite(Number(cents))) return '';
@@ -712,12 +715,12 @@ function purchaseReceiptHTML(name, receipt) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    body { font-family: Georgia, serif; background: ${TC['panel']}; color: ${TC['accent-pale']}; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: ${TC['page-bg']}; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
     .body { padding: 32px; }
-    .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
-    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .title { font-size: 22px; color: ${TC['accent']}; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: ${TC['accent-pale']}; margin-bottom: 16px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(${TC['accent-rgb']},0.15); font-size: 12px; color: rgba(${TC['accent-rgb']},0.4); text-align: center; }
     table { width: 100%; border-collapse: collapse; }
   </style>
 </head>
@@ -727,10 +730,10 @@ function purchaseReceiptHTML(name, receipt) {
     <div class="body">
       <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
       <div class="text">${esc(lead)}</div>
-      <div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;">
+      <div style="margin:18px 0;padding:14px 16px;background:rgba(${TC['accent-rgb']},0.06);border:1px solid rgba(${TC['accent-rgb']},0.2);border-radius:0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">${rows}</table>
       </div>
-      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">${receipt.kind === 'gift' ? ('Questions about your gift? Write to ' + esc(process.env.SUPPORT_EMAIL || 'support@campaignia.com') + ' and quote the purchase ID.') : 'You can see your plan, your passes and your token balance any time on My Account.'}</div>
+      <div class="text" style="font-size:13px;color:rgba(${TC['accent-rgb']},0.6);">${receipt.kind === 'gift' ? ('Questions about your gift? Write to ' + esc(process.env.SUPPORT_EMAIL || 'support@campaignia.com') + ' and quote the purchase ID.') : 'You can see your plan, your passes and your token balance any time on My Account.'}</div>
     </div>
     <div class="footer">Campaignia &middot; Receipt for your purchase.</div>
   </div>
@@ -829,8 +832,8 @@ function orderProblemHTML(name, order) {
   // already fetches and does not yet pass, and a book title is whatever the reader typed.
   function row(label, value) {
     if (value == null || value === '') return '';
-    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(201,168,76,0.6);font-size:13px;vertical-align:top;">' + esc(label) +
-      '</td><td width="60%" style="width:60%;padding:6px 0;color:#e8d5a3;font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
+    return '<tr><td width="40%" style="width:40%;padding:6px 8px 6px 0;color:rgba(' + TC['accent-rgb'] + ',0.6);font-size:13px;vertical-align:top;">' + esc(label) +
+      '</td><td width="60%" style="width:60%;padding:6px 0;color:' + TC['accent-pale'] + ';font-size:13px;text-align:right;vertical-align:top;">' + esc(value) + '</td></tr>';
   }
   var fmt = [order.binding, order.colorTier, order.coverFinish].filter(Boolean).join(', ');
   var bookTitle = order.bookTitle || order.orderName || order.campaignName || 'your book';
@@ -850,15 +853,15 @@ function orderProblemHTML(name, order) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
-    .header { background: #0a0806; padding: 32px; text-align: center; border-bottom: 1px solid rgba(201,168,76,0.2); }
-    .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: #c9a84c; letter-spacing: 4px; vertical-align: middle; }
+    body { font-family: Georgia, serif; background: ${TC['panel']}; color: ${TC['accent-pale']}; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: ${TC['page-bg']}; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    .header { background: ${TC['page-bg']}; padding: 32px; text-align: center; border-bottom: 1px solid rgba(${TC['accent-rgb']},0.2); }
+    .logo { font-family: 'Cinzel', Georgia, serif; font-size: 26px; font-weight: 700; color: ${TC['accent']}; letter-spacing: 4px; vertical-align: middle; }
     .body { padding: 32px; }
-    .title { font-size: 22px; color: #c9a84c; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 16px; }
-    .divider { width: 40px; height: 1px; background: rgba(201,168,76,0.4); margin: 16px auto; }
-    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .title { font-size: 22px; color: ${TC['accent']}; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: ${TC['accent-pale']}; margin-bottom: 16px; }
+    .divider { width: 40px; height: 1px; background: rgba(${TC['accent-rgb']},0.4); margin: 16px auto; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(${TC['accent-rgb']},0.15); font-size: 12px; color: rgba(${TC['accent-rgb']},0.4); text-align: center; }
     table { width: 100%; border-collapse: collapse; }
   </style>
 </head>
@@ -869,8 +872,8 @@ function orderProblemHTML(name, order) {
       <div class="title">There was a problem with your order</div>
       <div class="text">${name ? esc(name) + ', we' : 'We'} ran into a problem while placing your print order for <strong>${esc(bookTitle)}</strong>, so it has not been sent to print.</div>
       <div class="text">If your card was charged, that charge will be reversed. Our team has been notified and will look into it &mdash; you can also reply to this email and we&rsquo;ll help sort it out.</div>
-      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">' + rows + '</table></div>' : ''}
-      <div class="text" style="font-size:13px;color:rgba(201,168,76,0.6);">Sorry for the inconvenience.</div>
+      ${rows ? '<div style="margin:18px 0;padding:14px 16px;background:rgba(' + TC['accent-rgb'] + ',0.06);border:1px solid rgba(' + TC['accent-rgb'] + ',0.2);border-radius:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;table-layout:fixed;">' + rows + '</table></div>' : ''}
+      <div class="text" style="font-size:13px;color:rgba(${TC['accent-rgb']},0.6);">Sorry for the inconvenience.</div>
     </div>
     <div class="footer">Campaignia &middot; Support@campaignia.com</div>
   </div>
@@ -897,8 +900,8 @@ function orderFailureReportHTML(o) {
   }
   function row(label, value, mono) {
     return '<tr>' +
-      '<td style="padding:6px 12px 6px 0;vertical-align:top;color:#8a6a2a;white-space:nowrap;">' + esc(label) + '</td>' +
-      '<td style="padding:6px 0;vertical-align:top;color:#e8d5a3;' +
+      '<td style="padding:6px 12px 6px 0;vertical-align:top;color:' + TC['gold-dim-label'] + ';white-space:nowrap;">' + esc(label) + '</td>' +
+      '<td style="padding:6px 0;vertical-align:top;color:' + TC['accent-pale'] + ';' +
         (mono ? 'font-family:Consolas,Menlo,monospace;font-size:12px;word-break:break-all;' : '') + '">' +
         value + '</td></tr>';
   }
@@ -909,19 +912,19 @@ function orderFailureReportHTML(o) {
   // so the link is built from the id we hold rather than from a guess about which id it is.
   var piLink = o.stripePaymentIntentId
     ? ('<a href="https://dashboard.stripe.com/payments/' + esc(o.stripePaymentIntentId) + '" ' +
-       'style="color:#c9a84c;">' + esc(o.stripePaymentIntentId) + '</a>')
+       'style="color:' + TC['accent'] + ';">' + esc(o.stripePaymentIntentId) + '</a>')
     : '\u2014';
   var card = (o.cardBrand || o.cardLast4)
     ? (esc(o.cardBrand || 'card') + ' \u2022\u2022\u2022\u2022 ' + esc(o.cardLast4 || '????')) : '\u2014';
   var fmt = [o.binding, o.colorTier, o.coverFinish, o.paper].filter(Boolean).map(esc).join(', ') || '\u2014';
   var files =
-    (o.interiorPdfUrl ? '<a href="' + esc(o.interiorPdfUrl) + '" style="color:#c9a84c;">interior</a>' : 'interior missing') +
+    (o.interiorPdfUrl ? '<a href="' + esc(o.interiorPdfUrl) + '" style="color:' + TC['accent'] + ';">interior</a>' : 'interior missing') +
     ' &nbsp;|&nbsp; ' +
-    (o.coverPdfUrl ? '<a href="' + esc(o.coverPdfUrl) + '" style="color:#c9a84c;">cover</a>' : 'cover missing');
-  return '<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;background:#0a0806;color:#e8d5a3;margin:0;padding:24px;">' +
-    '<div style="max-width:640px;margin:0 auto;border:1px solid rgba(201,168,76,0.25);padding:20px;">' +
-    '<h2 style="margin:0 0 4px;color:#c9a84c;font-size:18px;">Paid order did not reach the printer</h2>' +
-    '<div style="color:#8a6a2a;font-size:12px;margin-bottom:16px;">' +
+    (o.coverPdfUrl ? '<a href="' + esc(o.coverPdfUrl) + '" style="color:' + TC['accent'] + ';">cover</a>' : 'cover missing');
+  return '<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;background:' + TC['page-bg'] + ';color:' + TC['accent-pale'] + ';margin:0;padding:24px;">' +
+    '<div style="max-width:640px;margin:0 auto;border:1px solid rgba(' + TC['accent-rgb'] + ',0.25);padding:20px;">' +
+    '<h2 style="margin:0 0 4px;color:' + TC['accent'] + ';font-size:18px;">Paid order did not reach the printer</h2>' +
+    '<div style="color:' + TC['gold-dim-label'] + ';font-size:12px;margin-bottom:16px;">' +
       'The customer has been charged and no print job exists. This needs a refund or a resubmission.</div>' +
     '<table style="border-collapse:collapse;font-size:13px;width:100%;">' +
       txt('Order', o.orderName || o.bookTitle) +
@@ -942,8 +945,8 @@ function orderFailureReportHTML(o) {
       row('Print files', files) +
       txt('Internal order id', o.orderId, true) +
     '</table>' +
-    '<div style="margin-top:16px;padding:12px;border:1px solid rgba(201,168,76,0.25);">' +
-      '<div style="color:#8a6a2a;font-size:12px;margin-bottom:6px;">What failed</div>' +
+    '<div style="margin-top:16px;padding:12px;border:1px solid rgba(' + TC['accent-rgb'] + ',0.25);">' +
+      '<div style="color:' + TC['gold-dim-label'] + ';font-size:12px;margin-bottom:6px;">What failed</div>' +
       '<div style="font-family:Consolas,Menlo,monospace;font-size:12px;word-break:break-word;">' + esc(o.error) + '</div>' +
     '</div></div></body></html>';
 }
@@ -974,7 +977,7 @@ async function sendOrderProblemEmail(opts) {
 function feedbackHTML(opts) {
   function esc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   return '<div style="font-family:Arial,sans-serif;max-width:600px;color:#222;">' +
-    '<h2 style="color:#2d6a4f;margin:0 0 12px;">New Campaignia feedback</h2>' +
+    '<h2 style="color:' + TC['success'] + ';margin:0 0 12px;">New Campaignia feedback</h2>' +
     '<p style="margin:4px 0;"><strong>Category:</strong> ' + esc(opts.category || 'Other') + '</p>' +
     (opts.subject ? '<p style="margin:4px 0;"><strong>Subject:</strong> ' + esc(opts.subject) + '</p>' : '') +
     '<p style="margin:4px 0;"><strong>From:</strong> ' + esc(opts.from_name || '') + ' (' + esc(opts.from_email || '') + ')</p>' +
@@ -1031,15 +1034,15 @@ function trialLifecycleHTML(copy, name, ctaUrl) {
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
-<body style="margin:0;padding:24px 0;background:#1a1008;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+<body style="margin:0;padding:24px 0;background:${TC['panel']};">
+  <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
-      <div style="font-size:20px;color:#f0e8d0;margin-bottom:16px;">${copy.headline}</div>
-      <div style="font-size:15px;line-height:1.7;color:#e8d5a3;margin-bottom:24px;">Hi ${safeName},<br><br>${copy.body}</div>
-      <a href="${ctaUrl}" style="display:inline-block;background:#c0392b;color:#f0e8d0;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:0;letter-spacing:0.5px;">${copy.cta}</a>
+      <div style="font-size:20px;color:${TC['on-panel']};margin-bottom:16px;">${copy.headline}</div>
+      <div style="font-size:15px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:24px;">Hi ${safeName},<br><br>${copy.body}</div>
+      <a href="${ctaUrl}" style="display:inline-block;background:${TC['button-cta']};color:${TC['on-panel']};text-decoration:none;font-weight:700;padding:12px 28px;border-radius:0;letter-spacing:0.5px;">${copy.cta}</a>
     </div>
-    <div style="padding:18px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:11px;color:rgba(201,168,76,0.5);">You are receiving this because you created a Campaignia account.</div>
+    <div style="padding:18px 32px;border-top:1px solid rgba(${TC['accent-rgb']},0.15);font-size:11px;color:rgba(${TC['accent-rgb']},0.5);">You are receiving this because you created a Campaignia account.</div>
   </div>
 </body>
 </html>`;
@@ -1234,7 +1237,7 @@ function giftEmailHTML(g) {
   function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   var msg = g.message ? esc(g.message).replace(/\r?\n/g, '<br>') : '';
   var packNote = (g.itemKind === 'pack')
-    ? '<div style="font-size:13px;line-height:1.6;color:rgba(232,213,163,0.75);margin-top:14px;">Tokens can be added to any Campaignia account except one on the Free Trial.</div>'
+    ? '<div style="font-size:13px;line-height:1.6;color:rgba(' + TC['accent-pale-rgb'] + ',0.75);margin-top:14px;">Tokens can be added to any Campaignia account except one on the Free Trial.</div>'
     : '';
   return `<!DOCTYPE html>
 <html>
@@ -1242,20 +1245,20 @@ function giftEmailHTML(g) {
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
-<body style="margin:0;padding:24px 0;background:#1a1008;">
-  <div style="max-width:520px;margin:0 auto;background:#0a0806;border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:#e8d5a3;">
+<body style="margin:0;padding:24px 0;background:${TC['panel']};">
+  <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
     <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
-      <div style="font-size:20px;color:#f0e8d0;margin-bottom:16px;">${esc(g.fromName)} sent you a gift</div>
-      <div style="font-size:15px;line-height:1.7;color:#e8d5a3;margin-bottom:18px;">Hi ${esc(g.recipientName || 'there')},<br><br>${esc(g.fromName)} has given you <b>${esc(g.description)}</b>.</div>
-      ${msg ? '<div style="font-size:15px;line-height:1.7;color:#f0e8d0;border-left:3px solid #c9a84c;padding:4px 0 4px 14px;margin:0 0 22px;font-style:italic;">' + msg + '</div>' : ''}
-      <a href="${esc(g.redeemUrl)}" style="display:inline-block;background:#c0392b;color:#f0e8d0;text-decoration:none;font-weight:700;padding:12px 28px;border-radius:0;letter-spacing:0.5px;">Redeem your gift</a>
-      <div style="font-size:13px;line-height:1.7;color:rgba(232,213,163,0.75);margin-top:22px;">Or go to ${esc(g.redeemBase)} and enter this code:</div>
-      <div style="font-family:'Courier New',monospace;font-size:20px;letter-spacing:2px;color:#f0e8d0;margin-top:6px;">${esc(g.code)}</div>
-      <div style="font-size:13px;line-height:1.6;color:rgba(232,213,163,0.75);margin-top:14px;">This gift never expires. You will need a free Campaignia account to use it.</div>
+      <div style="font-size:20px;color:${TC['on-panel']};margin-bottom:16px;">${esc(g.fromName)} sent you a gift</div>
+      <div style="font-size:15px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:18px;">Hi ${esc(g.recipientName || 'there')},<br><br>${esc(g.fromName)} has given you <b>${esc(g.description)}</b>.</div>
+      ${msg ? '<div style="font-size:15px;line-height:1.7;color:' + TC['on-panel'] + ';border-left:3px solid ' + TC['accent'] + ';padding:4px 0 4px 14px;margin:0 0 22px;font-style:italic;">' + msg + '</div>' : ''}
+      <a href="${esc(g.redeemUrl)}" style="display:inline-block;background:${TC['button-cta']};color:${TC['on-panel']};text-decoration:none;font-weight:700;padding:12px 28px;border-radius:0;letter-spacing:0.5px;">Redeem your gift</a>
+      <div style="font-size:13px;line-height:1.7;color:rgba(${TC['accent-pale-rgb']},0.75);margin-top:22px;">Or go to ${esc(g.redeemBase)} and enter this code:</div>
+      <div style="font-family:'Courier New',monospace;font-size:20px;letter-spacing:2px;color:${TC['on-panel']};margin-top:6px;">${esc(g.code)}</div>
+      <div style="font-size:13px;line-height:1.6;color:rgba(${TC['accent-pale-rgb']},0.75);margin-top:14px;">This gift never expires. You will need a free Campaignia account to use it.</div>
       ${packNote}
     </div>
-    <div style="padding:18px 32px;border-top:1px solid rgba(201,168,76,0.15);font-size:11px;color:rgba(201,168,76,0.5);">You are receiving this because someone sent you a Campaignia gift at this address. Keep the code private: anyone with it can redeem the gift.</div>
+    <div style="padding:18px 32px;border-top:1px solid rgba(${TC['accent-rgb']},0.15);font-size:11px;color:rgba(${TC['accent-rgb']},0.5);">You are receiving this because someone sent you a Campaignia gift at this address. Keep the code private: anyone with it can redeem the gift.</div>
   </div>
 </body>
 </html>`;
@@ -1296,7 +1299,7 @@ function giftBuyerCopy(row, code) {
     headline: 'Your gift to ' + esc(row.recipient_name || row.recipient_email) + ' has been delivered',
     body: 'We have emailed <b>' + esc(describe(row)) + '</b> to ' + esc(row.recipient_email) + '. ' +
       'Here is a copy of the code, in case it is easier to hand over yourself:<br><br>' +
-      '<span style="font-family:\'Courier New\',monospace;font-size:18px;letter-spacing:2px;color:#f0e8d0;">' + esc(code) + '</span><br><br>' +
+      '<span style="font-family:\'Courier New\',monospace;font-size:18px;letter-spacing:2px;color:' + TC['on-panel'] + ';">' + esc(code) + '</span><br><br>' +
       'It is redeemed at ' + esc(app.replace(/^https?:\/\//, '')) + '/redeem and never expires. Keep it private: anyone with the code can use it.<br><br>' +
       'We will email you again when it is redeemed.',
     cta: 'Give another gift'
@@ -1555,13 +1558,13 @@ function emailChangeShell(title, inner) {
   <meta name="supported-color-schemes" content="light dark">
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet">
   <style>
-    body { font-family: Georgia, serif; background: #1a1008; color: #e8d5a3; margin: 0; padding: 0; }
-    .container { max-width: 520px; margin: 40px auto; background: #0a0806; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
+    body { font-family: Georgia, serif; background: ${TC['panel']}; color: ${TC['accent-pale']}; margin: 0; padding: 0; }
+    .container { max-width: 520px; margin: 40px auto; background: ${TC['page-bg']}; border: 2px solid #000000; border-radius: 0; overflow: hidden; }
     .body { padding: 32px; }
-    .title { font-size: 20px; color: #c9a84c; margin-bottom: 12px; }
-    .text { font-size: 14px; line-height: 1.7; color: #e8d5a3; margin-bottom: 20px; }
-    .btn { display: inline-block; padding: 14px 32px; background: #c0392b; color: #f0e8d0; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
-    .footer { padding: 20px 32px; border-top: 1px solid rgba(201,168,76,0.15); font-size: 12px; color: rgba(201,168,76,0.4); text-align: center; }
+    .title { font-size: 20px; color: ${TC['accent']}; margin-bottom: 12px; }
+    .text { font-size: 14px; line-height: 1.7; color: ${TC['accent-pale']}; margin-bottom: 20px; }
+    .btn { display: inline-block; padding: 14px 32px; background: ${TC['button-cta']}; color: ${TC['on-panel']}; text-decoration: none; border-radius:0; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+    .footer { padding: 20px 32px; border-top: 1px solid rgba(${TC['accent-rgb']},0.15); font-size: 12px; color: rgba(${TC['accent-rgb']},0.4); text-align: center; }
   </style>
 </head>
 <body>
@@ -1591,7 +1594,7 @@ function emailChangeConfirmHTML(name, newEmail, url) {
       <div style="text-align:center;margin:28px 0;">
         <a href="${emailChangeEsc(url)}" class="btn">Confirm my new email</a>
       </div>
-      <div class="text" style="font-size:12px;color:rgba(201,168,76,0.5);">If you didn't ask for this, you can ignore this email and nothing will change.</div>`);
+      <div class="text" style="font-size:12px;color:rgba(${TC['accent-rgb']},0.5);">If you didn't ask for this, you can ignore this email and nothing will change.</div>`);
 }
 
 function emailChangeNoticeHTML(name, maskedNewEmail) {
@@ -1599,7 +1602,7 @@ function emailChangeNoticeHTML(name, maskedNewEmail) {
       <div class="text">Greetings, ${emailChangeEsc(name || 'there')}.</div>
       <div class="text">Someone signed in to your Campaignia account asked to change its email to <strong>${emailChangeEsc(maskedNewEmail)}</strong>. Nothing changes until the link sent to that address is clicked, and until then this address stays in charge of your account.</div>
       <div class="text">If this was you, there is nothing more to do here.</div>
-      <div class="text">If it wasn't you, sign in and change your password straight away, then cancel the change on your My Account page. If you can't sign in, email us at <a href="mailto:${emailChangeEsc(emailChangeSupport())}" style="color:#c9a84c;">${emailChangeEsc(emailChangeSupport())}</a> and we'll help.</div>`);
+      <div class="text">If it wasn't you, sign in and change your password straight away, then cancel the change on your My Account page. If you can't sign in, email us at <a href="mailto:${emailChangeEsc(emailChangeSupport())}" style="color:${TC['accent']};">${emailChangeEsc(emailChangeSupport())}</a> and we'll help.</div>`);
 }
 
 async function sendEmailChangeConfirmEmail(name, newEmail, url) {

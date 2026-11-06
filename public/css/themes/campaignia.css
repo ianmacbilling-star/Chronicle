@@ -176,6 +176,8 @@
   /* v3.4.59 -- forms the sign-in and gift pages needed */
   --amber-note-rgb:224,160,64;
   --page-bg-rgb:10,8,6;
+  /* v3.4.60 -- the call-to-action button in emails */
+  --button-cta:#c0392b;
 }
 :root{
   --ink:#2c1810;--ink-light:#5c3d2e;

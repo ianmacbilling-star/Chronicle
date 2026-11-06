@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.60",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3460-email-colors-from-theme",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: email colors come from the theme sheet.",
+        "detail": "email.js no longer types its 203 colors; the server reads them from public/css/themes/campaignia.css (new services/themeColors.js) and writes the color into each email, since email programs ignore CSS var(). The email button keeps its red as --button-cta. The dark area around each email is a touch darker (it now uses the panel color).",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.59",
     "staged_on": "2026-11-06",
     "entries": [
