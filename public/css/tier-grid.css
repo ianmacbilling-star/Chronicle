@@ -19,32 +19,35 @@
    .tier-info, .tier-name-row and .tier-perks, and a grid that reused those would
    inherit the pricing panel's list layout the moment either file changed.
    ============================================================================ */
+/* v3.4.61 -- Ian, 2026-11-06: the grid matches the landing page it sits on. The --tg- names below now point at the
+   brand theme sheet that page links (/css/themes/campaignia.css), so the grid follows the brand. A landing page that
+   wants a different grid can still give these --tg- names its own values. */
 
 .tg-root {
-  --tg-ink: #0a0806;
-  --tg-ink-mid: #160e06;
-  --tg-ink-deep: #120b05;
-  --tg-gold: #c9a84c;
-  --tg-gold-light: #e8d5a3;
-  --tg-parchment: #f0e8d0;
-  --tg-crimson: #c0392b;
-  --tg-line: rgba(201,168,76,0.22);
-  --tg-line-strong: rgba(201,168,76,0.4);
-  --tg-dim: rgba(240,232,208,0.55);
-  --tg-yes: #7fae5f;
-  --tg-no: rgba(240,232,208,0.28);
-  --tg-copper: #b87333;
-  --tg-silver: #c0c0c0;
-  --tg-platinum: #e5e4e2;
-  --tg-display: 'Bangers', cursive;
-  --tg-label: 'Cinzel', serif;
-  --tg-body: 'Crimson Text', Georgia, serif;
+  --tg-ink: var(--page-bg);
+  --tg-ink-mid: var(--panel);   /* v3.4.65 -- the grid's panel is a background: --panel, not a text color (on a light brand the text name made it dark) */
+  --tg-ink-deep: var(--panel-deep);
+  --tg-gold: var(--accent);
+  --tg-gold-light: var(--accent-pale);
+  --tg-parchment: var(--on-panel);
+  --tg-crimson: var(--button-cta);
+  --tg-line: rgba(var(--accent-rgb),0.22);
+  --tg-line-strong: rgba(var(--accent-rgb),0.4);
+  --tg-dim: rgba(var(--on-panel-rgb),0.55);
+  --tg-yes: var(--change-applied);
+  --tg-no: rgba(var(--on-panel-rgb),0.28);
+  --tg-copper: var(--copper);
+  --tg-silver: var(--tier-silver);
+  --tg-platinum: var(--tier-platinum);
+  --tg-display: var(--font-comic);
+  --tg-label: var(--font-label);
+  --tg-body: var(--font-body);
 }
 
 /* ---- the button that opens it, under the tier rows ---- */
 .tg-open-wrap {
   padding: 14px 20px 18px;
-  border-top: 3px solid rgba(201,168,76,0.25);
+  border-top: 3px solid rgba(var(--accent-rgb),0.25);
   text-align: center;
 }
 .tg-open {
@@ -153,7 +156,7 @@
   vertical-align: middle;
 }
 .tg-table tr:last-child th, .tg-table tr:last-child td { border-bottom: none; }
-.tg-table tbody tr:hover { background: rgba(201,168,76,0.05); }
+.tg-table tbody tr:hover { background: rgba(var(--accent-rgb),0.05); }
 
 /* feature column: sticky so a phone can scroll the tiers without losing the row name */
 .tg-table th.tg-feat, .tg-table td.tg-feat {
@@ -250,7 +253,7 @@
   text-transform: uppercase;
   color: var(--tg-gold-light);
   padding: 34px 0 6px;
-  background: linear-gradient(to bottom, rgba(22,14,6,0) 0%, rgba(22,14,6,0.92) 62%);
+  background: linear-gradient(to bottom, rgba(var(--panel-rgb),0) 0%, rgba(var(--panel-rgb),0.92) 62%);
 }
 
 /* ---- footnotes ---- */
@@ -274,7 +277,7 @@
   align-items: center;
   gap: 12px;
   font-size: 15px;
-  color: rgba(240,232,208,0.78);
+  color: rgba(var(--on-panel-rgb),0.78);
 }
 .tg-note-coin img {
   width: 48px;

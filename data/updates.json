@@ -1,5 +1,245 @@
 [
   {
+    "version": "3.4.68",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3468-story-brand-by-host",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/story picks its look by web address: brand 2 on chroniclemygame.com (staging), Campaignia's on campaignia.com.",
+        "detail": "So the brand work can be promoted without showing the new look in production (Ian, 2026-11-06). /story links Campaignia's theme sheet; on chroniclemygame.com (staging) it also writes in brand 2's sheet, which overrides every name, and sets the light toolbar color. On campaignia.com and any other address /story looks as it did before v3.4.63. brand2.css and the brand 2 font files ship but are used only on chroniclemygame.com. Temporary: the server-side brand switch replaces this.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.67",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3467-brand2-fonts",
+        "kind": "feature",
+        "public": false,
+        "summary": "Brand 2 on /story: Storybook fonts (Fraunces, Lora, Quicksand, Patrick Hand).",
+        "detail": "The landing page fonts are now theme names: --font-heading, --font-body, --font-label and --font-comic (landing.css, landing-story.css and the tier grid use them). Campaignia's sheet holds today's fonts, so the home page and /game-masters look the same (one small difference: eleven rules that said 'Crimson Text', serif now also list Georgia before serif, which only matters if the font fails to load). Brand 2's sheet holds Ian's pick, Storybook: Fraunces headings, Lora body, Quicksand labels, Patrick Hand for the comic bits. The 13 font files are plain files in public/fonts/brand2 with their Open Font License text; the print font list is not touched.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.66",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3466-story-hero-slot",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/story: the space above and below the hero picture matches the panel beside it.",
+        "detail": "Ian on staging: the strip above and below the turning-page picture was the page color, lighter than the text panel next to it. The picture slot, the page under it and the page-turn sweep now use --panel-deep, the left panel's color. landing-story.css is used by /story only.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.65",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3465-tier-grid-panel",
+        "kind": "fix",
+        "public": false,
+        "summary": "Compare the Tiers is readable on brand 2's light page.",
+        "detail": "Ian on staging /story: the middle of Compare the Tiers was unreadable (dark panel behind dark text). The grid's panel color pointed at a text-color name (--surface-ink-text), which brand 2 sets dark. It now points at the background name --panel. On Campaignia's pages the grid panel moves from #160e06 to #140c04, the same fold Ian approved in v3.4.58; it cannot be seen.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.64",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3464-brand2-dots-text",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Brand 2 on /story: the halftone dots are barely there and the text is easier to read.",
+        "detail": "Ian on staging: the dots were too dark and some text was hard to read. The halftone dot color is now a theme name, --halftone-dot (Campaignia keeps its rgba(0,0,0,0.15), so the Campaignia landing pages are unchanged); brand 2's is a faint slate blue at 4.5 percent. Brand 2's two text colors are deeper: on-panel #3f4668 to #262b4a, accent-pale #6a74a6 to #4f5a94.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.63",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3463-brand2-story-sheet",
+        "kind": "feature",
+        "public": false,
+        "summary": "Two brands: /story gets brand 2's own light look, Sky and Lavender.",
+        "detail": "New theme sheet css/themes/brand2.css: the same names as campaignia.css, with the storyteller brand's values chosen by Ian from the pastel trial (cool paper, slate-blue ink, periwinkle accent, pink button, a soft watercolor wash behind the page). /story now links that sheet instead of Campaignia's, and its browser toolbar color is the light page color. Every other page is unchanged. Fonts and layout are the same for now; fonts are next.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.62",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3462-theme-tiers-tidy",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: the tier badges take their colors from the theme sheet, and names nothing used are gone from it.",
+        "detail": "The Copper, Silver, Gold and Platinum badges and headers in the app (Account, Plans and Passes) now read their colors from css/themes/campaignia.css: seven new tier names, exact colors; Gold uses the brand gold. The theme sheet loses 20 names nothing in the code base uses any more: the folded names that only pointed at their replacements (gold, gold-light, parchment, cream, crimson, surface-ink, window-bg and the rest), two old light tokens, and two hex forms whose rgb forms are the ones in use. Nothing on screen changes.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.61",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3461-theme-public-pages",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, round 3: the public pages now take their colors from the theme sheet.",
+        "detail": "The home page, /game-masters, /story, the tier grid, the public library, the four legal pages, the 404 page, the offline page, the install chip and the marketplace screens now name their colors from css/themes/campaignia.css, and each page links that sheet. Their own local color names (ink, gold, parchment and so on, which clashed with the theme's) are replaced by the theme's names. The tier grid keeps its --tg- names but points them at the brand, so it matches the landing page it sits on. The sheet gains names for the tier metals (silver, platinum), the AI tag, the writer and editor labels and the added-to-shelf button. Near-identical shades are folded in as agreed on the review sheet; the offline page carries each color as a fallback too. Left typed: black and white shadows, near-black, and the staging header.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.60",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3460-email-colors-from-theme",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: email colors come from the theme sheet.",
+        "detail": "email.js no longer types its 203 colors; the server reads them from public/css/themes/campaignia.css (new services/themeColors.js) and writes the color into each email, since email programs ignore CSS var(). The email button keeps its red as --button-cta. The dark area around each email is a touch darker (it now uses the panel color).",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.59",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3459-signin-pages-theme",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: the sign-in, gift, redeem, invite and reset-password pages take their colors from the theme sheet.",
+        "detail": "136 colors on login, gift, redeem, invite and reset-password now use 22 existing theme names (no new names; two solid/see-through forms added). Near-identical shades take the name's color, so a few shift very slightly. The reset page's old --gold now uses --accent-bright. Black, white and greys stay as typed.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.58",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3458-theme-names-combined",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: theme names that held the same or nearly the same color were combined (14 names folded into 6).",
+        "detail": "Folded: gold into accent-bright, gold-light into accent-pale, parchment into on-panel, on-panel-cream into on-panel, cream into on-panel, crimson into danger, error-fill into danger, surface-ink into panel, panel-alt into panel, modal into panel, panel-raised into panel, window-bg into panel, card into panel, panel-deeper into panel-deep. style.css, app.html and app.js now use the kept names; each folded name stays in the theme sheet pointing at its replacement until the other pages are swept. The light text on dark panels is now one cream and the delete red one red, so a few colors shift very slightly.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.57",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3457-colors-named-by-job",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, step 3: every remaining color is named by its job in the theme sheet, and near-identical shades were merged (a few colors shift very slightly).",
+        "detail": "About 600 colors still typed into style.css, app.html and app.js (roughly 300 different shades) now use about 90 names in css/themes/campaignia.css, each named for what it does (labels, highlights, warnings, errors, success, the shelf's wood and brass...). Near-identical shades were merged into one as Ian approved on 2026-11-06, so some colors shift slightly. Kept as typed: black and white shadows, the staging header, the tier colors, the admin AI-layout window and the title halo. The error dialog keeps its exact grey under its own name.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.56",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3456-theme-sweep-app-js",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, step 2b: the colors app.js writes into the page now come from the theme sheet (nothing looks different).",
+        "detail": "Every brand color app.js writes as CSS (style attributes in built HTML, cssText, element.style) now names a value from css/themes/campaignia.css. Proved identical: expanded back it is the old file. Left as typed: the tier colors (tier identity, not brand), the SVG chart grid lines, the admin AI-layout JSON window (a window of its own, without the theme sheet) and the on-picture title halo. Also puts back the error dialog's own background (#1c1b22), which v3.4.54 had turned brown by defining --panel.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.55",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3455-theme-sweep-app-html",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, step 2a: app.html's colors now come from the theme sheet (nothing looks different).",
+        "detail": "Every brand color typed into app.html's style attributes and style blocks now names a value from css/themes/campaignia.css, which gains four names for the bookshelf look (foil, tooling, shelf shadow, inset well). Proved identical: expanded back it is the old file, and every computed style matches. Left as typed: the meta theme-color (the browser reads it before any style sheet) and comments.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.54",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3454-theme-sheet",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, step 1: Campaignia's colors now come from a theme sheet (nothing looks different).",
+        "detail": "style.css names every brand color (gold accent, dark panels, parchment text, crimson) and reads its value from css/themes/campaignia.css, so a second brand can have its own sheet. Proved identical: expanded back it is the old file, and every computed style of every element on the tested screens matches.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.53",
     "staged_on": "2026-11-05",
     "entries": [

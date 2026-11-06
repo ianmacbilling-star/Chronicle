@@ -15,40 +15,40 @@
 <style>
   body { margin: 0; }
   .auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
-    background: #0a0806; background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; position: relative; }
+    background: var(--page-bg); background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; position: relative; }
   .auth-page::before { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.65); }
-  .auth-box { position: relative; z-index: 1; background: rgba(20,15,8,0.92); border: 1px solid rgba(201,168,76,0.25); border-radius: 16px;
-    padding: 32px; width: 100%; max-width: 440px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: #e8d5a3; }
+  .auth-box { position: relative; z-index: 1; background: rgba(var(--panel-rgb),0.92); border: 1px solid rgba(var(--accent-rgb),0.25); border-radius: 16px;
+    padding: 32px; width: 100%; max-width: 440px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: var(--accent-pale); }
   .auth-logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 22px; gap: 10px; }
   .auth-logo-img { height: 72px; width: auto; max-width: 80%; }
-  .auth-title { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: #c9a84c; text-align: center; letter-spacing: 1px; margin-bottom: 6px; }
-  .auth-subtitle { font-size: 13px; color: rgba(201,168,76,0.6); text-align: center; margin-bottom: 20px; line-height: 1.5; }
-  .auth-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent); margin: 0 0 20px; }
-  .auth-box .form-label { color: #e8d5a3; } /* v3.1.54 -- brighter, as on the Gift page */
-  .auth-box .form-input { background: rgba(255,255,255,0.05); border-color: rgba(201,168,76,0.2); color: #e8d5a3; width: 100%; box-sizing: border-box;
+  .auth-title { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: var(--accent); text-align: center; letter-spacing: 1px; margin-bottom: 6px; }
+  .auth-subtitle { font-size: 13px; color: rgba(var(--accent-rgb),0.6); text-align: center; margin-bottom: 20px; line-height: 1.5; }
+  .auth-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb),0.3), transparent); margin: 0 0 20px; }
+  .auth-box .form-label { color: var(--accent-pale); } /* v3.1.54 -- brighter, as on the Gift page */
+  .auth-box .form-input { background: rgba(255,255,255,0.05); border-color: rgba(var(--accent-rgb),0.2); color: var(--accent-pale); width: 100%; box-sizing: border-box;
     font-family: 'Courier New', monospace; letter-spacing: 1px; text-transform: uppercase; }
-  .auth-box .btn-primary { background: #c9a84c; color: #1a0e06; border-color: #c9a84c; font-family: 'Cinzel', Georgia, serif; letter-spacing: 1px;
+  .auth-box .btn-primary { background: var(--accent); color: var(--surface-ink-text); border-color: var(--accent); font-family: 'Cinzel', Georgia, serif; letter-spacing: 1px;
     font-size: 13px; width: 100%; justify-content: center; padding: 12px; margin-top: 8px; }
-  .auth-box .btn-primary:hover { background: #e8c870; }
+  .auth-box .btn-primary:hover { background: var(--highlight-fill); }
   .auth-box .btn-primary[disabled] { opacity: 0.6; cursor: default; }
   /* v3.1.45 -- choice labels can be long on a phone: wrap rather than clip. */
   .auth-box .btn { white-space: normal; line-height: 1.35; text-align: center; }
-  .gift-card { border: 1px solid rgba(201,168,76,0.3); border-radius: 10px; padding: 16px; margin: 4px 0 16px; background: rgba(201,168,76,0.06); }
-  .gift-from { font-size: 13px; color: rgba(201,168,76,0.7); margin-bottom: 4px; }
-  .gift-what { font-size: 17px; color: #f0e8d0; line-height: 1.4; }
+  .gift-card { border: 1px solid rgba(var(--accent-rgb),0.3); border-radius: 10px; padding: 16px; margin: 4px 0 16px; background: rgba(var(--accent-rgb),0.06); }
+  .gift-from { font-size: 13px; color: rgba(var(--accent-rgb),0.7); margin-bottom: 4px; }
+  .gift-what { font-size: 17px; color: var(--on-panel); line-height: 1.4; }
   /* v3.1.55 -- what they already have, so they choose between the pass and the tokens knowing it. */
-  .acct { border: 1px solid rgba(201,168,76,0.18); border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: #e8d5a3; }
+  .acct { border: 1px solid rgba(var(--accent-rgb),0.18); border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: var(--accent-pale); }
   /* v3.1.56 -- small print on each choice: what they would have after it. Ordinary type, not the capitals. */
   #redeem-btn, #convert-btn { flex-direction: column; gap: 2px; }
   .auth-box .btn .btn-sub { display: block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 400;
     letter-spacing: 0; text-transform: none; font-variant: normal; opacity: 0.85; }
-  .acct-kicker { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: rgba(201,168,76,0.75); margin-bottom: 2px; }
-  .note { font-size: 13px; line-height: 1.6; color: rgba(232,213,163,0.8); margin: 10px 0 0; }
-  .msg-error { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
-  .msg-warn { background: rgba(201,140,40,0.14); border: 1px solid rgba(230,170,70,0.55); color: #f3d9a4; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
-  .msg-ok { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); color: #f0e8d0; padding: 14px; border-radius: 8px; font-size: 14px; margin-bottom: 14px; line-height: 1.6; }
-  .links { text-align: center; margin-top: 14px; font-size: 13px; color: rgba(201,168,76,0.6); }
-  .links a { color: #c9a84c; }
+  .acct-kicker { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: rgba(var(--accent-rgb),0.75); margin-bottom: 2px; }
+  .note { font-size: 13px; line-height: 1.6; color: rgba(var(--accent-pale-rgb),0.8); margin: 10px 0 0; }
+  .msg-error { background: rgba(var(--danger-rgb),0.3); border: 1px solid rgba(var(--error-light-line-rgb),0.4); color: var(--error-light); padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
+  .msg-warn { background: rgba(var(--amber-note-rgb),0.14); border: 1px solid rgba(var(--amber-note-line-rgb),0.55); color: var(--warn-strong-text); padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
+  .msg-ok { background: rgba(var(--accent-rgb),0.12); border: 1px solid rgba(var(--accent-rgb),0.45); color: var(--on-panel); padding: 14px; border-radius: 8px; font-size: 14px; margin-bottom: 14px; line-height: 1.6; }
+  .links { text-align: center; margin-top: 14px; font-size: 13px; color: rgba(var(--accent-rgb),0.6); }
+  .links a { color: var(--accent); }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -87,7 +87,7 @@
         <div id="other-account" class="msg-warn hidden" role="note"></div>
         <button class="btn btn-primary" id="redeem-btn" type="button">Redeem</button>
         <div id="convert-wrap" class="hidden">
-          <button class="btn btn-primary" id="convert-btn" type="button" style="background:transparent;color:#c9a84c;"></button>
+          <button class="btn btn-primary" id="convert-btn" type="button" style="background:transparent;color:var(--accent);"></button>
           <p class="note" id="convert-note"></p>
         </div>
         <p class="note" id="who"></p>
@@ -95,7 +95,7 @@
       <div id="signed-out" class="hidden">
         <p class="note" style="margin-top:0;">To use your gift, sign in or create a free Campaignia account.</p>
         <a class="btn btn-primary" id="login-link" href="/login">Sign in</a>
-        <a class="btn btn-primary" id="signup-link" href="/login?signup" style="background:transparent;color:#c9a84c;">Create a free account</a>
+        <a class="btn btn-primary" id="signup-link" href="/login?signup" style="background:transparent;color:var(--accent);">Create a free account</a>
         <p class="note">New here? After you confirm your email address, come back to the link in your gift email to redeem it. Your gift never expires.</p>
       </div>
     </div>
@@ -259,7 +259,7 @@
       var sub = r.subscription || 'none';
       var rb = $('redeem-btn'), cb = $('convert-btn');
       rb.classList.remove('hidden');
-      cb.style.background = 'transparent'; cb.style.color = '#c9a84c';
+      cb.style.background = 'transparent'; cb.style.color = 'var(--accent)';
       if (canConvert) {
         cb.textContent = 'Take ' + r.convertTokens + ' tokens instead';
         var tokensPart = r.tokens > 0 ? ' + ' + r.tokens + ' tokens' : '';

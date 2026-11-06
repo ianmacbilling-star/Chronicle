@@ -1,0 +1,219 @@
+/* Campaignia -- the theme sheet (v3.4.54, two brands step 1).
+   Every brand color style.css uses is named here, holding exactly the value it always had, so Campaignia
+   looks the same. A second brand gets its own sheet with the same names and its own values.
+   *-rgb names hold three numbers so a rule can keep its own see-through level: rgba(var(--accent-rgb),0.2).
+   The :root rules below the new names are style.css's original tokens, moved here word for word. */
+/* v3.4.58 -- near-duplicate names were folded into the name that does the same job (Ian, 2026-11-06).
+   v3.4.62 -- the folded names, which only pointed at their replacements, are gone, with every other name nothing used. */
+:root{
+  --accent-rgb:201,168,76;   /* the Campaignia gold: borders, glows, faint fills, focus rings */
+  --accent-bright-rgb:216,184,92;   /* the bright gold, used in shimmer animations */
+  --accent-pale-rgb:232,213,163;   /* the pale gold: hints and soft labels on dark */
+  --on-panel-rgb:240,232,208;   /* parchment text on a dark panel */
+  --panel-rgb:20,12,4;   /* the main dark-brown panel: inputs, review panel, pickers */
+  --panel-deep-rgb:15,10,5;   /* a deeper panel: picture frames, input wells */
+  --scrim-rgb:8,5,2;   /* the dimmer behind windows */
+  --danger-rgb:139,26,26;   /* the crimson: remove and delete */
+  --accent:#c9a84c;   /* the Campaignia gold as a solid color (spinners, labels) */
+  --page-bg:#0a0806;   /* the page background */
+  --panel:#140c04;   /* the main dark-brown panel as a solid color */
+  --on-panel:#f0e8d0;   /* parchment text on a dark panel */
+  --accent-bright:#d8b85c;   /* the bright gold */
+  --accent-pale:#e8d5a3;   /* the pale gold */
+  /* v3.4.55 -- names the bookshelf look in app.html adds */
+  --foil-rgb:232,207,122;   /* gold-foil lettering on the bookshelf books */
+  --tooling-rgb:214,180,90;   /* the gold lines tooled on the bookshelf books */
+  --shelf-shadow-rgb:12,7,3;   /* the dark fade under the shelves and behind settings text */
+  --well-rgb:10,6,4;   /* dark inset wells (lists inside panels) */
+  --foil:#e8cf7a;   /* gold-foil lettering as a solid color */
+  /* v3.4.57 -- every remaining color, named by its job (Ian, 2026-11-06). Near-identical shades were merged into one;
+     the names say what the color is for, so a second brand gives each its own value. *-rgb hold three numbers. */
+  /* brand golds, browns and creams */
+  --surface-ink-text:#160e06;
+  --surface-ink-text-rgb:22,14,6;
+  --hover-fill:#2a1d08;
+  --hover-fill-rgb:42,29,8;
+  --hover-fill-text:#2a1d08;
+  --support-banner-text:#7c2d12;
+  --gold-dim-label:#6b4f12;
+  --gold-dim-label-fill:#6b4f12;
+  --gold-dim-label-line:#6b4f12;
+  --gold-dim-label-line-rgb:107,79,18;
+  --gold-muted:#8a5a00;
+  --gold-muted-fill:#8a5a00;
+  --gold-muted-line:#8a5a00;
+  --gold-muted-line-rgb:138,90,0;
+  --quote-text:#6e6455;
+  --quote-text-rgb:110,100,85;
+  --hint-text:#7a6440;
+  --support-orange:#c2410c;
+  --support-orange-rgb:194,65,12;
+  --row-muted:#9a6a5a;
+  --copper:#b87333;
+  --copper-rgb:184,115,51;
+  --gold-faint:#a08850;
+  --print-note:#c9784c;
+  --print-note-rgb:201,120,76;
+  --muted-text:#9b8e80;
+  --admin-orange:#ff8c00;
+  --admin-orange-rgb:255,140,0;
+  --warn-orange-rgb:251,146,60;
+  --amber-note:#e0a040;
+  --amber-note-line-rgb:224,160,64;
+  --soft-gold-note:#e0b070;
+  --soft-gold-note-rgb:224,176,112;
+  --peach-text:#ffb38a;
+  --peach-text-rgb:255,179,138;
+  --highlight:#e8c766;
+  --highlight-rgb:232,199,102;
+  --highlight-fill:#e8c766;
+  --label:#e8d49a;
+  --label-rgb:232,212,154;
+  --label-fill:#e8d49a;
+  --label-line:#e8d49a;
+  --soft-line:#e2d6b5;
+  --soft-line-rgb:226,214,181;
+  --soft-line-text:#e2d6b5;
+  --soft-line-text-rgb:226,214,181;
+  /* pale panels (older light-style windows) */
+  --light-highlight:#ffebb4;
+  --light-highlight-rgb:255,235,180;
+  --light-panel:#faf8f3;
+  --light-panel-rgb:250,248,243;
+  --light-panel-line:#faf8f3;
+  --light-panel-text:#faf8f3;
+  --light-panel-text-rgb:250,248,243;
+  /* the bookshelf and Library shelves */
+  --shelf-deep:#0e0804;
+  --shelf-deep-rgb:14,8,4;
+  --shelf-wood-dark:#2b1a0d;
+  --shelf-wood-dark-rgb:43,26,13;
+  --shelf-wood:#3a2210;
+  --shelf-wood-rgb:58,34,16;
+  --shelf-remove-hover:#6e1a1a;
+  --shelf-wood-mid:#573115;
+  --shelf-wood-mid-rgb:87,49,21;
+  --shelf-wood-light:#6a3e1c;
+  --shelf-ribbon:#a83232;
+  --shelf-wood-edge:#8d5a2c;
+  --shelf-plaque:#9c7a2a;
+  --shelf-gutter:#9c8050;
+  --link-blue:#7fb0e0;
+  --shelf-remove-line-rgb:240,149,149;
+  --shelf-brass:#debe64;
+  --shelf-brass-rgb:222,190,100;
+  --shelf-gutter-light:#d8c290;
+  --shelf-remove-text:#f0c4c4;
+  --shelf-page:#fff1c4;
+  /* status colors: warnings, errors, success, notices */
+  --error-deep:#3a1010;
+  --error-deep-rgb:58,16,16;
+  --error-dialog-bg:#1c1b22;
+  --help-ink:#1f2430;
+  --help-ink-rgb:31,36,48;
+  --success-deep:#0d2a20;
+  --danger-hover:#6f1414;
+  --danger-hover-rgb:111,20,20;
+  --npc-deep:#3c3489;
+  --npc-deep-rgb:60,52,137;
+  --info-rgb:31,80,102;
+  --error-rgb:163,45,45;
+  --success-rgb:15,110,86;
+  --success-text:#0f6e56;
+  --warning-rgb:138,90,0;
+  --ok-text:#3c9142;
+  --ok-text-rgb:60,145,66;
+  --alert-red:#f44336;
+  --alert-red-rgb:244,67,54;
+  --alert-red-line:#f44336;
+  --player-badge-rgb:122,140,184;
+  --rights-warn-line:#d97706;
+  --error-soft:#e57373;
+  --error-soft-line-rgb:229,115,115;
+  --change-pending-rgb:224,122,106;
+  --change-pending-line:#e07a6a;
+  --change-pending-line-rgb:224,122,106;
+  --change-pending-text:#e07a6a;
+  --change-applied:#7ab874;
+  --change-applied-rgb:122,184,116;
+  --change-applied-line-rgb:122,184,116;
+  --error-light:#f09595;
+  --error-light-line:#f09595;
+  --error-light-line-rgb:240,149,149;
+  --player-text:#9caedb;
+  --player-text-line-rgb:156,174,219;
+  --nag:#e8a85a;
+  --nag-rgb:232,168,90;
+  --good-text:#8fd18f;
+  --warn-text-rgb:230,190,120;
+  --npc-text:#c9bdf0;
+  --npc-text-rgb:201,189,240;
+  --success-light:#86d4ba;
+  --success-light-rgb:134,212,186;
+  --success-light-line:#86d4ba;
+  --success-light-line-rgb:134,212,186;
+  --rights-warn-text:#fcd34d;
+  --warn-strong-text:#f0d9a8;
+  --error-pale-text:#f5d8d0;
+  --error-pale-text-rgb:245,216,208;
+  --ok-pale-text:#c8ebb4;
+  --ok-pale-text-rgb:200,235,180;
+  --error-bg-rgb:252,235,235;
+  --error-bg-line:#fcebeb;
+  /* v3.4.58 -- forms the kept names gained when near-duplicates were folded into them */
+  --danger:#8b1a1a;
+  /* v3.4.59 -- forms the sign-in and gift pages needed */
+  --amber-note-rgb:224,160,64;
+  --page-bg-rgb:10,8,6;
+  /* v3.4.60 -- the call-to-action button in emails */
+  --button-cta:#c0392b;
+  /* v3.4.61 -- names the public pages add: tier metals, the AI tag, the writer and editor labels, the added-to-shelf button */
+  --tier-silver:#c0c0c0;
+  --tier-platinum:#e5e4e2;
+  --ai-tag-line:#5b7bc0;
+  --ai-tag-text:#dbeafe;
+  --writer-pill-fill:#2f4a5c;
+  --editor-pill-fill:#3f5232;
+  --editor-pill-line:#283821;
+  --added-line:#1f3a1f;
+  --panel-deep:#0f0a05;
+  --tooling:#d6b45a;
+  --added-fill-rgb:40,70,40;
+  --tier-platinum-rgb:229,228,226;
+  --change-pending:#e07a6a;
+  --rights-warn-line-rgb:217,119,6;
+  --ai-tag-fill-rgb:59,90,160;
+  /* v3.4.62 -- the tier badges and headers in the app (Account, Plans and Passes); Gold uses --accent */
+  --tier-copper-fill:#6b4a2f;
+  --tier-copper-text:#f0d8b8;
+  --tier-silver-fill:#8a8d93;
+  --tier-silver-text:#1a1a1a;
+  --tier-gold-text:#1a1a1a;
+  --tier-platinum-fill:#3a3d6b;
+  --tier-platinum-text:#e8e8f0;
+  /* v3.4.64 -- the halftone dots laid over the landing pages (landing.css body::before) */
+  --halftone-dot:rgba(0,0,0,0.15);
+  /* v3.4.67 -- the landing page fonts (landing.css, landing-story.css, the tier grid). Campaignia's own faces come from /css/fonts.css. */
+  --font-heading:'EB Garamond', 'Crimson Text', Georgia, serif;
+  --font-body:'Crimson Text', Georgia, serif;
+  --font-label:'Cinzel', serif;
+  --font-comic:'Bangers', cursive;
+}
+:root{
+  --ink:#2c1810;
+  --gold-dim:rgba(201,168,76,0.6);
+  --crimson-light:#fcebeb;
+  --bg:#f9f7f4;--surface:#ffffff;
+  --border:#e2ddd5;--border-dark:#c4bfb5;
+  --text:#1a1410;--text-muted:#6b5f55;--text-light:#9e9088;
+  --success:#0f6e56;--success-bg:#e1f5ee;
+  --error:#a32d2d;--error-bg:#fcebeb;
+  --warning:#8a5a00;--warning-bg:#fbf0d8;
+  --info:#1f5066;--info-bg:#e6f0f4;
+  --shadow:0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:0 4px 16px rgba(0,0,0,0.12);
+  --radius:8px;--radius-lg:12px;
+  --font-display:'Cinzel',Georgia,serif;
+}
+:root{--warn-text:#e6be78;}
+:root{--warn-orange:#fb923c;--warn-orange-bg:rgba(194,65,12,0.12);--warn-orange-line:rgba(251,146,60,0.55);}

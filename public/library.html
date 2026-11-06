@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <link rel="stylesheet" href="/css/fonts.css">
+  <link rel="stylesheet" href="/css/themes/campaignia.css">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- v3.0.857 -- TD-716. The title, the three descriptions and the subtitle below are
@@ -26,41 +27,41 @@
   <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
 <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --ink:#0a0806; --gold:#c9a84c; --gold-light:#e8d5a3; --crimson-bright:#c0392b; --parchment:#f0e8d0; }
+    /* v3.4.61 -- colors come from the brand theme sheet, /css/themes/campaignia.css */
     html { scroll-behavior: smooth; }
-    body { font-family:'Crimson Text',Georgia,serif; background:#0a0806; background-image:url('/images/Campaignia_background.png'); background-size:cover; background-position:center; background-attachment:fixed; color:var(--parchment); min-height:100vh; }
+    body { font-family:'Crimson Text',Georgia,serif; background:var(--page-bg); background-image:url('/images/Campaignia_background.png'); background-size:cover; background-position:center; background-attachment:fixed; color:var(--on-panel); min-height:100vh; }
 
     nav {
       position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between;
-      padding:12px 20px; background:rgba(10,8,6,0.96); border-bottom:3px solid var(--ink);
-      box-shadow:0 3px 0 rgba(201,168,76,0.15); gap:12px; flex-wrap:wrap;
+      padding:12px 20px; background:rgba(var(--page-bg-rgb),0.96); border-bottom:3px solid var(--page-bg);
+      box-shadow:0 3px 0 rgba(var(--accent-rgb),0.15); gap:12px; flex-wrap:wrap;
     }
     .nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
     .nav-logo img { height:30px; }
-    .nav-logo-text { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--gold); letter-spacing:3px; }
+    .nav-logo-text { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--accent); letter-spacing:3px; }
     .nav-actions { display:flex; align-items:center; gap:14px; }
-    .nav-link { font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; color:rgba(201,168,76,0.6); text-decoration:none; transition:color .2s; }
-    .nav-link:hover { color:var(--gold); }
+    .nav-link { font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; color:rgba(var(--accent-rgb),0.6); text-decoration:none; transition:color .2s; }
+    .nav-link:hover { color:var(--accent); }
     .btn-nav {
       font-family:'Bangers',cursive; font-size:15px; letter-spacing:2px; padding:7px 18px;
-      background:var(--crimson-bright); color:var(--parchment); border:3px solid var(--ink); border-radius:3px;
-      text-decoration:none; box-shadow:3px 3px 0 var(--ink); transition:all .15s;
+      background:var(--button-cta); color:var(--on-panel); border:3px solid var(--page-bg); border-radius:3px;
+      text-decoration:none; box-shadow:3px 3px 0 var(--page-bg); transition:all .15s;
     }
-    .btn-nav:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
+    .btn-nav:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--page-bg); }
 
     .lib-head { text-align:center; padding:34px 18px 18px; max-width:760px; margin:0 auto; }
     /* v3.1.83 -- the heading is an h1 now (Bing: H1 tag missing). margin and weight reset so it looks
        exactly as the div did: an h1 brings its own margin, and Bangers has one weight, so bold would be faked. */
-    .lib-title { font-family:'Bangers',cursive; font-size:clamp(34px,6vw,56px); color:var(--gold); letter-spacing:2px; text-shadow:3px 3px 0 var(--ink); line-height:1; margin:0; font-weight:normal; }
-    .lib-sub { font-style:italic; color:var(--gold-light); font-size:clamp(15px,2.2vw,18px); margin-top:10px; }
+    .lib-title { font-family:'Bangers',cursive; font-size:clamp(34px,6vw,56px); color:var(--accent); letter-spacing:2px; text-shadow:3px 3px 0 var(--page-bg); line-height:1; margin:0; font-weight:normal; }
+    .lib-sub { font-style:italic; color:var(--accent-pale); font-size:clamp(15px,2.2vw,18px); margin-top:10px; }
 
     .lib-filter { display:flex; justify-content:center; gap:10px; padding:6px 14px 22px; }
     .filter-btn {
       font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer;
-      background:transparent; color:rgba(201,168,76,0.7); border:2px solid rgba(201,168,76,0.35); border-radius:3px; transition:all .15s;
+      background:transparent; color:rgba(var(--accent-rgb),0.7); border:2px solid rgba(var(--accent-rgb),0.35); border-radius:3px; transition:all .15s;
     }
-    .filter-btn:hover { border-color:var(--gold); color:var(--gold); }
-    .filter-btn.active { background:var(--gold); color:var(--ink); border-color:var(--gold); }
+    .filter-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .filter-btn.active { background:var(--accent); color:var(--page-bg); border-color:var(--accent); }
 
     /* v3.0.739 -- TD-536(3). FIXED COLUMNS, not CSS multi-column. column-width made the browser
        reflow cards BETWEEN columns whenever one changed height, so the same picture visibly
@@ -68,33 +69,33 @@
        card where it was put. */
     .gallery { display:flex; align-items:flex-start; gap:14px; padding:0 16px 40px; max-width:1300px; margin:0 auto; }
     .gallery-col { flex:1 1 0; min-width:0; display:flex; flex-direction:column; }
-    .card { margin:0 0 14px; border:3px solid var(--ink); background:#0d0804; border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); }
+    .card { margin:0 0 14px; border:3px solid var(--page-bg); background:var(--panel-deep); border-radius:3px; overflow:hidden; box-shadow:3px 3px 0 rgba(0,0,0,0.35); }
     /* v3.0.738 -- TD-536(2). NO aspect-ratio and NO object-fit here on purpose. v3.0.737 put a
        guessed 4/3 box with object-fit:cover on every card that had no stored pixel size, and
        cropped most of the gallery -- Ian: "they need to be their actual shape". A card whose
        ratio cannot be known keeps the original behaviour: whole image, natural height. The
        ratio is set INLINE, per card, only when it is actually known. */
-    .card img { display:block; width:100%; height:auto; background:#160e06; }
-    .card figcaption { display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:13px; padding:9px 12px; border-top:2px solid rgba(201,168,76,0.12); }
-    .card .cap-title { font-style:italic; color:rgba(240,232,208,0.75); min-width:0; overflow:hidden; text-overflow:ellipsis; }
-    .card .cap-author { font-style:normal; font-size:12px; color:rgba(201,168,76,0.9); white-space:nowrap; flex:0 0 auto; }
+    .card img { display:block; width:100%; height:auto; background:var(--panel); }
+    .card figcaption { display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:13px; padding:9px 12px; border-top:2px solid rgba(var(--accent-rgb),0.12); }
+    .card .cap-title { font-style:italic; color:rgba(var(--on-panel-rgb),0.75); min-width:0; overflow:hidden; text-overflow:ellipsis; }
+    .card .cap-author { font-style:normal; font-size:12px; color:rgba(var(--accent-rgb),0.9); white-space:nowrap; flex:0 0 auto; }
 
-    .lib-status { text-align:center; padding:30px 18px 60px; color:rgba(240,232,208,0.55); font-style:italic; }
+    .lib-status { text-align:center; padding:30px 18px 60px; color:rgba(var(--on-panel-rgb),0.55); font-style:italic; }
     .lib-status .btn-nav { display:inline-block; margin-top:14px; }
-    .spinner { display:inline-block; width:26px; height:26px; border:3px solid rgba(201,168,76,0.25); border-top-color:var(--gold); border-radius:50%; animation:spin .8s linear infinite; }
+    .spinner { display:inline-block; width:26px; height:26px; border:3px solid rgba(var(--accent-rgb),0.25); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
     #sentinel { height:1px; }
 
-    footer { border-top:3px solid var(--ink); background:var(--ink); padding:22px; text-align:center; color:rgba(201,168,76,0.4); font-size:12px; font-family:'Cinzel',serif; letter-spacing:1px; }
-    footer a { color:rgba(201,168,76,0.6); text-decoration:none; }
-    footer a:hover { color:var(--gold); }
+    footer { border-top:3px solid var(--page-bg); background:var(--page-bg); padding:22px; text-align:center; color:rgba(var(--accent-rgb),0.4); font-size:12px; font-family:'Cinzel',serif; letter-spacing:1px; }
+    footer a { color:rgba(var(--accent-rgb),0.6); text-decoration:none; }
+    footer a:hover { color:var(--accent); }
 
     .card img { cursor: zoom-in; }
     .lb { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; padding:24px; background:rgba(8,5,3,0.94); cursor:zoom-out; }
     .lb.open { display:flex; }
-    .lb img { max-width:96vw; max-height:82vh; border:3px solid var(--ink); border-radius:3px; box-shadow:0 10px 40px rgba(0,0,0,0.6); }
-    .lb .lb-cap { font-style:italic; color:var(--gold-light); max-width:760px; text-align:center; font-size:15px; }
-    .lb .lb-close { position:absolute; top:14px; right:20px; font-family:'Bangers',cursive; font-size:26px; color:var(--gold); background:none; border:none; cursor:pointer; letter-spacing:2px; }
+    .lb img { max-width:96vw; max-height:82vh; border:3px solid var(--page-bg); border-radius:3px; box-shadow:0 10px 40px rgba(0,0,0,0.6); }
+    .lb .lb-cap { font-style:italic; color:var(--accent-pale); max-width:760px; text-align:center; font-size:15px; }
+    .lb .lb-close { position:absolute; top:14px; right:20px; font-family:'Bangers',cursive; font-size:26px; color:var(--accent); background:none; border:none; cursor:pointer; letter-spacing:2px; }
 
     @media (max-width:600px) {
       .nav-logo-text { font-size:14px; letter-spacing:2px; }
@@ -103,11 +104,11 @@
       .gallery { padding:0 14px 30px; }
     }
     .lib-tabs { display:flex; gap:8px; justify-content:center; margin:0 auto 6px; }
-    .tab-btn { background:transparent; border:2px solid var(--ink); color:var(--gold); font-family:'Cinzel',serif; font-size:12px; letter-spacing:2px; text-transform:uppercase; padding:8px 20px; border-radius:3px; cursor:pointer; }
-    .tab-btn.active { background:var(--gold); color:#160e06; }
+    .tab-btn { background:transparent; border:2px solid var(--page-bg); color:var(--accent); font-family:'Cinzel',serif; font-size:12px; letter-spacing:2px; text-transform:uppercase; padding:8px 20px; border-radius:3px; cursor:pointer; }
+    .tab-btn.active { background:var(--accent); color:var(--surface-ink-text); }
     .lib-search { display:flex; justify-content:center; padding:0 14px 10px; }
-    .lib-search input { width:100%; max-width:440px; background:#0d0804; border:2px solid var(--ink); color:var(--parchment); font-family:'Crimson Text',serif; font-size:15px; padding:10px 14px; border-radius:3px; }
-    .lib-search input::placeholder { color:rgba(240,232,208,0.4); }
+    .lib-search input { width:100%; max-width:440px; background:var(--panel-deep); border:2px solid var(--page-bg); color:var(--on-panel); font-family:'Crimson Text',serif; font-size:15px; padding:10px 14px; border-radius:3px; }
+    .lib-search input::placeholder { color:rgba(var(--on-panel-rgb),0.4); }
     /* v3.3.44 -- THE STORIES STAND ON SHELVES (Ian: "the stories go across... a space between pen names if one pen name
        can't fill the whole row... arranged a little more like the bookshelf"). Every book is one slot in a single
        left-to-right run that wraps onto the next shelf: a wider gap where a new pen name starts, a smaller one where a
@@ -128,32 +129,32 @@
     .lib-slot.lib-linestart { margin-left:0; }
     .lib-slot:hover { z-index:6; } .lib-slot.lb-on { z-index:7; }
     .lib-board { position:absolute; height:22px; z-index:0; pointer-events:none; border-radius:2px;
-      background:linear-gradient(to bottom, #94602f 0, #74461f 2px, #5a3417 14px, #3a200d 20px, #170b04 22px);
+      background:linear-gradient(to bottom, var(--shelf-wood-edge) 0, var(--shelf-wood-light) 2px, var(--shelf-wood-mid) 14px, var(--shelf-wood) 20px, var(--shelf-deep) 22px);
       box-shadow:0 10px 16px rgba(0,0,0,0.55), 0 -2px 6px rgba(0,0,0,0.35); }
     /* The Bookshelf's brass plate (app.html .bplaque), carrying the pen name. */
     .lib-plate { position:absolute; z-index:2; pointer-events:none; padding:1px 10px; font-family:'Cinzel',serif; font-size:11px; font-weight:700;
-      letter-spacing:0.04em; line-height:1.4; color:#2a1606; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-      background:linear-gradient(to bottom, #f0d88a, #c9a84c 55%, #9c7a2a); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.7); }
+      letter-spacing:0.04em; line-height:1.4; color:var(--shelf-wood-dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      background:linear-gradient(to bottom, var(--foil), var(--tooling) 55%, var(--shelf-plaque)); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.7); }
     @media (max-width:420px) { .stories { --fh:176px; } .lib-slot { width:136px; flex-basis:136px; } .lib-slot.lib-sp { width:34px; flex-basis:34px; } .lib-slot.lib-astart { margin-left:24px; } }
     .story-card { display:block; position:relative; cursor:pointer; text-decoration:none; color:inherit; transition:transform .15s ease; }
     .story-card:hover, .story-card:focus-visible, .story-card.lb-open { transform:translateY(-8px); outline:none; }
     /* Face out: the Bookshelf's .bface, the cover with the spine's shading down its left edge. */
-    .lb-face { position:relative; width:100%; aspect-ratio:17/22; overflow:hidden; border-radius:2px 4px 4px 2px; background:#3a2010;
+    .lb-face { position:relative; width:100%; aspect-ratio:17/22; overflow:hidden; border-radius:2px 4px 4px 2px; background:var(--shelf-wood);
       box-shadow:5px 6px 12px rgba(0,0,0,0.7); }
     .lb-face img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
     .lb-face::after { content:''; position:absolute; top:0; bottom:0; left:0; width:10px; z-index:1;
       background:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.18) 55%, rgba(0,0,0,0.15)); }
     .lb-face-t { position:absolute; inset:12px 10px 12px 16px; display:flex; align-items:center; justify-content:center; text-align:center;
-      color:#e8cf7a; font-family:'Cinzel',serif; font-size:14px; line-height:1.25; }
+      color:var(--foil); font-family:'Cinzel',serif; font-size:14px; line-height:1.25; }
     /* Spine out: the Bookshelf's .bspine, leather in the campaign's colour, gold bands, the title up the spine. */
     .lb-spine { position:relative; width:34px; height:calc(var(--fh) * var(--k, 0.92)); overflow:hidden; border-radius:2px 2px 1px 1px;
       background-image:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.14) 20%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.22) 78%, rgba(0,0,0,0.55));
       box-shadow:2px 0 3px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12); }
     .lb-spine::before, .lb-spine::after { content:''; position:absolute; left:0; right:0; height:5px; z-index:1;
-      border-top:1px solid rgba(222,190,100,0.9); border-bottom:1px solid rgba(222,190,100,0.9); }
+      border-top:1px solid rgba(var(--shelf-brass-rgb),0.9); border-bottom:1px solid rgba(var(--shelf-brass-rgb),0.9); }
     .lb-spine::before { top:14px; } .lb-spine::after { bottom:16px; }
     .lb-spine-t { position:absolute; inset:30px 0 32px; display:flex; flex-direction:column; gap:1px; align-items:center; justify-content:center;
-      writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:#e8cf7a; font-family:'Cinzel',serif;
+      writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:var(--foil); font-family:'Cinzel',serif;
       font-size:11px; letter-spacing:0.05em; white-space:nowrap; overflow:hidden; text-shadow:0 1px 1px rgba(0,0,0,0.8); }
     .lb-tt, .lb-ts { display:block; max-height:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .lb-ts { font-size:8px; letter-spacing:0.03em; opacity:0.78; }
@@ -162,7 +163,7 @@
        on the way to + Bookshelf does not swap cards; it stays a moment after the mouse leaves, and its bridge
        (::after) covers the gap down to the book. */
     .lb-card { position:absolute; bottom:calc(100% + 12px); left:50%; width:238px; margin-left:-119px; z-index:7; text-align:left;
-      background:#160e06; border:2px solid #c9a84c; border-radius:4px; padding:10px 12px 4px; box-shadow:0 8px 20px rgba(0,0,0,0.75);
+      background:var(--panel); border:2px solid var(--accent); border-radius:4px; padding:10px 12px 4px; box-shadow:0 8px 20px rgba(0,0,0,0.75);
       opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease, visibility 0s linear .18s; }
     .lb-card::after { content:''; position:absolute; left:0; right:0; top:100%; height:16px; }
     /* v3.3.46 -- the whole cover, bigger than the book, at the top of the card -- spines too (Ian). Its picture loads
@@ -178,27 +179,27 @@
        not grow), over the big cover in the same space, scrolling when long. Clicking it again, or the blurb itself,
        brings the cover back; so does the card closing. */
     .lb-blurb { display:flex; align-items:flex-end; gap:6px; font-family:'Crimson Text',serif; font-size:13px; line-height:1.35;
-      color:rgba(240,232,208,0.86); margin:0 0 7px; }
+      color:rgba(var(--on-panel-rgb),0.86); margin:0 0 7px; }
     .lb-blurb-short { flex:1 1 auto; min-width:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-    .lb-blurb-more { flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:0.03em; color:var(--gold); text-decoration:underline; cursor:pointer; }
+    .lb-blurb-more { flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:0.03em; color:var(--accent); text-decoration:underline; cursor:pointer; }
     .lb-blurb.lb-more { cursor:pointer; }
     .lb-blurb-full { display:none; position:absolute; inset:0; z-index:2; padding:12px 12px 12px 18px; overflow-y:auto; cursor:pointer;
-      white-space:pre-line; font-family:'Crimson Text',serif; font-size:13px; line-height:1.4; color:rgba(240,232,208,0.92);
-      background:rgba(14,9,4,0.95); }
+      white-space:pre-line; font-family:'Crimson Text',serif; font-size:13px; line-height:1.4; color:rgba(var(--on-panel-rgb),0.92);
+      background:rgba(var(--panel-deep-rgb),0.95); }
     .lb-card.lb-bopen .lb-blurb-full { display:block; }
     .story-card:focus-visible .lb-card, .story-card.lb-open .lb-card { opacity:1; visibility:visible; pointer-events:auto; transition-delay:0s; }
     /* v3.0.983 -- TD-901. Add to Bookshelf on a story card (Gold and Platinum, signed in; v3.0.988: own stories too). */
     /* v3.3.44 -- the pill sits with the genre pills under the title, the same size as them, not over the cover (Ian). */
     .sc-shelf { font-family:'Crimson Text',serif; font-size:10px; font-weight:700; letter-spacing:0.02em; line-height:1.4;
-      color:#160e06; background:rgba(201,168,76,0.92); border:1px solid #4a3208; border-radius:9px; padding:0 7px; cursor:pointer; }
-    .sc-shelf:hover { background:#e2c270; }
-    .sc-shelf[disabled] { cursor:default; color:#f7ecd2; background:rgba(40,70,40,0.92); border-color:#1f3a1f; }
-    .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--parchment); padding:0 0 6px; line-height:1.3; }
-    .story-card .sc-sub { font-family:'Crimson Text',serif; font-size:12px; font-style:italic; color:rgba(240,232,208,0.72); margin:-3px 0 6px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }   /* v3.3.32 */
-    .story-card .sc-date { font-family:'Crimson Text',serif; font-size:11px; color:rgba(201,168,76,0.6); padding:0 0 7px; }
+      color:var(--surface-ink-text); background:rgba(var(--accent-rgb),0.92); border:1px solid var(--gold-dim-label-line); border-radius:9px; padding:0 7px; cursor:pointer; }
+    .sc-shelf:hover { background:var(--highlight-fill); }
+    .sc-shelf[disabled] { cursor:default; color:var(--on-panel); background:rgba(var(--added-fill-rgb),0.92); border-color:var(--added-line); }
+    .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--on-panel); padding:0 0 6px; line-height:1.3; }
+    .story-card .sc-sub { font-family:'Crimson Text',serif; font-size:12px; font-style:italic; color:rgba(var(--on-panel-rgb),0.72); margin:-3px 0 6px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }   /* v3.3.32 */
+    .story-card .sc-date { font-family:'Crimson Text',serif; font-size:11px; color:rgba(var(--accent-rgb),0.6); padding:0 0 7px; }
     /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
     .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 0 8px; }
-    .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:#f7ecd2; background:#6b4a12; border:1px solid #4a3208; border-radius:9px; padding:1px 7px; }
+    .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:var(--on-panel); background:var(--gold-dim-label-fill); border:1px solid var(--gold-dim-label-line); border-radius:9px; padding:1px 7px; }
     /* v3.0.846 -- Ian, 2026-09-10: "I don't like that control at all. Can you do the control
        that matches the Genre Control on the Campaign details Dialog box." So this IS that
        control: a row of removable chips, and a select underneath that adds one.
@@ -209,10 +210,10 @@
        filter chips and the pills on the cards they select now look like one thing. */
     .lib-facets { display:flex; flex-direction:column; align-items:center; gap:8px; padding:0 14px 22px; }
     .facet-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px; }
-    .facet-chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:12px; border:1px solid #4a3208; background:#8a6a2a; font-family:'Crimson Text',serif; font-size:12px; font-weight:600; color:#f7ecd2; }
-    .facet-chip button { background:none; border:none; color:rgba(247,236,210,0.8); cursor:pointer; padding:0; font-size:13px; line-height:1; }
+    .facet-chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:12px; border:1px solid var(--gold-dim-label-line); background:var(--gold-dim-label-fill); font-family:'Crimson Text',serif; font-size:12px; font-weight:600; color:var(--on-panel); }
+    .facet-chip button { background:none; border:none; color:rgba(var(--on-panel-rgb),0.8); cursor:pointer; padding:0; font-size:13px; line-height:1; }
     .facet-chip button:hover { color:#fff; }
-    .facet-add { font-family:'Crimson Text',serif; font-size:13px; background:rgba(12,8,4,0.75); color:rgba(230,210,160,0.92); border:1px solid rgba(201,168,76,0.45); border-radius:5px; padding:6px 9px; max-width:260px; }
+    .facet-add { font-family:'Crimson Text',serif; font-size:13px; background:rgba(var(--panel-deep-rgb),0.75); color:rgba(var(--accent-pale-rgb),0.92); border:1px solid rgba(var(--accent-rgb),0.45); border-radius:5px; padding:6px 9px; max-width:260px; }
     .facet-add:disabled { opacity:0.55; cursor:default; }
     /* v3.3.55 -- TD-1068. THE PICKER WITH ITS CHOICES INSIDE. A fixed-width button ("Genre", "Genre: Fantasy",
        "Genre: Fantasy +2", gold once anything is ticked) and a list of tick boxes under it, so choosing never moves
@@ -221,15 +222,15 @@
     .fdd-btn { display:inline-flex; align-items:center; gap:6px; width:200px; text-align:left; cursor:pointer; }
     .fdd-btn .fdd-t { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .fdd-btn .fdd-c { flex:0 0 auto; font-size:10px; opacity:0.8; }
-    .fdd-btn.fdd-on { background:#8a6a2a; border-color:#c9a84c; color:#f7ecd2; }
+    .fdd-btn.fdd-on { background:var(--gold-dim-label-fill); border-color:var(--accent); color:var(--on-panel); }
     .fdd-panel { position:absolute; top:calc(100% + 6px); left:0; z-index:60; min-width:240px; max-height:320px; overflow-y:auto;
-      background:#120b05; border:1px solid rgba(201,168,76,0.55); border-radius:6px; box-shadow:0 10px 26px rgba(0,0,0,0.7); padding:6px 0; }
+      background:var(--panel-deep); border:1px solid rgba(var(--accent-rgb),0.55); border-radius:6px; box-shadow:0 10px 26px rgba(0,0,0,0.7); padding:6px 0; }
     .fdd-panel[hidden] { display:none; }
-    .fdd-opt { display:flex; align-items:center; gap:9px; padding:6px 12px; font-family:'Crimson Text',serif; font-size:14px; color:rgba(240,232,208,0.92); cursor:pointer; }
-    .fdd-opt:hover { background:rgba(201,168,76,0.12); }
-    .fdd-opt input { margin:0; accent-color:#c9a84c; }
-    .fdd-foot { display:flex; justify-content:space-between; padding:6px 12px 2px; margin-top:4px; border-top:1px solid rgba(201,168,76,0.2); }
-    .fdd-foot button { background:none; border:none; color:#c9a84c; font-family:'Crimson Text',serif; font-size:13px; cursor:pointer; padding:2px 0; }
+    .fdd-opt { display:flex; align-items:center; gap:9px; padding:6px 12px; font-family:'Crimson Text',serif; font-size:14px; color:rgba(var(--on-panel-rgb),0.92); cursor:pointer; }
+    .fdd-opt:hover { background:rgba(var(--accent-rgb),0.12); }
+    .fdd-opt input { margin:0; accent-color:var(--accent); }
+    .fdd-foot { display:flex; justify-content:space-between; padding:6px 12px 2px; margin-top:4px; border-top:1px solid rgba(var(--accent-rgb),0.2); }
+    .fdd-foot button { background:none; border:none; color:var(--accent); font-family:'Crimson Text',serif; font-size:13px; cursor:pointer; padding:2px 0; }
     .fdd-foot button:hover { text-decoration:underline; }
     @media (max-width:600px) { .fdd-panel { min-width:0; width:calc(100vw - 28px); max-width:420px; } }   /* phones: full width, under its button */
     /* Show everything shares a row with Last 6 Months and All Time, so it takes their
@@ -237,8 +238,8 @@
        -- or the three sit at different heights and the row reads as an accident. It keeps a
        thinner, dimmer border because it is an ACTION beside two MODE buttons, and only the
        modes should ever look selected. */
-    .facet-clear { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer; background:transparent; color:rgba(201,168,76,0.7); border:2px solid rgba(201,168,76,0.2); border-radius:3px; transition:all .15s; }
-    .facet-clear:hover { color:var(--gold); border-color:var(--gold); }
+    .facet-clear { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer; background:transparent; color:rgba(var(--accent-rgb),0.7); border:2px solid rgba(var(--accent-rgb),0.2); border-radius:3px; transition:all .15s; }
+    .facet-clear:hover { color:var(--accent); border-color:var(--accent); }
     #lib-actions { gap:10px; margin-top:2px; }
     #lib-actions .lib-search { padding:0; flex:0 1 380px; min-width:220px; }   /* v3.3.45 -- on the Show everything row */
     #lib-actions { width:100%; max-width:760px; }   /* the full width, or the row shrinks to its widest item and the search wraps */
@@ -256,9 +257,9 @@
     .lib-row .tab-btn { padding:7px 14px; }
     /* v3.3.65 -- TD-1076. The unselected tabs and time-window button get the same dark fill as the Genre and Art style
        pickers, so the background does not show through them (Ian: "darken their interiors a little"). */
-    .tab-btn:not(.active), .filter-btn:not(.active), .facet-clear { background:rgba(12,8,4,0.75); }
-    .tab-btn:not(.active):hover, .filter-btn:not(.active):hover, .facet-clear:hover { background:rgba(20,13,6,0.88); }
-    .lib-sep { width:1px; height:28px; background:rgba(201,168,76,0.35); margin:0 2px; }
+    .tab-btn:not(.active), .filter-btn:not(.active), .facet-clear { background:rgba(var(--panel-deep-rgb),0.75); }
+    .tab-btn:not(.active):hover, .filter-btn:not(.active):hover, .facet-clear:hover { background:rgba(var(--panel-rgb),0.88); }
+    .lib-sep { width:1px; height:28px; background:rgba(var(--accent-rgb),0.35); margin:0 2px; }
     .lib-row .lib-facets { display:contents; }
     .lib-row #facet-genre, .lib-row #facet-style { flex-wrap:nowrap; }
     .lib-row #lib-actions { width:auto; max-width:none; flex:1 1 260px; justify-content:flex-start; margin:0; }
@@ -359,7 +360,7 @@
 
   <footer>
     &copy; <span id="yr"></span> So It Begins, LLC &middot; Campaignia &middot; <a href="/" onclick="goHome(event)">Home</a> &middot; <a href="/login">Sign In</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a>
-    <div style="margin-top:8px;font-size:11px;color:rgba(201,168,76,0.3);letter-spacing:0;line-height:1.5;">Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher.</div>
+    <div style="margin-top:8px;font-size:11px;color:rgba(var(--accent-rgb),0.3);letter-spacing:0;line-height:1.5;">Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher.</div>
   </footer>
 
   <script>

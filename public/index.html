@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <link rel="stylesheet" href="/css/fonts.css">
+  <link rel="stylesheet" href="/css/themes/campaignia.css">
   <meta charset="UTF-8">
   <script>(function(){var P=['campaignia.com','www.campaignia.com'];if(P.indexOf(location.hostname)===-1){document.documentElement.classList.add('staging-env');}})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,7 +24,7 @@
   <!-- v3.0.891 -- TD-767. Compare the Tiers. Its own stylesheet ON PURPOSE: this is the file a
        second landing page swaps out. Version-stamped because Cloudflare caches /css and /js by
        extension and index.html cannot stamp itself the way app.html does. -->
-  <link rel="stylesheet" href="/css/tier-grid.css?v=3.0.896">
+  <link rel="stylesheet" href="/css/tier-grid.css?v=3.4.61">
   <script src="/js/tier-grid.js?v=3.4.02" defer></script>
   <!-- v3.0.897 -- TD-770. THE LANDING PAGE STYLESHEET MOVED OUT, UNCHANGED.
        900 lines lived here. A second landing page needs the same rules, and two copies of one
@@ -34,7 +35,7 @@
        tier-grid.css, so the cascade is byte-for-byte the cascade it was. And it is a stylesheet in
        the head, which blocks painting until it arrives -- so there is no flash of unstyled page,
        only one extra request on a first visit that the edge then caches. -->
-  <link rel="stylesheet" href="/css/landing.css?v=3.3.01">
+  <link rel="stylesheet" href="/css/landing.css?v=3.4.61">
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -79,9 +80,9 @@
   <div class="hero-split" style="display:flex;gap:var(--gutter);margin-bottom:var(--gutter);min-height:calc(100vh - 84px);">
 
     <!-- LEFT: Text panel -->
-    <div class="panel hero-text-panel" style="flex:1;background:#0d0804;display:flex;flex-direction:column;justify-content:flex-start;padding:16px 44px;position:relative;overflow:hidden;">
+    <div class="panel hero-text-panel" style="flex:1;background:var(--panel-deep);display:flex;flex-direction:column;justify-content:flex-start;padding:16px 44px;position:relative;overflow:hidden;">
       <!-- subtle background texture -->
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(201,168,76,0.02) 0px,rgba(201,168,76,0.02) 1px,transparent 1px,transparent 12px);pointer-events:none;"></div>
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(var(--accent-rgb),0.02) 0px,rgba(var(--accent-rgb),0.02) 1px,transparent 1px,transparent 12px);pointer-events:none;"></div>
       <div class="hero-content" style="position:relative;z-index:1;">
         <div class="hero-eyebrow">⚔ FOR GAME MASTERS AND STORYTELLERS ⚔</div>
         <h1 class="hero-title">
@@ -106,7 +107,7 @@
 
     <!-- RIGHT: DM image panel -->
     <div class="panel hero-img-panel" style="flex:1;background-image:url('/images/DM_Rolling_Dice.png');background-size:cover;background-position:center center;position:relative;">
-      <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(10,8,6,0.3) 0%,transparent 40%);"></div>
+      <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(var(--page-bg-rgb),0.3) 0%,transparent 40%);"></div>
     </div>
 
   </div>
@@ -211,7 +212,7 @@
     .features-strip-body.ways-3 { grid-template-columns: repeat(3, 1fr); }
     /* v3.2.44 -- Ian, 2026-10-23: the tagline sits in the banner, not on a line of its own under the cards. */
     #your-way .features-strip-header { flex-wrap: wrap; row-gap: 2px; }
-    .ways-tag { margin-left: auto; font-style: italic; font-size: 15px; color: var(--ink, #0a0806); opacity: 0.8; }
+    .ways-tag { margin-left: auto; font-style: italic; font-size: 15px; color: var(--page-bg, #0a0806); opacity: 0.8; }
     @media (max-width: 900px) { .features-strip-body.ways-3 { grid-template-columns: 1fr; } .features-strip-body.ways-3 .feature-cell { border-right: none; } }
   </style>
   <div class="features-strip" id="your-way">
@@ -301,7 +302,7 @@
         </div>
         <div style="text-align:center;flex-shrink:0;">
           <a href="/login?signup" class="btn-cta">BEGIN YOUR CAMPAIGN</a>
-          <div class="cta-note" style="color:rgba(240,232,208,0.5);">30-DAY FREE TRIAL</div>
+          <div class="cta-note" style="color:rgba(var(--on-panel-rgb),0.5);">30-DAY FREE TRIAL</div>
         </div>
       </div>
     </div>
@@ -435,7 +436,7 @@
       </div>
       <div class="faq-cell">
         <div class="faq-q">How does the AI know which moments matter?</div>
-        <div class="faq-a">Campaignia identifies combat, revelations, and emotional beats automatically. You can also give it director's notes — tell it exactly which scenes you want included. <a href="https://campaignia.com/library" style="color:var(--gold);text-decoration:underline;">Click here to see</a> some of the moments other users have made.</div>
+        <div class="faq-a">Campaignia identifies combat, revelations, and emotional beats automatically. You can also give it director's notes — tell it exactly which scenes you want included. <a href="https://campaignia.com/library" style="color:var(--accent);text-decoration:underline;">Click here to see</a> some of the moments other users have made.</div>
       </div>
       <div class="faq-cell">
         <div class="faq-q">Can I use Campaignia for any TTRPG system?</div>
@@ -447,14 +448,14 @@
       </div>
       <div class="faq-cell">
         <div class="faq-q">What does the exported PDF look like?</div>
-        <div class="faq-a">A print-ready graphic novel with cover page, AI-illustrated panels, narrative prose, and your character cast. Four layout styles, preview before you print. <a href="/library#stories" style="color:var(--gold);font-weight:600;text-decoration:underline;">Click here to see our Library</a>.</div>
+        <div class="faq-a">A print-ready graphic novel with cover page, AI-illustrated panels, narrative prose, and your character cast. Four layout styles, preview before you print. <a href="/library#stories" style="color:var(--accent);font-weight:600;text-decoration:underline;">Click here to see our Library</a>.</div>
       </div>
       <div class="faq-cell">
         <div class="faq-q">Can I cancel anytime?</div>
         <div class="faq-a">Yes, always. Cancel anytime and keep access through your billing period. Your campaigns and sessions are always accessible — your stories don't disappear.</div>
       </div>
       <!-- v3.1.50 -- TD-940. The seventh question spans the row, so the grid of three stays whole. -->
-      <div class="faq-cell" style="grid-column:1 / -1;border-right:none;border-top:2px solid rgba(201,168,76,0.1);">
+      <div class="faq-cell" style="grid-column:1 / -1;border-right:none;border-top:2px solid rgba(var(--accent-rgb),0.1);">
         <div class="faq-q">Can I use my own art, or my own writing?</div>
         <div class="faq-a">Yes. Campaignia can do it all, but it doesn&rsquo;t have to. Illustrate it yourself with your table&rsquo;s own art, or keep a story you&rsquo;ve already written word for word and let Campaignia add the pictures. Mix and match as you like.</div>
       </div>

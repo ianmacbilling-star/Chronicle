@@ -15,41 +15,41 @@
 <style>
   body { margin: 0; }
   .page { min-height: 100vh; display: flex; justify-content: center; padding: 28px 16px; box-sizing: border-box;
-    background: #0a0806; background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; background-attachment: fixed; position: relative; }
+    background: var(--page-bg); background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; background-attachment: fixed; position: relative; }
   .page::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.68); }
-  .box { position: relative; z-index: 1; background: rgba(20,15,8,0.94); border: 1px solid rgba(201,168,76,0.25); border-radius: 16px;
-    padding: 30px; width: 100%; max-width: 620px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: #e8d5a3; align-self: flex-start; }
+  .box { position: relative; z-index: 1; background: rgba(var(--panel-rgb),0.94); border: 1px solid rgba(var(--accent-rgb),0.25); border-radius: 16px;
+    padding: 30px; width: 100%; max-width: 620px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: var(--accent-pale); align-self: flex-start; }
   .logo { display: block; height: 64px; margin: 0 auto 14px; }
-  h1 { font-family: 'Cinzel', Georgia, serif; font-size: 22px; font-weight: 400; color: #c9a84c; text-align: center; letter-spacing: 1px; margin: 0 0 6px; }
-  .sub { font-size: 14px; color: rgba(232,213,163,0.75); text-align: center; margin: 0 0 22px; line-height: 1.5; }
-  .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent); margin: 22px 0; }
-  h2 { font-family: 'Cinzel', Georgia, serif; font-size: 14px; font-weight: 400; color: #c9a84c; letter-spacing: 1px; margin: 0 0 12px; }
+  h1 { font-family: 'Cinzel', Georgia, serif; font-size: 22px; font-weight: 400; color: var(--accent); text-align: center; letter-spacing: 1px; margin: 0 0 6px; }
+  .sub { font-size: 14px; color: rgba(var(--accent-pale-rgb),0.75); text-align: center; margin: 0 0 22px; line-height: 1.5; }
+  .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(var(--accent-rgb),0.3), transparent); margin: 22px 0; }
+  h2 { font-family: 'Cinzel', Georgia, serif; font-size: 14px; font-weight: 400; color: var(--accent); letter-spacing: 1px; margin: 0 0 12px; }
   .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
-  .item { position: relative; border: 1px solid rgba(201,168,76,0.28); border-radius: 10px; padding: 12px; cursor: pointer; background: rgba(255,255,255,0.02); }
+  .item { position: relative; border: 1px solid rgba(var(--accent-rgb),0.28); border-radius: 10px; padding: 12px; cursor: pointer; background: rgba(255,255,255,0.02); }
   .item input { position: absolute; opacity: 0; pointer-events: none; }
-  .item.sel { border-color: #c9a84c; background: rgba(201,168,76,0.12); box-shadow: 0 0 0 1px #c9a84c inset; }
-  .item:focus-within { outline: 2px solid #e8c870; outline-offset: 2px; }
-  .item-kicker { font-size: 11px; letter-spacing: 1px; color: rgba(201,168,76,0.75); text-transform: uppercase; }
-  .item-name { font-size: 15px; color: #f0e8d0; margin: 4px 0 2px; }
-  .item-detail { font-size: 12px; color: rgba(232,213,163,0.7); }
-  .item-price { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: #c9a84c; margin-top: 6px; }
+  .item.sel { border-color: var(--accent); background: rgba(var(--accent-rgb),0.12); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .item:focus-within { outline: 2px solid var(--highlight); outline-offset: 2px; }
+  .item-kicker { font-size: 11px; letter-spacing: 1px; color: rgba(var(--accent-rgb),0.75); text-transform: uppercase; }
+  .item-name { font-size: 15px; color: var(--on-panel); margin: 4px 0 2px; }
+  .item-detail { font-size: 12px; color: rgba(var(--accent-pale-rgb),0.7); }
+  .item-price { font-family: 'Cinzel', Georgia, serif; font-size: 18px; color: var(--accent); margin-top: 6px; }
   /* v3.1.54 -- brighter field labels (Ian: "brighten up the Name, email and message labels"); same cream as the Send it now choices. */
-  label.f { display: block; font-size: 14px; color: #e8d5a3; margin: 12px 0 5px; }
-  .in { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid rgba(201,168,76,0.2); color: #e8d5a3; border-radius: 8px; padding: 10px 12px; font-size: 15px; font-family: inherit; }
-  .in:focus { border-color: rgba(201,168,76,0.6); outline: none; }
+  label.f { display: block; font-size: 14px; color: var(--accent-pale); margin: 12px 0 5px; }
+  .in { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid rgba(var(--accent-rgb),0.2); color: var(--accent-pale); border-radius: 8px; padding: 10px 12px; font-size: 15px; font-family: inherit; }
+  .in:focus { border-color: rgba(var(--accent-rgb),0.6); outline: none; }
   textarea.in { resize: vertical; min-height: 80px; }
-  .count { font-size: 12px; color: rgba(232,213,163,0.75); text-align: right; margin-top: 3px; }
+  .count { font-size: 12px; color: rgba(var(--accent-pale-rgb),0.75); text-align: right; margin-top: 3px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   .when { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 14px; }
   .when label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  .note { font-size: 13px; line-height: 1.6; color: rgba(232,213,163,0.75); margin: 10px 0 0; }
-  .btn-go { display: block; width: 100%; margin-top: 18px; background: #c9a84c; color: #1a0e06; border: 1px solid #c9a84c; border-radius: 8px; padding: 13px;
+  .note { font-size: 13px; line-height: 1.6; color: rgba(var(--accent-pale-rgb),0.75); margin: 10px 0 0; }
+  .btn-go { display: block; width: 100%; margin-top: 18px; background: var(--accent); color: var(--surface-ink-text); border: 1px solid var(--accent); border-radius: 8px; padding: 13px;
     font-family: 'Cinzel', Georgia, serif; font-size: 14px; letter-spacing: 1px; cursor: pointer; white-space: normal; }
-  .btn-go:hover { background: #e8c870; } .btn-go[disabled] { opacity: 0.6; cursor: default; }
-  .err { background: rgba(139,26,26,0.3); border: 1px solid rgba(240,149,149,0.4); color: #f09595; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 14px; line-height: 1.5; }
-  .ok { background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.45); color: #f0e8d0; padding: 16px; border-radius: 10px; font-size: 15px; line-height: 1.6; }
-  .links { text-align: center; margin-top: 16px; font-size: 13px; } .links a { color: #c9a84c; }
-  .sub a { color: #c9a84c; } /* v3.1.55 -- the Back to Campaignia link beside Want to send another? */
+  .btn-go:hover { background: var(--highlight-fill); } .btn-go[disabled] { opacity: 0.6; cursor: default; }
+  .err { background: rgba(var(--danger-rgb),0.3); border: 1px solid rgba(var(--error-light-line-rgb),0.4); color: var(--error-light); padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-top: 14px; line-height: 1.5; }
+  .ok { background: rgba(var(--accent-rgb),0.12); border: 1px solid rgba(var(--accent-rgb),0.45); color: var(--on-panel); padding: 16px; border-radius: 10px; font-size: 15px; line-height: 1.6; }
+  .links { text-align: center; margin-top: 16px; font-size: 13px; } .links a { color: var(--accent); }
+  .sub a { color: var(--accent); } /* v3.1.55 -- the Back to Campaignia link beside Want to send another? */
   .hidden { display: none !important; }
   @media (max-width: 520px) { .box { padding: 22px 18px; } .two { grid-template-columns: 1fr; } }
 </style>
@@ -76,7 +76,7 @@
         <div><label class="f" for="to-name">Their name</label><input class="in" id="to-name" maxlength="80" autocomplete="off" /></div>
         <div><label class="f" for="to-email">Their email</label><input class="in" id="to-email" type="email" maxlength="254" autocomplete="off" /></div>
       </div>
-      <label class="f" for="message">A message <span style="color:rgba(232,213,163,0.7);">(optional)</span></label>
+      <label class="f" for="message">A message <span style="color:rgba(var(--accent-pale-rgb),0.7);">(optional)</span></label>
       <textarea class="in" id="message" maxlength="300"></textarea>
       <div class="count" id="count">0 / 300</div>
 

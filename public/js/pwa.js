@@ -99,7 +99,7 @@
       'box-sizing:border-box',
       'display:flex', 'align-items:center', 'gap:10px',
       'padding:12px', 'padding-bottom:calc(12px + env(safe-area-inset-bottom))',
-      'background:#211c16', 'color:#f5efe2',
+      'background:var(--panel)', 'color:var(--light-panel-text)',
       'border:1px solid rgba(255,255,255,.12)', 'border-radius:14px',
       'box-shadow:0 10px 34px rgba(0,0,0,.40)',
       'font-family:inherit', 'font-size:13px', 'line-height:1.35'
@@ -128,7 +128,7 @@
       btn.style.cssText = [
         'flex:none', 'border:none', 'cursor:pointer', 'font:inherit',
         'font-weight:600', 'border-radius:9px', 'padding:8px 14px',
-        'background:#c9a14a', 'color:#1a1712'
+        'background:var(--accent)', 'color:var(--surface-ink-text)'
       ].join(';');
       btn.addEventListener('click', function () { window.installApp(); });
       wrap.appendChild(btn);
