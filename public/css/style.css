@@ -10,16 +10,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .gap-1{gap:8px;}.gap-2{gap:16px;}.w-full{width:100%;}
 
 /* BUTTONS */
-.btn{padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(30,20,10,0.7);color:var(--gold-light);white-space:nowrap;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px;}
+.btn{padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(var(--surface-ink-rgb),0.7);color:var(--gold-light);white-space:nowrap;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px;}
 .btn:hover{background:rgba(var(--accent-rgb),0.15);border-color:rgba(var(--accent-rgb),0.6);color:var(--gold);}
 .btn:active{transform:scale(0.98);}
 .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
 .btn-primary{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:600;}
 .btn-primary:hover{background:var(--gold-light);border-color:var(--gold-light);color:var(--ink);}
 .btn-danger{background:var(--crimson);color:#fff;border-color:var(--crimson);}
-.btn-danger:hover{background:#6f1414;color:#fff;border-color:#6f1414;}
-.lib-remove-btn{background:rgba(var(--danger-rgb),0.45);color:#f0c4c4;border-color:rgba(240,149,149,0.4);}
-.lib-remove-btn:hover{background:#6e1a1a;color:#ffe5e5;border-color:#a83232;}
+.btn-danger:hover{background:var(--danger-hover);color:#fff;border-color:var(--danger-hover);}
+.lib-remove-btn{background:rgba(var(--danger-rgb),0.45);color:var(--shelf-remove-text);border-color:rgba(var(--shelf-remove-line-rgb),0.4);}
+.lib-remove-btn:hover{background:var(--shelf-remove-hover);color:var(--shelf-remove-text);border-color:var(--shelf-ribbon);}
 .btn-sm{padding:5px 10px;font-size:12px;}
 .btn-lg{padding:12px 24px;font-size:14px;}
 .btn-ghost{border-color:transparent;background:transparent;}
@@ -51,13 +51,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
    semantic tokens. For an alert on a dark/transparent panel, add .panel-dark to an
    ancestor for the light-on-dark variant. NEVER hand-color a status message --
    use these classes so contrast is guaranteed everywhere. */
-.alert-error{background:var(--error-bg);border:1px solid rgba(163,45,45,0.35);color:#3a1010;}
-.alert-success{background:var(--success-bg);border:1px solid rgba(15,110,86,0.35);color:#0d2a20;}
-.alert-warning{background:var(--warning-bg);border:1px solid rgba(138,90,0,0.35);color:#3a2600;}
-.alert-info{background:var(--info-bg);border:1px solid rgba(31,80,102,0.35);color:#0f2a35;}
-.panel-dark .alert-error{background:rgba(var(--danger-rgb),0.35);border-color:rgba(240,149,149,0.4);color:#f09595;}
-.panel-dark .alert-success{background:rgba(15,110,86,0.3);border-color:rgba(134,212,186,0.4);color:#86d4ba;}
-.panel-dark .alert-warning{background:rgba(120,80,0,0.32);border-color:rgba(230,190,120,0.4);color:#e6be78;}
+.alert-error{background:var(--error-bg);border:1px solid rgba(var(--error-rgb),0.35);color:var(--error-deep);}
+.alert-success{background:var(--success-bg);border:1px solid rgba(var(--success-rgb),0.35);color:var(--success-deep);}
+.alert-warning{background:var(--warning-bg);border:1px solid rgba(var(--warning-rgb),0.35);color:var(--error-deep);}
+.alert-info{background:var(--info-bg);border:1px solid rgba(var(--info-rgb),0.35);color:var(--help-ink);}
+.panel-dark .alert-error{background:rgba(var(--danger-rgb),0.35);border-color:rgba(var(--error-light-line-rgb),0.4);color:var(--error-light);}
+.panel-dark .alert-success{background:rgba(var(--success-rgb),0.3);border-color:rgba(var(--success-light-line-rgb),0.4);color:var(--success-light);}
+.panel-dark .alert-warning{background:rgba(var(--warning-rgb),0.32);border-color:rgba(var(--warn-text-rgb),0.4);color:var(--warn-text);}
 /* v3.0.628 -- the warning text colour as a token, so the Optimize busy line and the alert it
    belongs with cannot drift to two different oranges. Same value as the rule above. */
 /* v3.4.54 -- this :root rule moved to /css/themes/campaignia.css */
@@ -84,7 +84,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   font-size:11px;font-weight:700;letter-spacing:0.03em;white-space:nowrap;
   color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);}
 .ver-foreign-chip::before{content:'\26A0';font-weight:400;}
-.panel-dark .alert-info{background:rgba(40,60,80,0.4);border-color:rgba(150,180,200,0.4);color:#a8c4d6;}
+.panel-dark .alert-info{background:rgba(var(--info-rgb),0.4);border-color:rgba(var(--player-text-line-rgb),0.4);color:var(--player-text);}
 /* v3.0.493 -- A WARNING IN THE OPTIMIZE PROGRESS LIST SHOULD LOOK LIKE ONE.
    The stale-layout notice was written into #optimize-progress as an ordinary bullet,
    identical to every other line, so it read as one more progress step and was never
@@ -94,8 +94,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
    rather than inherited because #optimize-progress is not inside a .panel-dark ancestor,
    and a style that depends on where it happens to sit is a style that stops working when
    the box moves. */
-.opt-line-warn{display:block;background:rgba(120,80,0,0.32);border:1px solid rgba(230,190,120,0.4);color:#e6be78;border-radius:var(--radius);padding:8px 12px;margin:8px 0;line-height:1.5;}
-.opt-line-warn strong{color:#f0d9a8;}
+.opt-line-warn{display:block;background:rgba(var(--warning-rgb),0.32);border:1px solid rgba(var(--warn-text-rgb),0.4);color:var(--warn-text);border-radius:var(--radius);padding:8px 12px;margin:8px 0;line-height:1.5;}
+.opt-line-warn strong{color:var(--warn-strong-text);}
 
 /* ===== APP HEADER ===== */
 .app-header{
@@ -138,14 +138,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* USER MENU */
 .user-menu-wrap{position:relative;}
-.user-menu-btn{display:flex;align-items:center;gap:8px;padding:0 10px;height:30px;border-radius:var(--radius);cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(30,20,10,0.7);color:var(--gold-light);font-size:13px;font-weight:400;transition:all 0.15s;}
+.user-menu-btn{display:flex;align-items:center;gap:8px;padding:0 10px;height:30px;border-radius:var(--radius);cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(var(--surface-ink-rgb),0.7);color:var(--gold-light);font-size:13px;font-weight:400;transition:all 0.15s;}
 .user-menu-btn:hover{background:rgba(var(--accent-rgb),0.15);border-color:rgba(var(--accent-rgb),0.6);}
 .user-avatar{width:22px;height:22px;border-radius:50%;background:var(--gold);color:var(--ink);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--font-display);}
 .user-menu-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--ink);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);box-shadow:0 8px 24px rgba(0,0,0,0.5);min-width:190px;overflow:hidden;display:none;z-index:100;}
 .user-menu-dropdown.open{display:block;}
 .user-menu-item{padding:10px 14px;font-size:13px;color:var(--gold-light);cursor:pointer;display:flex;align-items:center;gap:8px;transition:background 0.1s;}
 .user-menu-item:hover{background:rgba(var(--accent-rgb),0.1);}
-.user-menu-item.danger{color:#f09595;}
+.user-menu-item.danger{color:var(--error-light);}
 .user-menu-item.danger:hover{background:rgba(var(--danger-rgb),0.3);}
 .user-menu-divider{height:1px;background:rgba(var(--accent-rgb),0.15);margin:4px 0;}
 .user-menu-header{padding:10px 14px;font-size:11px;color:rgba(var(--accent-rgb),0.5);border-bottom:1px solid rgba(var(--accent-rgb),0.15);}
@@ -227,8 +227,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #view-settings .page-subtitle{color:rgba(var(--accent-rgb),0.5);}
 
 /* Make cards and surfaces slightly translucent */
-.session-item{background:rgba(30,22,12,0.85);border-color:rgba(var(--accent-rgb),0.15);color:var(--gold-light);}
-.session-item:hover{border-color:var(--gold);background:rgba(50,35,15,0.92);box-shadow:0 0 0 1px rgba(var(--accent-rgb),0.3);}
+.session-item{background:rgba(var(--surface-ink-rgb),0.85);border-color:rgba(var(--accent-rgb),0.15);color:var(--gold-light);}
+.session-item:hover{border-color:var(--gold);background:rgba(var(--hover-fill-rgb),0.92);box-shadow:0 0 0 1px rgba(var(--accent-rgb),0.3);}
 .session-name{color:var(--gold-light);}
 .session-date{color:rgba(var(--accent-rgb),0.45);}
 .session-num{background:rgba(var(--accent-rgb),0.1);border-color:rgba(var(--accent-rgb),0.2);color:var(--gold);}
@@ -240,9 +240,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .char-badge{background:rgba(var(--accent-rgb),0.08);border-color:rgba(var(--accent-rgb),0.15);color:rgba(var(--accent-rgb),0.6);}
 .char-btn{background:rgba(var(--accent-rgb),0.08);border-color:rgba(var(--accent-rgb),0.2);color:rgba(var(--accent-rgb),0.6);}
 .char-btn:hover{background:rgba(var(--accent-rgb),0.2);color:var(--gold);}
-.char-btn-delete:hover{background:rgba(var(--danger-rgb),0.4);color:#f09595;border-color:rgba(240,149,149,0.4);}
+.char-btn-delete:hover{background:rgba(var(--danger-rgb),0.4);color:var(--error-light);border-color:rgba(var(--error-light-line-rgb),0.4);}
 .add-char-card{background:rgba(var(--panel-alt-rgb),0.6);border-color:rgba(var(--accent-rgb),0.2);color:rgba(var(--accent-rgb),0.4);}
-.add-char-card:hover{border-color:rgba(var(--accent-rgb),0.5);color:var(--gold);background:rgba(40,28,10,0.7);}
+.add-char-card:hover{border-color:rgba(var(--accent-rgb),0.5);color:var(--gold);background:rgba(var(--hover-fill-rgb),0.7);}
 .moment-card{background:rgba(var(--card-rgb),0.85);border-color:rgba(var(--accent-rgb),0.15);}
 .moment-img{background:rgba(var(--panel-deep-rgb),0.6);border-bottom-color:rgba(var(--accent-rgb),0.1);}
 .moment-title{color:var(--gold-light);}
@@ -314,7 +314,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   letter-spacing:0.05em;font-size:10px;}
 .review-chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;
   background:rgba(var(--accent-rgb),0.12);color:var(--gold);}
-.review-chip-asset{background:rgba(122,140,184,0.14);color:#9caedb;}
+.review-chip-asset{background:rgba(var(--player-badge-rgb),0.14);color:var(--player-text);}
 .review-none{font-size:11px;color:var(--text-light);font-style:italic;}
 /* Pass 2 — editable per-panel casting */
 .review-chip{position:relative;}
@@ -327,7 +327,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .review-add-select:hover{border-color:var(--gold);color:var(--gold);}
 .review-cast-badge{margin-left:auto;font-size:9px;font-weight:700;text-transform:uppercase;
   letter-spacing:0.08em;padding:2px 7px;border-radius:8px;
-  background:rgba(122,140,184,0.14);color:#9caedb;}
+  background:rgba(var(--player-badge-rgb),0.14);color:var(--player-text);}
 .review-cast-badge.is-custom{background:rgba(var(--accent-rgb),0.16);color:var(--gold);}
 .review-reset-btn{font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer;
   background:transparent;border:1px solid rgba(var(--accent-rgb),0.3);color:rgba(var(--accent-rgb),0.75);}
@@ -474,7 +474,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .session-card-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px;}
 .session-card-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;flex-wrap:wrap;}
 .session-card-include{font-size:11px;color:rgba(var(--accent-rgb),0.55);display:inline-flex;align-items:center;gap:4px;cursor:pointer;}
-.session-card-open{font-size:11px;color:#8fb8e0;cursor:pointer;text-decoration:underline;}
+.session-card-open{font-size:11px;color:var(--player-text);cursor:pointer;text-decoration:underline;}
 .session-card-publish{cursor:default;}
 .session-card-publish:hover{border-color:rgba(var(--accent-rgb),0.3);box-shadow:none;}
 
@@ -486,7 +486,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .char-actions{display:flex;gap:4px;}
 .char-btn{padding:3px 8px;font-size:10px;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);}
 .char-btn:hover{background:var(--border);}
-.char-btn-delete:hover{background:var(--error-bg);color:var(--error);border-color:#f09595;}
+.char-btn-delete:hover{background:var(--error-bg);color:var(--error);border-color:var(--error-light-line);}
 .char-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
 .char-player{font-size:11px;color:var(--text-muted);margin-bottom:3px;}
 .char-desc{font-size:11px;color:var(--text-muted);line-height:1.5;}
@@ -528,10 +528,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .moment-desc{font-size:11px;color:var(--text-muted);line-height:1.5;}
 .moment-prompt{font-size:10px;color:var(--text-muted);line-height:1.4;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-style:italic;}
 .moment-type{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;margin-top:5px;font-weight:500;}
-.type-combat{background:#fcebeb;color:#a32d2d;}
-.type-drama{background:#eeedfe;color:#3c3489;}
-.type-discovery{background:#e1f5ee;color:#0f6e56;}
-.type-humor{background:#faeeda;color:#854f0b;}
+.type-combat{background:var(--error-bg);color:var(--error);}
+.type-drama{background:var(--error-bg);color:var(--npc-deep);}
+.type-discovery{background:var(--error-bg);color:var(--success-text);}
+.type-humor{background:var(--light-panel);color:var(--gold-muted);}
 
 /* TRANSCRIPT */
 .transcript-box{width:100%;min-height:220px;border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:13px;line-height:1.7;color:var(--text);background:var(--surface);resize:vertical;font-family:inherit;}
@@ -658,27 +658,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
    miss errors when scrolled deep in a long storyboard). */
 .moment-img-error-overlay{
   position:absolute;inset:0;
-  background:rgba(40,12,8,0.85);
+  background:rgba(var(--error-deep-rgb),0.85);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
   z-index:3;
   border-radius:inherit;
   padding:14px;
 }
 .moment-img-error-icon{
-  font-size:22px;color:#f0a090;line-height:1;
+  font-size:22px;color:var(--error-light);line-height:1;
 }
 .moment-img-error-message{
-  font-size:12px;color:#f5d8d0;
+  font-size:12px;color:var(--error-pale-text);
   max-width:90%;text-align:center;line-height:1.45;
   text-shadow:0 1px 4px rgba(0,0,0,0.6);
 }
 .moment-img-error-dismiss{
   position:absolute;top:6px;right:8px;
   background:none;border:none;cursor:pointer;
-  color:rgba(245,216,208,0.7);font-size:18px;line-height:1;
+  color:rgba(var(--error-pale-text-rgb),0.7);font-size:18px;line-height:1;
   padding:2px 6px;border-radius:4px;
 }
-.moment-img-error-dismiss:hover{color:#f5d8d0;background:rgba(0,0,0,0.3);}
+.moment-img-error-dismiss:hover{color:var(--error-pale-text);background:rgba(0,0,0,0.3);}
 @keyframes momentBusySpin{to{transform:rotate(360deg);}}
 .moment-card{position:relative;}
 .moment-regen-btn{
@@ -998,16 +998,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .narrative-save-btn {
   padding: 2px 8px;
   font-size: 10px;
-  background: rgba(15,110,86,0.2);
-  border: 1px solid rgba(134,212,186,0.3);
+  background: rgba(var(--success-rgb),0.2);
+  border: 1px solid rgba(var(--success-light-line-rgb),0.3);
   border-radius: 4px;
-  color: rgba(134,212,186,0.7);
+  color: rgba(var(--success-light-rgb),0.7);
   cursor: pointer;
   transition: all 0.15s;
 }
 .narrative-save-btn:hover {
-  background: rgba(15,110,86,0.35);
-  color: #86d4ba;
+  background: rgba(var(--success-rgb),0.35);
+  color: var(--success-light);
 }
 
 /* Publish tab - no top padding */
@@ -1106,8 +1106,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* Trial expiry banner */
 .trial-expired-banner {
   background: rgba(var(--danger-rgb),0.4);
-  border: 1px solid rgba(240,149,149,0.4);
-  color: #f09595;
+  border: 1px solid rgba(var(--error-light-line-rgb),0.4);
+  color: var(--error-light);
   padding: 12px 16px;
   border-radius: var(--radius);
   font-size:13px;
@@ -1200,14 +1200,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
    reader has scrolled away from. */
 .char-prompt-msg {
   margin: 6px 0 0; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.45;
-  background: rgba(150,40,20,0.10); border: 1px solid rgba(150,40,20,0.35); color: #7a2412;
+  background: rgba(var(--error-fill-rgb),0.10); border: 1px solid rgba(var(--error-fill-rgb),0.35); color: var(--danger-hover);
 }
 .char-prompt-msg.hidden { display: none; }
 .char-prompt-hint { margin: 4px 0 0; font-size: 11px; color: var(--text-muted); }
 /* The line beside the picture, saying in words what the lit button says in colour. */
 .char-ref-stale {
   margin: 0 0 6px; padding: 7px 10px; border-radius: 6px; font-size: 12px; line-height: 1.4;
-  background: rgba(var(--accent-rgb),0.16); border: 1px solid rgba(var(--accent-rgb),0.5); color: #6b4d0e;
+  background: rgba(var(--accent-rgb),0.16); border: 1px solid rgba(var(--accent-rgb),0.5); color: var(--gold-dim-label);
 }
 .char-prompt-actions {
   display: flex;
@@ -1303,20 +1303,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 @keyframes helpNudge{0%{box-shadow:0 0 0 0 rgba(var(--accent-bright-rgb),0.6);}60%{box-shadow:0 0 0 7px rgba(var(--accent-bright-rgb),0);}100%{box-shadow:0 0 0 0 rgba(var(--accent-bright-rgb),0);}}
 .help-nudge{animation:helpNudge 1.7s ease-out 3;}
 @media (prefers-reduced-motion: reduce){.help-nudge{animation:none;}}
-.help-panel{position:fixed;top:0;right:0;bottom:0;width:360px;max-width:92vw;z-index:96;background:#ffffff;color:#1f2430;display:flex;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,0.35);}
-.help-panel-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e6e1d6;background:#faf8f3;}
-.help-panel-title{font-family:var(--font-display);font-size:17px;color:#7a5c12;}
+.help-panel{position:fixed;top:0;right:0;bottom:0;width:360px;max-width:92vw;z-index:96;background:#ffffff;color:var(--help-ink);display:flex;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,0.35);}
+.help-panel-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--light-panel-line);background:var(--light-panel);}
+.help-panel-title{font-family:var(--font-display);font-size:17px;color:var(--gold-muted);}
 .help-close{background:none;border:none;font-size:24px;line-height:1;color:#6b7280;cursor:pointer;padding:0 4px;}
-.help-close:hover{color:#1f2430;}
+.help-close:hover{color:var(--help-ink);}
 .help-panel-body{flex:1;min-height:0;display:flex;flex-direction:column;}
 .help-thread{flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
 .help-msg{font-size:14px;line-height:1.5;padding:9px 12px;border-radius:10px;max-width:88%;white-space:pre-wrap;word-wrap:break-word;}
-.help-msg-bot{align-self:flex-start;background:#f1eee6;color:#2a2f3a;border:1px solid #e2dccb;}
-.help-msg-user{align-self:flex-end;background:#e8eef7;color:#1f2a3a;border:1px solid #d2deef;}
+.help-msg-bot{align-self:flex-start;background:var(--light-panel);color:var(--help-ink);border:1px solid var(--soft-line);}
+.help-msg-user{align-self:flex-end;background:var(--error-bg);color:var(--help-ink);border:1px solid var(--error-bg-line);}
 .help-msg-pending{opacity:0.7;font-style:italic;}
-.help-msg-error{align-self:flex-start;background:#fbecea;color:#b4452f;border:1px solid #f0cfc8;}
-.help-compose{display:flex;gap:8px;align-items:flex-end;padding:12px 16px;border-top:1px solid #e6e1d6;background:#faf8f3;}
-.help-input{flex:1;box-sizing:border-box;min-height:44px;max-height:140px;padding:10px 12px;font-size:14px;font-family:inherit;color:#1f2430;background:#ffffff;border:1px solid #cfd4dc;border-radius:8px;resize:vertical;line-height:1.4;}
+.help-msg-error{align-self:flex-start;background:var(--error-bg);color:var(--error);border:1px solid var(--error-pale-text);}
+.help-compose{display:flex;gap:8px;align-items:flex-end;padding:12px 16px;border-top:1px solid var(--light-panel-line);background:var(--light-panel);}
+.help-input{flex:1;box-sizing:border-box;min-height:44px;max-height:140px;padding:10px 12px;font-size:14px;font-family:inherit;color:var(--help-ink);background:#ffffff;border:1px solid var(--error-bg-line);border-radius:8px;resize:vertical;line-height:1.4;}
 .help-input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px rgba(var(--accent-rgb),0.25);}
 @media (max-width:480px){.help-fab{padding:10px 16px;font-size:14px;}.tour-replay{padding:10px 16px;font-size:14px;}.help-panel{width:100%;max-width:100%;}}
 .archive-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; margin-top: 3px; }
@@ -1345,10 +1345,10 @@ body.role-player.can-edit-fork .moment-replace-btn{display:inline-block !importa
 /* v3.0.860 -- TD-724. The prompt changed and this picture has not caught up.
    opacity is FORCED because .panel-pill is invisible until its wrapper is hovered,
    and a signal you have to go looking for is not a signal. */
-.panel-pill.is-stale{opacity:1 !important;color:#2a1a06;background:var(--gold);border-color:var(--gold);font-weight:600;}
-.panel-pill.is-stale:hover{background:#e0c169;color:#2a1a06;}
+.panel-pill.is-stale{opacity:1 !important;color:var(--hover-fill-text);background:var(--gold);border-color:var(--gold);font-weight:600;}
+.panel-pill.is-stale:hover{background:var(--highlight-fill);color:var(--hover-fill-text);}
 body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
-.modal.archive-picker{max-width:880px;background:#241810;border:1px solid rgba(var(--accent-rgb),0.25);}
+.modal.archive-picker{max-width:880px;background:var(--surface-ink);border:1px solid rgba(var(--accent-rgb),0.25);}
 #style-picker-modal .modal{overflow-y:visible;max-height:92vh;display:flex;flex-direction:column;}
 .modal.archive-picker .modal-title{color:var(--gold-light);}
 .modal.archive-picker .modal-close{color:var(--gold-dim);}
@@ -1374,25 +1374,25 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
    Access panel uses rather than the gold everything else here wears. */
 /* v3.0.676 -- a lone Copper user keeps the copper-orange the retired badge used, so the warning
    still reads as a warning rather than as an ordinary plan label. */
-.tier-badge-lone{border-color:rgba(184,115,51,0.7)!important;color:#fff!important;
-  background:#b87333!important;font-weight:700!important;}
+.tier-badge-lone{border-color:rgba(var(--copper-rgb),0.7)!important;color:#fff!important;
+  background:var(--copper)!important;font-weight:700!important;}
 .tier-badge-tester{border-color:var(--warn-orange-line)!important;color:var(--warn-orange)!important;   /* v3.0.887 -- same value, now read from the token */
-  background:rgba(194,65,12,0.12)!important;}
+  background:rgba(var(--support-orange-rgb),0.12)!important;}
 /* v3.3.51 -- TD-1064. THE TESTER BADGE, MADE INVITING (Ian chose option C, "Platinum"): a silver sheen with a star,
    "Platinum Tester", lifting a little on hover. "Not billed" is in the tooltip now. Overrides the orange above. */
-#tier-badge.tier-badge-tester{border:1px solid #cfd6e3!important;color:#1b2230!important;font-weight:700!important;
-  background:linear-gradient(110deg,#e9edf5 0%,#ffffff 40%,#b9c2d3 60%,#eef1f7 100%)!important;
-  box-shadow:0 0 10px rgba(220,228,245,0.4);transition:transform .15s ease, box-shadow .15s ease;}
-#tier-badge.tier-badge-tester:hover{transform:translateY(-1px);box-shadow:0 0 14px rgba(232,238,250,0.7);}
+#tier-badge.tier-badge-tester{border:1px solid var(--error-bg-line)!important;color:var(--help-ink)!important;font-weight:700!important;
+  background:linear-gradient(110deg,var(--error-bg) 0%,#ffffff 40%,var(--player-text) 60%,var(--error-bg) 100%)!important;
+  box-shadow:0 0 10px rgba(var(--error-bg-rgb),0.4);transition:transform .15s ease, box-shadow .15s ease;}
+#tier-badge.tier-badge-tester:hover{transform:translateY(-1px);box-shadow:0 0 14px rgba(var(--error-bg-rgb),0.7);}
 /* v3.3.51 -- TD-1064. The ?s help buttons' tooltip: shown at once on hover (the browser's own title tooltip came late
    and was easy to miss -- Ian). Text in data-tip; below the button, right-aligned, with a small arrow. */
 .hq-tip{position:relative;}
 @media (hover:hover){
   .hq-tip:hover::after,.hq-tip:focus-visible::after{content:attr(data-tip);position:absolute;top:calc(100% + 9px);right:0;z-index:300;
-    white-space:nowrap;background:#f8f3e6;color:#2a1d08;font:400 13px/1.3 Georgia,serif;letter-spacing:0;text-transform:none;
+    white-space:nowrap;background:var(--light-panel);color:var(--hover-fill-text);font:400 13px/1.3 Georgia,serif;letter-spacing:0;text-transform:none;
     padding:7px 11px;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.5);pointer-events:none;}
   .hq-tip:hover::before,.hq-tip:focus-visible::before{content:'';position:absolute;top:calc(100% + 3px);right:12px;z-index:301;
-    border:6px solid transparent;border-top:0;border-bottom-color:#f8f3e6;pointer-events:none;}
+    border:6px solid transparent;border-top:0;border-bottom-color:var(--light-panel-line);pointer-events:none;}
 }
 .archive-pick-item img{max-width:100%;max-height:178px;width:auto;height:auto;display:block;
   cursor:pointer;border-radius:4px;}
@@ -1405,7 +1405,7 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   border:1px dashed rgba(255,255,255,0.85);box-shadow:0 0 0 1px rgba(0,0,0,0.45);border-radius:2px;}
 /* The shape in a word, because "is that tall enough for a cover" should not be a squint. */
 .archive-pick-shape{position:absolute;left:6px;bottom:6px;padding:2px 7px;border-radius:10px;
-  font-size:10px;font-weight:600;letter-spacing:0.03em;color:#1a1410;background:rgba(var(--accent-rgb),0.92);
+  font-size:10px;font-weight:600;letter-spacing:0.03em;color:var(--surface-ink-text);background:rgba(var(--accent-rgb),0.92);
   pointer-events:none;}
 /* The image already on the book. The old cover picker explained "click the highlighted image to
    remove it" in a footnote; the button now says so itself. */
@@ -1414,7 +1414,7 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   border:1px solid rgba(var(--accent-rgb),0.5);}
 .archive-pick-cap{padding:6px 8px;font-size:11px;color:var(--gold-dim);line-height:1.35;flex:1;}
 .archive-pick-cap b{color:var(--gold-light);font-weight:600;}
-.archive-pick-use{margin:0 8px 8px;padding:5px;font-size:11px;cursor:pointer;background:var(--gold);color:#1a1410;border:none;border-radius:6px;font-weight:600;}
+.archive-pick-use{margin:0 8px 8px;padding:5px;font-size:11px;cursor:pointer;background:var(--gold);color:var(--surface-ink-text);border:none;border-radius:6px;font-weight:600;}
 .archive-pick-use:hover{filter:brightness(1.08);}
 .archive-pick-empty{padding:24px;text-align:center;color:var(--gold-dim);font-size:13px;}
 .archive-pick-note{grid-column:1/-1;padding:8px 10px;margin-bottom:2px;border-radius:6px;background:rgba(var(--accent-rgb),0.10);border:1px solid rgba(var(--accent-rgb),0.25);color:var(--gold-light);font-size:12px;}
@@ -1441,9 +1441,9 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
   flex-shrink: 0;
 }
 .char-badge-npc {
-  background: rgba(90,70,140,0.35);
-  color: #c9bdf0;
-  border: 1px solid rgba(160,140,210,0.4);
+  background: rgba(var(--npc-deep-rgb),0.35);
+  color: var(--npc-text);
+  border: 1px solid rgba(var(--npc-text-rgb),0.4);
   margin-left: 5px;
 }
 
@@ -1460,32 +1460,32 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 .sc-change-badge {
   margin: 10px 0 4px;
   padding: 8px 12px;
-  background: rgba(224,122,106,0.12);
-  border: 1px solid rgba(224,122,106,0.4);
+  background: rgba(var(--change-pending-rgb),0.12);
+  border: 1px solid rgba(var(--change-pending-line-rgb),0.4);
   border-radius: var(--radius);
-  color: #e8a99c;
+  color: var(--error-light);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 .sc-change-badge:hover {
-  background: rgba(224,122,106,0.2);
+  background: rgba(var(--change-pending-rgb),0.2);
 }
 
 /* Accepted-change badge — quieter, greenish, re-opens the review screen */
 .sc-change-badge-accepted {
-  background: rgba(122,184,116,0.12);
-  border-color: rgba(122,184,116,0.4);
-  color: #9ccb94;
+  background: rgba(var(--change-applied-rgb),0.12);
+  border-color: rgba(var(--change-applied-line-rgb),0.4);
+  color: var(--success-light);
 }
 .sc-change-badge-accepted:hover {
-  background: rgba(122,184,116,0.2);
+  background: rgba(var(--change-applied-rgb),0.2);
 }
 
 /* Stage 3: change review screen */
 .sc-review-title {
   font-weight: 600;
-  color: #e8a99c;
+  color: var(--error-light);
   font-size: 14px;
 }
 .sc-review-name {
@@ -1619,8 +1619,8 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 .sc-desc-wrap { position: relative; margin-top: 6px; }
 .sc-card-desc { font-size: 12px; color: var(--parchment); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc-card-tag { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; cursor: pointer; }
-.sc-card-tag-pending { color: #e8a99c; background: rgba(224,122,106,0.12); border: 1px solid rgba(224,122,106,0.4); }
-.sc-card-tag-applied { color: #9ccb94; background: rgba(122,184,116,0.12); border: 1px solid rgba(122,184,116,0.4); }
+.sc-card-tag-pending { color: var(--error-light); background: rgba(var(--change-pending-rgb),0.12); border: 1px solid rgba(var(--change-pending-rgb),0.4); }
+.sc-card-tag-applied { color: var(--success-light); background: rgba(var(--change-applied-rgb),0.12); border: 1px solid rgba(var(--change-applied-rgb),0.4); }
 .sc-card-tag-draft { color: var(--gold); background: rgba(var(--accent-rgb),0.12); border: 1px solid rgba(var(--accent-rgb),0.45); }
 .sc-edit-draft:empty { display: none; }
 /* v3.4.51 -- bands across the bottom of the card's picture: red for a change Generate Story spotted, gold for a new picture
@@ -1628,15 +1628,15 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 #sc-list .sc-card .char-avatar { position: relative; }
 .sc-pic-bands { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; }
 .sc-pic-band { padding: 9px 10px; font-size: 15px; font-weight: 700; line-height: 1.25; text-align: center; cursor: pointer; letter-spacing: 0.2px; }
-.sc-pic-band-change { background: rgba(150,38,22,0.93); color: #fff1e6; border-top: 1px solid rgba(255,190,160,0.5); }
-.sc-pic-band-draft { background: rgba(var(--accent-rgb),0.96); color: #1a1208; border-top: 1px solid rgba(255,235,180,0.7); }
+.sc-pic-band-change { background: rgba(var(--error-fill-rgb),0.93); color: var(--light-panel-text); border-top: 1px solid rgba(var(--peach-text-rgb),0.5); }
+.sc-pic-band-draft { background: rgba(var(--accent-rgb),0.96); color: var(--surface-ink-text); border-top: 1px solid rgba(var(--light-highlight-rgb),0.7); }
 .sc-pic-band:hover { filter: brightness(1.1); }
 @media (hover:hover) {
   /* v3.4.49 -- ABOVE the line, over the picture. Below it, on the bottom row it lengthened the page, a scrollbar came and
      went, the cards reflowed under the pointer and the pop-up flickered (Ian). Above, it can never lengthen the page. */
   .sc-desc-wrap.is-cut:hover::after {
     content: attr(data-full); position: absolute; bottom: calc(100% + 6px); left: -12px; width: 340px; max-width: 80vw; z-index: 300;
-    white-space: pre-wrap; background: #f8f3e6; color: #2a1d08; font: 400 13px/1.5 Georgia, serif;
+    white-space: pre-wrap; background: var(--light-panel); color: var(--hover-fill-text); font: 400 13px/1.5 Georgia, serif;
     padding: 10px 13px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none;
   }
 }
@@ -1663,7 +1663,7 @@ body.role-player.can-edit-fork .panel-pill{display:inline-flex !important;}
 @media (hover:hover) {
   .sc-tip:hover::after {
     content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 0; width: 320px; max-width: 80vw; z-index: 300;
-    white-space: normal; background: #f8f3e6; color: #2a1d08; font: 400 13px/1.45 Georgia, serif;
+    white-space: normal; background: var(--light-panel); color: var(--hover-fill-text); font: 400 13px/1.45 Georgia, serif;
     padding: 8px 11px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none;
   }
 }
@@ -1802,9 +1802,9 @@ body.role-player #stab-export { display: block !important; }
   border: 1px solid rgba(var(--accent-rgb),0.35);
 }
 .role-badge-player {
-  background: rgba(80,140,200,0.18);
-  color: #94c0e8;
-  border: 1px solid rgba(120,170,210,0.35);
+  background: rgba(var(--player-badge-rgb),0.18);
+  color: var(--player-text);
+  border: 1px solid rgba(var(--player-text-line-rgb),0.35);
 }
 
 /* Ellipsis menu (⋯) — opens a small dropdown for destructive actions */
@@ -1855,8 +1855,8 @@ body.role-player #stab-export { display: block !important; }
   width: 100%;
 }
 .row-menu-item:hover { background: rgba(var(--accent-rgb),0.12); }
-.row-menu-item-danger { color: #f5b0a8; }
-.row-menu-item-danger:hover { background: rgba(180,40,30,0.18); }
+.row-menu-item-danger { color: var(--error-light); }
+.row-menu-item-danger:hover { background: rgba(var(--error-fill-rgb),0.18); }
 
 /* Pending-invite specific touches */
 .invite-row-expired-tag {
@@ -1867,9 +1867,9 @@ body.role-player #stab-export { display: block !important; }
   letter-spacing: 0.05em;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(180,60,40,0.18);
-  color: #f5b0a8;
-  border: 1px solid rgba(220,120,100,0.35);
+  background: rgba(var(--error-fill-rgb),0.18);
+  color: var(--error-light);
+  border: 1px solid rgba(var(--change-pending-line-rgb),0.35);
   margin-left: 8px;
 }
 
@@ -1879,9 +1879,9 @@ body.role-player #stab-export { display: block !important; }
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: rgba(80,140,200,0.18);
-  color: #94c0e8;
-  border: 1px solid rgba(120,170,210,0.35);
+  background: rgba(var(--player-badge-rgb),0.18);
+  color: var(--player-text);
+  border: 1px solid rgba(var(--player-text-line-rgb),0.35);
   margin-top: 4px;
 }
 .char-pending-badge {
@@ -1919,20 +1919,20 @@ body.role-player #stab-export { display: block !important; }
   vertical-align: middle;
 }
 .session-access-chip-draft {
-  background: rgba(110,100,85,0.55);
+  background: rgba(var(--quote-text-rgb),0.55);
   color: var(--on-panel-cream);
-  border: 1px solid rgba(200,190,170,0.45);
+  border: 1px solid rgba(var(--soft-line-rgb),0.45);
 }
 .session-access-chip-ready {
-  background: rgba(80,160,100,0.35);
-  color: #d4f0d8;
-  border: 1px solid rgba(140,200,160,0.55);
+  background: rgba(var(--ok-text-rgb),0.35);
+  color: var(--ok-pale-text);
+  border: 1px solid rgba(var(--success-light-line-rgb),0.55);
 }
 
 /* Lock indicator on Characters tab when campaign is locked (player POV).
    Subtle banner above the character grid. */
 .campaign-lock-banner {
-  background: rgba(40,30,15,0.85);
+  background: rgba(var(--hover-fill-rgb),0.85);
   border: 1px solid rgba(var(--accent-rgb),0.3);
   border-left: 4px solid var(--gold);
   border-radius: var(--radius);
@@ -1995,17 +1995,17 @@ body.role-player #stab-export { display: block !important; }
 .verbosity-seg{display:flex;gap:0;border:1px solid var(--gold-dim);border-radius:6px;overflow:hidden;max-width:180px;}
 .vseg-btn{flex:1 1 0;padding:5px 4px;background:transparent;color:var(--gold-dim);border:0;border-right:1px solid var(--gold-dim);font:inherit;font-size:11px;cursor:pointer;transition:background .12s,color .12s;}
 .vseg-btn:last-child{border-right:0;}
-.vseg-btn:hover{background:rgba(212,175,110,0.10);}
-.vseg-btn.is-on{background:var(--gold);color:#1a1410;font-weight:600;}
+.vseg-btn:hover{background:rgba(var(--soft-gold-note-rgb),0.10);}
+.vseg-btn.is-on{background:var(--gold);color:var(--surface-ink-text);font-weight:600;}
 
 .style-card{background:rgba(var(--panel-rgb),0.6);border:1px solid rgba(var(--accent-rgb),0.18);border-radius:10px;padding:12px 13px;cursor:pointer;transition:border-color .12s, background .12s;}
-.style-card:hover{border-color:rgba(var(--accent-rgb),0.5);background:rgba(30,18,6,0.7);}
+.style-card:hover{border-color:rgba(var(--accent-rgb),0.5);background:rgba(var(--surface-ink-rgb),0.7);}
 .style-card.is-selected{border-color:var(--gold);background:rgba(var(--accent-rgb),0.12);}
 .style-card.is-locked{opacity:.5;cursor:not-allowed;pointer-events:none;}
 .style-card.is-locked .style-card-current{color:#fff;background:#6b7280;}
 .style-card-name{font-family:var(--font-display);font-size:14px;color:var(--gold-light);font-weight:600;margin-bottom:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .style-card-current{font-size:10px;color:var(--gold);background:rgba(var(--accent-rgb),0.18);border-radius:4px;padding:1px 6px;font-weight:600;}
-.style-card-desc{font-size:12px;color:rgba(230,210,160,0.82);line-height:1.45;margin-bottom:7px;}
+.style-card-desc{font-size:12px;color:rgba(var(--label-rgb),0.82);line-height:1.45;margin-bottom:7px;}
 .style-card-eg{font-size:11.5px;color:rgba(var(--accent-rgb),0.62);font-style:italic;line-height:1.45;border-left:2px solid rgba(var(--accent-rgb),0.25);padding-left:8px;}
 
 /* Per-panel style labels: art style on the image caption, narrative style in
@@ -2023,7 +2023,7 @@ body.role-player #stab-export { display: block !important; }
 .camp-edit-pencil{background:none;border:none;color:rgba(var(--accent-rgb),0.5);cursor:pointer;font-size:0.55em;padding:2px 5px;line-height:1;border-radius:4px;}
 .camp-edit-pencil:hover{color:var(--gold);background:rgba(var(--accent-rgb),0.12);}
 .camp-edit-input{font-family:inherit;font-size:0.85em;background:rgba(var(--panel-deeper-rgb),0.75);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:5px;color:var(--gold);padding:2px 8px;min-width:220px;max-width:100%;}
-.camp-edit-textarea{display:block;width:100%;max-width:560px;font-family:var(--font-body,inherit);font-size:12px;line-height:1.5;background:rgba(var(--panel-deeper-rgb),0.75);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:5px;color:rgba(230,210,160,0.92);padding:5px 8px;min-height:46px;margin-top:5px;resize:vertical;}
+.camp-edit-textarea{display:block;width:100%;max-width:560px;font-family:var(--font-body,inherit);font-size:12px;line-height:1.5;background:rgba(var(--panel-deeper-rgb),0.75);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:5px;color:rgba(var(--label-rgb),0.92);padding:5px 8px;min-height:46px;margin-top:5px;resize:vertical;}
 /* Archive 'Make cover' control (DM-only) */
 .archive-cover-toggle{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:rgba(var(--accent-rgb),0.72);cursor:pointer;user-select:none;}
 .archive-cover-toggle input{margin:0;width:13px;height:13px;accent-color:var(--gold);cursor:pointer;}
@@ -2154,7 +2154,7 @@ body.role-player #stab-export { display: block !important; }
 
 /* Order Printed Copy tab -- readable blue-grey placeholders on dark fields */
 #novel-tab-order input::placeholder,
-#novel-tab-order textarea::placeholder { color:#9fb0c4; opacity:1; }
+#novel-tab-order textarea::placeholder { color:var(--player-text); opacity:1; }
 
 /* ============================================================
    PANEL TEXT CONTRAST STANDARD
@@ -2406,7 +2406,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
 .prep-field-pair .prep-field-col { flex:1 1 0; min-width:0; }
 @media (max-width:640px){ .prep-field-pair { display:block; } }
 .prep-textarea { width:100%; min-height:64px; background:rgba(var(--panel-rgb),0.85); color:var(--gold); border:1px solid rgba(var(--accent-rgb),0.3); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; resize:vertical; box-sizing:border-box; margin-bottom:12px; }
-.prep-attest { display:flex; gap:8px; align-items:flex-start; font-size:12px; color:#cbb994; line-height:1.4; margin:0 0 14px; cursor:pointer; }
+.prep-attest { display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--soft-line-text); line-height:1.4; margin:0 0 14px; cursor:pointer; }
 .prep-attest input { margin-top:2px; flex-shrink:0; }
 .prep-hint { color:rgba(var(--on-panel-rgb),0.5); font-size:11px; margin-top:10px; }
 .prep-acc { border:1px solid rgba(var(--accent-rgb),0.18); border-radius:var(--radius); margin-bottom:10px; overflow:hidden; background:rgba(var(--panel-rgb),0.3); }
@@ -2636,9 +2636,9 @@ html.staging-env .app-logo-text{color:#2b1400;}
    and only ever rendered when the tile actually has a picture. */
 .prep-thumb-x { position:absolute; top:3px; right:3px; z-index:2; width:18px; height:18px; padding:0;
   line-height:16px; text-align:center; font-size:12px; font-family:inherit; border-radius:50%;
-  border:1px solid rgba(var(--accent-rgb),0.55); background:rgba(12,7,3,0.82); color:rgba(240,217,138,0.9);
+  border:1px solid rgba(var(--accent-rgb),0.55); background:rgba(12,7,3,0.82); color:rgba(var(--highlight-rgb),0.9);
   cursor:pointer; opacity:0.75; transition:opacity 0.15s, background 0.15s; }
-.prep-thumb-x:hover { opacity:1; background:rgba(120,30,20,0.9); border-color:var(--gold); }
+.prep-thumb-x:hover { opacity:1; background:rgba(var(--danger-hover-rgb),0.9); border-color:var(--gold); }
 .prep-img-slots .prep-img-thumb { position:relative; }
 /* v3.4.46 -- names under the pictures in every picture picker: larger, semi-bold, cream (Ian: "I can't really read the writing"). */
 .prep-img-cap { font-size:14px; font-weight:600; color:var(--on-panel); margin-top:6px; }
@@ -2707,8 +2707,8 @@ html.staging-env .app-logo-text{color:#2b1400;}
    size rule at all here and was inheriting the card's 12px, which is most of why it read as
    faint rather than small. */
 #view-assets .page-subtitle{color:rgba(var(--accent-pale-rgb),0.78);}
-.asset-grid .add-char-card{border:2px dashed rgba(var(--accent-rgb),0.5);color:rgba(var(--accent-pale-rgb),0.85);background:rgba(28,20,8,0.72);}
-.asset-grid .add-char-card:hover{border-color:var(--gold);color:var(--gold-light);background:rgba(48,34,12,0.8);}
+.asset-grid .add-char-card{border:2px dashed rgba(var(--accent-rgb),0.5);color:rgba(var(--accent-pale-rgb),0.85);background:rgba(var(--surface-ink-rgb),0.72);}
+.asset-grid .add-char-card:hover{border-color:var(--gold);color:var(--gold-light);background:rgba(var(--hover-fill-rgb),0.8);}
 .asset-grid .add-char-card .plus{font-size:30px;line-height:1;color:var(--gold);}
 
 /* v3.0.916 -- THE IMPORT REVIEW LIST. Ian: "add a small thumbnail of each in front of the
@@ -2759,7 +2759,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
 /* v3.4.46 -- TD-1040: the cast pickers' note links to the Characters tab in gold, not browser blue. */
 #cast-pick-note{font-size:13px;color:rgba(var(--accent-pale-rgb),0.85);}
 #cast-pick-note a{color:var(--gold);text-decoration:underline;font-weight:600;}
-#cast-pick-note a:hover{color:#e0c169;}
+#cast-pick-note a:hover{color:var(--highlight);}
 
 /* ===== Breadcrumb band holds the corner actions (Tour / Ask). Desktop: two pills.
    Mobile (<=480px): collapse into a kebab menu so they don't stretch the row. ===== */
@@ -3028,7 +3028,7 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
   color:var(--gold-light); border-radius:8px; padding:8px 10px; font-size:12px; line-height:1.4; margin-top:8px; }
 .tb-result { margin-top:6px; border:1px solid rgba(var(--accent-rgb),0.25); border-radius:8px; min-height:120px;
   display:flex; align-items:center; justify-content:center; padding:10px;
-  background-color:#2a2018;
+  background-color:var(--surface-ink);
   background-image:linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%),
                    linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%);
   background-size:16px 16px; background-position:0 0, 8px 8px; }
@@ -3048,7 +3048,7 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .sc-style-chip { font-size:11px; padding:2px 8px; border-radius:10px; border:1px solid rgba(255,255,255,0.18);
   color:rgba(255,255,255,0.72); white-space:normal; }
 .sc-style-chip-draft { border-color:rgba(var(--accent-rgb),0.6); color:var(--accent); }
-.sc-style-chip-stale { border-color:rgba(224,122,95,0.65); color:#e07a5f; }
+.sc-style-chip-stale { border-color:rgba(var(--change-pending-line-rgb),0.65); color:var(--change-pending-text); }
 .sc-style-retouch { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
 .sc-style-retouch .form-input { flex:1 1 200px; font-size:12px; padding:5px 8px; }
 /* v3.2.27 -- TD-999 WRITING TOOLS. The pill row above each Narrative box (the .panel-pill look, a touch
@@ -3068,81 +3068,81 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .wt-pill.is-locked{opacity:0.55;}
 .wt-pills{flex-wrap:wrap;row-gap:4px;}   /* v3.2.33 -- eight pills: wrap rather than run off a narrow box */
 .wt-gold{font-size:8px;letter-spacing:0.06em;text-transform:uppercase;margin-left:4px;opacity:0.85;}
-.wc-panel{position:fixed;top:0;right:0;bottom:0;width:460px;max-width:92vw;z-index:97;background:#ffffff;color:#1f2430;display:none;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,0.35);overflow-y:auto;overscroll-behavior:contain;}   /* v3.2.35 -- wider (Ian); the whole coach scrolls as one column, and never into the page */
+.wc-panel{position:fixed;top:0;right:0;bottom:0;width:460px;max-width:92vw;z-index:97;background:#ffffff;color:var(--help-ink);display:none;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,0.35);overflow-y:auto;overscroll-behavior:contain;}   /* v3.2.35 -- wider (Ian); the whole coach scrolls as one column, and never into the page */
 .wc-panel > *{flex-shrink:0;}
-.wc-head{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 16px;border-bottom:1px solid #e6e1d6;background:#faf8f3;position:sticky;top:0;z-index:2;}   /* v3.2.35 -- one line: title, box name, Previous / Next, close (Ian) */
+.wc-head{display:flex;align-items:center;gap:8px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--light-panel-line);background:var(--light-panel);position:sticky;top:0;z-index:2;}   /* v3.2.35 -- one line: title, box name, Previous / Next, close (Ian) */
 /* v3.2.34 -- the coach carries the box's text, the tools, and Previous / Next box (Ian) */
 .wc-nav{display:flex;gap:6px;flex:0 0 auto;}
-.wc-navbtn{padding:2px 8px;font-size:11px;background:#fff;color:#7a5c12;border:1px solid #e2d6b5;border-radius:6px;cursor:pointer;}
-.wc-navbtn:hover:not(:disabled){border-color:var(--accent);background:#f3ecd8;}
+.wc-navbtn{padding:2px 8px;font-size:11px;background:#fff;color:var(--gold-muted);border:1px solid var(--soft-line);border-radius:6px;cursor:pointer;}
+.wc-navbtn:hover:not(:disabled){border-color:var(--accent);background:var(--light-panel);}
 .wc-navbtn:disabled{opacity:0.4;cursor:default;}
-.wc-editwrap{padding:10px 16px 6px;border-bottom:1px solid #efebe2;}
-.wc-edit{display:block;width:100%;box-sizing:border-box;min-height:130px;height:170px;resize:vertical;padding:8px 10px;font-family:Georgia,serif;font-size:14px;line-height:1.5;color:#1f2430;background:#fdfcf9;border:1px solid #e2d6b5;border-radius:8px;}
+.wc-editwrap{padding:10px 16px 6px;border-bottom:1px solid var(--light-panel-line);}
+.wc-edit{display:block;width:100%;box-sizing:border-box;min-height:130px;height:170px;resize:vertical;padding:8px 10px;font-family:Georgia,serif;font-size:14px;line-height:1.5;color:var(--help-ink);background:#fdfcf9;border:1px solid var(--soft-line);border-radius:8px;}
 .wc-edit:focus{outline:none;border-color:var(--accent);background:#fff;}
-.wc-edit::selection{background:#f1dfa6;}
+.wc-edit::selection{background:var(--label-fill);}
 .wc-edit-note{font-size:10px;color:#8a8f99;margin-top:4px;}
-.wc-tools{display:flex;align-items:flex-end;gap:2px;padding:6px 16px 0;border-bottom:1px solid #e2d6b5;}   /* v3.2.38 -- TABS, not buttons (Ian: "I keep hitting them thinking they should do something") */
-.wc-tool{padding:8px 12px 7px;margin-bottom:-1px;font-size:13px;background:none;color:#8a7d66;border:none;border-bottom:3px solid transparent;border-radius:0;cursor:pointer;}
-.wc-tool:hover{color:#7a5c12;border-bottom-color:#eadfbf;}
-.wc-tool.is-on{color:#7a5c12;font-weight:700;border-bottom-color:var(--accent);}
+.wc-tools{display:flex;align-items:flex-end;gap:2px;padding:6px 16px 0;border-bottom:1px solid var(--soft-line);}   /* v3.2.38 -- TABS, not buttons (Ian: "I keep hitting them thinking they should do something") */
+.wc-tool{padding:8px 12px 7px;margin-bottom:-1px;font-size:13px;background:none;color:var(--muted-text);border:none;border-bottom:3px solid transparent;border-radius:0;cursor:pointer;}
+.wc-tool:hover{color:var(--gold-muted);border-bottom-color:var(--soft-line);}
+.wc-tool.is-on{color:var(--gold-muted);font-weight:700;border-bottom-color:var(--accent);}
 .wc-tool.is-locked{opacity:0.55;}
 .wc-tool .wt-gold{color:inherit;}
-.wc-revert{margin-left:auto;align-self:center;padding:4px 2px;font-size:12px;background:none;border:none;color:#7a5c12;text-decoration:underline;cursor:pointer;}
-.wc-revert:hover{color:#5f470e;}
+.wc-revert{margin-left:auto;align-self:center;padding:4px 2px;font-size:12px;background:none;border:none;color:var(--gold-muted);text-decoration:underline;cursor:pointer;}
+.wc-revert:hover{color:var(--gold-dim-label);}
 /* v3.2.35 -- tabs that keep their results; the changed-text note; the leave-with-suggestions question */
 .wc-tool.is-on{box-shadow:none;}
-.wc-verdict{border-radius:8px;padding:8px 10px;margin:0 0 12px;border:1px solid #e6e1d6;background:#faf8f3;}   /* v3.2.38 -- Feedback's verdict */
-.wc-v-great{background:#eef8ee;border-color:#a8d5a8;}
-.wc-v-close{background:#fff8e6;border-color:#ecd28f;}
-.wc-v-head{font-weight:600;color:#1f2430;}
-.wc-v-great .wc-v-head,.wc-v-mark{color:#2f7a32;}
-.wc-v-working{font-size:12px;color:#4b5563;margin-top:3px;}
-.wc-stale{font-size:11px;color:#8a5a00;background:#fff6dd;border:1px solid #f0dca0;border-radius:6px;padding:4px 8px;margin:0 0 10px;}
-.wc-warn{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 16px;background:#fff6dd;border-bottom:1px solid #f0dca0;font-size:12px;color:#5b4300;}
+.wc-verdict{border-radius:8px;padding:8px 10px;margin:0 0 12px;border:1px solid var(--light-panel-line);background:var(--light-panel);}   /* v3.2.38 -- Feedback's verdict */
+.wc-v-great{background:var(--error-bg);border-color:var(--success-light-line);}
+.wc-v-close{background:var(--light-panel);border-color:var(--highlight);}
+.wc-v-head{font-weight:600;color:var(--help-ink);}
+.wc-v-great .wc-v-head,.wc-v-mark{color:var(--ok-text);}
+.wc-v-working{font-size:12px;color:var(--info);margin-top:3px;}
+.wc-stale{font-size:11px;color:var(--gold-muted);background:var(--light-panel);border:1px solid var(--label-line);border-radius:6px;padding:4px 8px;margin:0 0 10px;}
+.wc-warn{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 16px;background:var(--error-bg);border-bottom:1px solid var(--warn-strong-text);font-size:12px;color:var(--warning);}
 .wc-warn span{flex:1 1 200px;}
-.wc-title{font-family:var(--font-display);font-size:17px;color:#7a5c12;flex:0 0 auto;white-space:nowrap;}
+.wc-title{font-family:var(--font-display);font-size:17px;color:var(--gold-muted);flex:0 0 auto;white-space:nowrap;}
 .wc-sub{font-size:12px;color:#6b7280;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .wc-sub:not(:empty)::before{content:'\00b7  ';}
 .wc-close{background:none;border:none;font-size:24px;line-height:1;color:#6b7280;cursor:pointer;padding:0 4px;}
-.wc-close:hover{color:#1f2430;}
-.wc-uses{font-size:9px;line-height:1.3;color:#8a8f99;padding:4px 16px;border-bottom:1px solid #efebe2;min-height:11px;display:flex;align-items:center;gap:8px;}
+.wc-close:hover{color:var(--help-ink);}
+.wc-uses{font-size:9px;line-height:1.3;color:#8a8f99;padding:4px 16px;border-bottom:1px solid var(--light-panel-line);min-height:11px;display:flex;align-items:center;gap:8px;}
 /* v3.2.39 -- the box's Prompt and Direction, on the uses line (Ian) */
 .wc-uses-text{flex:1 1 auto;min-width:0;}
 .wc-intent{display:flex;gap:6px;flex:0 0 auto;}
-.wc-intent-btn{padding:2px 8px;font-size:11px;background:#fff;color:#7a5c12;border:1px solid #e2d6b5;border-radius:6px;cursor:pointer;}
-.wc-intent-btn:hover{border-color:var(--accent);background:#f3ecd8;}
-.wc-intent-btn.is-set{border-color:var(--accent);background:#fbf4dc;}
+.wc-intent-btn{padding:2px 8px;font-size:11px;background:#fff;color:var(--gold-muted);border:1px solid var(--soft-line);border-radius:6px;cursor:pointer;}
+.wc-intent-btn:hover{border-color:var(--accent);background:var(--light-panel);}
+.wc-intent-btn.is-set{border-color:var(--accent);background:var(--light-panel);}
 .wc-body{padding:14px 16px 24px;font-size:13px;line-height:1.55;}
 .wc-text{margin:0 0 12px;}
 .wc-note{font-size:11px;color:#6b7280;margin:8px 0;}
-.wc-wait{color:#7a5c12;font-style:italic;}
-.wc-err{color:#a23b2a;}
+.wc-wait{color:var(--gold-muted);font-style:italic;}
+.wc-err{color:var(--error);}
 .wc-points{margin:0;padding-left:20px;}
 .wc-point{margin:0 0 16px;}
-.wc-quote{font-family:Georgia,serif;font-style:italic;color:#5b5348;border-left:2px solid #e2d6b5;padding-left:8px;margin-bottom:4px;}
+.wc-quote{font-family:Georgia,serif;font-style:italic;color:var(--quote-text);border-left:2px solid var(--soft-line);padding-left:8px;margin-bottom:4px;}
 .wc-issue{font-weight:600;margin-bottom:2px;}
-.wc-why{color:#4b5563;margin-bottom:6px;}
+.wc-why{color:var(--info);margin-bottom:6px;}
 .wc-show{margin-top:6px;}
-.wc-ba,.wc-opt{border:1px solid #e6e1d6;border-radius:8px;padding:10px;background:#fdfcf9;}
-.wc-ba-label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#7a5c12;margin-top:4px;}
+.wc-ba,.wc-opt{border:1px solid var(--light-panel-line);border-radius:8px;padding:10px;background:#fdfcf9;}
+.wc-ba-label{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-muted);margin-top:4px;}
 .wc-ba-text,.wc-opt-text{font-family:Georgia,serif;white-space:pre-wrap;margin:2px 0 6px;}
 .wc-ba-text{color:#6b7280;}
-.wc-ba-after{color:#1f2430;}
+.wc-ba-after{color:var(--help-ink);}
 .wc-acts{display:flex;gap:6px;margin-top:6px;}
-.wc-btn{padding:3px 10px;font-size:12px;background:#faf8f3;color:#7a5c12;border:1px solid #d9c690;border-radius:6px;cursor:pointer;}
-.wc-btn:hover{background:#f3ecd8;border-color:var(--accent);}
-.wc-btn-main{background:#7a5c12;color:#fff;border-color:#7a5c12;}
-.wc-btn-main:hover{background:#5f470e;border-color:#5f470e;}
+.wc-btn{padding:3px 10px;font-size:12px;background:var(--light-panel);color:var(--gold-muted);border:1px solid var(--label-line);border-radius:6px;cursor:pointer;}
+.wc-btn:hover{background:var(--light-panel);border-color:var(--accent);}
+.wc-btn-main{background:var(--gold-muted-fill);color:#fff;border-color:var(--gold-muted-fill);}
+.wc-btn-main:hover{background:var(--gold-dim-label-fill);border-color:var(--gold-dim-label-fill);}
 /* v3.2.33 -- TD-999 stage 2: Rewrite choices, the writer's own instruction, and Word's list */
 .wc-choices{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;}
 .wc-own{display:flex;gap:6px;margin:0 0 6px;}
-.wc-input{flex:1;min-width:0;padding:4px 8px;font-size:13px;border:1px solid #d9c690;border-radius:6px;color:#1f2430;background:#fff;}
+.wc-input{flex:1;min-width:0;padding:4px 8px;font-size:13px;border:1px solid var(--label-line);border-radius:6px;color:var(--help-ink);background:#fff;}
 .wc-input:focus{outline:none;border-color:var(--accent);}
 .wc-opt{margin:0 0 10px;}
 .wc-words{list-style:none;margin:6px 0 0;padding:0;}
 .wc-words li{display:flex;align-items:baseline;gap:8px;margin:0 0 6px;}
-.wc-word{padding:3px 10px;font-size:13px;font-family:Georgia,serif;background:#faf8f3;color:#1f2430;border:1px solid #d9c690;border-radius:6px;cursor:pointer;}
-.wc-word:hover{background:#f3ecd8;border-color:var(--accent);}
+.wc-word{padding:3px 10px;font-size:13px;font-family:Georgia,serif;background:var(--light-panel);color:var(--help-ink);border:1px solid var(--label-line);border-radius:6px;cursor:pointer;}
+.wc-word:hover{background:var(--light-panel);border-color:var(--accent);}
 .wc-word-note{font-size:11px;color:#6b7280;}
 @media (max-width:600px){.wc-panel{width:100vw;max-width:100vw;}}
 
@@ -3154,7 +3154,7 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .storyboard-panel.panel-job-busy button[onclick^="revertMoment"] { pointer-events:none; filter:grayscale(1) brightness(0.6); }
 
 /* v3.2.93 -- TD-1026. Publish pressed with the rights box unticked: light the row and shake it once. */
-.prep-attest.prep-attest-nag { outline:2px solid #e8a85a; outline-offset:4px; border-radius:6px; background:rgba(232,168,90,0.12); color:#f3d9b0; animation:prepAttestShake 0.45s ease-in-out; }
+.prep-attest.prep-attest-nag { outline:2px solid var(--nag); outline-offset:4px; border-radius:6px; background:rgba(var(--nag-rgb),0.12); color:var(--warn-strong-text); animation:prepAttestShake 0.45s ease-in-out; }
 @keyframes prepAttestShake { 0%,100% { transform:translateX(0); } 20% { transform:translateX(-6px); } 40% { transform:translateX(6px); } 60% { transform:translateX(-4px); } 80% { transform:translateX(4px); } }
 
 /* v3.2.94 -- TD-1027. A LONG CAMPAIGN OR SESSION TITLE NEVER PUSHES THE BUTTONS DOWN. Ian, 2026-10-26: "Don't let a
@@ -3185,5 +3185,5 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 @keyframes prepRefreshWiggle { 0%,100% { transform:rotate(0); } 20% { transform:rotate(-4deg); } 40% { transform:rotate(4deg); } 60% { transform:rotate(-3deg); } 80% { transform:rotate(2deg); } }
 /* v3.4.25 -- TD-1101: every change wiggles AND flashes the button solid bright gold for about a second, then the soft glow. */
 #prep-refresh-btn.prep-refresh-stale.prep-refresh-flash { animation:prepRefreshWiggle 0.6s ease-in-out 1, prepRefreshFlash 1.1s ease-out 1, prepRefreshGlow 1.8s ease-in-out 1.1s infinite; }
-@keyframes prepRefreshFlash { 0%,55% { background-color:#e8c766; border-color:#f3dc8a; color:var(--panel); box-shadow:0 0 18px 6px rgba(232,199,102,0.85); } }
+@keyframes prepRefreshFlash { 0%,55% { background-color:var(--highlight-fill); border-color:var(--highlight); color:var(--panel); box-shadow:0 0 18px 6px rgba(var(--highlight-rgb),0.85); } }
 @media (prefers-reduced-motion: reduce) { #prep-refresh-btn.prep-refresh-stale, #prep-refresh-btn.prep-refresh-stale.prep-refresh-wiggle { animation:none; box-shadow:0 0 8px 1px rgba(var(--accent-bright-rgb),0.5); } #prep-refresh-btn.prep-refresh-stale.prep-refresh-flash { animation:prepRefreshFlash 1.1s ease-out 1; box-shadow:0 0 8px 1px rgba(var(--accent-bright-rgb),0.5); } }

@@ -668,7 +668,7 @@ function renderTokenPacks() {
       ? 'border:2px solid var(--accent);box-shadow:0 0 0 1px rgba(var(--accent-rgb),0.3),0 6px 18px rgba(var(--accent-rgb),0.1);'
       : 'border:1px solid rgba(var(--accent-rgb),0.2);';
     var badge = p.highlight
-      ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:#1a120a;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:99px;">' + p.tagline.toUpperCase() + '</div>'
+      ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--surface-ink-text);font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:99px;">' + p.tagline.toUpperCase() + '</div>'
       : '';
     return '' +
       '<div style="position:relative;background:rgba(var(--card-rgb),0.85);' + highlightStyle + 'border-radius:10px;padding:22px 18px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;">' +
@@ -676,7 +676,7 @@ function renderTokenPacks() {
         '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--accent-rgb),0.7);">' + p.name + '</div>' +
         '<div style="font-size:32px;font-weight:700;color:var(--accent);line-height:1;margin:4px 0 2px;">$' + p.price + '</div>' +
         '<div style="font-size:16px;color:var(--gold-light);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
-        (_bonusPct > 0 ? '<div style="font-size:11px;font-weight:700;color:#7ec98f;margin-bottom:6px;">+' + _bonusPct + '% more tokens per $</div>' : '') +
+        (_bonusPct > 0 ? '<div style="font-size:11px;font-weight:700;color:var(--good-text);margin-bottom:6px;">+' + _bonusPct + '% more tokens per $</div>' : '') +
         (p.highlight ? '' : '<div style="font-size:11px;color:rgba(var(--accent-rgb),0.6);font-style:italic;">' + p.tagline + '</div>') +
         (canBuy
           ? '<button class="btn btn-primary btn-sm" onclick="buyTokenPack(\'' + p.id + '\')" style="margin-top:auto;">Buy ' + p.name + '</button>'
@@ -1370,7 +1370,7 @@ function uiPublishPrompt(message, opts) {
     hint.textContent = 'You can manage your published content under My Stuff.';
     hint.style.cssText = 'color:rgba(var(--on-panel-rgb),0.5);font-size:11px;margin:0 0 16px;';
     var attestWrap = document.createElement('label');
-    attestWrap.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#cbb994;line-height:1.4;margin:0 0 14px;cursor:pointer;';
+    attestWrap.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--soft-line-text);line-height:1.4;margin:0 0 14px;cursor:pointer;';
     var attestBox = document.createElement('input');
     attestBox.type = 'checkbox';
     attestBox.style.cssText = 'margin-top:2px;flex-shrink:0;';
@@ -1515,8 +1515,8 @@ function _impMsg(id, text, good) {
   if (!el) return;
   el.style.display = text ? 'block' : 'none';
   el.textContent = text || '';
-  el.style.background = good ? 'rgba(80,160,90,0.18)' : 'rgba(194,65,12,0.22)';
-  el.style.color = good ? '#bfe6c4' : '#ffd9c7';
+  el.style.background = good ? 'rgba(var(--ok-text-rgb),0.18)' : 'rgba(var(--support-orange-rgb),0.22)';
+  el.style.color = good ? 'var(--ok-pale-text)' : 'var(--light-panel-text)';
 }
 
 // The countdown is redrawn from the STATUS the server gave us, not from a local clock we keep
@@ -1601,9 +1601,9 @@ function _impShowEnded(ended) {
   wrap.setAttribute('role', 'alertdialog');
   wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px;';
   var box = document.createElement('div');
-  box.style.cssText = 'max-width:440px;width:100%;background:#1c1610;color:#f5efe2;border:2px solid #c2410c;border-radius:10px;padding:18px 20px;font-family:Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,0.5);';
+  box.style.cssText = 'max-width:440px;width:100%;background:var(--surface-ink);color:var(--light-panel-text);border:2px solid var(--support-orange);border-radius:10px;padding:18px 20px;font-family:Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,0.5);';
   var h = document.createElement('div');
-  h.style.cssText = 'font-weight:700;letter-spacing:0.04em;color:#fdba74;margin-bottom:8px;';
+  h.style.cssText = 'font-weight:700;letter-spacing:0.04em;color:var(--soft-gold-note);margin-bottom:8px;';
   h.textContent = 'SUPPORT SESSION ENDED';
   var p = document.createElement('div');
   p.id = 'imp-ended-msg';
@@ -1612,7 +1612,7 @@ function _impShowEnded(ended) {
   b.type = 'button';
   b.id = 'imp-ended-ok';
   b.textContent = reload ? 'OK, reload as me' : 'OK';
-  b.style.cssText = 'margin-top:14px;background:#c2410c;color:#fff;border:none;border-radius:5px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
+  b.style.cssText = 'margin-top:14px;background:var(--support-orange);color:#fff;border:none;border-radius:5px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;';
   b.onclick = function () {
     if (reload) { window.location.href = '/app.html'; return; }
     if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
@@ -1781,14 +1781,14 @@ function renderUnusedPics(d) {
   _unusedPics = d;
   // v3.2.73 -- every folder: a line per folder, then the totals, then the oldest 200 with their folder.
   var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';
-  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-rgb),0.85);';
+  var th = 'position:sticky;top:0;background:var(--surface-ink);text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-rgb),0.85);';
   var tdr = td + 'text-align:right;';
   var h = '<div style="line-height:1.6;">' +
     '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div></div>' +
     '<div style="overflow:auto;margin-top:8px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--modal-rgb),0.94);color-scheme:dark;font-size:12px;">' +
-    '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">folder</th><th style="' + th + 'text-align:right;">files</th><th style="' + th + 'text-align:right;">size</th><th style="' + th + 'text-align:right;">in use</th><th style="' + th + 'text-align:right;">too new (left out)</th><th style="' + th + 'text-align:right;color:#e8c766;">orphaned</th><th style="' + th + 'text-align:right;color:#e8c766;">orphaned size</th></tr></thead><tbody>' +
-    (d.folders || []).map(function (f) { return '<tr><td style="' + td + '">' + _upEsc(f.label) + ' <span style="opacity:0.6;">' + _upEsc(f.prefix) + '</span></td><td style="' + tdr + '">' + f.listed + '</td><td style="' + tdr + '">' + _upBytes(f.listed_bytes) + '</td><td style="' + tdr + '">' + f.in_use + '</td><td style="' + tdr + '">' + f.recent + ' <span style="opacity:0.6;">(' + (f.min_age_days >= 1 ? (f.min_age_days + (f.min_age_days === 1 ? ' day' : ' days')) : '1 day') + ')</span></td><td style="' + tdr + 'color:#e8c766;">' + f.unused + '</td><td style="' + tdr + 'color:#e8c766;">' + _upBytes(f.unused_bytes) + '</td></tr>'; }).join('') +
-    '<tr><td style="' + td + 'font-weight:600;">Total</td><td style="' + tdr + 'font-weight:600;">' + d.listed + '</td><td style="' + tdr + 'font-weight:600;">' + _upBytes(d.listed_bytes) + '</td><td style="' + tdr + 'font-weight:600;">' + d.in_use + '</td><td style="' + tdr + 'font-weight:600;">' + d.recent + '</td><td style="' + tdr + 'font-weight:600;color:#e8c766;">' + d.unused + '</td><td style="' + tdr + 'font-weight:600;color:#e8c766;">' + _upBytes(d.unused_bytes) + '</td></tr>' +
+    '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">folder</th><th style="' + th + 'text-align:right;">files</th><th style="' + th + 'text-align:right;">size</th><th style="' + th + 'text-align:right;">in use</th><th style="' + th + 'text-align:right;">too new (left out)</th><th style="' + th + 'text-align:right;color:var(--highlight);">orphaned</th><th style="' + th + 'text-align:right;color:var(--highlight);">orphaned size</th></tr></thead><tbody>' +
+    (d.folders || []).map(function (f) { return '<tr><td style="' + td + '">' + _upEsc(f.label) + ' <span style="opacity:0.6;">' + _upEsc(f.prefix) + '</span></td><td style="' + tdr + '">' + f.listed + '</td><td style="' + tdr + '">' + _upBytes(f.listed_bytes) + '</td><td style="' + tdr + '">' + f.in_use + '</td><td style="' + tdr + '">' + f.recent + ' <span style="opacity:0.6;">(' + (f.min_age_days >= 1 ? (f.min_age_days + (f.min_age_days === 1 ? ' day' : ' days')) : '1 day') + ')</span></td><td style="' + tdr + 'color:var(--highlight);">' + f.unused + '</td><td style="' + tdr + 'color:var(--highlight);">' + _upBytes(f.unused_bytes) + '</td></tr>'; }).join('') +
+    '<tr><td style="' + td + 'font-weight:600;">Total</td><td style="' + tdr + 'font-weight:600;">' + d.listed + '</td><td style="' + tdr + 'font-weight:600;">' + _upBytes(d.listed_bytes) + '</td><td style="' + tdr + 'font-weight:600;">' + d.in_use + '</td><td style="' + tdr + 'font-weight:600;">' + d.recent + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + d.unused + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + _upBytes(d.unused_bytes) + '</td></tr>' +
     '</tbody></table></div>';
   var items = d.items || [];
   if (items.length) {
@@ -1819,20 +1819,20 @@ function renderCleanup(d) {
   if (tw && d.mode) tw.textContent = (d.mode === 'hold') ? 'On' : 'Off';
   var h = '<div><strong>' + _upEsc(d.env) + '</strong>, bucket ' + _upEsc(d.bucket) + ' \u00b7 monthly job <strong>' + (d.mode === 'hold' ? 'On' : (d.mode === 'off' ? 'Off (silent)' : 'Off (report only)')) + '</strong>' + (d.month ? (' \u00b7 last monthly run ' + _upEsc(d.month)) : '') + '</div>';
   if (d.holdBucket) h += '<div>Holding: ' + _upEsc(d.holdBucket) + '/' + _upEsc(d.holdPrefix || '') + (d.keep ? (' \u00b7 put back (never moved again) ' + d.keep) : '') + '</div>';
-  if (d.allowed && !d.allowed.ok) h += '<div style="color:#ffb38a;"><strong>Moving is refused here:</strong> ' + _upEsc(d.allowed.why) + '</div>';
+  if (d.allowed && !d.allowed.ok) h += '<div style="color:var(--peach-text);"><strong>Moving is refused here:</strong> ' + _upEsc(d.allowed.why) + '</div>';
   // v3.2.75 -- Ian: the running count bigger and bolder.
-  if (d.running) h += '<div style="font-size:15px;font-weight:700;color:#f0d78a;margin:4px 0;">Running: ' + _upEsc(d.phase) + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '</div>';
-  if (d.error) h += '<div style="color:#ffb38a;">' + _upEsc(d.error) + '</div>';
+  if (d.running) h += '<div style="font-size:15px;font-weight:700;color:var(--highlight);margin:4px 0;">Running: ' + _upEsc(d.phase) + (d.total ? (' \u00b7 ' + d.done + ' of ' + d.total) : '') + '</div>';
+  if (d.error) h += '<div style="color:var(--peach-text);">' + _upEsc(d.error) + '</div>';
   var o = d.last;
   // v3.2.74 -- every folder: a line per folder under the totals.
   var FL = { uploads: 'pictures', archives: 'archived pictures', optimized: 'saved books and covers', story: 'story PDFs', print: 'print PDFs' };
   // v3.2.75 -- Ian: the per-folder line is the result, so it says so, bigger and bolder.
-  var folderLine = (o && o.byFolder) ? ('<div style="font-size:15px;font-weight:700;color:#f0d78a;margin:4px 0;">Results: ' + ['uploads', 'archives', 'optimized', 'story', 'print'].filter(function (k) { return o.byFolder[k]; }).map(function (k) { var f = o.byFolder[k];
+  var folderLine = (o && o.byFolder) ? ('<div style="font-size:15px;font-weight:700;color:var(--highlight);margin:4px 0;">Results: ' + ['uploads', 'archives', 'optimized', 'story', 'print'].filter(function (k) { return o.byFolder[k]; }).map(function (k) { var f = o.byFolder[k];
     return _upEsc(FL[k]) + ' ' + f.unused + (o.mode === 'hold' ? (f.skipped ? ' (left alone: over 85% looked orphaned)' : (' \u2192 moved ' + f.moved)) : ''); }).join(' \u00b7 ') + '</div>') : '';
   if (o) h += '<div><strong>Last run</strong> (' + _upEsc(o.mode === 'hold' ? 'move to holding' : o.mode) + ', ' + _upEsc(String(o.at).slice(0, 16).replace('T', ' ')) + '): orphaned ' + o.unused + ' (' + _upBytes(o.unusedBytes) + ')' +
     (o.mode === 'hold' ? (' \u00b7 moved to holding ' + o.moved + ' (' + _upBytes(o.movedBytes) + ') \u00b7 kept as now in use ' + o.nowInUse + ' \u00b7 failed ' + o.failed)
       : (o.mode === 'delete' ? (' \u00b7 deleted ' + o.deleted + ' (' + _upBytes(o.deletedBytes) + ')') : ' \u00b7 nothing moved')) + '</div>' +
-    (o.refused ? ('<div style="color:#ffb38a;"><strong>Not moved:</strong> ' + _upEsc(o.refused) + '</div>') : '') +
+    (o.refused ? ('<div style="color:var(--peach-text);"><strong>Not moved:</strong> ' + _upEsc(o.refused) + '</div>') : '') +
     folderLine +
     (o.emptied ? ('<div>Held over ' + o.emptied.days + ' days, deleted for good: ' + o.emptied.deleted + ' (' + _upBytes(o.emptied.deletedBytes) + ')' + (o.emptied.failed ? (' \u00b7 failed ' + o.emptied.failed) : '') + '</div>') : '');
   var jb = d.job;
@@ -1950,8 +1950,8 @@ function devAddTokens() {
     if (!msg) return;
     msg.textContent = text;
     msg.style.display = 'block';
-    msg.style.background = ok ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)';
-    msg.style.color = ok ? '#3c9142' : '#c0392b';
+    msg.style.background = ok ? 'rgba(var(--change-applied-rgb),0.15)' : 'rgba(var(--alert-red-rgb),0.12)';
+    msg.style.color = ok ? 'var(--ok-text)' : 'var(--error)';
   }
   if (!input) return;
   var amt = parseInt(input.value, 10);
@@ -1984,8 +1984,8 @@ function devSetBalance() {
     if (!msg) return;
     msg.textContent = text;
     msg.style.display = 'block';
-    msg.style.background = ok ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)';
-    msg.style.color = ok ? '#3c9142' : '#c0392b';
+    msg.style.background = ok ? 'rgba(var(--change-applied-rgb),0.15)' : 'rgba(var(--alert-red-rgb),0.12)';
+    msg.style.color = ok ? 'var(--ok-text)' : 'var(--error)';
   }
   var cotEl = document.getElementById('dev-set-cot');
   var utltEl = document.getElementById('dev-set-utlt');
@@ -2025,8 +2025,8 @@ function devGrantMonthly() {
     if (!msg) return;
     msg.textContent = text;
     msg.style.display = 'block';
-    msg.style.background = ok ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)';
-    msg.style.color = ok ? '#3c9142' : '#c0392b';
+    msg.style.background = ok ? 'rgba(var(--change-applied-rgb),0.15)' : 'rgba(var(--alert-red-rgb),0.12)';
+    msg.style.color = ok ? 'var(--ok-text)' : 'var(--error)';
   }
   fetch('/api/tokens/dev-grant-monthly', {
     method: 'POST',
@@ -2054,8 +2054,8 @@ function devApplyTrial() {
     if (!msg) return;
     msg.textContent = text;
     msg.style.display = 'block';
-    msg.style.background = ok ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)';
-    msg.style.color = ok ? '#3c9142' : '#c0392b';
+    msg.style.background = ok ? 'rgba(var(--change-applied-rgb),0.15)' : 'rgba(var(--alert-red-rgb),0.12)';
+    msg.style.color = ok ? 'var(--ok-text)' : 'var(--error)';
   }
   if (!toggle) return;
   var body = { inTrial: toggle.checked };
@@ -2117,13 +2117,13 @@ function showAdminBalanceMsg(text, kind) {
   el.textContent = text;
   el.style.display = 'block';
   if (kind === 'ok') {
-    el.style.background = 'rgba(15,110,86,0.25)';
-    el.style.border = '1px solid rgba(134,212,186,0.4)';
-    el.style.color = '#86d4ba';
+    el.style.background = 'rgba(var(--success-rgb),0.25)';
+    el.style.border = '1px solid rgba(var(--success-light-line-rgb),0.4)';
+    el.style.color = 'var(--success-light)';
   } else {
     el.style.background = 'rgba(var(--danger-rgb),0.35)';
-    el.style.border = '1px solid rgba(240,149,149,0.4)';
-    el.style.color = '#f09595';
+    el.style.border = '1px solid rgba(var(--error-light-line-rgb),0.4)';
+    el.style.color = 'var(--error-light)';
   }
 }
 
@@ -2329,7 +2329,7 @@ function myStoryCard(it) {
   if (it.cover_page_url || it.cover_url) {
     var img = document.createElement('img');
     img.setAttribute('loading', 'lazy'); img.alt = it.title || 'story';
-    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:#160e06;';
+    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:var(--surface-ink);';
     // v3.3.39 -- the book's own cover page, title and all, as the Library shows it (Ian). If it cannot be drawn, the
     // cover picture as before; if that fails too, the title placeholder.
     var _fbCover = it.cover_url || '';
@@ -2337,14 +2337,14 @@ function myStoryCard(it) {
       if (_fbCover && img.getAttribute('data-fell') !== '1' && img.src.indexOf(_fbCover) < 0) { img.setAttribute('data-fell', '1'); img.src = _fbCover; return; }
       img.onerror = null;
       var ph0 = document.createElement('div'); ph0.textContent = it.title || 'Untitled';
-      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--surface-ink);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
       if (img.parentNode) img.parentNode.replaceChild(ph0, img);
     };
     img.src = it.cover_page_url || it.cover_url;
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
-    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--surface-ink);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
     a.appendChild(ph);
   }
   card.appendChild(a);
@@ -2412,7 +2412,7 @@ function myStoryCard(it) {
       ? 'Anyone with the link can read it. It is not in the Library and search engines are asked to skip it.'
       : 'Listed in the public Library and open to search engines.';
     visBadge.style.cssText = 'font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid ' +
-      (unlisted ? 'rgba(var(--accent-rgb),0.45);color:rgba(var(--accent-rgb),0.95);' : 'rgba(120,200,140,0.45);color:rgba(150,220,170,0.95);');
+      (unlisted ? 'rgba(var(--accent-rgb),0.45);color:rgba(var(--accent-rgb),0.95);' : 'rgba(120,200,140,0.45);color:rgba(var(--success-light-rgb),0.95);');
     visBtn.textContent = unlisted ? 'Make public' : 'Make link only';
     // The card link follows the same rule, so it can never point at a url that 404s.
     a.href = storyShareUrl(it);
@@ -2630,7 +2630,7 @@ function myStoriesPaint() {
         // The pen name printed inside the book, when it is not the one this story is listed under.
         if (it.printed_name && _msKey(it.printed_name) !== _msKey(it.author)) {
           var pn = document.createElement('div'); pn.className = 'ms-printed';
-          pn.style.cssText = 'font-size:10px;line-height:1.35;color:#e8a85a;padding:0 8px 6px;';
+          pn.style.cssText = 'font-size:10px;line-height:1.35;color:var(--soft-gold-note);padding:0 8px 6px;';
           pn.textContent = 'The book itself says \u00a9 ' + it.printed_name + '. Publish it again with Replace to change that.';
           card.appendChild(pn);
         }
@@ -2877,7 +2877,7 @@ function savePreferences() {
     .then(function(d){
       if (!msg) return;
       msg.style.display = 'block';
-      if (d && d.success) { msg.style.color = '#0a4a38'; msg.textContent = 'Preferences saved.'; }
+      if (d && d.success) { msg.style.color = 'var(--success-text)'; msg.textContent = 'Preferences saved.'; }
       else { msg.style.color = 'var(--error)'; msg.textContent = (d && d.error) || 'Could not save preferences.'; }
       setTimeout(function(){ if (msg) msg.style.display = 'none'; }, 4000);
     })
@@ -3139,8 +3139,8 @@ function renderAccountTier(me) {
   if (grid) {
     function row(label, ok) {
       var mark = ok
-        ? '<span style="color:#7fae5f;">\u2713</span> '
-        : '<span style="color:#9a6a5a;">\u2717</span> ';
+        ? '<span style="color:var(--change-applied);">\u2713</span> '
+        : '<span style="color:var(--row-muted);">\u2717</span> ';
       return '<div>' + mark + label + '</div>';
     }
     function val(label, v) {
@@ -5518,7 +5518,7 @@ function renderReview(data) {
       : '';
     html += '<div class="review-panel"' + (_isEstR ? '' : (' data-fx-src="review" data-fx-t="p" data-fx-id="' + mid + '"')) + '>' +   // v3.4.37
       '<div class="review-panel-head">' +
-        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(var(--accent-rgb),0.22);color:#e8c870;">' + fxRowLabel(1, 'Opening') + '</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
+        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(var(--accent-rgb),0.22);color:var(--highlight);">' + fxRowLabel(1, 'Opening') + '</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
@@ -6530,8 +6530,8 @@ function charPicCss() {
     '.char-card--pic .char-avatar>span{font-size:44px !important;}' +
     '.char-card--pic .char-actions{position:absolute;top:8px;right:8px;z-index:2;}' +
     '.char-card--pic .char-btn{background:rgba(var(--panel-alt-rgb),0.78);color:var(--on-panel);border-color:rgba(var(--accent-rgb),0.45);font-size:11px;padding:4px 9px;}' +
-    '.char-card--pic .char-btn:hover{background:rgba(var(--accent-rgb),0.92);color:#1a120c;}' +
-    '.char-card--pic .char-btn-delete:hover{background:rgba(var(--danger-rgb),0.92);color:#fff;border-color:rgba(240,149,149,0.6);}';
+    '.char-card--pic .char-btn:hover{background:rgba(var(--accent-rgb),0.92);color:var(--surface-ink-text);}' +
+    '.char-card--pic .char-btn-delete:hover{background:rgba(var(--danger-rgb),0.92);color:#fff;border-color:rgba(var(--error-light-line-rgb),0.6);}';
   document.head.appendChild(st);
 }
 function renderCustomStyleCards() {
@@ -6596,11 +6596,11 @@ function csRightsSlotMark(list) {
       var n = parseInt(it && it.slot, 10); if (!(n >= 1 && n <= 4)) return;
       var box = document.getElementById('drop-cstyle_' + n); if (!box || !box.parentNode) return;
       var red = it.verdict === 'reject';
-      box.style.outline = '3px solid ' + (red ? '#dc2626' : '#d97706'); box.style.outlineOffset = '-3px';
+      box.style.outline = '3px solid ' + (red ? 'var(--alert-red-line)' : 'var(--rights-warn-line)'); box.style.outlineOffset = '-3px';
       box.setAttribute('data-cs-rights', red ? 'reject' : 'warn');   // v3.2.02 -- TD-983
       var note = document.createElement('div');
       note.id = 'cs-rights-note-' + n; note.setAttribute('role', 'note');
-      note.style.cssText = (red ? 'color:#fecaca;background:#7f1d1d;' : 'color:#fde68a;background:#5c3d0a;') + 'font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+      note.style.cssText = (red ? 'color:var(--error-pale-text);background:var(--danger-hover);' : 'color:var(--warn-text);background:var(--warning);') + 'font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
       var why = ((it.reasons || []).map(function (r) { return r && r.text; }).filter(Boolean)).join(' ');
       note.textContent = red ? ('Watermark or stock picture \u2014 replace this picture. ' + why) : (why + ' Use it only if it\u2019s yours or you have permission.');
       box.parentNode.insertBefore(note, box.nextSibling);
@@ -8062,7 +8062,7 @@ function showErrorDialog(msg, title) {
   var ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
   var box = document.createElement('div');
-  box.style.cssText = 'background:#1c1b22;border:1px solid var(--gold,var(--accent));border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
+  box.style.cssText = 'background:var(--error-dialog-bg);border:1px solid var(--gold,var(--accent));border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
   var h = document.createElement('div');
   h.textContent = title || 'Heads up';
   h.style.cssText = 'font-size:16px;font-weight:700;color:var(--gold,var(--accent));margin-bottom:10px;';
@@ -10094,7 +10094,7 @@ function showCharPromptNudge() {
   var nudge = document.createElement('div');
   nudge.id = 'char-prompt-nudge';
   nudge.style.cssText = 'margin:8px 0;padding:8px 12px;border-radius:6px;font-size:13px;' +
-    'background:rgba(15,110,86,0.15);border:1px solid rgba(15,110,86,0.4);color:#0a4a38;font-weight:500;';
+    'background:rgba(var(--success-rgb),0.15);border:1px solid rgba(var(--success-rgb),0.4);color:var(--success-text);font-weight:500;';
   nudge.innerHTML = '&#10003; Character saved. Now build its character prompt \u2014 ' +
     'this is what keeps the character looking consistent across your panels. ' +
     'You can close this window when you\u2019re done.';
@@ -10582,7 +10582,7 @@ function saveNarrativeSection(type, panelIndex) {
       if (btn) {
         var orig = btn.textContent;
         btn.textContent = '✓ Saved!';
-        btn.style.color = '#5dcaa5';
+        btn.style.color = 'var(--success-light)';
         setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 1500);
       }
     }
@@ -14445,7 +14445,7 @@ function bookshelfShowCard(b, isLib) {
   var ph = document.createElement('div');
   ph.className = 'bopen-cover-ph';
   ph.textContent = b.bookTitle || 'Untitled book';
-  ph.style.backgroundColor = isLib ? '#3a2418' : bshelfLeather(String(b.campaignId || 0) + '|' + (b.campaignName || ''));
+  ph.style.backgroundColor = isLib ? 'var(--shelf-wood-dark)' : bshelfLeather(String(b.campaignId || 0) + '|' + (b.campaignName || ''));
   left.appendChild(ph);
   if (src) {
     var im = document.createElement('img');
@@ -17861,7 +17861,7 @@ function adminLibCard(it) {
   img.setAttribute('loading', 'lazy');
   img.src = it.image_url;
   img.alt = it.caption || 'shared image';
-  img.style.cssText = 'width:100%;height:auto;display:block;background:#160e06;cursor:zoom-in;';
+  img.style.cssText = 'width:100%;height:auto;display:block;background:var(--surface-ink);cursor:zoom-in;';
   img.onclick = function () { openLightbox(it.image_url, it.caption); };
   card.appendChild(img);
   if (it.caption) {
@@ -17966,11 +17966,11 @@ function adminStoryCard(it) {
   if (it.cover_url) {
     var img = document.createElement('img');
     img.setAttribute('loading', 'lazy'); img.src = it.cover_url; img.alt = it.title || 'story';
-    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:#160e06;';
+    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:var(--surface-ink);';
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
-    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--surface-ink);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
     a.appendChild(ph);
   }
   card.appendChild(a);
@@ -19713,7 +19713,7 @@ function saveNarrativeSection(type, panelIndex) {
       if (btn) {
         var orig = btn.textContent;
         btn.textContent = '✓ Saved!';
-        btn.style.color = '#5dcaa5';
+        btn.style.color = 'var(--success-light)';
         setTimeout(function() { btn.textContent = orig; btn.style.color = ''; }, 1500);
       }
     }
@@ -20282,7 +20282,7 @@ function wtRenderPoints(points, d) {
   // v3.2.40 -- the Story box: what it reads as, big-picture points, no Show me, and the cost on the button.
   var story = wtIsStory();
   var again = story ? wtStoryFbLabel('Get new feedback') : 'Get new feedback (1 use)';
-  if (story && d && d.reads_as) head = '<div class="wc-reads-as" style="font-size:11px;color:#7a5c12;letter-spacing:0.03em;margin:0 0 8px;">Reads as: ' + escapeHtml(d.reads_as) + '</div>' + head;
+  if (story && d && d.reads_as) head = '<div class="wc-reads-as" style="font-size:11px;color:var(--gold-muted);letter-spacing:0.03em;margin:0 0 8px;">Reads as: ' + escapeHtml(d.reads_as) + '</div>' + head;
   if (!points.length && d && d.verdict === 'great') {
     s.pending = false;   // nothing to use, so nothing to warn about when moving on
     wtTabHtml('feedback', head + (story ? '<p class="wc-note">The final narrative gets polished box by box on the Storyboard.</p>' : '') + '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">' + again + '</button>');
@@ -21846,7 +21846,7 @@ function loadMemberCap() {
     .then(function (d) {
       var t = memberCapLineText(d);
       el.textContent = t;
-      el.style.color = (d && d.full) ? '#e8b25c' : 'rgba(var(--on-panel-cream-rgb),0.75)';
+      el.style.color = (d && d.full) ? 'var(--amber-note)' : 'rgba(var(--on-panel-cream-rgb),0.75)';
       el.style.display = t ? '' : 'none';
     })
     .catch(function () { el.style.display = 'none'; });
@@ -21864,14 +21864,14 @@ function loadMembers() {
     .then(function(r) { return r.json(); })
     .then(function(rows) {
       if (rows && rows.error) {
-        list.innerHTML = '<div style="color:#f5b0a8;padding:8px;">' + rows.error + '</div>';
+        list.innerHTML = '<div style="color:var(--error-light);padding:8px;">' + rows.error + '</div>';
         return;
       }
       state.members = rows || [];
       renderMembersList();
     })
     .catch(function(e) {
-      list.innerHTML = '<div style="color:#f5b0a8;padding:8px;">Could not load members: ' + e.message + '</div>';
+      list.innerHTML = '<div style="color:var(--error-light);padding:8px;">Could not load members: ' + e.message + '</div>';
     });
 }
 
@@ -21936,14 +21936,14 @@ function loadPendingInvites() {
     .then(function(r) { return r.json(); })
     .then(function(rows) {
       if (rows && rows.error) {
-        list.innerHTML = '<div style="color:#f5b0a8;padding:8px;">' + rows.error + '</div>';
+        list.innerHTML = '<div style="color:var(--error-light);padding:8px;">' + rows.error + '</div>';
         return;
       }
       state.pendingInvites = rows || [];
       renderPendingInvites();
     })
     .catch(function(e) {
-      list.innerHTML = '<div style="color:#f5b0a8;padding:8px;">Could not load invites: ' + e.message + '</div>';
+      list.innerHTML = '<div style="color:var(--error-light);padding:8px;">Could not load invites: ' + e.message + '</div>';
     });
 }
 
@@ -22222,10 +22222,10 @@ function campPinCss() {
   var s = document.createElement('style'); s.id = 'camp-pin-css';
   // v3.4.16 -- no circle: the pin sits on the card itself, with a dark shadow so it reads on a light cover (Ian).
   s.textContent = '.camp-pin{position:absolute;top:12px;right:12px;z-index:7;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;' +
-    'border:none;background:none;color:rgba(232,200,112,0.75);cursor:pointer;padding:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));}' +
+    'border:none;background:none;color:rgba(var(--highlight-rgb),0.75);cursor:pointer;padding:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));}' +
     '.camp-pin svg{width:22px;height:22px;}' +
-    '.camp-pin:hover{color:#f0d888;}' +
-    '.camp-pin.on{color:#e8c870;}' +
+    '.camp-pin:hover{color:var(--highlight);}' +
+    '.camp-pin.on{color:var(--highlight);}' +
     '.camp-pin.off svg{transform:rotate(45deg);}';
   document.head.appendChild(s);
 }
@@ -24514,7 +24514,7 @@ function renderUserLastActive(d) {
   var _ord = _ulaOrder(cols);   // v3.4.52 -- Ian's order and names
   if (cnt) cnt.textContent = '(' + rows.length + (d.capped ? '+' : '') + ')';
   if (!rows.length) { out.textContent = 'No rows.'; return; }
-  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(var(--accent-rgb),0.85);white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.25);';
+  var th = 'position:sticky;top:0;background:var(--surface-ink);text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(var(--accent-rgb),0.85);white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.25);';
   var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';   // v3.2.61 -- light text
   var h = '<table style="border-collapse:collapse;width:100%;"><thead><tr>' +
     _ord.map(function (o) { return '<th style="' + th + '">' + _ulaCell(o.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
@@ -26583,7 +26583,7 @@ function updateWordCounts() {
       if (state.narrativeStyle === 'written') {
         var lim = _writtenLimit();
         out.textContent += ' \u00b7 Already Written: up to ' + lim.toLocaleString() + ' a session';
-        if (n > lim) out.style.color = '#e0a040';
+        if (n > lim) out.style.color = 'var(--amber-note)';
       }
     }
   });
@@ -26856,13 +26856,13 @@ function csGenreRender() {
       // cannot break again if the modal is ever restyled.
       var primary = (i === 0 && _csGenres.length > 1);
       return '<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:12px;' +
-        'border:1px solid ' + (primary ? '#4a3208' : '#6b4a12') + ';' +
-        'background:' + (primary ? '#6b4a12' : '#8a6a2a') + ';' +
-        'font-size:12px;font-weight:600;color:#f7ecd2;">' +
+        'border:1px solid ' + (primary ? 'var(--gold-dim-label-line)' : 'var(--gold-dim-label-line)') + ';' +
+        'background:' + (primary ? 'var(--gold-dim-label-fill)' : 'var(--gold-muted-fill)') + ';' +
+        'font-size:12px;font-weight:600;color:var(--light-panel-text);">' +
         escapeHtmlReview(csGenreLabel(slug)) +
         (primary ? '<span style="font-size:10px;font-weight:400;opacity:0.8;">main</span>' : '') +
         '<button type="button" title="Remove" onclick="csGenreRemove(\'' + slug + '\')" ' +
-        'style="background:none;border:none;color:rgba(247,236,210,0.8);cursor:pointer;padding:0;font-size:13px;line-height:1;">&times;</button>' +
+        'style="background:none;border:none;color:rgba(var(--light-panel-text-rgb),0.8);cursor:pointer;padding:0;font-size:13px;line-height:1;">&times;</button>' +
       '</span>';
     }).join('');
   }
@@ -27059,7 +27059,7 @@ function csSaveState(msg, kind) {
   var el = document.getElementById('cs-save-state');
   if (!el) return;
   el.textContent = msg || '';
-  el.style.color = (kind === 'error') ? '#e57373' : '';
+  el.style.color = (kind === 'error') ? 'var(--error-soft)' : '';
 }
 
 // now === true writes immediately (a toggle, or a flush); otherwise it debounces.
@@ -27784,9 +27784,9 @@ function showPrintMsg(text, kind) {
   if (!text) { el.style.display = 'none'; return; }
   var ok = kind === 'ok';
   el.style.display = 'block';
-  el.style.background = ok ? 'rgba(120,180,90,0.12)' : 'rgba(201,120,76,0.12)';
-  el.style.border = '1px solid ' + (ok ? 'rgba(120,180,90,0.4)' : 'rgba(201,120,76,0.4)');
-  el.style.color = ok ? 'rgba(200,235,180,0.95)' : 'rgba(245,200,180,0.95)';
+  el.style.background = ok ? 'rgba(var(--change-applied-rgb),0.12)' : 'rgba(var(--print-note-rgb),0.12)';
+  el.style.border = '1px solid ' + (ok ? 'rgba(var(--change-applied-line-rgb),0.4)' : 'rgba(var(--print-note-rgb),0.4)');
+  el.style.color = ok ? 'rgba(var(--ok-pale-text-rgb),0.95)' : 'rgba(var(--soft-line-text-rgb),0.95)';
   el.textContent = text;
 }
 
@@ -27816,9 +27816,9 @@ function showPrintBtnMsg(text, kind) {
   var ok = kind === 'ok';
   var info = kind === 'info';
   el.style.display = 'block';
-  el.style.background = ok ? 'rgba(120,180,90,0.12)' : (info ? 'rgba(var(--accent-rgb),0.12)' : 'rgba(201,120,76,0.12)');
-  el.style.border = '1px solid ' + (ok ? 'rgba(120,180,90,0.4)' : (info ? 'rgba(var(--accent-rgb),0.4)' : 'rgba(201,120,76,0.4)'));
-  el.style.color = ok ? 'rgba(200,235,180,0.95)' : (info ? 'rgba(var(--accent-pale-rgb),0.95)' : 'rgba(245,200,180,0.95)');
+  el.style.background = ok ? 'rgba(var(--change-applied-rgb),0.12)' : (info ? 'rgba(var(--accent-rgb),0.12)' : 'rgba(var(--print-note-rgb),0.12)');
+  el.style.border = '1px solid ' + (ok ? 'rgba(var(--change-applied-line-rgb),0.4)' : (info ? 'rgba(var(--accent-rgb),0.4)' : 'rgba(var(--print-note-rgb),0.4)'));
+  el.style.color = ok ? 'rgba(var(--ok-pale-text-rgb),0.95)' : (info ? 'rgba(var(--accent-pale-rgb),0.95)' : 'rgba(var(--soft-line-text-rgb),0.95)');
   el.textContent = text;
 }
 function printProgress(pct) {
@@ -29593,7 +29593,7 @@ function renderPrintReview(body, quote) {
       ca.id = 'print-review-cover-preview';
       ca.href = preparedCoverUrl; ca.target = '_blank'; ca.rel = 'noopener';
       ca.textContent = 'Preview your cover (opens the PDF in a new tab)';
-      ca.style.cssText = 'display:inline-block;margin-bottom:10px;margin-left:14px;font-size:13px;color:#7fb0e0;text-decoration:underline;';
+      ca.style.cssText = 'display:inline-block;margin-bottom:10px;margin-left:14px;font-size:13px;color:var(--player-text);text-decoration:underline;';
       prev.insertAdjacentElement('afterend', ca);
     }
   }
@@ -30015,7 +30015,7 @@ function orderCardHtml(o) {
   // v3.0.992 -- Ian: the cover about the width of a button, and Check with the printer / Reorder
   // UNDER it, so the card is wider and shorter. The buttons move into the cover's column; with no
   // cover they stay under the details, as they always were.
-  if (_coverThumb) html += '<div class="ord-with-thumb" style="display:flex;gap:14px;align-items:flex-start;"><div class="ord-thumb-col"><img class="ord-cover-thumb" src="/api/order-covers/' + encodeURIComponent(o.id) + '" alt="" loading="lazy" onerror="this.remove()" style="display:block;width:100%;aspect-ratio:17/22;object-fit:cover;border-radius:2px;box-shadow:2px 3px 6px rgba(0,0,0,0.35);background:#2a1a0c;">' + checkBtn + reorderBtn + deleteBtn + '</div><div style="flex:1;min-width:0;">';
+  if (_coverThumb) html += '<div class="ord-with-thumb" style="display:flex;gap:14px;align-items:flex-start;"><div class="ord-thumb-col"><img class="ord-cover-thumb" src="/api/order-covers/' + encodeURIComponent(o.id) + '" alt="" loading="lazy" onerror="this.remove()" style="display:block;width:100%;aspect-ratio:17/22;object-fit:cover;border-radius:2px;box-shadow:2px 3px 6px rgba(0,0,0,0.35);background:var(--hover-fill);">' + checkBtn + reorderBtn + deleteBtn + '</div><div style="flex:1;min-width:0;">';
   html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:1px;">';
   html += '<div style="font-weight:600;color:var(--text);font-size:15px;font-family:var(--font-display);">' + esc(title) + '</div>';
   html += '<div style="font-size:11px;color:var(--text-muted);">' + esc(when) + '</div>';
@@ -31061,10 +31061,10 @@ function replayTours() {
         _tourProgress = {};
         if (msg) { msg.style.color = 'var(--gold-light)'; msg.textContent = 'Guided tours are back on. Visit any screen to see its tour again.'; }
       } else {
-        if (msg) { msg.style.color = '#c0392b'; msg.textContent = (d && d.error) ? d.error : 'Could not turn tours back on. Please try again.'; }
+        if (msg) { msg.style.color = 'var(--error)'; msg.textContent = (d && d.error) ? d.error : 'Could not turn tours back on. Please try again.'; }
       }
     })
-    .catch(function(){ if (msg) { msg.style.color = '#c0392b'; msg.textContent = 'Could not turn tours back on. Please try again.'; } });
+    .catch(function(){ if (msg) { msg.style.color = 'var(--error)'; msg.textContent = 'Could not turn tours back on. Please try again.'; } });
 }
 
 // ===== Cast picker modal: image grid (replaces the +Add character/asset dropdowns) =====
@@ -31240,12 +31240,12 @@ function _doDeleteCampaign(id) {
         if (c.assets) parts.push(c.assets + ' asset' + (c.assets > 1 ? 's' : ''));
         if (c.archives) parts.push(c.archives + ' archived image' + (c.archives > 1 ? 's' : ''));
         if (c.otherMembers) parts.push(c.otherMembers + ' other member' + (c.otherMembers > 1 ? 's' : ''));
-        if (msg) { msg.style.color = '#e57373'; msg.textContent = 'Cannot delete yet \u2014 this campaign still has ' + parts.join(', ') + '. Remove those first.'; }
+        if (msg) { msg.style.color = 'var(--error-soft)'; msg.textContent = 'Cannot delete yet \u2014 this campaign still has ' + parts.join(', ') + '. Remove those first.'; }
         return;
       }
-      if (msg) { msg.style.color = '#e57373'; msg.textContent = (res.d && res.d.error) ? res.d.error : 'Could not delete this campaign.'; }
+      if (msg) { msg.style.color = 'var(--error-soft)'; msg.textContent = (res.d && res.d.error) ? res.d.error : 'Could not delete this campaign.'; }
     })
-    .catch(function(){ if (btn) btn.disabled = false; if (msg) { msg.style.color = '#e57373'; msg.textContent = 'Could not delete this campaign.'; } });
+    .catch(function(){ if (btn) btn.disabled = false; if (msg) { msg.style.color = 'var(--error-soft)'; msg.textContent = 'Could not delete this campaign.'; } });
 }
 
 // ============================================================
@@ -31339,7 +31339,7 @@ function cmpDebugMsg(text, ok) {
   var m = document.getElementById('debug-log-msg');
   if (!m) return;
   m.style.display = 'block';
-  m.style.color = ok ? '#7bbf6a' : '#e57373';
+  m.style.color = ok ? 'var(--change-applied)' : 'var(--error-soft)';
   m.textContent = text;
 }
 
@@ -31469,8 +31469,8 @@ function finalizeVerdictHtml(bp, cnt, fB, fA) {
   if (!bp || !cnt) return '';
   var saved = bp - cnt;
   var denser = (fB != null && fA != null) ? (fA - fB) : null;
-  var g = function (s) { return '<strong style="color:#8fd18f;">' + s + '</strong>'; };
-  var w = function (s) { return '<strong style="color:#e0a0a0;">' + s + '</strong>'; };
+  var g = function (s) { return '<strong style="color:var(--good-text);">' + s + '</strong>'; };
+  var w = function (s) { return '<strong style="color:var(--error-light);">' + s + '</strong>'; };
   var pg = function (n) { return n + (n === 1 ? ' page' : ' pages'); };
   var gained = (saved > 0 || (denser != null && denser >= 2));
   // 1. What the two measurements actually found -- facts only, no advice here.
@@ -32391,8 +32391,8 @@ function finalizeOpenFixDialog(viewerPage) {
   // reads as a caution rather than as another option.
   var h = '';
   if (_fixOffsetSuspect) {
-    h += '<div style="font-size:11px;color:#8a5a1e;background:rgba(176,125,30,0.12);' +
-      'border:1px solid rgba(176,125,30,0.5);border-radius:4px;padding:8px 9px;margin-bottom:10px;">' +
+    h += '<div style="font-size:11px;color:var(--gold-muted);background:rgba(var(--copper-rgb),0.12);' +
+      'border:1px solid rgba(var(--copper-rgb),0.5);border-radius:4px;padding:8px 9px;margin-bottom:10px;">' +
       // v3.0.799 -- TD-609. Same removal as the run-log line above, for the same reason: this
       // banner carried the identical instruction and it cannot do what it promises (TD-597).
       // v3.0.801 -- TD-611. Same wording change as the run-log line, same reason.
@@ -32400,7 +32400,7 @@ function finalizeOpenFixDialog(viewerPage) {
       'book.</strong> The book on screen has ' + _fixOffsetSuspect.rendered + ' pages and those ' +
       'selections make ' + _fixOffsetSuspect.planned + ', so these options may describe a different page.</div>';
   }
-  h += '<div style="font-size:11px;color:#8a6a2a;margin-bottom:10px;">Green is what we expect to work. ' +
+  h += '<div style="font-size:11px;color:var(--gold-muted);margin-bottom:10px;">Green is what we expect to work. ' +
     'Any of them can be tried &mdash; if a move will not fit, nothing changes and it says why.</div>';
   info.options.forEach(function (o, ix) {
     // v3.0.399 -- NOTHING IS DISABLED. The colour is what we EXPECT; the applier decides. A grey
@@ -32416,29 +32416,29 @@ function finalizeOpenFixDialog(viewerPage) {
     // v3.0.424 -- MAX, on the grow row only. There is no sensible Min: the shrink floor is already
     // the smallest a picture may be, and a button for it would just be a slower way to hit the floor.
     var _maxBox = _isGrow
-      ? ('<label style="margin-left:10px;font-size:11px;color:#8a6a2a;cursor:pointer;" onclick="event.stopPropagation();">' +
+      ? ('<label style="margin-left:10px;font-size:11px;color:var(--gold-muted);cursor:pointer;" onclick="event.stopPropagation();">' +
          '<input type="checkbox" class="fix-max" data-for="' + ix + '" ' +
          'onclick="event.stopPropagation();" onchange="finalizeFixMaxToggle(' + ix + ');" ' +
          'style="margin-right:4px;vertical-align:middle;">Max</label>')
       : '';
     var _pctBox = _isPic
-      ? ('<span style="margin-left:8px;font-size:11px;color:#8a6a2a;">by ' +
+      ? ('<span style="margin-left:8px;font-size:11px;color:var(--gold-muted);">by ' +
          '<input type="number" class="fix-pct" data-for="' + ix + '" value="10" min="1" max="75" step="5" ' +
          'onclick="event.stopPropagation();" onfocus="finalizeFixPickRadio(' + ix + ');" ' +
          'style="width:46px;padding:1px 4px;font-size:11px;border-radius:3px;border:1px solid rgba(var(--accent-rgb),0.5);' +
-         'background:rgba(var(--accent-rgb),0.10);color:#8a6a2a;"> percent</span>' + _maxBox)
+         'background:rgba(var(--accent-rgb),0.10);color:var(--gold-muted);"> percent</span>' + _maxBox)
       : '';
     h += '<label style="display:block;margin-bottom:8px;padding:7px 9px;border-radius:4px;border:1px solid rgba(var(--accent-rgb),0.18);' +
       (dis ? 'cursor:not-allowed;' : 'cursor:pointer;') + '">' +   // v3.0.397 -- no opacity: colour carries it
       '<input type="radio" name="fixopt" value="' + ix + '"' + (dis ? ' disabled' : '') + ' style="margin-right:8px;">' +
       '<span style="color:' + (COL[o.verdict] || COL.GREY) + ';font-weight:600;">' + o.label + '</span>' + _pctBox +
-      '<div style="font-size:11px;color:#8a6a2a;margin:3px 0 0 22px;">' + o.reason + '</div>' +
+      '<div style="font-size:11px;color:var(--gold-muted);margin:3px 0 0 22px;">' + o.reason + '</div>' +
     '</label>';
   });
   var t = document.getElementById('fix-modal-title');
   if (t) {
     t.innerHTML = 'Adjust page ' + viewerPage +
-      '<span style="font-family:var(--font-body);font-size:12px;font-weight:400;color:#8a6a2a;margin-left:10px;">' +
+      '<span style="font-family:var(--font-body);font-size:12px;font-weight:400;color:var(--gold-muted);margin-left:10px;">' +
       'This page holds ' + info.heldIn + 'in of ' + info.boxIn + 'in' +
       (info.overBox ? ' &mdash; it runs over the page' : '') + '.</span>';
   }
@@ -33125,7 +33125,7 @@ function optimizeLogLine(txt, kind) {
     if (p) {
       var d = document.createElement('div');
       d.textContent = (kind === 'stop' ? '\u2717 ' : (kind === 'ok' ? '\u2713 ' : '\u2022 ')) + txt;
-      d.style.cssText = 'opacity:0.85;margin:2px 0;' + (kind === 'stop' ? 'color:#e0a0a0;' : '');
+      d.style.cssText = 'opacity:0.85;margin:2px 0;' + (kind === 'stop' ? 'color:var(--error-light);' : '');
       p.appendChild(d);
     }
   } catch (e) {}
@@ -34285,7 +34285,7 @@ function _runLayoutAiOptimize() {
         if (!panel) {
           panel = document.createElement('div');
           panel.id = '__aiLoopLog';
-          panel.style.cssText = 'margin:8px 4px 0 4px;padding:8px 10px;max-height:180px;overflow-y:auto;background:#0c0805;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#d8c79a;';
+          panel.style.cssText = 'margin:8px 4px 0 4px;padding:8px 10px;max-height:180px;overflow-y:auto;background:var(--surface-ink);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--label);';
           var title = document.createElement('div');
           title.style.cssText = 'color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;';
           title.textContent = 'AI optimize log';
@@ -34293,7 +34293,7 @@ function _runLayoutAiOptimize() {
           host.parentNode.insertBefore(panel, host.nextSibling);
         }
         var line = document.createElement('div');
-        line.style.color = (kind === 'applied') ? '#7bd88f' : (kind === 'reject') ? '#e0a05a' : (kind === 'stop') ? 'var(--accent)' : '#d8c79a';
+        line.style.color = (kind === 'applied') ? 'var(--good-text)' : (kind === 'reject') ? 'var(--soft-gold-note)' : (kind === 'stop') ? 'var(--accent)' : 'var(--label)';
         line.textContent = txt;
         panel.appendChild(line);
         panel.scrollTop = panel.scrollHeight;
@@ -34700,11 +34700,11 @@ function _runLayoutAiOptimize() {
           // number matches the diagnostics bundle. The ink metric still drives the underfull flags.
           var _fB = finalizeFillPct(_finalizeHeights, bp), _fA = finalizeFillPct(_finalizeAfterHeights, cnt);
           var _html = 'Pages: <strong>' + bp + '</strong> &nbsp;&rarr;&nbsp; <strong>' + cnt + '</strong>' +
-            (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
+            (delta > 0 ? ' &nbsp;(<strong style="color:var(--good-text);">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:var(--error-light);">+' + (-delta) + '</strong>)' : ''));
           if (_fB != null && _fA != null) {
             _html += '<br>Density: <strong style="color:' + finalizeFillColor(_fB) + ';">' + _fB + '%</strong> &nbsp;&rarr;&nbsp; <strong style="color:' + finalizeFillColor(_fA) + ';">' + _fA + '% full</strong>';
             var _eB = bp * (100 - _fB), _eA = cnt * (100 - _fA);
-            if (_eB > 0) { var _cut = Math.round((_eB - _eA) / _eB * 100); if (_cut > 0) _html += '<br><strong style="color:#8fd18f;">' + _cut + '% less empty space overall (after editing)</strong>'; }
+            if (_eB > 0) { var _cut = Math.round((_eB - _eA) / _eB * 100); if (_cut > 0) _html += '<br><strong style="color:var(--good-text);">' + _cut + '% less empty space overall (after editing)</strong>'; }
           }
           _dEl.innerHTML = _html;
           var _vEl = document.getElementById('pub-pick-verdict');
@@ -34782,13 +34782,13 @@ function _runLayoutAiOptimize() {
           // number matches the diagnostics bundle. The ink metric still drives the underfull flags.
           var _fB = finalizeFillPct(_finalizeHeights, bp), _fA = finalizeFillPct(_finalizeAfterHeights, cnt);
           var _html = 'Pages: <strong>' + bp + '</strong> &nbsp;&rarr;&nbsp; <strong>' + cnt + '</strong>' +
-            (delta > 0 ? ' &nbsp;(<strong style="color:#8fd18f;">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:#e0a0a0;">+' + (-delta) + '</strong>)' : ''));
+            (delta > 0 ? ' &nbsp;(<strong style="color:var(--good-text);">-' + delta + '</strong>)' : (delta < 0 ? ' &nbsp;(<strong style="color:var(--error-light);">+' + (-delta) + '</strong>)' : ''));
           if (_fB != null && _fA != null) {
             _html += '<br>Density: <strong style="color:' + finalizeFillColor(_fB) + ';">' + _fB + '%</strong> &nbsp;&rarr;&nbsp; <strong style="color:' + finalizeFillColor(_fA) + ';">' + _fA + '% full</strong>';
             // Total empty space = pages x white. Captures BOTH fewer pages AND denser pages in one number.
             var _eB = bp * (100 - _fB), _eA = cnt * (100 - _fA);
             if (_eB > 0) { var _cut = Math.round((_eB - _eA) / _eB * 100);
-              if (_cut > 0) _html += '<br><strong style="color:#8fd18f;">' + _cut + '% less empty space overall</strong>'; }
+              if (_cut > 0) _html += '<br><strong style="color:var(--good-text);">' + _cut + '% less empty space overall</strong>'; }
           }
           _dEl.innerHTML = _html;
         }
@@ -34997,7 +34997,7 @@ function finalizeFreeAnalysis() {
 function renderLayoutAiResult(j) {
   var out = document.getElementById('layoutai-results');
   if (!out) return;
-  if (!j || j.error) { out.innerHTML = '<div style="color:#e0a0a0;font-size:13px;">Error: ' + escapeHtml((j && j.error) || 'no response') + '</div>'; return; }
+  if (!j || j.error) { out.innerHTML = '<div style="color:var(--error-light);font-size:13px;">Error: ' + escapeHtml((j && j.error) || 'no response') + '</div>'; return; }
   var h = '';
   h += '<div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.5);margin-bottom:8px;">' + escapeHtml(j.layout || '') + ' &middot; ' + escapeHtml(j.model || '') + ' &middot; ' + (j.total_pages || 0) + ' pages &middot; ' + (j.pages_flagged || 0) + ' flagged &middot; ' + (j.applied != null ? j.applied + ' applied &middot; ' : '') + (Math.round((j.ms || 0) / 100) / 10) + 's</div>';
   if (j.settings) {
@@ -35006,7 +35006,7 @@ function renderLayoutAiResult(j) {
     h += '<div style="font-size:10px;color:rgba(var(--on-panel-cream-rgb),0.4);margin-bottom:8px;font-family:monospace;word-break:break-all;">rendered: layout=' + escapeHtml(String(j.settings.layout || '')) + ' &middot; panels=' + (j.settings.panels || 0) + (_coStr ? ' &middot; ' + escapeHtml(_coStr) : '') + '</div>';
   }
   if (j.book_assessment) h += '<div style="background:rgba(var(--accent-rgb),0.08);border-left:3px solid var(--gold);border-radius:4px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--cream);margin-bottom:10px;">' + escapeHtml(j.book_assessment) + '</div>';
-  if (j.notes && j.notes.length) h += '<div style="color:#d0a86a;font-size:11px;margin-bottom:8px;">' + escapeHtml(j.notes.join(' | ')) + '</div>';
+  if (j.notes && j.notes.length) h += '<div style="color:var(--soft-gold-note);font-size:11px;margin-bottom:8px;">' + escapeHtml(j.notes.join(' | ')) + '</div>';
   var pages = j.pages || [];
   if (!pages.length) h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.5);font-size:12px;">No page-level changes suggested.</div>';
   pages.forEach(function (pg) {
@@ -35021,7 +35021,7 @@ function renderLayoutAiResult(j) {
       h += '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">';
       panels.forEach(function (pn) {
         var tag = (pn.label ? escapeHtml(String(pn.label)) : 'panel') + ': e' + escapeHtml(String(pn.emphasis)) + '/' + escapeHtml(String(pn.size_hint || 'keep')) + (pn.flow === true ? ' +flow' : '');
-        h += '<span style="font-size:10px;font-family:monospace;background:#0c0805;border:1px solid rgba(138,106,42,0.5);border-radius:3px;padding:1px 6px;color:#d8c9a0;">' + tag + '</span>';
+        h += '<span style="font-size:10px;font-family:monospace;background:var(--surface-ink);border:1px solid rgba(var(--gold-muted-line-rgb),0.5);border-radius:3px;padding:1px 6px;color:var(--label);">' + tag + '</span>';
       });
       h += '</div>';
     }
@@ -35412,7 +35412,7 @@ function renderPdfInto(url, containerId, isBefore) {
     // it -- which is exactly what locked Ian out on 2026-08-12. The run is over either way; the
     // only question was whether the server found out now or in a quarter of an hour.
     try { if (String(url).indexOf('compose=1') !== -1) fetch('/api/pdf/optimize-release', { method: 'POST', credentials: 'same-origin' }).catch(function () {}); } catch (e2) {}
-    if (container) container.innerHTML = '<div style="color:#e0a0a0;font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
+    if (container) container.innerHTML = '<div style="color:var(--error-light);font-size:12px;padding:16px;">Preview render failed: ' + escapeHtml((e && e.message) || 'error') + '</div>';
   });
 }
 var _finalizeSyncing = false;
@@ -35565,7 +35565,7 @@ function sbSummaryCount() {
   var lim = state._sbSummaryLimit || 1500;
   var n = (ta.value || '').length;
   el.textContent = n + ' / ' + lim;
-  el.style.color = (n > lim) ? '#e08a6a' : 'rgba(var(--accent-rgb),0.35)';
+  el.style.color = (n > lim) ? 'var(--print-note)' : 'rgba(var(--accent-rgb),0.35)';
 }
 
 // =================================================================================================
@@ -35585,7 +35585,7 @@ function sbSummaryState(msg, kind) {
   var el = document.getElementById('sb-summary-msg');
   if (!el) return;
   el.textContent = msg || '';
-  el.style.color = (kind === 'error') ? '#e57373' : 'rgba(var(--accent-rgb),0.5)';
+  el.style.color = (kind === 'error') ? 'var(--error-soft)' : 'rgba(var(--accent-rgb),0.5)';
 }
 
 // now === true writes immediately (a flush); otherwise it debounces.
@@ -36030,7 +36030,7 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
   (offered || []).forEach(function (it) {
     if (failed.indexOf(it.name) === -1) return;
     var s = slotFor(it.key);
-    if (s) s.innerHTML = '<span style="font-size:12px;color:#f0a090;">Could not start</span>';
+    if (s) s.innerHTML = '<span style="font-size:12px;color:var(--error-light);">Could not start</span>';
   });
   var bar = document.createElement('div');
   bar.className = 'progress-bar asset-suggest-bar';
@@ -36224,7 +36224,7 @@ function _rpSync() {
   e.tabs.innerHTML = ['archive', 'upload'].map(function (t) {
     var on = t === tab;
     return '<button type="button" class="rp-tab" data-tab="' + t + '" onclick="_rpShowTab(\'' + t + '\')" style="background:none;border:none;border-bottom:2px solid ' +
-      (on ? 'var(--accent)' : 'transparent') + ';color:' + (on ? '#e8d49a' : 'rgba(var(--on-panel-rgb),0.6)') + ';padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;">' +
+      (on ? 'var(--accent)' : 'transparent') + ';color:' + (on ? 'var(--label)' : 'rgba(var(--on-panel-rgb),0.6)') + ';padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;">' +
       (t === 'archive' ? 'From Archive' : 'Upload your own') + '</button>';
   }).join('');
   e.filters.style.display = tab === 'archive' ? '' : 'none';
@@ -36253,8 +36253,8 @@ function _rpShapeStrip(activeKey, pickFn) {   // v3.3.71 -- TD-1080: pickFn, the
       (on ? 'rgba(var(--accent-rgb),0.14)' : 'transparent') + ';border:1px solid ' + (on ? 'var(--accent)' : 'rgba(var(--accent-rgb),0.18)') + ';border-radius:8px;cursor:' + (clickable ? 'pointer' : 'default') + ';font:inherit;">' +
       // v3.1.16 -- flex-shrink:0 and border-box: in a button too short for it the icon was squashed, so
       // Square drew wider than tall (Ian's screenshot). The outline is now exactly the shape's ratio.
-      '<span style="display:block;flex-shrink:0;box-sizing:border-box;width:' + bw + 'px;height:' + bh + 'px;border:2px solid ' + (on ? '#e8d49a' : 'rgba(var(--accent-rgb),0.6)') + ';border-radius:2px;"></span>' +
-      '<span style="font-size:11px;line-height:1.1;color:' + (on ? '#e8d49a' : 'rgba(var(--on-panel-rgb),0.7)') + ';">' + s.label + '<br>' + s.w + ':' + s.h + '</span></button>';
+      '<span style="display:block;flex-shrink:0;box-sizing:border-box;width:' + bw + 'px;height:' + bh + 'px;border:2px solid ' + (on ? 'var(--label-line)' : 'rgba(var(--accent-rgb),0.6)') + ';border-radius:2px;"></span>' +
+      '<span style="font-size:11px;line-height:1.1;color:' + (on ? 'var(--label)' : 'rgba(var(--on-panel-rgb),0.7)') + ';">' + s.label + '<br>' + s.w + ':' + s.h + '</span></button>';
   }).join('');
 }
 
@@ -36279,7 +36279,7 @@ function _rpBuildPane() {
   var drop = document.getElementById('rp-drop'), input = document.getElementById('rp-file');
   drop.onclick = function () { input.click(); };
   input.onchange = function () { if (input.files && input.files[0]) _rpTakeFile(input.files[0]); input.value = ''; };
-  drop.ondragover = function (ev) { ev.preventDefault(); drop.style.borderColor = '#e8d49a'; };
+  drop.ondragover = function (ev) { ev.preventDefault(); drop.style.borderColor = 'var(--label-line)'; };
   drop.ondragleave = function () { drop.style.borderColor = 'rgba(var(--accent-rgb),0.45)'; };
   drop.ondrop = function (ev) {
     ev.preventDefault(); drop.style.borderColor = 'rgba(var(--accent-rgb),0.45)';
@@ -36297,7 +36297,7 @@ function _rpMsg(text, kind) {
   if (kind === 'warn') {
     m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;padding:8px 12px;border-radius:var(--radius);color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);';
   } else {
-    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(var(--on-panel-rgb),0.85)') + ';';
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? 'var(--error-light)' : 'rgba(var(--on-panel-rgb),0.85)') + ';';
   }
 }
 
@@ -36459,14 +36459,14 @@ function cropMount(host, o) {
   var s = Math.min((maxW - 20) / o.W, maxH / o.H, 1);
   var dw = Math.round(o.W * s), dh = Math.round(o.H * s);
   var Hd = function (pos, cur, css) {
-    return '<div class="crop-handle" data-h="' + pos + '" style="position:absolute;' + css + 'width:16px;height:16px;margin:-8px;background:#e8d49a;border:2px solid #241810;border-radius:3px;cursor:' + cur + ';touch-action:none;"></div>';
+    return '<div class="crop-handle" data-h="' + pos + '" style="position:absolute;' + css + 'width:16px;height:16px;margin:-8px;background:var(--label-fill);border:2px solid var(--surface-ink);border-radius:3px;cursor:' + cur + ';touch-action:none;"></div>';
   };
   // A 10px margin round the picture inside the clip, so the handles stay whole at the picture's edge.
   host.innerHTML =
     '<div class="crop-wrap" style="position:relative;width:' + (dw + 20) + 'px;margin:0 auto;padding:10px;box-sizing:border-box;overflow:hidden;border-radius:6px;background:#000;">' +
     '<div class="crop-box" style="position:relative;width:' + dw + 'px;height:' + dh + 'px;touch-action:none;">' +
       '<img src="' + o.url + '" alt="" draggable="false" style="position:absolute;left:0;top:0;width:' + dw + 'px;height:' + dh + 'px;user-select:none;pointer-events:none;">' +
-      '<div class="crop-frame" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,0.6);outline:2px solid #e8d49a;cursor:move;touch-action:none;">' +
+      '<div class="crop-frame" style="position:absolute;box-shadow:0 0 0 9999px rgba(0,0,0,0.6);outline:2px solid var(--label-line);cursor:move;touch-action:none;">' +
         Hd('nw', 'nwse-resize', 'left:0;top:0;') + Hd('ne', 'nesw-resize', 'left:100%;top:0;') +
         Hd('sw', 'nesw-resize', 'left:0;top:100%;') + Hd('se', 'nwse-resize', 'left:100%;top:100%;') +
       '</div>' +
@@ -36656,7 +36656,7 @@ function _cvShow(W, H) {
       '<div id="cv-stage"></div>' +
       '<div id="cv-msg"></div>' +
       // v3.1.20 -- the buttons stay pinned to the bottom of the window if it still has to scroll.
-      '<div id="cv-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;position:sticky;bottom:0;z-index:2;background:#241810;padding:10px 0 2px;">' +
+      '<div id="cv-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;position:sticky;bottom:0;z-index:2;background:var(--surface-ink);padding:10px 0 2px;">' +
         '<button class="btn" onclick="_cvBack()">Back to the Archive</button>' +
         '<button class="btn btn-primary" id="cv-use" onclick="_cvUse()">Use this framing</button>' +
       '</div>' +
@@ -36672,7 +36672,7 @@ function _cvMsg(text, kind) {
   if (kind === 'warn') {
     m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;padding:8px 12px;border-radius:var(--radius);color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);';
   } else {
-    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(var(--on-panel-rgb),0.85)') + ';';
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? 'var(--error-light)' : 'rgba(var(--on-panel-rgb),0.85)') + ';';
   }
 }
 
@@ -36934,7 +36934,7 @@ function _ciModal() {
         '<button class="modal-close" onclick="closeCharImport()">&times;</button></div>' +
         '<div id="ci-sub" style="font-size:13px;color:rgba(var(--on-panel-rgb),0.75);margin:-4px 0 10px;"></div>' +
         '<div id="ci-body" style="max-height:62vh;overflow-y:auto;"></div>' +
-        '<div id="ci-msg" style="font-size:13px;margin-top:8px;color:#f0a090;"></div>' +
+        '<div id="ci-msg" style="font-size:13px;margin-top:8px;color:var(--error-light);"></div>' +
         '<div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:12px;">' +
           '<button class="btn" id="ci-back" onclick="_ciBack()">Back</button>' +
           '<button class="btn btn-primary" id="ci-go" onclick="_ciImport()" disabled>Import this picture</button>' +
@@ -36997,7 +36997,7 @@ function _ciCampaigns() {
       var _cpic = c.image ? '<img class="ci-camp-pic" src="' + escapeHtml(c.image) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:16/10;object-fit:contain;display:block;border-radius:6px;background:rgba(var(--panel-deep-rgb),0.5);">'
         : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(var(--panel-deep-rgb),0.5);display:flex;align-items:center;justify-content:center;"><img src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
       // v3.4.17 -- TD-1094: a pinned campaign carries the My Campaigns pin (pinning itself stays on My Campaigns).
-      var _cpin = c.pinned ? '<span class="ci-pin" title="Pinned on My Campaigns" style="position:absolute;top:10px;right:12px;color:#e8c870;line-height:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));">' + _vpickPinSvg(true) + '</span>' : '';
+      var _cpin = c.pinned ? '<span class="ci-pin" title="Pinned on My Campaigns" style="position:absolute;top:10px;right:12px;color:var(--highlight);line-height:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));">' + _vpickPinSvg(true) + '</span>' : '';
       return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + 'position:relative;">' + _cpin + _cpic +
         '<b style="font-size:14px;">' + escapeHtml(c.name) + '</b>' +
         '<span style="font-size:12px;opacity:0.7;">' + (c.role === 'dm' ? 'Story Master' : 'Member') + ' \u00b7 ' + c.character_count + ' character' + (c.character_count === 1 ? '' : 's') + '</span></button>';
@@ -37037,10 +37037,10 @@ function _ciLookTile(l) {
            : '<div style="width:100%;aspect-ratio:3/4;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;font-size:12px;opacity:0.6;">No picture</div>') +
     '<span style="font-size:12px;"><b>' + escapeHtml(l.label) + '</b>' + (l.date ? '<br><span style="opacity:0.65;">' + escapeHtml(l.date) + '</span>' : '') +
     (('style' in l) ? '<br><span class="ci-style" style="opacity:0.65;">' + escapeHtml(l.style ? ('Art style: ' + artStyleLabel(l.style)) : 'No art style recorded') + '</span>' : '') +   // v3.4.05 -- TD-1086 (Ian)
-    (l.changed ? '<br><span style="color:#e8d49a;">Appearance changed</span>' : '') +
+    (l.changed ? '<br><span style="color:var(--label);">Appearance changed</span>' : '') +
     // v3.4.20 -- TD-1096 (Ian: "Way too much text"): the versions that use the picture open from a \u2026 pill.
     ((l.uses && l.uses.length) ? '<br><span class="ci-more" role="button" title="Which versions use this picture" data-uses="' + escapeHtml(JSON.stringify(l.uses)) + '"' +
-      ' style="display:inline-block;margin-top:5px;padding:0 10px;border:1px solid rgba(var(--accent-rgb),0.45);border-radius:999px;font-size:13px;line-height:18px;color:#e8d49a;cursor:pointer;">\u2026</span>' : '') +
+      ' style="display:inline-block;margin-top:5px;padding:0 10px;border:1px solid rgba(var(--accent-rgb),0.45);border-radius:999px;font-size:13px;line-height:18px;color:var(--label);cursor:pointer;">\u2026</span>' : '') +
     '</span></button>';
 }
 
@@ -37115,7 +37115,7 @@ function _ciMoreOpen(pill) {
   var p = document.createElement('div'); p.id = 'ci-more-pop'; p._pill = pill;
   p.style.cssText = 'position:fixed;z-index:100010;max-width:260px;max-height:50vh;overflow-y:auto;background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.45);' +
     'border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.55);padding:8px 10px;font-size:12px;line-height:1.45;color:rgba(var(--on-panel-rgb),0.9);';
-  p.innerHTML = '<div style="color:#e8d49a;font-weight:600;margin-bottom:4px;">Used by these versions</div>' + uses.map(function (u) { return '<div>' + escapeHtml(u) + '</div>'; }).join('');
+  p.innerHTML = '<div style="color:var(--label);font-weight:600;margin-bottom:4px;">Used by these versions</div>' + uses.map(function (u) { return '<div>' + escapeHtml(u) + '</div>'; }).join('');
   document.body.appendChild(p);
   var r = pill.getBoundingClientRect(), W = window.innerWidth || document.documentElement.clientWidth, H = window.innerHeight || document.documentElement.clientHeight;
   var pw = p.offsetWidth, ph = p.offsetHeight;
@@ -37131,7 +37131,7 @@ function _ciPickFromEvent(ev) {
   var t = ev.target && ev.target.closest ? ev.target.closest('.ci-look') : null;
   if (!t || !_ci || _ci.step !== 'looks') return;
   Array.prototype.forEach.call(document.querySelectorAll('#ci-body .ci-look'), function (el) { el.style.outline = ''; });
-  t.style.outline = '2px solid #e8d49a';
+  t.style.outline = '2px solid var(--label-line)';
   _ci.look = t.getAttribute('data-key');
   var _lb = t.querySelector('b'); _ci.lookLabel = _lb ? _lb.textContent : '';   // v3.3.71 -- TD-1080: the Image Builder's chip
   var go = document.getElementById('ci-go'); if (go) go.disabled = false;
@@ -37223,9 +37223,9 @@ function _narratorPanelEnsure() {
       '<button type="button" class="info-tip" id="narrator-info" aria-controls="narrator-note" aria-expanded="false" aria-label="About In first person" onclick="_infoTipToggle(this, event)">i</button>' +
     '</div>' +
     '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
-      '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:var(--on-panel);border:1px solid rgba(var(--accent-rgb),0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
-      '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story \u2014 or close, and it will be Nobody in particular.</div>' +
-      '<div id="narrator-povwarn" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;line-height:1.4;">Your Story Instructions mention point of view. In first person wins: the story is told as \u201cI\u201d, and the rest of your instructions are still followed.</div>' +   // v3.1.36
+      '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:var(--surface-ink);color:var(--on-panel);border:1px solid rgba(var(--accent-rgb),0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
+      '<div id="narrator-need" style="display:none;font-size:11px;color:var(--amber-note);margin-top:4px;">Choose who is telling the story \u2014 or close, and it will be Nobody in particular.</div>' +
+      '<div id="narrator-povwarn" style="display:none;font-size:11px;color:var(--amber-note);margin-top:4px;line-height:1.4;">Your Story Instructions mention point of view. In first person wins: the story is told as \u201cI\u201d, and the rest of your instructions are still followed.</div>' +   // v3.1.36
     '</div>' +
     '<div id="narrator-note" class="info-tip-pop" style="display:none;"></div>';   // v3.1.28 -- shown by the i
   _infoTipCss();
@@ -37340,7 +37340,7 @@ function _writtenControls(on) {
   if (!note && vd && vd.parentNode) {
     note = document.createElement('div');
     note.id = 'written-note';
-    note.style.cssText = 'display:none;font-size:12px;color:#e8c766;margin:0 0 8px;line-height:1.4;';
+    note.style.cssText = 'display:none;font-size:12px;color:var(--highlight);margin:0 0 8px;line-height:1.4;';
     note.textContent = 'Already Written keeps your words exactly as you wrote them, so Narrative length and In first person do not apply.';
     var row = document.getElementById('narr-settings-row') || vd;
     row.parentNode.insertBefore(note, row.nextSibling);
@@ -37422,14 +37422,14 @@ function _infoTipCss() {
   if (document.getElementById('info-tip-css')) return;
   var st = document.createElement('style');
   st.id = 'info-tip-css';
-  st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,#a08850);background:transparent;border:1px solid rgba(var(--accent-rgb),0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
+  st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,var(--gold-faint));background:transparent;border:1px solid rgba(var(--accent-rgb),0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
     '.info-tip:hover,.info-tip[aria-expanded="true"]{color:var(--on-panel);border-color:var(--gold,var(--accent));}' +
-    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(var(--accent-rgb),0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}' +
+    '.info-tip-pop{font-size:11px;color:var(--soft-line-text);background:var(--surface-ink);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}' +
     // v3.1.29 -- the plain modals are LIGHT (white --surface); only the pickers (.archive-picker) are
     // dark. Explicit colours for each, never inherit (the 3.1.17 lesson: inherit gave dark on dark).
-    '.modal:not(.archive-picker) .info-tip{color:#8a6a20;border-color:rgba(138,106,32,0.6);}' +
-    '.modal:not(.archive-picker) .info-tip:hover,.modal:not(.archive-picker) .info-tip[aria-expanded=\"true\"]{color:#2c1810;border-color:#8a6a20;}' +
-    '.modal:not(.archive-picker) .info-tip-pop{color:#3a2e22;background:#faf6ea;border-color:rgba(var(--accent-rgb),0.55);text-transform:none;letter-spacing:0;font-weight:400;}';
+    '.modal:not(.archive-picker) .info-tip{color:var(--gold-muted);border-color:rgba(var(--gold-muted-line-rgb),0.6);}' +
+    '.modal:not(.archive-picker) .info-tip:hover,.modal:not(.archive-picker) .info-tip[aria-expanded=\"true\"]{color:var(--surface-ink-text);border-color:var(--gold-muted-line);}' +
+    '.modal:not(.archive-picker) .info-tip-pop{color:var(--hover-fill-text);background:var(--light-panel);border-color:rgba(var(--accent-rgb),0.55);text-transform:none;letter-spacing:0;font-weight:400;}';
   document.head.appendChild(st);
   document.addEventListener('click', function (e) {
     if (e.target && e.target.closest && e.target.closest('.info-tip-pop')) return;
@@ -37584,18 +37584,18 @@ function _selfBriefHtml(m) {
       (c.description ? '<div style="opacity:0.85;">' + escapeHtml(c.description) + '</div>' : '') + '</div></div>';
   }).join('');
   var aim = (typeof artStyleLabel === 'function') ? artStyleLabel(state.artStyle || 'High fantasy illustration') : (state.artStyle || '');
-  var L = function (t) { return '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim,#a08850);margin:8px 0 2px;">' + t + '</div>'; };
+  var L = function (t) { return '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--gold-dim,var(--gold-faint));margin:8px 0 2px;">' + t + '</div>'; };
   // v3.1.31 -- Ian: "get rid of the word Draw and replace it with Art Brief... That way when you hover
   // over the panel... The buttons don't cover the word Art Brief." The top of the box is left clear
   // for the hover buttons; the heading and the shape sit on the first line below them.
-  return '<div class="self-brief" style="min-height:180px;padding:36px 14px 12px;border:1px dashed rgba(var(--accent-rgb),0.45);border-radius:6px;background:rgba(var(--accent-rgb),0.05);color:#e8dcc0;font-size:12px;line-height:1.45;text-align:left;">' +
+  return '<div class="self-brief" style="min-height:180px;padding:36px 14px 12px;border:1px dashed rgba(var(--accent-rgb),0.45);border-radius:6px;background:rgba(var(--accent-rgb),0.05);color:var(--soft-line-text);font-size:12px;line-height:1.45;text-align:left;">' +
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">' + L('Art brief') +
       '<span style="font-size:11px;opacity:0.8;">' + escapeHtml(SHAPE_NAMES[shape] || shape) + '</span></div>' +
     '<div>' + (m.prompt ? escapeHtml(m.prompt) : '<span style="opacity:0.7;">No prompt yet \u2014 run Generate Story, or use Edit prompt.</span>') + '</div>' +
     L('Who\u2019s in it') + who +
     L('Look to aim for') + '<div>' + escapeHtml(aim) + '</div>' +
     (m.locked ? '' : '<button type="button" class="btn btn-sm dm-only" style="margin-top:10px;" onclick="openReplacePicker(\'moment\', ' + m.id + '); _rpShowTab(\'upload\');">Upload your own</button>') +
-    (m.locked ? '' : '<div class="mkt-link dm-only" style="margin-top:8px;"><a href="/library?from=app#guild-artist" target="_blank" rel="noopener" style="color:#e8c766;font-size:12px;">Need an artist? Find one in the Guild</a></div>') +   // v3.3.01 -- TD-1037 (hidden until the Marketplace is on)
+    (m.locked ? '' : '<div class="mkt-link dm-only" style="margin-top:8px;"><a href="/library?from=app#guild-artist" target="_blank" rel="noopener" style="color:var(--highlight);font-size:12px;">Need an artist? Find one in the Guild</a></div>') +   // v3.3.01 -- TD-1037 (hidden until the Marketplace is on)
   '</div>';
 }
 
@@ -37638,7 +37638,7 @@ function _outlineBulletsCheck() {
     if (!box) {
       box = document.createElement('div');
       box.id = 'outline-bullets-warn';
-      box.style.cssText = 'display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(224,160,64,0.6);border-radius:8px;background:rgba(224,160,64,0.10);color:#f0d9a8;font-size:13px;line-height:1.45;';
+      box.style.cssText = 'display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(var(--amber-note-line-rgb),0.6);border-radius:8px;background:rgba(var(--amber-note-line-rgb),0.10);color:var(--label);font-size:13px;line-height:1.45;';
       tab.insertBefore(box, tab.firstChild);
     }
     var cid = state.currentCampaign.id;
@@ -37710,7 +37710,7 @@ function _vpickCss() {
     '.vpick-row:hover,.vpick-row.is-cur{background:rgba(var(--accent-rgb),0.12);}' +
     '.vpick-choose{flex:1 1 auto;min-width:0;background:none;border:none;color:inherit;text-align:left;font:inherit;padding:9px 0;cursor:pointer;white-space:normal;overflow-wrap:anywhere;line-height:1.35;}' +
     '.vpick-choose:focus-visible,.vpick-pinbtn:focus-visible{outline:1px solid var(--accent);outline-offset:1px;}' +
-    '.vpick-row.is-cur .vpick-choose{color:#e8c870;font-weight:600;}' +
+    '.vpick-row.is-cur .vpick-choose{color:var(--highlight);font-weight:600;}' +
     '.vpick-pinbtn{flex:0 0 auto;background:none;border:none;color:rgba(var(--accent-rgb),0.5);cursor:pointer;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:0;}' +
     '.vpick-pinbtn:hover{background:rgba(var(--accent-rgb),0.18);color:var(--accent);}' +
     '.vpick-pinbtn.on{color:var(--accent);}' +
@@ -37931,8 +37931,8 @@ function _promoteDraftBox(info, vName) {
   var body = all
     ? 'Every session in \u201c' + vName + '\u201d is Draft. Members only see sessions set to Ready, so after the switch they\u2019ll see nothing until you set them to Ready.'
     : _promoteList(d) + (d.length === 1 ? ' is' : ' are') + ' Draft in \u201c' + vName + '\u201d. Members only see sessions set to Ready, so after the switch they won\u2019t see ' + (d.length === 1 ? 'it' : 'them') + ' until you set ' + (d.length === 1 ? 'it' : 'them') + ' to Ready.';
-  return '<div class="promote-draft-warn" role="alert" style="background:rgba(224,150,50,0.14);border:1px solid #e09632;border-radius:8px;padding:10px 12px;margin-bottom:14px;">' +
-    '<div style="font-weight:700;color:#f0b050;margin-bottom:4px;">\u26a0 ' + escapeHtml(head) + '</div>' +
+  return '<div class="promote-draft-warn" role="alert" style="background:rgba(var(--warn-orange-rgb),0.14);border:1px solid var(--warn-orange);border-radius:8px;padding:10px 12px;margin-bottom:14px;">' +
+    '<div style="font-weight:700;color:var(--amber-note);margin-bottom:4px;">\u26a0 ' + escapeHtml(head) + '</div>' +
     '<div>' + escapeHtml(body) + '</div></div>';
 }
 function _promoteOthersLine(u) {
@@ -37964,17 +37964,17 @@ function _promoteDialog(info) {
     box.innerHTML =
       '<div style="font-family:\'Cinzel\',serif;color:var(--accent);font-size:17px;margin-bottom:12px;">Make \u201c' + escapeHtml(vName) + '\u201d the Canonical</div>' +
       draftBox +
-      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">What is the Canonical?</div>' +
+      '<div style="font-weight:600;color:var(--highlight);margin-bottom:4px;">What is the Canonical?</div>' +
       '<div style="margin-bottom:14px;">The Canonical is the campaign\u2019s official book. It\u2019s what every member reads, and every other version shows it on any session that version hasn\u2019t made its own copy of. Every campaign has exactly one, and it belongs to the Story Master.</div>' +
-      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">Making \u201c' + escapeHtml(vName) + '\u201d the Canonical means:</div>' +
+      '<div style="font-weight:600;color:var(--highlight);margin-bottom:4px;">Making \u201c' + escapeHtml(vName) + '\u201d the Canonical means:</div>' +
       '<ul style="margin:0 0 14px 18px;padding:0;">' + bullets.map(function (b) { return '<li style="margin-bottom:4px;">' + escapeHtml(b) + '</li>'; }).join('') + '</ul>' +
-      '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">Your current Canonical, \u201c' + escapeHtml(cName) + '\u201d</div>' +
+      '<div style="font-weight:600;color:var(--highlight);margin-bottom:4px;">Your current Canonical, \u201c' + escapeHtml(cName) + '\u201d</div>' +
       '<div style="margin-bottom:8px;">You need to name your old Canonical version, or do you want me to delete it once we make the switch?</div>' +
       '<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;cursor:pointer;"><input type="radio" name="promote-old" value="keep" checked style="margin-top:4px;"> <span>Keep it as one of my versions, named:</span></label>' +
       '<input type="text" id="promote-old-name" maxlength="60" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.4);background:rgba(var(--accent-rgb),0.08);color:var(--on-panel);font-size:14px;margin:0 0 10px 0;">' +
       '<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;cursor:pointer;"><input type="radio" name="promote-old" value="delete" style="margin-top:4px;"> <span>Delete it</span></label>' +
       (others ? '<div style="font-size:12.5px;color:rgba(var(--on-panel-rgb),0.7);margin:0 0 8px 26px;">Others are using it: ' + escapeHtml(others) + '</div>' : '') +
-      '<div id="promote-err" style="display:none;color:#f08a7a;font-size:13px;margin:6px 0 0 0;"></div>' +
+      '<div id="promote-err" style="display:none;color:var(--change-pending-text);font-size:13px;margin:6px 0 0 0;"></div>' +
       '<div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:16px;">' +
       '<button type="button" class="btn btn-sm" id="promote-cancel">Cancel</button>' +
       '<button type="button" class="btn btn-sm btn-primary" id="promote-ok">Make it the Canonical</button></div>';
@@ -38112,7 +38112,7 @@ function _sessionOutlineWarn() {
     if (!box) {
       box = document.createElement('div');
       box.id = 'session-outline-warn';
-      box.style.cssText = 'display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(224,160,64,0.6);border-radius:8px;background:rgba(224,160,64,0.10);color:#f0d9a8;font-size:13px;line-height:1.45;';
+      box.style.cssText = 'display:none;margin:0 0 10px;padding:10px 12px;border:1px solid rgba(var(--nag-rgb),0.6);border-radius:8px;background:rgba(var(--nag-rgb),0.10);color:var(--warn-strong-text);font-size:13px;line-height:1.45;';
       tab.insertBefore(box, tab.firstChild);
     }
     var nd = state.narrativeData || {};
@@ -38263,10 +38263,10 @@ function _cmpRightsAnnounce(items, opts) {
     box.setAttribute('data-urls', JSON.stringify((items || []).map(function (i) { return i && i.url ? _cmpRightsKey(i.url) : ''; }).filter(Boolean)));
     var red = !!opts.red || rej.length > 0;
     box.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99998;max-width:420px;width:calc(100% - 24px);box-sizing:border-box;' +
-      'background:' + (red ? '#2a0f0f' : '#2a210c') + ';color:#f5efe2;border:2px solid ' + (red ? '#dc2626' : '#d97706') + ';border-radius:10px;' +
+      'background:' + (red ? 'var(--error-deep)' : 'var(--error-deep)') + ';color:var(--error-bg);border:2px solid ' + (red ? 'var(--alert-red-line)' : 'var(--rights-warn-line)') + ';border-radius:10px;' +
       'padding:12px 36px 12px 14px;font-family:inherit;font-size:13px;line-height:1.45;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:left;';
     var h = document.createElement('div');
-    h.style.cssText = 'font-weight:700;margin-bottom:4px;color:' + (red ? '#fca5a5' : '#fcd34d') + ';';
+    h.style.cssText = 'font-weight:700;margin-bottom:4px;color:' + (red ? 'var(--error-light)' : 'var(--rights-warn-text)') + ';';
     h.textContent = opts.heading || (red ? 'This picture can’t be used' : 'Check you have the rights to this picture');
     var p = document.createElement('div');
     var first = red ? rej[0] : warn[0];
@@ -38354,7 +38354,7 @@ function _cmpRightsMark(img) {
     img.setAttribute('data-rights', now + '|' + key);
     img.setAttribute('data-rights-title', img.title || '');
     img.title = _cmpRightsText(r);
-    img.style.outline = (now === 'reject' ? '3px solid #dc2626' : '3px solid #d97706');
+    img.style.outline = (now === 'reject' ? '3px solid var(--alert-red-line)' : '3px solid var(--rights-warn-line)');
     img.style.outlineOffset = '-3px';
     // v3.1.94 -- a WARNED picture (signed, or a creator named in its file details) gets a written amber
     // note as well as its outline. The tooltip alone could not be read on a phone (testers, 2026-10-16).
@@ -38363,10 +38363,10 @@ function _cmpRightsMark(img) {
       n.className = 'cmp-rights-note';
       n.setAttribute('role', 'note');
       if (now === 'reject') {
-        n.style.cssText = 'color:#fecaca;background:#7f1d1d;font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+        n.style.cssText = 'color:var(--error-pale-text);background:var(--danger-hover);font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
         n.textContent = 'Watermark or stock picture — replace this picture. ' + _cmpRightsText(r);
       } else {
-        n.style.cssText = 'color:#fde68a;background:#5c3d0a;font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
+        n.style.cssText = 'color:var(--warn-text);background:var(--warning);font-size:11px;line-height:1.35;padding:3px 6px;border-radius:4px;margin-top:3px;text-align:left;';
         n.textContent = _cmpRightsText(r) + ' Use it only if it’s yours or you have permission.';
       }
       img.parentNode.insertBefore(n, img.nextSibling);
@@ -38770,7 +38770,7 @@ function versionTierGate(msg) {
 // =====================================================================================
 function _pubAsEsc(s) { return (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function _pubAsImg(url, w, h, fallback) {
-  var st = 'flex:0 0 ' + w + 'px;width:' + w + 'px;height:' + h + 'px;border-radius:5px;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(40,28,14,0.9) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(var(--accent-rgb),0.55);font-size:' + Math.round(h / 3) + 'px;';
+  var st = 'flex:0 0 ' + w + 'px;width:' + w + 'px;height:' + h + 'px;border-radius:5px;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(var(--hover-fill-rgb),0.9) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(var(--accent-rgb),0.55);font-size:' + Math.round(h / 3) + 'px;';
   if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
   return '<span style=\'' + st + '\'>' + (url ? '' : (fallback || '')) + '</span>';
 }
@@ -38790,7 +38790,7 @@ function _pubAsCard(o) {
   return '<button type="button" class="pubas-card" data-id="' + _pubAsEsc(o.id) + '" style=\'' + st + 'cursor:pointer;\'>' + inner + '</button>';
 }
 function _pubAsCover(url, plus) {
-  var st = 'display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:71 / 96;border-radius:5px;background:rgba(40,28,14,0.9) center/cover no-repeat;color:rgba(var(--accent-rgb),0.55);font-size:40px;';
+  var st = 'display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:71 / 96;border-radius:5px;background:rgba(var(--hover-fill-rgb),0.9) center/cover no-repeat;color:rgba(var(--accent-rgb),0.55);font-size:40px;';
   st += plus ? 'border:1px dashed rgba(var(--accent-rgb),0.5);color:var(--gold);' : 'border:1px solid rgba(var(--accent-rgb),0.3);';
   if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
   return '<span style=\'' + st + '\'>' + (plus ? '+' : (url ? '' : '&#128214;')) + '</span>';
@@ -39033,14 +39033,14 @@ function nagField(el, message, statusEl) {
   if (!el) return;
   if (!document.getElementById('field-nag-css')) {
     var st = document.createElement('style'); st.id = 'field-nag-css';
-    st.textContent = '.field-nag{outline:2px solid #e8a85a !important;outline-offset:3px;border-radius:6px;background-color:rgba(232,168,90,0.12) !important;animation:fieldNagShake 0.45s ease-in-out;}' +
+    st.textContent = '.field-nag{outline:2px solid var(--nag) !important;outline-offset:3px;border-radius:6px;background-color:rgba(var(--nag-rgb),0.12) !important;animation:fieldNagShake 0.45s ease-in-out;}' +
       '@keyframes fieldNagShake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}';
     document.head.appendChild(st);
   }
   el.classList.remove('field-nag'); void el.offsetWidth; el.classList.add('field-nag');   // restart the shake
   try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
   try { el.focus({ preventScroll: true }); } catch (e) {}
-  if (statusEl && message) { statusEl.style.color = '#e8a85a'; statusEl.textContent = message; }
+  if (statusEl && message) { statusEl.style.color = 'var(--nag)'; statusEl.textContent = message; }
   var clear = function () {
     el.classList.remove('field-nag');
     if (statusEl && message && statusEl.textContent === message) { statusEl.textContent = ''; statusEl.style.color = ''; }
@@ -39049,7 +39049,7 @@ function nagField(el, message, statusEl) {
   el.addEventListener('input', clear); el.addEventListener('change', clear);
 }
 function _prepAttestNag(st) {
-  if (st) { st.style.display = 'block'; st.style.color = '#e8a85a'; st.textContent = PREP_ATTEST_NAG; }
+  if (st) { st.style.display = 'block'; st.style.color = 'var(--nag)'; st.textContent = PREP_ATTEST_NAG; }
   var box = document.getElementById('prep-attest');
   var row = box ? box.closest('label') : null;
   if (!row) return;
@@ -39159,15 +39159,15 @@ function ibCss() {
     '.ib-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}' +
     '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(var(--accent-rgb),0.2);margin-bottom:10px;}' +
     '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(var(--on-panel-rgb),0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
-    '.ib-tab.on{border-bottom-color:var(--accent);color:#e8d49a;}' +
+    '.ib-tab.on{border-bottom-color:var(--accent);color:var(--label);}' +
     '.ib-make{display:grid;grid-template-columns:minmax(300px,460px) minmax(0,1fr);gap:20px;align-items:start;}' +
     '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
     '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--gold);letter-spacing:0.04em;margin-bottom:6px;}' +
-    '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:#e8a090;margin-left:6px;letter-spacing:0;font-weight:400;}' +
+    '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:var(--error-light);margin-left:6px;letter-spacing:0;font-weight:400;}' +
     '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;color:var(--on-panel);padding:8px 10px;font:inherit;font-size:14px;}' +
-    '.ib-in.ib-bad{border-color:#e07a6a;}' +
-    '#ib-style-btn.ib-bad,#ib-shapes.ib-bad{outline:2px solid #e07a6a;outline-offset:2px;border-radius:8px;}' +
+    '.ib-in.ib-bad{border-color:var(--change-pending-line);}' +
+    '#ib-style-btn.ib-bad,#ib-shapes.ib-bad{outline:2px solid var(--change-pending-line);outline-offset:2px;border-radius:8px;}' +
     '.ib-acc-title{display:flex;align-items:baseline;gap:8px;min-width:0;overflow:hidden;}' +
     '.ib-acc-sum{font-weight:400;opacity:0.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
     '.ib-acc.open .ib-acc-sum{display:none;}' +
@@ -39188,9 +39188,9 @@ function ibCss() {
     '.ib-frame.tour-show-pills .panel-pill{opacity:1;}' +   // v3.3.99 -- shown while the tour points at them
     '@media (max-width:820px){#ib-root .ib-pills{position:static;width:100%;margin:2px 0 0;padding:0;justify-content:center;}}' +   // v3.4.14 -- under the picture (Ian)
     '.ib-scroll{width:100%;}' +   // v3.3.75 -- no scroll box of its own (Ian: the page's scroll bar is the only one)
-    '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
-    '.ib-state.ready{background:rgba(120,180,110,0.16);color:#9fd28f;}' +
-    '.ib-draft{position:absolute;top:6px;left:6px;z-index:3;font-size:11px;padding:2px 8px;border-radius:9px;background:rgba(20,20,40,0.85);color:#9caedb;}' +
+    '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(var(--player-badge-rgb),0.16);color:var(--player-text);}' +
+    '.ib-state.ready{background:rgba(var(--change-applied-rgb),0.16);color:var(--good-text);}' +
+    '.ib-draft{position:absolute;top:6px;left:6px;z-index:3;font-size:11px;padding:2px 8px;border-radius:9px;background:rgba(var(--help-ink-rgb),0.85);color:var(--player-text);}' +
     '.ib-frame{position:relative;margin:0 auto;max-width:100%;border-radius:8px;background:#0a0604;border:1px solid rgba(var(--accent-rgb),0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;}' +
     '.ib-frame img{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in;}' +
     // v3.3.89 -- the title being placed
@@ -39198,10 +39198,10 @@ function ibCss() {
     '.ib-place canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
     '.ib-place-h{position:absolute;right:0;bottom:0;width:16px;height:16px;background:var(--accent);border:2px solid #0a0604;border-radius:3px;cursor:nwse-resize;touch-action:none;}' +
     '.ib-place-bar{position:absolute;left:8px;top:8px;z-index:5;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}' +
-    '.ib-place-tip{font-size:12px;padding:3px 8px;border-radius:8px;background:rgba(var(--well-rgb),0.75);color:#e8d9b0;}' +
+    '.ib-place-tip{font-size:12px;padding:3px 8px;border-radius:8px;background:rgba(var(--well-rgb),0.75);color:var(--label);}' +
     '.ib-placing .panel-img-actions{display:none !important;}' +
     // v3.3.92 -- the handout's writing being placed
-    '.ib-ho-box{position:absolute;z-index:4;cursor:move;touch-action:none;outline:2px dashed rgba(var(--accent-rgb),0.95);background:rgba(255,248,225,0.12);}' +
+    '.ib-ho-box{position:absolute;z-index:4;cursor:move;touch-action:none;outline:2px dashed rgba(var(--accent-rgb),0.95);background:rgba(var(--light-panel-rgb),0.12);}' +
     '.ib-ho-box canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
     '.ib-ho-chip{display:inline-block;padding:6px 10px;border:1px dashed rgba(var(--accent-rgb),0.8);border-radius:8px;cursor:grab;font-size:13px;color:var(--gold-light);user-select:none;}' +
     '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
@@ -39211,7 +39211,7 @@ function ibCss() {
     '.ib-pic{position:relative;width:100%;aspect-ratio:4/3;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}' +
     '.ib-pic img{width:100%;height:100%;object-fit:contain;display:block;}' +
     '.ib-meta{font-size:12px;color:rgba(var(--on-panel-rgb),0.7);}' +
-    '.ib-err{color:#f0a090;font-size:13px;}' +
+    '.ib-err{color:var(--error-light);font-size:13px;}' +
     '@media (max-width:800px){.ib-make{grid-template-columns:1fr;}.ib-viewer{position:static;}}';
   document.head.appendChild(st);
 }
@@ -39925,7 +39925,7 @@ function ibAccSummary(key) {
 }
 // v3.4.04 -- the 1,500-character boxes say how full they are (testers: a paste lost its tail without a word).
 var IB_TEXT_MAX = 1500;
-function ibCountText(s) { var n = String(s || '').length; return (n >= IB_TEXT_MAX * 0.93 ? '<span style="color:#e8a85a;">' : '<span>') + n.toLocaleString() + ' / ' + IB_TEXT_MAX.toLocaleString() + '</span>'; }
+function ibCountText(s) { var n = String(s || '').length; return (n >= IB_TEXT_MAX * 0.93 ? '<span style="color:var(--soft-gold-note);">' : '<span>') + n.toLocaleString() + ' / ' + IB_TEXT_MAX.toLocaleString() + '</span>'; }
 function ibCountPaint() {
   var d = document.getElementById('ib-desc-count'); if (d) d.innerHTML = ibCountText(IB.desc);
   var h = document.getElementById('ib-ho-count'); if (h) h.innerHTML = ibCountText(IB.ho && IB.ho.text);
@@ -40368,7 +40368,7 @@ function ibEditPrompt(id) {
         '<div class="ib-lbl">The picture\u2019s words</div>' +
         '<div class="ib-meta" style="margin-bottom:6px;">What the picture shows. Campaignia adds its house rules, the art style and the reference pictures around these words when it draws.</div>' +
         '<textarea class="ib-in" id="ib-words" rows="10" maxlength="6000">' + escapeHtml(im.words || im.description || '') + '</textarea>' +
-        '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:13px;color:#e8d49a;">The whole prompt last sent</summary>' +
+        '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:13px;color:var(--label);">The whole prompt last sent</summary>' +
           '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
         '<div id="ib-words-msg" class="ib-err" style="margin-top:8px;"></div>' +
       '</div>' +
@@ -40539,14 +40539,14 @@ function ibPickHas(kind, id) { return ibPickList(kind).some(function (x) { retur
 function ibPickMark(btn, on, full) {
   var im = btn.querySelector('.prep-img-pick-img'), ok = btn.querySelector('.ib-pick-ok');
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-  if (im) { im.style.borderColor = on ? '#e8d49a' : ''; im.style.boxShadow = on ? '0 0 0 2px #e8d49a' : ''; }
+  if (im) { im.style.borderColor = on ? 'var(--label-line)' : ''; im.style.boxShadow = on ? '0 0 0 2px #e8d49a' : ''; }
   if (ok) ok.style.display = on ? 'flex' : 'none';
   btn.style.opacity = (!on && full) ? '0.4' : ''; btn.style.cursor = (!on && full) ? 'not-allowed' : '';
 }
 function ibPickTile(kind, it, btn) {
   btn.style.position = 'relative'; btn.setAttribute('data-id', String(it.id));
   var ok = document.createElement('span'); ok.className = 'ib-pick-ok'; ok.textContent = '\u2713';
-  ok.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:#e8d49a;color:var(--window-bg);font-weight:700;font-size:14px;align-items:center;justify-content:center;display:none;';
+  ok.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:var(--label-fill);color:var(--window-bg);font-weight:700;font-size:14px;align-items:center;justify-content:center;display:none;';
   btn.appendChild(ok);
   btn.addEventListener('click', function () { ibPickToggle(kind, it); });
   ibPickMark(btn, ibPickHas(kind, it.id), ibPickList(kind).length >= ibRefRoom());
@@ -40903,7 +40903,7 @@ async function ibDelete(id) {
 // =====================================================================================================
 var PANEL_MOVE_WARN_KEY = 'campaignia.panelMoveWarnOff';
 function panelStaleNoteHtml() {
-  return '<div class="pm-stale" style="margin:6px 12px 0;font-size:11px;line-height:1.4;color:#e0b070;">This bridge now sits between different panels from the ones it was written for. Regenerate it to match, or regenerate the narrative.</div>';
+  return '<div class="pm-stale" style="margin:6px 12px 0;font-size:11px;line-height:1.4;color:var(--soft-gold-note);">This bridge now sits between different panels from the ones it was written for. Regenerate it to match, or regenerate the narrative.</div>';
 }
 function _pmWarnOff() { try { return window.localStorage.getItem(PANEL_MOVE_WARN_KEY) === '1'; } catch (e) { return false; } }
 function _pmAsk(title, lines, okText, danger, offerQuiet) {

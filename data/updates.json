@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.57",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3457-colors-named-by-job",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, step 3: every remaining color is named by its job in the theme sheet, and near-identical shades were merged (a few colors shift very slightly).",
+        "detail": "About 600 colors still typed into style.css, app.html and app.js (roughly 300 different shades) now use about 90 names in css/themes/campaignia.css, each named for what it does (labels, highlights, warnings, errors, success, the shelf's wood and brass...). Near-identical shades were merged into one as Ian approved on 2026-11-06, so some colors shift slightly. Kept as typed: black and white shadows, the staging header, the tier colors, the admin AI-layout window and the title halo. The error dialog keeps its exact grey under its own name.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.56",
     "staged_on": "2026-11-05",
     "entries": [
