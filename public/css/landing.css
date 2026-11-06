@@ -22,14 +22,8 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --ink: #0a0806;
-      --ink-mid: #160e06;
-      --gold: #c9a84c;
-      --gold-light: #e8d5a3;
-      --crimson: #8b1a1a;
-      --crimson-bright: #c0392b;
-      --parchment: #f0e8d0;
-      --border: 5px solid #0a0806;
+      /* v3.4.61 -- the colors are the brand theme sheet's (/css/themes/campaignia.css), linked by each page before this file. */
+      --border: 5px solid var(--page-bg);
       --gutter: 10px;
     }
 
@@ -37,8 +31,8 @@
 
     body {
       font-family: 'Crimson Text', Georgia, serif;
-      background: #1a1008;
-      color: var(--parchment);
+      background: var(--panel);
+      color: var(--on-panel);
       overflow-x: hidden;
     }
 
@@ -64,9 +58,9 @@
       align-items: center;
       justify-content: space-between;
       padding: 10px 24px;   /* v3.0.928 -- was 14px. */
-      background: rgba(10,8,6,0.96);
-      border-bottom: 3px solid var(--ink);
-      box-shadow: 0 3px 0 rgba(201,168,76,0.15);
+      background: rgba(var(--page-bg-rgb),0.96);
+      border-bottom: 3px solid var(--page-bg);
+      box-shadow: 0 3px 0 rgba(var(--accent-rgb),0.15);
     }
 
     /* STAGING ENV INDICATOR */
@@ -86,7 +80,7 @@
       font-family: 'Cinzel', serif;
       font-size: 18px;
       font-weight: 700;
-      color: var(--gold);
+      color: var(--accent);
       letter-spacing: 4px;
     }
 
@@ -96,11 +90,11 @@
       font-family: 'Cinzel', serif;
       font-size: 11px;
       letter-spacing: 2px;
-      color: rgba(201,168,76,0.6);
+      color: rgba(var(--accent-rgb),0.6);
       text-decoration: none;
       transition: color 0.2s;
     }
-    .nav-link:hover { color: var(--gold); }
+    .nav-link:hover { color: var(--accent); }
 
     .btn-nav {
       font-family: 'Bangers', cursive;
@@ -109,21 +103,21 @@
       font-size: 14px;
       letter-spacing: 2px;
       padding: 5px 18px;
-      background: var(--crimson-bright);
-      color: var(--parchment);
-      border: 3px solid var(--ink);
+      background: var(--button-cta);
+      color: var(--on-panel);
+      border: 3px solid var(--page-bg);
       border-radius: 3px;
       cursor: pointer;
       text-decoration: none;
-      box-shadow: 3px 3px 0 var(--ink);
+      box-shadow: 3px 3px 0 var(--page-bg);
       transition: all 0.15s;
     }
-    .btn-nav:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--ink); }
+    .btn-nav:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--page-bg); }
     .nav-toggle {
       display: none;
       background: none;
-      border: 2px solid rgba(201,168,76,0.4);
-      color: var(--gold);
+      border: 2px solid rgba(var(--accent-rgb),0.4);
+      color: var(--accent);
       font-size: 20px;
       line-height: 1;
       padding: 4px 11px;
@@ -136,8 +130,8 @@
       top: 64px; left: 0; right: 0;
       z-index: 499;
       flex-direction: column;
-      background: rgba(10,8,6,0.98);
-      border-bottom: 3px solid var(--ink);
+      background: rgba(var(--page-bg-rgb),0.98);
+      border-bottom: 3px solid var(--page-bg);
       box-shadow: 0 6px 16px rgba(0,0,0,0.5);
       padding: 6px 0;
     }
@@ -145,18 +139,18 @@
       font-family: 'Cinzel', serif;
       font-size: 14px;
       letter-spacing: 2px;
-      color: rgba(201,168,76,0.85);
+      color: rgba(var(--accent-rgb),0.85);
       text-decoration: none;
       padding: 14px 24px;
-      border-bottom: 1px solid rgba(201,168,76,0.12);
+      border-bottom: 1px solid rgba(var(--accent-rgb),0.12);
     }
     .mobile-menu a:last-child { border-bottom: none; }
-    .mobile-menu a:hover, .mobile-menu a:active { color: var(--gold); background: rgba(201,168,76,0.06); }
+    .mobile-menu a:hover, .mobile-menu a:active { color: var(--accent); background: rgba(var(--accent-rgb),0.06); }
 
     /* COMIC BOOK PAGE */
     .comic-book {
       padding-top: 64px;
-      background: #2a1a08;
+      background: var(--hover-fill);
       min-height: 100vh;
       position: relative;
     }
@@ -165,7 +159,7 @@
     .comic-page {
       max-width: 1200px;
       margin: 0 auto;
-      background: #1a0f06;
+      background: var(--panel);
       padding: var(--gutter);
       position: relative;
     }
@@ -183,7 +177,7 @@
       position: relative;
       overflow: hidden;
       flex-shrink: 0;
-      background: var(--ink-mid);
+      background: var(--panel);
     }
 
     /* ============================================================
@@ -208,10 +202,10 @@
       inset: 0;
       background: linear-gradient(
         to bottom,
-        rgba(10,8,6,0.1) 0%,
-        rgba(10,8,6,0.2) 40%,
-        rgba(10,8,6,0.85) 75%,
-        rgba(10,8,6,0.97) 100%
+        rgba(var(--page-bg-rgb),0.1) 0%,
+        rgba(var(--page-bg-rgb),0.2) 40%,
+        rgba(var(--page-bg-rgb),0.85) 75%,
+        rgba(var(--page-bg-rgb),0.97) 100%
       );
     }
 
@@ -226,7 +220,7 @@
       font-family: 'Bangers', cursive;
       font-size: 14px;
       letter-spacing: 6px;
-      color: var(--crimson-bright);
+      color: var(--button-cta);
       margin-bottom: 8px;
     }
 
@@ -234,14 +228,14 @@
       font-family: 'Bangers', cursive;
       font-size: clamp(40px, 5.5vw, 72px);
       line-height: 0.92;
-      color: var(--gold);
-      text-shadow: 4px 4px 0 var(--ink), 6px 6px 0 rgba(0,0,0,0.4);
+      color: var(--accent);
+      text-shadow: 4px 4px 0 var(--page-bg), 6px 6px 0 rgba(0,0,0,0.4);
       margin-bottom: 8px;
       letter-spacing: 2px;
     }
 
-    .hero-title .white { color: var(--parchment); }
-    .hero-title .red { color: var(--crimson-bright); }
+    .hero-title .white { color: var(--on-panel); }
+    .hero-title .red { color: var(--button-cta); }
 
     .hero-sub {
       font-family: 'Crimson Text', serif;
@@ -249,7 +243,7 @@
          line scales exactly as it did and is simply two pixels larger everywhere. */
       font-size: clamp(17px, 2.2vw, 20px);
       font-style: italic;
-      color: var(--gold-light);
+      color: var(--accent-pale);
       line-height: 1.55;
       margin-bottom: 12px;
       max-width: 560px;
@@ -267,17 +261,17 @@
       font-size: 21px;
       letter-spacing: 2px;
       padding: 14px 32px;
-      background: var(--crimson-bright);
-      color: var(--parchment);
-      border: 4px solid var(--ink);
+      background: var(--button-cta);
+      color: var(--on-panel);
+      border: 4px solid var(--page-bg);
       border-radius: 3px;
       cursor: pointer;
       text-decoration: none;
-      box-shadow: 5px 5px 0 var(--ink);
+      box-shadow: 5px 5px 0 var(--page-bg);
       transition: all 0.15s;
       display: inline-block;
     }
-    .btn-hero:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--ink); }
+    .btn-hero:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--page-bg); }
 
     .btn-ghost {
       font-family: 'Cinzel', serif;
@@ -285,21 +279,21 @@
       letter-spacing: 2px;
       padding: 14px 28px;
       background: transparent;
-      color: var(--gold);
-      border: 2px solid rgba(201,168,76,0.4);
+      color: var(--accent);
+      border: 2px solid rgba(var(--accent-rgb),0.4);
       border-radius: 3px;
       cursor: pointer;
       text-decoration: none;
       transition: all 0.2s;
       display: inline-block;
     }
-    .btn-ghost:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+    .btn-ghost:hover { border-color: var(--accent); background: rgba(var(--accent-rgb),0.08); }
 
     .hero-trial {
       /* v3.0.928 -- was 12px. */ font-size: 14px;
       /* v3.0.926 -- was rgba(201,168,76,0.4): 2.24:1 on this panel, below the 4.5:1 floor.
          Ian: "It needs to be the same color as" the hero subtitle -- which is --gold-light. */
-      color: var(--gold-light);
+      color: var(--accent-pale);
       font-family: 'Cinzel', serif;
       letter-spacing: 1px;
       line-height: 1.45;
@@ -308,8 +302,8 @@
 
     /* CAPTION BOX - like comic book caption */
     .caption-box {
-      background: var(--parchment);
-      color: var(--ink);
+      background: var(--on-panel);
+      color: var(--page-bg);
       border: var(--border);
       padding: 14px 18px;
       font-family: 'Crimson Text', serif;
@@ -326,8 +320,8 @@
       font-family: 'Bangers', cursive;
       font-size: 10px;
       letter-spacing: 3px;
-      background: var(--gold);
-      color: var(--ink);
+      background: var(--accent);
+      color: var(--page-bg);
       padding: 0 8px;
       transform: translateY(-50%);
     }
@@ -335,8 +329,8 @@
     /* SPEECH BUBBLE */
     .speech-bubble {
       background: white;
-      color: var(--ink);
-      border: 4px solid var(--ink);
+      color: var(--page-bg);
+      border: 4px solid var(--page-bg);
       border-radius: 20px;
       padding: 14px 20px;
       font-family: 'Bangers', cursive;
@@ -344,7 +338,7 @@
       letter-spacing: 1px;
       position: relative;
       display: inline-block;
-      box-shadow: 3px 3px 0 var(--ink);
+      box-shadow: 3px 3px 0 var(--page-bg);
     }
 
     .speech-bubble::after {
@@ -353,7 +347,7 @@
       bottom: -20px; left: 28px;
       border-left: 14px solid transparent;
       border-right: 8px solid transparent;
-      border-top: 20px solid var(--ink);
+      border-top: 20px solid var(--page-bg);
     }
     .speech-bubble::before {
       content: '';
@@ -382,7 +376,7 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(to top, rgba(10,8,6,0.7) 0%, transparent 50%);
+      background: linear-gradient(to top, rgba(var(--page-bg-rgb),0.7) 0%, transparent 50%);
     }
 
     .players-caption {
@@ -404,7 +398,7 @@
     }
 
     .how-title-panel {
-      background: var(--crimson);
+      background: var(--danger);
       padding: 20px 24px;
       border: var(--border);
     }
@@ -442,7 +436,7 @@
     .reward-item {
       flex: 1;
       border: var(--border);
-      background: var(--ink-mid);
+      background: var(--panel);
       padding: 16px 20px;
       display: flex;
       flex-direction: column;
@@ -452,7 +446,7 @@
     .reward-item-title {
       font-family: 'Bangers', cursive;
       font-size: 20px;
-      color: var(--gold);
+      color: var(--accent);
       letter-spacing: 1px;
       margin-bottom: 4px;
     }
@@ -461,7 +455,7 @@
       font-family: 'Crimson Text', serif;
       /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
-      color: rgba(240,232,208,0.7);
+      color: rgba(var(--on-panel-rgb),0.7);
       line-height: 1.55;
     }
 
@@ -469,7 +463,7 @@
       font-family: 'Bangers', cursive;
       font-size: 11px;
       letter-spacing: 5px;
-      color: rgba(240,232,208,0.6);
+      color: rgba(var(--on-panel-rgb),0.6);
       margin-bottom: 4px;
       display: block;
     }
@@ -477,7 +471,7 @@
     .section-title {
       font-family: 'Bangers', cursive;
       font-size: clamp(28px, 4vw, 48px);
-      color: var(--parchment);
+      color: var(--on-panel);
       line-height: 1;
       letter-spacing: 2px;
       text-shadow: 2px 2px 0 rgba(0,0,0,0.4);
@@ -493,7 +487,7 @@
     .how-step-panel {
       flex: 1;
       border: var(--border);
-      background: var(--ink-mid);
+      background: var(--panel);
       padding: 20px;
       display: flex;
       align-items: flex-start;
@@ -503,7 +497,7 @@
     .step-num {
       font-family: 'Bangers', cursive;
       font-size: 52px;
-      color: var(--gold);
+      color: var(--accent);
       line-height: 1;
       text-shadow: 3px 3px 0 rgba(0,0,0,0.5);
       flex-shrink: 0;
@@ -516,14 +510,14 @@
       font-family: 'Bangers', cursive;
       font-size: 10px;
       letter-spacing: 4px;
-      color: var(--crimson-bright);
+      color: var(--button-cta);
       margin-bottom: 4px;
     }
 
     .step-title {
       font-family: 'Bangers', cursive;
       font-size: 22px;
-      color: var(--gold);
+      color: var(--accent);
       margin-bottom: 6px;
       letter-spacing: 1px;
     }
@@ -532,7 +526,7 @@
       font-family: 'Crimson Text', serif;
       /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
-      color: rgba(240,232,208,0.7);
+      color: rgba(var(--on-panel-rgb),0.7);
       line-height: 1.6;
     }
 
@@ -542,13 +536,13 @@
     .features-strip {
       width: 100%;
       border: var(--border);
-      background: #0d0804;
+      background: var(--panel-deep);
       margin-bottom: var(--gutter);
       overflow: hidden;
     }
 
     .features-strip-header {
-      background: var(--gold);
+      background: var(--accent);
       padding: 12px 24px;
       border-bottom: var(--border);
       display: flex;
@@ -559,7 +553,7 @@
     .features-strip-title {
       font-family: 'Bangers', cursive;
       font-size: 28px;
-      color: var(--ink);
+      color: var(--page-bg);
       letter-spacing: 3px;
     }
 
@@ -570,7 +564,7 @@
 
     .feature-cell {
       padding: 24px 20px;
-      border-right: 3px solid rgba(201,168,76,0.1);
+      border-right: 3px solid rgba(var(--accent-rgb),0.1);
       position: relative;
     }
 
@@ -581,7 +575,7 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: var(--crimson);
+      background: var(--danger);
     }
 
     .feature-icon { font-size: 28px; margin-bottom: 8px; display: block; }
@@ -589,7 +583,7 @@
     .feature-title {
       font-family: 'Bangers', cursive;
       font-size: 18px;
-      color: var(--gold);
+      color: var(--accent);
       margin-bottom: 6px;
       letter-spacing: 1px;
     }
@@ -598,7 +592,7 @@
       font-family: 'Crimson Text', serif;
       /* v3.0.928 -- was 13px. */ font-size: 15px;
       font-style: italic;
-      color: rgba(240,232,208,0.6);
+      color: rgba(var(--on-panel-rgb),0.6);
       line-height: 1.6;
     }
 
@@ -608,14 +602,14 @@
     .panel-pricing {
       width: 42%;
       border: var(--border);
-      background: var(--ink-mid);
+      background: var(--panel);
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
     }
 
     .pricing-header {
-      background: var(--gold);
+      background: var(--accent);
       padding: 14px 20px;
       border-bottom: var(--border);
     }
@@ -623,13 +617,13 @@
     .pricing-header-title {
       font-family: 'Bangers', cursive;
       font-size: 32px;
-      color: var(--ink);
+      color: var(--page-bg);
       letter-spacing: 2px;
     }
 
     .pricing-header-sub {
       /* v3.0.928 -- was 13px. */ font-size: 15px;
-      color: rgba(10,8,6,0.6);
+      color: rgba(var(--surface-ink-text-rgb),0.6);
       font-style: italic;
     }
 
@@ -643,12 +637,12 @@
       display: flex;
       align-items: center;
       padding: 7px 20px;
-      border-bottom: 2px solid rgba(201,168,76,0.1);
+      border-bottom: 2px solid rgba(var(--accent-rgb),0.1);
       gap: 14px;
       transition: background 0.15s;
     }
     .tier-row:last-child { border-bottom: none; }
-    .tier-row:hover { background: rgba(201,168,76,0.05); }
+    .tier-row:hover { background: rgba(var(--accent-rgb),0.05); }
 
     /* ============================================================
        v3.0.924 -- TD-780 Push 7. PASSES ON THE STOREFRONT.
@@ -662,18 +656,18 @@
 
     .plan-blurb {
       padding: 12px 20px 10px;
-      border-bottom: 2px solid rgba(201,168,76,0.1);
+      border-bottom: 2px solid rgba(var(--accent-rgb),0.1);
     }
     .plan-blurb b {
       font-family: 'Bangers', cursive;
       font-size: 18px;
       letter-spacing: 1.5px;
-      color: var(--gold);
+      color: var(--accent);
       display: block;
     }
     .plan-blurb span {
       /* v3.0.928 -- was 13px. */ font-size: 15px;
-      color: rgba(240,232,208,0.62);
+      color: rgba(var(--on-panel-rgb),0.62);
       font-style: italic;
     }
 
@@ -682,14 +676,14 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 14px;
       padding: 14px 20px 16px;
-      border-bottom: 2px solid rgba(201,168,76,0.1);
+      border-bottom: 2px solid rgba(var(--accent-rgb),0.1);
       align-items: stretch;
     }
 
     .pass-card {
-      border: 2px solid rgba(201,168,76,0.45);
+      border: 2px solid rgba(var(--accent-rgb),0.45);
       border-radius: 3px;
-      background: rgba(201,168,76,0.04);
+      background: rgba(var(--accent-rgb),0.04);
       padding: 14px 14px 16px;
       display: flex;
       flex-direction: column;
@@ -698,19 +692,19 @@
       gap: 2px;
       transition: border-color 0.15s, background 0.15s;
     }
-    .pass-card:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+    .pass-card:hover { border-color: var(--accent); background: rgba(var(--accent-rgb),0.08); }
 
     .pass-card-kicker {
       font-size: 10px;
       letter-spacing: 2px;
-      color: rgba(229,228,226,0.75);
+      color: rgba(var(--tier-platinum-rgb),0.75);
       text-transform: uppercase;
     }
     .pass-card-term {
       font-family: 'Bangers', cursive;
       font-size: 26px;
       letter-spacing: 2px;
-      color: #e5e4e2;
+      color: var(--tier-platinum);
       line-height: 1.1;
     }
     /* TOKENS LEAD, AND THEY ARE THE BIGGEST THING ON THE CARD. It is where a pass actually wins:
@@ -719,20 +713,20 @@
       font-family: 'Bangers', cursive;
       font-size: 30px;
       letter-spacing: 1px;
-      color: var(--gold);
+      color: var(--accent);
       margin-top: 6px;
       line-height: 1;
     }
     .pass-card-tokens-sub {
       /* v3.0.928 -- was 12px. */ font-size: 14px;
       font-style: italic;
-      color: rgba(240,232,208,0.55);
+      color: rgba(var(--on-panel-rgb),0.55);
       margin-bottom: 8px;
     }
     .pass-card-price {
       font-family: 'Bangers', cursive;
       font-size: 24px;
-      color: var(--parchment);
+      color: var(--on-panel);
       margin-bottom: 10px;
     }
     /* NO PER-MONTH FIGURE ON A PASS CARD. See the batch note: every pass is above Platinum's $22
@@ -747,8 +741,8 @@
       margin-top: auto;
       width: 100%;
       font-size: 13px;
-      background: #e5e4e2;
-      color: var(--ink);
+      background: var(--tier-platinum);
+      color: var(--page-bg);
     }
 
     .tier-coin { font-size: 28px; flex-shrink: 0; }
@@ -762,18 +756,18 @@
       letter-spacing: 2px;
     }
 
-    .tier-copper .tier-name-row { color: #b87333; }
-    .tier-silver .tier-name-row { color: #c0c0c0; }
-    .tier-gold .tier-name-row { color: var(--gold); }
-    .tier-platinum .tier-name-row { color: #e5e4e2; }
-    .tier-trial .tier-name-row { color: var(--crimson-bright); }
+    .tier-copper .tier-name-row { color: var(--copper); }
+    .tier-silver .tier-name-row { color: var(--tier-silver); }
+    .tier-gold .tier-name-row { color: var(--accent); }
+    .tier-platinum .tier-name-row { color: var(--tier-platinum); }
+    .tier-trial .tier-name-row { color: var(--button-cta); }
 
     .tier-perks {
       /* v3.0.927 -- matches .reward-item-desc. The pass cards carry no long descriptive line, so
          the anchor is the nearest sibling of the same KIND rather than of the same name. This is
          also the line that gained the most room: across the full row, 12px read as fine print. */
       /* v3.0.928 -- was 14px. */ font-size: 16px;
-      color: rgba(240,232,208,0.5);
+      color: rgba(var(--on-panel-rgb),0.5);
       font-style: italic;
       margin-top: 2px;
     }
@@ -782,14 +776,14 @@
       font-family: 'Bangers', cursive;
       /* v3.0.927 -- matches .pass-card-price. */
       font-size: 24px;
-      color: var(--parchment);
+      color: var(--on-panel);
       text-align: right;
       flex-shrink: 0;
     }
 
     .tier-price-tag small {
       /* v3.0.928 -- was 12px. */ font-size: 14px;
-      color: rgba(240,232,208,0.4);
+      color: rgba(var(--on-panel-rgb),0.4);
       display: block;
       font-family: 'Crimson Text', serif;
     }
@@ -800,30 +794,30 @@
       font-size: 14px;
       letter-spacing: 2px;
       padding: 8px 16px;
-      border: 3px solid var(--ink);
+      border: 3px solid var(--page-bg);
       border-radius: 3px;
       cursor: pointer;
       text-decoration: none;
       text-align: center;
       transition: all 0.15s;
-      box-shadow: 2px 2px 0 var(--ink);
+      box-shadow: 2px 2px 0 var(--page-bg);
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .btn-tier:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+    .btn-tier:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--page-bg); }
 
     /* v3.0.926 -- TD-780 Push 7c. A SAFE DEFAULT, so this class is never colourless again.
        Every background below is a MODIFIER; before this line .btn-tier had none of its own, so a
        .btn-tier used outside a .tier-* row rendered as the browser's default link -- blue text on
        nothing. That is exactly what happened to the pass buttons in v3.0.924, and it looked like a
        decision rather than an omission. The modifiers still win; this only catches the fall. */
-    .btn-tier { background: var(--parchment); color: var(--ink); }
+    .btn-tier { background: var(--on-panel); color: var(--page-bg); }
 
-    .tier-copper .btn-tier { background: #b87333; color: var(--parchment); }
-    .tier-silver .btn-tier { background: #c0c0c0; color: var(--ink); }
-    .tier-gold .btn-tier { background: var(--gold); color: var(--ink); }
-    .tier-platinum .btn-tier { background: #e5e4e2; color: var(--ink); }
-    .tier-trial .btn-tier { background: var(--crimson-bright); color: var(--parchment); }
+    .tier-copper .btn-tier { background: var(--copper); color: var(--on-panel); }
+    .tier-silver .btn-tier { background: var(--tier-silver); color: var(--page-bg); }
+    .tier-gold .btn-tier { background: var(--accent); color: var(--page-bg); }
+    .tier-platinum .btn-tier { background: var(--tier-platinum); color: var(--page-bg); }
+    .tier-trial .btn-tier { background: var(--button-cta); color: var(--on-panel); }
 
     /* PAYOFF PANEL */
     .panel-payoff {
@@ -842,7 +836,7 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(to top, rgba(10,8,6,0.4) 0%, transparent 60%);
+      background: linear-gradient(to top, rgba(var(--page-bg-rgb),0.4) 0%, transparent 60%);
     }
 
     .payoff-content {
@@ -855,8 +849,8 @@
     .payoff-title {
       font-family: 'Bangers', cursive;
       font-size: clamp(16px, 2vw, 24px);
-      color: var(--gold);
-      text-shadow: 2px 2px 0 var(--ink);
+      color: var(--accent);
+      text-shadow: 2px 2px 0 var(--page-bg);
       line-height: 1.1;
       margin-bottom: 6px;
       letter-spacing: 1px;
@@ -866,7 +860,7 @@
       font-family: 'Crimson Text', serif;
       /* v3.0.928 -- was 13px. */ font-size: 15px;
       font-style: italic;
-      color: var(--gold-light);
+      color: var(--accent-pale);
       margin-bottom: 0;
       line-height: 1.5;
       display: none;
@@ -877,29 +871,29 @@
       font-size: 28px;
       letter-spacing: 3px;
       padding: 18px 56px;
-      background: var(--crimson-bright);
-      color: var(--parchment);
-      border: 4px solid var(--ink);
+      background: var(--button-cta);
+      color: var(--on-panel);
+      border: 4px solid var(--page-bg);
       border-radius: 3px;
       cursor: pointer;
       text-decoration: none;
-      box-shadow: 5px 5px 0 var(--ink);
+      box-shadow: 5px 5px 0 var(--page-bg);
       transition: all 0.15s;
       display: inline-block;
     }
-    .btn-cta:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--ink); }
+    .btn-cta:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--page-bg); }
 
     .cta-note {
       margin-top: 12px;
       font-size: 12px;
-      color: rgba(201,168,76,0.4);
+      color: rgba(var(--accent-rgb),0.4);
       font-family: 'Cinzel', serif;
       letter-spacing: 1px;
     }
 
     /* CTA STRIP below payoff image */
     .cta-strip {
-      background: var(--crimson);
+      background: var(--danger);
       border: var(--border);
       border-top: none;
       padding: 28px 32px;
@@ -914,7 +908,7 @@
     .cta-strip-text {
       font-family: 'Bangers', cursive;
       font-size: clamp(20px, 3vw, 36px);
-      color: var(--parchment);
+      color: var(--on-panel);
       letter-spacing: 2px;
       text-shadow: 2px 2px 0 rgba(0,0,0,0.4);
       text-align: left;
@@ -924,7 +918,7 @@
       font-family: 'Crimson Text', serif;
       /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
-      color: rgba(240,232,208,0.7);
+      color: rgba(var(--on-panel-rgb),0.7);
       margin-top: 4px;
     }
 
@@ -934,12 +928,12 @@
     .faq-strip {
       width: 100%;
       border: var(--border);
-      background: var(--ink-mid);
+      background: var(--panel);
       margin-bottom: var(--gutter);
     }
 
     .faq-header {
-      background: var(--crimson);
+      background: var(--danger);
       padding: 12px 24px;
       border-bottom: var(--border);
     }
@@ -947,7 +941,7 @@
     .faq-header-title {
       font-family: 'Bangers', cursive;
       font-size: 28px;
-      color: var(--parchment);
+      color: var(--on-panel);
       letter-spacing: 3px;
     }
 
@@ -958,8 +952,8 @@
 
     .faq-cell {
       padding: 20px;
-      border-right: 2px solid rgba(201,168,76,0.1);
-      border-bottom: 2px solid rgba(201,168,76,0.1);
+      border-right: 2px solid rgba(var(--accent-rgb),0.1);
+      border-bottom: 2px solid rgba(var(--accent-rgb),0.1);
     }
 
     .faq-cell:nth-child(3n) { border-right: none; }
@@ -968,7 +962,7 @@
     .faq-q {
       font-family: 'Bangers', cursive;
       font-size: 17px;
-      color: var(--gold);
+      color: var(--accent);
       margin-bottom: 8px;
       letter-spacing: 0.5px;
       line-height: 1.2;
@@ -978,13 +972,13 @@
       font-family: 'Crimson Text', serif;
       /* v3.0.928 -- was 14px. */ font-size: 16px;
       font-style: italic;
-      color: rgba(240,232,208,0.65);
+      color: rgba(var(--on-panel-rgb),0.65);
       line-height: 1.6;
     }
 
     /* FOOTER */
     footer {
-      background: var(--ink);
+      background: var(--page-bg);
       border-top: var(--border);
       padding: 12px 32px 10px;
       display: flex;
@@ -1007,7 +1001,7 @@
       font-family: 'Cinzel', serif;
       font-size: 16px;
       font-weight: 700;
-      color: var(--gold);
+      color: var(--accent);
       letter-spacing: 4px;
     }
     .footer-logo img { height: 41px; width: auto; display: block; }
@@ -1019,27 +1013,27 @@
       font-size: 11px;
       letter-spacing: 1px;
       /* v3.0.926 -- was rgba(201,168,76,0.4), 2.23:1 on --ink. */
-      color: var(--gold-light);
+      color: var(--accent-pale);
       text-decoration: none;
       transition: color 0.2s;
     }
     /* AND THE HOVER HAD TO MOVE WITH IT. --gold (#c9a84c) is DARKER than --gold-light (#e8d5a3),
        so leaving the hover alone would have made these links DIM on hover -- an affordance
        pointing the wrong way. Hover now goes to --parchment, which is brighter than the base. */
-    .footer-link:hover { color: var(--parchment); }
+    .footer-link:hover { color: var(--on-panel); }
 
     .footer-copy {
       font-size: 11.5px;
       line-height: 1.5;
       /* v3.0.926 -- was rgba(201,168,76,0.4), 2.23:1 on --ink. This is the copyright and the
          publisher disclaimer, so it is now as legible as everything else in the footer. */
-      color: var(--gold-light);
+      color: var(--accent-pale);
       text-align: center;
       max-width: 880px;
       width: 100%;
       margin: 0 auto;
       padding-top: 8px;
-      border-top: 1px solid rgba(201,168,76,0.14);
+      border-top: 1px solid rgba(var(--accent-rgb),0.14);
     }
 
     /* ANIMATIONS */
@@ -1109,24 +1103,24 @@
 
 /* v3.3.00 -- TD-1035. "See what they look like" under A REAL BOOK, and the photo window it opens
    (public/js/book-gallery.js). Photos of real printed books, Ian 2026-10-27. */
-.book-gallery-link { display: inline-block; margin-top: 6px; font-family: 'Crimson Text', serif; font-size: 13px; color: var(--gold-light); text-decoration: underline; text-underline-offset: 3px; opacity: 0.85; }
-.book-gallery-link:hover, .book-gallery-link:focus { color: var(--gold); opacity: 1; }
+.book-gallery-link { display: inline-block; margin-top: 6px; font-family: 'Crimson Text', serif; font-size: 13px; color: var(--accent-pale); text-decoration: underline; text-underline-offset: 3px; opacity: 0.85; }
+.book-gallery-link:hover, .book-gallery-link:focus { color: var(--accent); opacity: 1; }
 html.bkg-open, html.bkg-open body { overflow: hidden; }
 .bkg-overlay { position: fixed; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; background: rgba(6,4,2,0.88); padding: 16px; }
-.bkg-box { position: relative; width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 10px; background: #120c06; border: 1px solid rgba(201,168,76,0.35); border-radius: 10px; padding: 14px 16px 12px; box-sizing: border-box; }
+.bkg-box { position: relative; width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 10px; background: var(--panel-deep); border: 1px solid rgba(var(--accent-rgb),0.35); border-radius: 10px; padding: 14px 16px 12px; box-sizing: border-box; }
 .bkg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.bkg-title { font-family: 'Bangers', cursive; font-size: 22px; letter-spacing: 1px; color: var(--gold); }
-.bkg-x { background: none; border: none; color: var(--gold); font-size: 30px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.bkg-title { font-family: 'Bangers', cursive; font-size: 22px; letter-spacing: 1px; color: var(--accent); }
+.bkg-x { background: none; border: none; color: var(--accent); font-size: 30px; line-height: 1; cursor: pointer; padding: 0 4px; }
 .bkg-stage { position: relative; display: flex; align-items: center; justify-content: center; min-height: 0; flex: 1 1 auto; }
 .bkg-img { display: block; max-width: 100%; max-height: calc(100vh - 230px); object-fit: contain; border-radius: 4px; background: #0a0703; }
-.bkg-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(201,168,76,0.5); background: rgba(12,8,4,0.75); color: var(--gold); font-size: 28px; line-height: 38px; text-align: center; cursor: pointer; padding: 0; }
+.bkg-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 50%; border: 1px solid rgba(var(--accent-rgb),0.5); background: rgba(var(--panel-deep-rgb),0.75); color: var(--accent); font-size: 28px; line-height: 38px; text-align: center; cursor: pointer; padding: 0; }
 .bkg-prev { left: 6px; } .bkg-next { right: 6px; }
-.bkg-cap { text-align: center; font-family: 'Crimson Text', serif; font-style: italic; font-size: 15px; color: rgba(240,232,208,0.85); }
+.bkg-cap { text-align: center; font-family: 'Crimson Text', serif; font-style: italic; font-size: 15px; color: rgba(var(--on-panel-rgb),0.85); }
 .bkg-strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; justify-content: safe center; }
 .bkg-thumb { flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 4px; background: none; cursor: pointer; opacity: 0.7; }
 .bkg-thumb img { display: block; height: 64px; width: auto; border-radius: 2px; }
-.bkg-thumb.is-on, .bkg-thumb:hover { border-color: var(--gold); opacity: 1; }
-.bkg-note { text-align: center; font-size: 12px; color: rgba(240,232,208,0.5); }
+.bkg-thumb.is-on, .bkg-thumb:hover { border-color: var(--accent); opacity: 1; }
+.bkg-note { text-align: center; font-size: 12px; color: rgba(var(--on-panel-rgb),0.5); }
 @media (max-width: 640px) {
   .bkg-overlay { padding: 8px; }
   .bkg-box { padding: 10px 10px 8px; }

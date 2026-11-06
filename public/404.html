@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <link rel="stylesheet" href="/css/fonts.css">
+  <link rel="stylesheet" href="/css/themes/campaignia.css">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>404 — This page isn't here</title>
@@ -10,11 +11,11 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Crimson Text', Georgia, serif;
-      background: #0a0806;
+      background: var(--page-bg);
       background-image: url('/images/Campaignia_background.png');
       background-size: cover;
       background-position: center;
-      color: #e8d5a3;
+      color: var(--accent-pale);
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -25,28 +26,28 @@
       content: '';
       position: fixed;
       inset: 0;
-      background: rgba(10,8,6,0.82);
+      background: rgba(var(--page-bg-rgb),0.82);
     }
     .panel {
       position: relative;
       z-index: 1;
-      border: 4px solid #0a0806;
-      background: rgba(20,12,4,0.95);
+      border: 4px solid var(--page-bg);
+      background: rgba(var(--panel-rgb),0.95);
       max-width: 560px;
       width: 100%;
       text-align: center;
       overflow: hidden;
     }
     .panel-top {
-      background: #1a0f08;
-      border-bottom: 3px solid rgba(201,168,76,0.2);
+      background: var(--panel);
+      border-bottom: 3px solid rgba(var(--accent-rgb),0.2);
       padding: 24px;
     }
     .logo {
       font-family: 'Cinzel', serif;
       font-size: 16px;
       font-weight: 700;
-      color: #c9a84c;
+      color: var(--accent);
       letter-spacing: 4px;
     }
     .logo img { height: 30px; width: auto; margin: 0 auto; }
@@ -56,15 +57,15 @@
     .error-num {
       font-family: 'Bangers', cursive;
       font-size: 120px;
-      color: #8b1a1a;
+      color: var(--danger);
       line-height: 1;
       text-shadow: 4px 4px 0 rgba(0,0,0,0.5);
       margin-bottom: 8px;
     }
     .narrator-box {
-      background: #f0e8d0;
-      color: #0a0806;
-      border: 3px solid #0a0806;
+      background: var(--on-panel);
+      color: var(--surface-ink-text);
+      border: 3px solid var(--page-bg);
       padding: 16px 20px;
       font-style: italic;
       font-size: 16px;
@@ -80,21 +81,21 @@
       font-family: 'Bangers', cursive;
       font-size: 10px;
       letter-spacing: 3px;
-      background: #f0e8d0;
+      background: var(--on-panel);
       padding: 0 6px;
       transform: translateY(-50%);
     }
     .title {
       font-family: 'Bangers', cursive;
       font-size: 32px;
-      color: #c9a84c;
+      color: var(--accent);
       letter-spacing: 2px;
       margin-bottom: 8px;
     }
     .sub {
       font-size: 16px;
       font-style: italic;
-      color: rgba(232,213,163,0.6);
+      color: rgba(var(--accent-pale-rgb),0.6);
       margin-bottom: 32px;
     }
     .btn {
@@ -103,26 +104,26 @@
       font-size: 20px;
       letter-spacing: 2px;
       padding: 14px 40px;
-      background: #c9a84c;
-      color: #0a0806;
+      background: var(--accent);
+      color: var(--surface-ink-text);
       text-decoration: none;
-      border: 3px solid #0a0806;
-      box-shadow: 4px 4px 0 #0a0806;
+      border: 3px solid var(--page-bg);
+      box-shadow: 4px 4px 0 var(--page-bg);
       transition: all 0.15s;
       margin: 6px;
     }
     .btn:hover {
       transform: translate(-2px, -2px);
-      box-shadow: 6px 6px 0 #0a0806;
+      box-shadow: 6px 6px 0 var(--page-bg);
     }
     .btn-ghost {
       background: transparent;
-      color: #c9a84c;
-      border-color: rgba(201,168,76,0.3);
+      color: var(--accent);
+      border-color: rgba(var(--accent-rgb),0.3);
       box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
     }
     .btn-ghost:hover {
-      border-color: #c9a84c;
+      border-color: var(--accent);
     }
   </style>
 </head>

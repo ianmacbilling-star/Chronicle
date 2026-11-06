@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.61",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3461-theme-public-pages",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, round 3: the public pages now take their colors from the theme sheet.",
+        "detail": "The home page, /game-masters, /story, the tier grid, the public library, the four legal pages, the 404 page, the offline page, the install chip and the marketplace screens now name their colors from css/themes/campaignia.css, and each page links that sheet. Their own local color names (ink, gold, parchment and so on, which clashed with the theme's) are replaced by the theme's names. The tier grid keeps its --tg- names but points them at the brand, so it matches the landing page it sits on. The sheet gains names for the tier metals (silver, platinum), the AI tag, the writer and editor labels and the added-to-shelf button. Near-identical shades are folded in as agreed on the review sheet; the offline page carries each color as a fallback too. Left typed: black and white shadows, near-black, and the staging header.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.60",
     "staged_on": "2026-11-06",
     "entries": [

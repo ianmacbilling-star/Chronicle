@@ -178,6 +178,24 @@
   --page-bg-rgb:10,8,6;
   /* v3.4.60 -- the call-to-action button in emails */
   --button-cta:#c0392b;
+  /* v3.4.61 -- names the public pages add: tier metals, the AI tag, the writer and editor labels, the added-to-shelf button */
+  --tier-silver:#c0c0c0;
+  --tier-platinum:#e5e4e2;
+  --ai-tag-fill:#3b5aa0;
+  --ai-tag-line:#5b7bc0;
+  --ai-tag-text:#dbeafe;
+  --writer-pill-fill:#2f4a5c;
+  --editor-pill-fill:#3f5232;
+  --editor-pill-line:#283821;
+  --added-fill:#284628;
+  --added-line:#1f3a1f;
+  --panel-deep:#0f0a05;
+  --tooling:#d6b45a;
+  --added-fill-rgb:40,70,40;
+  --tier-platinum-rgb:229,228,226;
+  --change-pending:#e07a6a;
+  --rights-warn-line-rgb:217,119,6;
+  --ai-tag-fill-rgb:59,90,160;
 }
 :root{
   --ink:#2c1810;--ink-light:#5c3d2e;
