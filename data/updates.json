@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.65",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3465-tier-grid-panel",
+        "kind": "fix",
+        "public": false,
+        "summary": "Compare the Tiers is readable on brand 2's light page.",
+        "detail": "Ian on staging /story: the middle of Compare the Tiers was unreadable (dark panel behind dark text). The grid's panel color pointed at a text-color name (--surface-ink-text), which brand 2 sets dark. It now points at the background name --panel. On Campaignia's pages the grid panel moves from #160e06 to #140c04, the same fold Ian approved in v3.4.58; it cannot be seen.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.64",
     "staged_on": "2026-11-06",
     "entries": [

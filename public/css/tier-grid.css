@@ -25,7 +25,7 @@
 
 .tg-root {
   --tg-ink: var(--page-bg);
-  --tg-ink-mid: var(--surface-ink-text);
+  --tg-ink-mid: var(--panel);   /* v3.4.65 -- the grid's panel is a background: --panel, not a text color (on a light brand the text name made it dark) */
   --tg-ink-deep: var(--panel-deep);
   --tg-gold: var(--accent);
   --tg-gold-light: var(--accent-pale);
