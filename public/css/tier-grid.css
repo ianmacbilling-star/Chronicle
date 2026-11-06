@@ -39,9 +39,9 @@
   --tg-copper: var(--copper);
   --tg-silver: var(--tier-silver);
   --tg-platinum: var(--tier-platinum);
-  --tg-display: 'Bangers', cursive;
-  --tg-label: 'Cinzel', serif;
-  --tg-body: 'Crimson Text', Georgia, serif;
+  --tg-display: var(--font-comic);
+  --tg-label: var(--font-label);
+  --tg-body: var(--font-body);
 }
 
 /* ---- the button that opens it, under the tier rows ---- */

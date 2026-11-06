@@ -193,6 +193,11 @@
   --tier-platinum-text:#e8e8f0;
   /* v3.4.64 -- the halftone dots laid over the landing pages (landing.css body::before) */
   --halftone-dot:rgba(0,0,0,0.15);
+  /* v3.4.67 -- the landing page fonts (landing.css, landing-story.css, the tier grid). Campaignia's own faces come from /css/fonts.css. */
+  --font-heading:'EB Garamond', 'Crimson Text', Georgia, serif;
+  --font-body:'Crimson Text', Georgia, serif;
+  --font-label:'Cinzel', serif;
+  --font-comic:'Bangers', cursive;
 }
 :root{
   --ink:#2c1810;

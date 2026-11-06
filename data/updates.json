@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.67",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3467-brand2-fonts",
+        "kind": "feature",
+        "public": false,
+        "summary": "Brand 2 on /story: Storybook fonts (Fraunces, Lora, Quicksand, Patrick Hand).",
+        "detail": "The landing page fonts are now theme names: --font-heading, --font-body, --font-label and --font-comic (landing.css, landing-story.css and the tier grid use them). Campaignia's sheet holds today's fonts, so the home page and /game-masters look the same (one small difference: eleven rules that said 'Crimson Text', serif now also list Georgia before serif, which only matters if the font fails to load). Brand 2's sheet holds Ian's pick, Storybook: Fraunces headings, Lora body, Quicksand labels, Patrick Hand for the comic bits. The 13 font files are plain files in public/fonts/brand2 with their Open Font License text; the print font list is not touched.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.66",
     "staged_on": "2026-11-06",
     "entries": [

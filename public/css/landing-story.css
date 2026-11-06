@@ -154,11 +154,11 @@
    landing.css and is not named here renders in a comic face on a page that has none; the batch
    guard now asserts this list covers them all. */
 .plan-blurb b, .pass-card-term, .pass-card-tokens, .pass-card-price, .reward-item-title {
-  font-family: 'EB Garamond', 'Crimson Text', Georgia, serif;
+  font-family: var(--font-heading);
   font-weight: 500;
 }
 body, .hero-sub, .step-body, .feature-body, .faq-a, .tier-perks, .narrator-text {
-  font-family: 'EB Garamond', 'Crimson Text', Georgia, serif;
+  font-family: var(--font-heading);
 }
 .hero-title { font-weight: 600; letter-spacing: -0.5px; line-height: 1.06; }
 .hero-eyebrow, .section-tag, .step-label, .pricing-header-title, .faq-header-title,

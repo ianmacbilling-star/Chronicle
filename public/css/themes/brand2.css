@@ -198,6 +198,11 @@
   --tier-platinum-text:#e8e8f0;
   /* v3.4.64 -- the halftone dots laid over the landing pages (landing.css body::before) */
   --halftone-dot:rgba(43,49,82,0.045);
+  /* v3.4.67 -- the landing page fonts (landing.css, landing-story.css, the tier grid). Brand 2: Storybook (Ian, 2026-11-06) -- Fraunces, Lora, Quicksand, Patrick Hand; faces at the end of this sheet. */
+  --font-heading:'Fraunces', Georgia, serif;
+  --font-body:'Lora', Georgia, serif;
+  --font-label:'Quicksand', sans-serif;
+  --font-comic:'Patrick Hand', cursive;
 }
 :root{
   --ink:#2c1810;
@@ -220,3 +225,38 @@
 
 /* Brand 2's background, in place of a picture: a soft watercolor wash over the page color. */
 body{background-image:radial-gradient(ellipse 60% 40% at 80% 8%, rgba(190,200,245,.40), transparent 70%), radial-gradient(ellipse 55% 35% at 10% 40%, rgba(240,200,225,.32), transparent 70%), radial-gradient(ellipse 70% 40% at 60% 90%, rgba(200,230,240,.35), transparent 70%);background-attachment:fixed;}
+
+/* Brand 2's fonts (v3.4.67, Storybook). Files in /fonts/brand2/, SIL Open Font License (the -OFL.txt beside them). Served as plain files;
+   they are not in services/printing/fonts.js, so books, PDFs and print are untouched. Each weight the pages ask for maps to the nearest file. */
+@font-face{font-family:'Fraunces';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/brand2/fraunces-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Fraunces';font-style:italic;font-weight:400;font-display:swap;src:url('/fonts/brand2/fraunces-latin-400-italic.woff2') format('woff2');}
+@font-face{font-family:'Fraunces';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/brand2/fraunces-latin-500-normal.woff2') format('woff2');}
+@font-face{font-family:'Fraunces';font-style:italic;font-weight:500;font-display:swap;src:url('/fonts/brand2/fraunces-latin-500-italic.woff2') format('woff2');}
+@font-face{font-family:'Fraunces';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/brand2/fraunces-latin-600-normal.woff2') format('woff2');}
+@font-face{font-family:'Fraunces';font-style:italic;font-weight:600;font-display:swap;src:url('/fonts/brand2/fraunces-latin-600-italic.woff2') format('woff2');}
+@font-face{font-family:'Fraunces';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/brand2/fraunces-latin-600-normal.woff2') format('woff2');}
+@font-face{font-family:'Fraunces';font-style:italic;font-weight:700;font-display:swap;src:url('/fonts/brand2/fraunces-latin-600-italic.woff2') format('woff2');}
+@font-face{font-family:'Lora';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/brand2/lora-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Lora';font-style:italic;font-weight:400;font-display:swap;src:url('/fonts/brand2/lora-latin-400-italic.woff2') format('woff2');}
+@font-face{font-family:'Lora';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/brand2/lora-latin-500-normal.woff2') format('woff2');}
+@font-face{font-family:'Lora';font-style:italic;font-weight:500;font-display:swap;src:url('/fonts/brand2/lora-latin-400-italic.woff2') format('woff2');}
+@font-face{font-family:'Lora';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/brand2/lora-latin-500-normal.woff2') format('woff2');}
+@font-face{font-family:'Lora';font-style:italic;font-weight:600;font-display:swap;src:url('/fonts/brand2/lora-latin-400-italic.woff2') format('woff2');}
+@font-face{font-family:'Lora';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/brand2/lora-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'Lora';font-style:italic;font-weight:700;font-display:swap;src:url('/fonts/brand2/lora-latin-400-italic.woff2') format('woff2');}
+@font-face{font-family:'Quicksand';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/brand2/quicksand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Quicksand';font-style:italic;font-weight:400;font-display:swap;src:url('/fonts/brand2/quicksand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Quicksand';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/brand2/quicksand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Quicksand';font-style:italic;font-weight:500;font-display:swap;src:url('/fonts/brand2/quicksand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Quicksand';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/brand2/quicksand-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'Quicksand';font-style:italic;font-weight:600;font-display:swap;src:url('/fonts/brand2/quicksand-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'Quicksand';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/brand2/quicksand-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'Quicksand';font-style:italic;font-weight:700;font-display:swap;src:url('/fonts/brand2/quicksand-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'Patrick Hand';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Patrick Hand';font-style:italic;font-weight:400;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Patrick Hand';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Patrick Hand';font-style:italic;font-weight:500;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Patrick Hand';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Patrick Hand';font-style:italic;font-weight:600;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Patrick Hand';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Patrick Hand';font-style:italic;font-weight:700;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
