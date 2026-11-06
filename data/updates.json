@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.56",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3456-theme-sweep-app-js",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, step 2b: the colors app.js writes into the page now come from the theme sheet (nothing looks different).",
+        "detail": "Every brand color app.js writes as CSS (style attributes in built HTML, cssText, element.style) now names a value from css/themes/campaignia.css. Proved identical: expanded back it is the old file. Left as typed: the tier colors (tier identity, not brand), the SVG chart grid lines, the admin AI-layout JSON window (a window of its own, without the theme sheet) and the on-picture title halo. Also puts back the error dialog's own background (#1c1b22), which v3.4.54 had turned brown by defining --panel.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.55",
     "staged_on": "2026-11-05",
     "entries": [

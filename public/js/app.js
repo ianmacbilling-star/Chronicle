@@ -665,19 +665,19 @@ function renderTokenPacks() {
     var _rate = p.price ? (p.tokens / p.price) : 0;
     var _bonusPct = _baseRate ? Math.round((_rate / _baseRate - 1) * 100) : 0;
     var highlightStyle = p.highlight
-      ? 'border:2px solid #c9a84c;box-shadow:0 0 0 1px rgba(201,168,76,0.3),0 6px 18px rgba(201,168,76,0.1);'
-      : 'border:1px solid rgba(201,168,76,0.2);';
+      ? 'border:2px solid var(--accent);box-shadow:0 0 0 1px rgba(var(--accent-rgb),0.3),0 6px 18px rgba(var(--accent-rgb),0.1);'
+      : 'border:1px solid rgba(var(--accent-rgb),0.2);';
     var badge = p.highlight
-      ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#c9a84c;color:#1a120a;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:99px;">' + p.tagline.toUpperCase() + '</div>'
+      ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:#1a120a;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:99px;">' + p.tagline.toUpperCase() + '</div>'
       : '';
     return '' +
-      '<div style="position:relative;background:rgba(25,18,10,0.85);' + highlightStyle + 'border-radius:10px;padding:22px 18px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;">' +
+      '<div style="position:relative;background:rgba(var(--card-rgb),0.85);' + highlightStyle + 'border-radius:10px;padding:22px 18px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;">' +
         badge +
-        '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(201,168,76,0.7);">' + p.name + '</div>' +
-        '<div style="font-size:32px;font-weight:700;color:#c9a84c;line-height:1;margin:4px 0 2px;">$' + p.price + '</div>' +
+        '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--accent-rgb),0.7);">' + p.name + '</div>' +
+        '<div style="font-size:32px;font-weight:700;color:var(--accent);line-height:1;margin:4px 0 2px;">$' + p.price + '</div>' +
         '<div style="font-size:16px;color:var(--gold-light);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
         (_bonusPct > 0 ? '<div style="font-size:11px;font-weight:700;color:#7ec98f;margin-bottom:6px;">+' + _bonusPct + '% more tokens per $</div>' : '') +
-        (p.highlight ? '' : '<div style="font-size:11px;color:rgba(201,168,76,0.6);font-style:italic;">' + p.tagline + '</div>') +
+        (p.highlight ? '' : '<div style="font-size:11px;color:rgba(var(--accent-rgb),0.6);font-style:italic;">' + p.tagline + '</div>') +
         (canBuy
           ? '<button class="btn btn-primary btn-sm" onclick="buyTokenPack(\'' + p.id + '\')" style="margin-top:auto;">Buy ' + p.name + '</button>'
           : '<button class="btn btn-sm" disabled style="margin-top:auto;opacity:0.5;cursor:not-allowed;">Buy ' + p.name + '</button>') +
@@ -1052,18 +1052,18 @@ if (typeof window !== "undefined" && !window.__alertPatched) {
 function uiPrompt(title, message, initial) {
   return new Promise(function (resolve) {
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
     var h = document.createElement('div');
     h.textContent = title || '';
-    h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:8px;";
+    h.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:8px;";
     var msg = document.createElement('div');
     msg.textContent = (message == null) ? '' : String(message);
-    msg.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.5;margin-bottom:14px;';
+    msg.style.cssText = 'color:var(--on-panel);font-size:14px;line-height:1.5;margin-bottom:14px;';
     var input = document.createElement('input');
     input.type = 'text'; input.maxLength = 60; input.value = initial || '';
-    input.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin-bottom:16px;';
+    input.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.4);background:rgba(var(--accent-rgb),0.08);color:var(--on-panel);font-size:14px;margin-bottom:16px;';
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button');
@@ -1095,14 +1095,14 @@ function uiPrompt(title, message, initial) {
 function uiDeleteLastSession(versionName, sessionName) {
   return new Promise(function (resolve) {
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
     var h = document.createElement('div');
     h.textContent = 'That is the only session in \u201c' + versionName + '\u201d';
-    h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+    h.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:10px;";
     var msg = document.createElement('div');
-    msg.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.55;margin-bottom:18px;white-space:pre-wrap;';
+    msg.style.cssText = 'color:var(--on-panel);font-size:14px;line-height:1.55;margin-bottom:18px;white-space:pre-wrap;';
     msg.textContent =
       'This deletes the \u201c' + versionName + '\u201d version of \u201c' + sessionName + '\u201d \u2014 its pictures, its narrative and its character notes.\n\n' +
       'It is the only session \u201c' + versionName + '\u201d has. You can keep the version and add a different session to it later, or delete it completely \u2014 which also removes its cover, its layout choices and its saved book.\n\n' +
@@ -1142,25 +1142,25 @@ function uiDeleteLastSession(versionName, sessionName) {
 function uiVersionPick(srcLabel, mine) {
   return new Promise(function (resolve) {
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
     var h = document.createElement('div');
     h.textContent = mine.length ? 'Add this session to a version' : 'Name this version';
-    h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:8px;";
+    h.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:8px;";
     var msg = document.createElement('div');
     msg.textContent = 'Copying ' + (srcLabel || 'this version') + '.';
-    msg.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.5;margin-bottom:14px;';
+    msg.style.cssText = 'color:var(--on-panel);font-size:14px;line-height:1.5;margin-bottom:14px;';
     box.appendChild(h); box.appendChild(msg);
 
     var sel = null;
     if (mine.length) {
       var l1 = document.createElement('div');
       l1.textContent = 'Add to one of your versions';
-      l1.style.cssText = 'color:#c9a84c;font-size:12px;margin-bottom:6px;';
+      l1.style.cssText = 'color:var(--accent);font-size:12px;margin-bottom:6px;';
       sel = document.createElement('select');
       sel.className = 'form-input';
-      sel.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin-bottom:14px;';
+      sel.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.4);background:rgba(var(--accent-rgb),0.08);color:var(--on-panel);font-size:14px;margin-bottom:14px;';
       var o0 = document.createElement('option');
       o0.value = ''; o0.textContent = '\u2014 choose a version \u2014';
       sel.appendChild(o0);
@@ -1168,7 +1168,7 @@ function uiVersionPick(srcLabel, mine) {
       // OS, not by the select's own rule, so on Windows the panel came up near-white with the
       // cream text set on the parent -- cream on white, effectively invisible. Reported by Ian
       // with a screenshot. Set on every option including the placeholder.
-      var _optCss = 'background:#16100a;color:#f0e8d0;';
+      var _optCss = 'background:var(--window-bg);color:var(--on-panel);';
       o0.style.cssText = _optCss;
       mine.forEach(function (v) {
         var o = document.createElement('option');
@@ -1180,13 +1180,13 @@ function uiVersionPick(srcLabel, mine) {
       });
       var l2 = document.createElement('div');
       l2.textContent = 'or create a new version';
-      l2.style.cssText = 'color:rgba(201,168,76,0.7);font-size:12px;margin-bottom:6px;';
+      l2.style.cssText = 'color:rgba(var(--accent-rgb),0.7);font-size:12px;margin-bottom:6px;';
       box.appendChild(l1); box.appendChild(sel); box.appendChild(l2);
     }
 
     var input = document.createElement('input');
     input.type = 'text'; input.maxLength = 60; input.placeholder = 'New version name';
-    input.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin-bottom:16px;';
+    input.style.cssText = 'width:100%;padding:9px 10px;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.4);background:rgba(var(--accent-rgb),0.08);color:var(--on-panel);font-size:14px;margin-bottom:16px;';
     box.appendChild(input);
 
     var row = document.createElement('div');
@@ -1235,9 +1235,9 @@ function uiConfirm(message, opts) {
   opts = opts || {};
   return new Promise(function (resolve) {
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
     // v3.0.461 -- three OPT-IN options, so every existing caller renders exactly as before:
     //   opts.title         a heading above the message
     //   opts.preserveLines honour blank lines, for a message written as paragraphs. Without it a
@@ -1250,11 +1250,11 @@ function uiConfirm(message, opts) {
     if (opts.title) {
       head = document.createElement('div');
       head.textContent = String(opts.title);
-      head.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+      head.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:10px;";
     }
     var msg = document.createElement('div');
     msg.textContent = (message == null) ? '' : String(message);
-    msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:18px;' + (opts.preserveLines ? 'white-space:pre-wrap;' : '');
+    msg.style.cssText = 'color:var(--on-panel);font-size:15px;line-height:1.5;margin-bottom:18px;' + (opts.preserveLines ? 'white-space:pre-wrap;' : '');
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
@@ -1295,17 +1295,17 @@ function uiConfirm(message, opts) {
 function uiChoose(title, message, items) {
   return new Promise(function (resolve) {
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px;max-height:80vh;overflow-y:auto;';
+    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px;max-height:80vh;overflow-y:auto;';
     var head = document.createElement('div');
     head.textContent = String(title || 'Choose one');
-    head.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
+    head.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:10px;";
     box.appendChild(head);
     if (message) {
       var msg = document.createElement('div');
       msg.textContent = String(message);
-      msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:16px;';
+      msg.style.cssText = 'color:var(--on-panel);font-size:15px;line-height:1.5;margin-bottom:16px;';
       box.appendChild(msg);
     }
     (items || []).forEach(function (label, i) {
@@ -1341,26 +1341,26 @@ function uiPublishPrompt(message, opts) {
   opts = opts || {};
   return new Promise(function (resolve) {
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
     var msg = document.createElement('div');
     msg.textContent = (message == null) ? '' : String(message);
-    msg.style.cssText = 'color:#f0e8d0;font-size:15px;line-height:1.5;margin-bottom:14px;';
+    msg.style.cssText = 'color:var(--on-panel);font-size:15px;line-height:1.5;margin-bottom:14px;';
     var tlabel = document.createElement('div');
     tlabel.textContent = 'Title for this story';
-    tlabel.style.cssText = 'color:rgba(201,168,76,0.9);font-size:12px;margin-bottom:6px;';
+    tlabel.style.cssText = 'color:rgba(var(--accent-rgb),0.9);font-size:12px;margin-bottom:6px;';
     var ti = document.createElement('input');
     ti.type = 'text'; ti.maxLength = 200; ti.value = opts.defaultTitle || '';
     ti.placeholder = 'e.g. The Shattered Crown, or Summer at the Lake';   // v3.0.852 -- TD-711, and this is the twin of the one in app.html
-    ti.style.cssText = 'width:100%;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:14px;';
+    ti.style.cssText = 'width:100%;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:14px;';
     var label = document.createElement('div');
     label.textContent = 'Add a short blurb for your Library page (optional)';
-    label.style.cssText = 'color:rgba(201,168,76,0.9);font-size:12px;margin-bottom:6px;';
+    label.style.cssText = 'color:rgba(var(--accent-rgb),0.9);font-size:12px;margin-bottom:6px;';
     var ta = document.createElement('textarea');
     ta.maxLength = 600;
     ta.placeholder = 'Leave blank to use your opening narrative as the teaser.';
-    ta.style.cssText = 'width:100%;min-height:64px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:8px;';
+    ta.style.cssText = 'width:100%;min-height:64px;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:8px;';
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
@@ -1368,7 +1368,7 @@ function uiPublishPrompt(message, opts) {
     row.appendChild(cancel); row.appendChild(ok);
     var hint = document.createElement('div');
     hint.textContent = 'You can manage your published content under My Stuff.';
-    hint.style.cssText = 'color:rgba(240,232,208,0.5);font-size:11px;margin:0 0 16px;';
+    hint.style.cssText = 'color:rgba(var(--on-panel-rgb),0.5);font-size:11px;margin:0 0 16px;';
     var attestWrap = document.createElement('label');
     attestWrap.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#cbb994;line-height:1.4;margin:0 0 14px;cursor:pointer;';
     var attestBox = document.createElement('input');
@@ -1726,7 +1726,7 @@ function impersonateLoadLog() {
         var when = r.started_at ? String(r.started_at).replace('T', ' ').slice(0, 16) : '';
         var state = r.ended_at ? ('ended, ' + (r.end_reason || 'manual')) : 'STILL OPEN';
         var spent = (r.tokens_spent > 0) ? (' &middot; ' + r.tokens_spent + ' tokens spent') : '';
-        return '<div style="padding:4px 0;border-bottom:1px solid rgba(201,168,76,0.15);">' +
+        return '<div style="padding:4px 0;border-bottom:1px solid rgba(var(--accent-rgb),0.15);">' +
           when + ' &middot; <strong>' + (r.admin_email || '?') + '</strong> &rarr; ' + (r.target_email || '?') +
           ' &middot; ' + state + spent + (r.reason ? (' &middot; <em>' + r.reason + '</em>') : '') + '</div>';
       }).join('');
@@ -1780,12 +1780,12 @@ function renderUnusedPics(d) {
   if (!d || d.error) { out.textContent = (d && d.error) || 'Could not run the check.'; return; }
   _unusedPics = d;
   // v3.2.73 -- every folder: a line per folder, then the totals, then the oldest 200 with their folder.
-  var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';
-  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:5px 10px;font-size:11px;color:rgba(201,168,76,0.85);';
+  var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';
+  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-rgb),0.85);';
   var tdr = td + 'text-align:right;';
   var h = '<div style="line-height:1.6;">' +
     '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div></div>' +
-    '<div style="overflow:auto;margin-top:8px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color-scheme:dark;font-size:12px;">' +
+    '<div style="overflow:auto;margin-top:8px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--modal-rgb),0.94);color-scheme:dark;font-size:12px;">' +
     '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">folder</th><th style="' + th + 'text-align:right;">files</th><th style="' + th + 'text-align:right;">size</th><th style="' + th + 'text-align:right;">in use</th><th style="' + th + 'text-align:right;">too new (left out)</th><th style="' + th + 'text-align:right;color:#e8c766;">orphaned</th><th style="' + th + 'text-align:right;color:#e8c766;">orphaned size</th></tr></thead><tbody>' +
     (d.folders || []).map(function (f) { return '<tr><td style="' + td + '">' + _upEsc(f.label) + ' <span style="opacity:0.6;">' + _upEsc(f.prefix) + '</span></td><td style="' + tdr + '">' + f.listed + '</td><td style="' + tdr + '">' + _upBytes(f.listed_bytes) + '</td><td style="' + tdr + '">' + f.in_use + '</td><td style="' + tdr + '">' + f.recent + ' <span style="opacity:0.6;">(' + (f.min_age_days >= 1 ? (f.min_age_days + (f.min_age_days === 1 ? ' day' : ' days')) : '1 day') + ')</span></td><td style="' + tdr + 'color:#e8c766;">' + f.unused + '</td><td style="' + tdr + 'color:#e8c766;">' + _upBytes(f.unused_bytes) + '</td></tr>'; }).join('') +
     '<tr><td style="' + td + 'font-weight:600;">Total</td><td style="' + tdr + 'font-weight:600;">' + d.listed + '</td><td style="' + tdr + 'font-weight:600;">' + _upBytes(d.listed_bytes) + '</td><td style="' + tdr + 'font-weight:600;">' + d.in_use + '</td><td style="' + tdr + 'font-weight:600;">' + d.recent + '</td><td style="' + tdr + 'font-weight:600;color:#e8c766;">' + d.unused + '</td><td style="' + tdr + 'font-weight:600;color:#e8c766;">' + _upBytes(d.unused_bytes) + '</td></tr>' +
@@ -1793,7 +1793,7 @@ function renderUnusedPics(d) {
   var items = d.items || [];
   if (items.length) {
     h += '<div style="margin-top:8px;opacity:0.8;">Oldest ' + Math.min(200, items.length) + ' of ' + items.length + ' shown; the CSV has them all.</div>' +
-      '<div style="overflow:auto;max-height:50vh;margin-top:6px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color-scheme:dark;font-size:12px;">' +
+      '<div style="overflow:auto;max-height:50vh;margin-top:6px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--modal-rgb),0.94);color-scheme:dark;font-size:12px;">' +
       '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">folder</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th></tr></thead><tbody>' +
       items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.folder || '') + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td></tr>'; }).join('') +
       '</tbody></table></div>';
@@ -2121,7 +2121,7 @@ function showAdminBalanceMsg(text, kind) {
     el.style.border = '1px solid rgba(134,212,186,0.4)';
     el.style.color = '#86d4ba';
   } else {
-    el.style.background = 'rgba(139,26,26,0.35)';
+    el.style.background = 'rgba(var(--danger-rgb),0.35)';
     el.style.border = '1px solid rgba(240,149,149,0.4)';
     el.style.color = '#f09595';
   }
@@ -2337,40 +2337,40 @@ function myStoryCard(it) {
       if (_fbCover && img.getAttribute('data-fell') !== '1' && img.src.indexOf(_fbCover) < 0) { img.setAttribute('data-fell', '1'); img.src = _fbCover; return; }
       img.onerror = null;
       var ph0 = document.createElement('div'); ph0.textContent = it.title || 'Untitled';
-      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(201,168,76,0.45);font-size:12px;text-align:center;padding:8px;';
+      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
       if (img.parentNode) img.parentNode.replaceChild(ph0, img);
     };
     img.src = it.cover_page_url || it.cover_url;
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
-    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(201,168,76,0.45);font-size:12px;text-align:center;padding:8px;';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
     a.appendChild(ph);
   }
   card.appendChild(a);
   var meta = document.createElement('div');
-  meta.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.85);padding:6px 8px;line-height:1.35;';
+  meta.style.cssText = 'font-size:12px;color:rgba(var(--on-panel-rgb),0.85);padding:6px 8px;line-height:1.35;';
   meta.textContent = it.title || 'Untitled';
   card.appendChild(meta);
   // v3.3.38 -- the subtitle under the title, as on the Library card: the one the book was published with, two lines at most.
   if (it.subtitle) {
     var subEl = document.createElement('div'); subEl.className = 'ms-subtitle'; subEl.textContent = it.subtitle; subEl.title = it.subtitle;
-    subEl.style.cssText = 'font-size:11px;font-style:italic;color:rgba(240,232,208,0.72);padding:0 8px;margin:-3px 0 4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;';
+    subEl.style.cssText = 'font-size:11px;font-style:italic;color:rgba(var(--on-panel-rgb),0.72);padding:0 8px;margin:-3px 0 4px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;';
     card.appendChild(subEl);
   }
   var blWrap = document.createElement('div');
   blWrap.style.cssText = 'padding:0 8px 8px;';
   var blView = document.createElement('div');
-  blView.style.cssText = 'font-size:11px;color:rgba(240,232,208,0.6);line-height:1.4;margin-bottom:6px;white-space:pre-wrap;';
+  blView.style.cssText = 'font-size:11px;color:rgba(var(--on-panel-rgb),0.6);line-height:1.4;margin-bottom:6px;white-space:pre-wrap;';
   var renderBlurbView = function(){ blView.textContent = (it.blurb && String(it.blurb).trim()) ? it.blurb : 'No blurb yet.'; };
   var editBtn = document.createElement('button'); editBtn.className = 'btn btn-sm'; editBtn.textContent = 'Edit';
   editBtn.style.cssText = 'font-size:11px;padding:3px 8px;';
   var showView = function(){ blWrap.innerHTML = ''; renderBlurbView(); blWrap.appendChild(blView); blWrap.appendChild(editBtn); };
   editBtn.onclick = function(){
     var ti = document.createElement('input'); ti.type = 'text'; ti.value = it.title || ''; ti.maxLength = 200; ti.placeholder = 'Title';
-    ti.style.cssText = 'width:100%;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:6px;';
+    ti.style.cssText = 'width:100%;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:6px;';
     var ta = document.createElement('textarea'); ta.value = it.blurb || ''; ta.maxLength = 600; ta.placeholder = 'Blurb (optional)';
-    ta.style.cssText = 'width:100%;min-height:54px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:6px;';
+    ta.style.cssText = 'width:100%;min-height:54px;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:6px;';
     var save = document.createElement('button'); save.className = 'btn btn-primary btn-sm'; save.textContent = 'Save'; save.style.cssText = 'font-size:11px;padding:3px 10px;margin-right:6px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = 'Cancel'; cancel.style.cssText = 'font-size:11px;padding:3px 10px;';
     blWrap.innerHTML = ''; blWrap.appendChild(ti); blWrap.appendChild(ta);
@@ -2403,7 +2403,7 @@ function myStoryCard(it) {
   copyBtn.textContent = 'Copy link';
   copyBtn.style.cssText = 'font-size:11px;padding:3px 8px;';
   var visMsg = document.createElement('span');
-  visMsg.style.cssText = 'font-size:10px;color:rgba(240,232,208,0.6);';
+  visMsg.style.cssText = 'font-size:10px;color:rgba(var(--on-panel-rgb),0.6);';
   visMsg.setAttribute('role', 'status');
   function renderVis() {
     var unlisted = (it.visibility === 'unlisted');
@@ -2412,7 +2412,7 @@ function myStoryCard(it) {
       ? 'Anyone with the link can read it. It is not in the Library and search engines are asked to skip it.'
       : 'Listed in the public Library and open to search engines.';
     visBadge.style.cssText = 'font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid ' +
-      (unlisted ? 'rgba(201,168,76,0.45);color:rgba(201,168,76,0.95);' : 'rgba(120,200,140,0.45);color:rgba(150,220,170,0.95);');
+      (unlisted ? 'rgba(var(--accent-rgb),0.45);color:rgba(var(--accent-rgb),0.95);' : 'rgba(120,200,140,0.45);color:rgba(150,220,170,0.95);');
     visBtn.textContent = unlisted ? 'Make public' : 'Make link only';
     // The card link follows the same rule, so it can never point at a url that 404s.
     a.href = storyShareUrl(it);
@@ -2487,7 +2487,7 @@ function myStoryCard(it) {
   var _dt = it.created_at ? new Date(it.created_at) : null;
   dateLine.className = 'ms-published';
   dateLine.textContent = _dt ? ('Published ' + _dt.toLocaleDateString()) : '';
-  dateLine.style.cssText = 'font-size:10px;color:rgba(201,168,76,0.5);padding:0 8px 8px;margin-top:-2px;';
+  dateLine.style.cssText = 'font-size:10px;color:rgba(var(--accent-rgb),0.5);padding:0 8px 8px;margin-top:-2px;';
   card.appendChild(dateLine);
   return card;
 }
@@ -2577,7 +2577,7 @@ function _msMoveSelect(current, onPick, label) {
   if (!others.length) return null;
   var sel = document.createElement('select'); sel.className = 'ms-move';
   sel.title = label;
-  sel.style.cssText = 'font-size:11px;max-width:150px;background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:6px;padding:2px 4px;';
+  sel.style.cssText = 'font-size:11px;max-width:150px;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:2px 4px;';
   var o0 = document.createElement('option'); o0.value = ''; o0.textContent = label; sel.appendChild(o0);
   others.forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
   sel.onchange = function () { var v = sel.value; sel.value = ''; if (v) onPick(v); };
@@ -2590,19 +2590,19 @@ function myStoriesPaint() {
   var pens = _msPens();
   pens.forEach(function (pen) {
     var sec = document.createElement('div'); sec.className = 'ms-pen'; sec.setAttribute('data-pen', pen.name);
-    sec.style.cssText = 'margin:14px 0 6px;padding:10px 12px;border-radius:10px;background:rgba(12,7,3,0.55);border:1px solid rgba(201,168,76,0.22);';
+    sec.style.cssText = 'margin:14px 0 6px;padding:10px 12px;border-radius:10px;background:rgba(var(--shelf-shadow-rgb),0.55);border:1px solid rgba(var(--accent-rgb),0.22);';
     var h = document.createElement('div'); h.className = 'ms-pen-name';
-    h.style.cssText = "font-family:'Cinzel',serif;color:#e8cf7a;font-size:15px;margin-bottom:6px;";
+    h.style.cssText = "font-family:'Cinzel',serif;color:var(--foil);font-size:15px;margin-bottom:6px;";
     h.textContent = (pen.name || 'No pen name') + (pen.key === _msKey(_msData.current) ? '  (your pen name)' : '');
     sec.appendChild(h);
     pen.groups.forEach(function (g, gi) {
       var grp = document.createElement('div'); grp.className = 'ms-camp'; grp.setAttribute('data-camp', g.camp);
       grp.style.cssText = 'margin:8px 0 4px;';
       var gh = document.createElement('div'); gh.className = 'ms-camp-head'; gh.draggable = true;
-      gh.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 6px;border-radius:6px;background:rgba(201,168,76,0.08);cursor:grab;';
-      var grip = document.createElement('span'); grip.textContent = '\u2630'; grip.title = 'Drag to move this campaign'; grip.style.cssText = 'color:rgba(201,168,76,0.7);font-size:13px;';
+      gh.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 6px;border-radius:6px;background:rgba(var(--accent-rgb),0.08);cursor:grab;';
+      var grip = document.createElement('span'); grip.textContent = '\u2630'; grip.title = 'Drag to move this campaign'; grip.style.cssText = 'color:rgba(var(--accent-rgb),0.7);font-size:13px;';
       var gn = document.createElement('span'); gn.textContent = g.name + ' (' + g.items.length + ')';
-      gn.style.cssText = 'color:rgba(240,232,208,0.92);font-size:13px;font-weight:600;flex:1 1 auto;min-width:120px;';
+      gn.style.cssText = 'color:rgba(var(--on-panel-rgb),0.92);font-size:13px;font-weight:600;flex:1 1 auto;min-width:120px;';
       gh.appendChild(grip); gh.appendChild(gn);
       gh.appendChild(_msBtn('\u2191', 'Move this campaign up', function () { myStoriesMoveGroup(pen.key, gi, gi - 1); }, gi === 0));
       gh.appendChild(_msBtn('\u2193', 'Move this campaign down', function () { myStoriesMoveGroup(pen.key, gi, gi + 1); }, gi === pen.groups.length - 1));
@@ -2622,7 +2622,7 @@ function myStoriesPaint() {
         bar.title = 'Drag to change the order';
         bar.appendChild(_msBtn('\u2190', 'Move earlier', function () { myStoriesMoveStory(pen.key, gi, si, si - 1); }, si === 0));
         bar.appendChild(_msBtn('\u2192', 'Move later', function () { myStoriesMoveStory(pen.key, gi, si, si + 1); }, si === g.items.length - 1));
-        var pos = document.createElement('span'); pos.textContent = (si + 1) + ' of ' + g.items.length; pos.style.cssText = 'font-size:10px;color:rgba(240,232,208,0.6);flex:1 1 auto;';
+        var pos = document.createElement('span'); pos.textContent = (si + 1) + ' of ' + g.items.length; pos.style.cssText = 'font-size:10px;color:rgba(var(--on-panel-rgb),0.6);flex:1 1 auto;';
         bar.appendChild(pos);
         var cs = _msMoveSelect(pen.name, function (to) { myStoriesMoveTo([it], to, true); }, 'Move to\u2026');
         if (cs) bar.appendChild(cs);
@@ -3174,7 +3174,7 @@ function renderAccountUsage(usage) {
     var subRow = sub
       ? '<div style="font-size:10px;color:var(--text-light);opacity:0.75;letter-spacing:0.3px;margin-top:3px;">' + sub + '</div>'
       : '';
-    return '<div style="background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.18);' +
+    return '<div style="background:rgba(var(--accent-rgb),0.06);border:1px solid rgba(var(--accent-rgb),0.18);' +
       'border-radius:var(--radius);padding:16px;text-align:center;">' +
       '<div style="font-family:var(--font-display);font-size:28px;color:var(--gold);">' + num + '</div>' +
       '<div style="font-size:11px;color:var(--text-light);letter-spacing:0.5px;margin-top:4px;">' +
@@ -3270,7 +3270,7 @@ function renderAccountStanding(me) {
   // now sits inline after the value rather than under it, so each fact is one readable line.
   function row(label, value, note) {
     return '<div style="display:flex;align-items:baseline;gap:10px;' +
-      'padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
+      'padding:7px 0;border-bottom:1px solid rgba(var(--accent-rgb),0.12);">' +
       // v3.0.931 -- 128px, because "Next billing date" is seventeen characters and 108 wrapped it.
       '<span style="font-size:12px;color:var(--text-muted);flex:0 0 128px;">' + label + '</span>' +
       '<span style="font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text);">' + value + '</span>' +
@@ -3380,7 +3380,7 @@ function renderAccountStanding(me) {
     // inside it. v3.0.934's check 2b looked for the words "does not cancel", and this batch
     // legitimately rewrote them -- the third time a guard here has been anchored to prose.
     html += '<div data-cmp="overlap-notice" style="margin-top:12px;padding:10px 14px;border-radius:var(--radius);' +
-      'background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);font-size:12px;' +
+      'background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;' +
       'line-height:1.5;color:var(--text);">' +
       // v3.0.937 -- LEAD WITH WHAT THEY HAVE. This said "you keep Gold access until then", which
       // is true of the BILLING and wrong about the READER: they are Platinum, from the moment the
@@ -3410,8 +3410,8 @@ function renderAccountStanding(me) {
   // instead of muted grey, and the values in bold (see row()). THE LABELS STAY MUTED on purpose:
   // making everything loud is the same as making nothing loud, and the label is the half you
   // already know -- the value and the date are what you came to read.
-  el.innerHTML = '<div style="padding:14px 18px 6px;border:2px solid rgba(201,168,76,0.6);' +
-    'border-radius:var(--radius-lg);background:rgba(201,168,76,0.16);">' +
+  el.innerHTML = '<div style="padding:14px 18px 6px;border:2px solid rgba(var(--accent-rgb),0.6);' +
+    'border-radius:var(--radius-lg);background:rgba(var(--accent-rgb),0.16);">' +
     '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:1.5px;' +
     'text-transform:uppercase;color:var(--text);font-weight:700;margin-bottom:8px;">Where you stand</div>' +
     html + '</div>';
@@ -3484,7 +3484,7 @@ function renderAccountPasses(me, data) {
     // which is 1.27:1 on a white card -- this page is a LIGHT theme and the first version of these
     // cards was written as if it were dark. The token figure was var(--gold) at 1.92:1, which is
     // worse, because it is the biggest thing on the card and the number the card exists to show.
-    return '<div style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);' +
+    return '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);' +
       'padding:16px;display:flex;flex-direction:column;">' +
       '<div style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + PLAT + ';">' +
         months + (months === 1 ? ' MONTH' : ' MONTHS') + '</div>' +
@@ -3552,9 +3552,9 @@ function renderAccountPlans(me) {
     } else if (key !== 'copper' && isCurrent && live) {
       action = '<button class="btn btn-sm" style="margin-top:10px;width:100%;" onclick="openBillingPortal()">Manage</button>';
     }
-    return '<div style="border:1px solid ' + (markCurrent ? 'var(--gold)' : 'rgba(201,168,76,0.2)') + ';' +
+    return '<div style="border:1px solid ' + (markCurrent ? 'var(--gold)' : 'rgba(var(--accent-rgb),0.2)') + ';' +
       'border-radius:var(--radius-lg);padding:16px;background:' +
-      (markCurrent ? 'rgba(201,168,76,0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
+      (markCurrent ? 'rgba(var(--accent-rgb),0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;">' +
         '<span style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + col.bg + ';">' +
           (t.name || key).toUpperCase() + '</span>' +
@@ -3964,7 +3964,7 @@ function renderSessions() {
     }
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
-      '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:#c9a84c;font-size:13px;">It works best if you create your characters before making your session.</p>' +
+      '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:var(--accent);font-size:13px;">It works best if you create your characters before making your session.</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
     maybeShowNoCharacterHint();
     return;
@@ -5518,7 +5518,7 @@ function renderReview(data) {
       : '';
     html += '<div class="review-panel"' + (_isEstR ? '' : (' data-fx-src="review" data-fx-t="p" data-fx-id="' + mid + '"')) + '>' +   // v3.4.37
       '<div class="review-panel-head">' +
-        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(201,168,76,0.22);color:#e8c870;">' + fxRowLabel(1, 'Opening') + '</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
+        (_isEstR ? '<span class="review-panel-num" style="width:auto;padding:0 9px;border-radius:11px;background:rgba(var(--accent-rgb),0.22);color:#e8c870;">' + fxRowLabel(1, 'Opening') + '</span>' : '<span class="review-panel-num">' + num + '</span>') +   // v3.1.36 -- a word gets a pill, not the number circle
         '<span class="review-panel-title">' + escapeHtmlReview(p.title || 'Untitled panel') + '</span>' +
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
@@ -6525,13 +6525,13 @@ function charPicCss() {
     '@media (max-width:600px){#char-grid,#cstyle-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}}' +
     '.char-card--pic{overflow:hidden;}' +
     '.char-card--pic .char-card-header{display:block;position:relative;margin:-12px -12px 10px;}' +
-    '.char-card--pic .char-avatar{width:100%;height:auto;aspect-ratio:3/4;border-radius:0;border:0;border-bottom:1px solid rgba(201,168,76,0.18);}' +
+    '.char-card--pic .char-avatar{width:100%;height:auto;aspect-ratio:3/4;border-radius:0;border:0;border-bottom:1px solid rgba(var(--accent-rgb),0.18);}' +
     '.char-card--wide .char-avatar{aspect-ratio:16/9;}' +
     '.char-card--pic .char-avatar>span{font-size:44px !important;}' +
     '.char-card--pic .char-actions{position:absolute;top:8px;right:8px;z-index:2;}' +
-    '.char-card--pic .char-btn{background:rgba(20,14,6,0.78);color:#f0e8d0;border-color:rgba(201,168,76,0.45);font-size:11px;padding:4px 9px;}' +
-    '.char-card--pic .char-btn:hover{background:rgba(201,168,76,0.92);color:#1a120c;}' +
-    '.char-card--pic .char-btn-delete:hover{background:rgba(139,26,26,0.92);color:#fff;border-color:rgba(240,149,149,0.6);}';
+    '.char-card--pic .char-btn{background:rgba(var(--panel-alt-rgb),0.78);color:var(--on-panel);border-color:rgba(var(--accent-rgb),0.45);font-size:11px;padding:4px 9px;}' +
+    '.char-card--pic .char-btn:hover{background:rgba(var(--accent-rgb),0.92);color:#1a120c;}' +
+    '.char-card--pic .char-btn-delete:hover{background:rgba(var(--danger-rgb),0.92);color:#fff;border-color:rgba(240,149,149,0.6);}';
   document.head.appendChild(st);
 }
 function renderCustomStyleCards() {
@@ -8062,13 +8062,13 @@ function showErrorDialog(msg, title) {
   var ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
   var box = document.createElement('div');
-  box.style.cssText = 'background:var(--panel,#1c1b22);border:1px solid var(--gold,#c9a84c);border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
+  box.style.cssText = 'background:#1c1b22;border:1px solid var(--gold,var(--accent));border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
   var h = document.createElement('div');
   h.textContent = title || 'Heads up';
-  h.style.cssText = 'font-size:16px;font-weight:700;color:var(--gold,#c9a84c);margin-bottom:10px;';
+  h.style.cssText = 'font-size:16px;font-weight:700;color:var(--gold,var(--accent));margin-bottom:10px;';
   var p = document.createElement('div');
   p.textContent = msg;
-  p.style.cssText = 'font-size:14px;line-height:1.5;color:var(--gold,#c9a84c);margin-bottom:18px;white-space:pre-wrap;';
+  p.style.cssText = 'font-size:14px;line-height:1.5;color:var(--gold,var(--accent));margin-bottom:18px;white-space:pre-wrap;';
   var bar = document.createElement('div');
   bar.style.cssText = 'text-align:right;';
   var ok = document.createElement('button');
@@ -8574,7 +8574,7 @@ function aimpRender() {
   }
 
   if (aimpRejects.length) {
-    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(245,232,200,0.15);">' +
+    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(var(--on-panel-cream-rgb),0.15);">' +
          '<div class="form-hint" style="color:var(--gold);font-weight:600;">' + aimpRejects.length +
          ' file' + (aimpRejects.length === 1 ? '' : 's') + ' could not be used:</div>';
     aimpRejects.forEach(function (x) {
@@ -11045,7 +11045,7 @@ function refreshNovelVersionOptions(done) {
         var opts = '';
         rows.forEach(function(v) {
           var n = v.session_count === 1 ? '1 session' : (v.session_count + ' sessions');
-          opts += '<option value="' + v.version_id + '" style="background:#16100a;color:#f0e8d0;">' + escapeHtml(v.label) + ' (' + n + ')</option>';
+          opts += '<option value="' + v.version_id + '" style="background:var(--window-bg);color:var(--on-panel);">' + escapeHtml(v.label) + ' (' + n + ')</option>';
         });
         if (!opts) opts = '<option value="">Story Master \u2014 Canonical</option>';
         sel.innerHTML = opts;
@@ -14837,7 +14837,7 @@ function renderNovelSummary(sessions) {
     '</div>';
   }).join('') + '</div>';
 
-  container.innerHTML = '<div style="font-size:12px;color:rgba(201,168,76,0.5);margin-bottom:14px;">' +
+  container.innerHTML = '<div style="font-size:12px;color:rgba(var(--accent-rgb),0.5);margin-bottom:14px;">' +
     sessions.length + ' sessions in chronological order &middot; ' + totalMoments + ' total panels</div>' + html;
 }
 
@@ -15337,10 +15337,10 @@ function renderNarrativeEditor(data) {
       '<textarea class="narrative-textarea" id="narrative-before-' + i + '" placeholder="Prose leading into this panel...">' +
       (section.before || '') + '</textarea>' +
       (i < state.moments.length - 1
-        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(201,168,76,0.3);font-style:italic;">— panel image appears here —</div>' +
+        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-rgb),0.3);font-style:italic;">— panel image appears here —</div>' +
           '<textarea class="narrative-textarea" id="narrative-after-' + i + '" placeholder="Prose bridging from this panel to the next...">' +
           (section.after || '') + '</textarea>'
-        : '<div style="padding:4px 14px;font-size:10px;color:rgba(201,168,76,0.3);font-style:italic;">— final panel image appears here —</div>') +
+        : '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-rgb),0.3);font-style:italic;">— final panel image appears here —</div>') +
     '</div>';
   });
 
@@ -16313,8 +16313,8 @@ function rgCellRow(slot, question) {
   var isActive = (rgState.active === slot);
   var tint = (slot === 'from') ? RG_FROM_LINE : RG_TO_LINE;
   return '<div onclick="rgSetActive(\'' + slot + '\')" style="cursor:pointer;padding:6px 8px;border-radius:6px;' +
-    'border:1px solid ' + (isActive ? 'rgba(216,184,92,0.55)' : 'rgba(201,168,76,0.18)') + ';' +
-    'background:' + (isActive ? 'rgba(201,168,76,0.08)' : 'transparent') + ';">' +
+    'border:1px solid ' + (isActive ? 'rgba(var(--accent-bright-rgb),0.55)' : 'rgba(var(--accent-rgb),0.18)') + ';' +
+    'background:' + (isActive ? 'rgba(var(--accent-rgb),0.08)' : 'transparent') + ';">' +
     '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + tint +
     ';border:1px solid rgba(255,255,255,0.4);margin-right:6px;vertical-align:middle;"></span>' +
     '<span style="font-size:11px;color:var(--gold-dim);">' + question + '</span>' +
@@ -16403,8 +16403,8 @@ function rgRedrawRows() {
     if (r.id && r.id.indexOf('rg-readout') === 0) continue;
     if (r.querySelector && r.querySelector('[id^="rg-readout-"]')) {
       var isActive = (def.cells[ci] === rgState.active);
-      r.style.borderColor = isActive ? 'rgba(216,184,92,0.55)' : 'rgba(201,168,76,0.18)';
-      r.style.background = isActive ? 'rgba(201,168,76,0.08)' : 'transparent';
+      r.style.borderColor = isActive ? 'rgba(var(--accent-bright-rgb),0.55)' : 'rgba(var(--accent-rgb),0.18)';
+      r.style.background = isActive ? 'rgba(var(--accent-rgb),0.08)' : 'transparent';
       ci++;
     }
   }
@@ -16466,7 +16466,7 @@ function rgPaintSizes() {
   var s = '<span style="font-size:11px;color:var(--gold-dim);margin-right:6px;">Marker size</span>';
   for (var i = 0; i < RG_SIZES.length; i++) {
     s += '<button class="btn btn-sm" onclick="rgSetSize(' + i + ')" style="margin-right:4px;' +
-      (i === rgState.size ? 'border-color:rgba(216,184,92,0.75);' : 'opacity:0.65;') + '">' + RG_SIZE_NAMES[i] + '</button>';
+      (i === rgState.size ? 'border-color:rgba(var(--accent-bright-rgb),0.75);' : 'opacity:0.65;') + '">' + RG_SIZE_NAMES[i] + '</button>';
   }
   s += '<span style="font-size:11px;color:var(--gold-dim);margin-left:4px;">or scroll on the picture</span>';
   box.innerHTML = s;
@@ -17856,7 +17856,7 @@ function loadAdminLibrary() {
 }
 function adminLibCard(it) {
   var card = document.createElement('div');
-  card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.5);display:flex;flex-direction:column;';
+  card.style.cssText = 'border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;background:rgba(var(--panel-deeper-rgb),0.5);display:flex;flex-direction:column;';
   var img = document.createElement('img');
   img.setAttribute('loading', 'lazy');
   img.src = it.image_url;
@@ -17867,14 +17867,14 @@ function adminLibCard(it) {
   if (it.caption) {
     var cap = document.createElement('div');
     cap.textContent = it.caption;
-    cap.style.cssText = 'font-size:12px;font-style:italic;color:rgba(240,232,208,0.75);padding:6px 8px;';
+    cap.style.cssText = 'font-size:12px;font-style:italic;color:rgba(var(--on-panel-rgb),0.75);padding:6px 8px;';
     card.appendChild(cap);
   }
   // v3.3.41 -- who shared it, and from which campaign: what the name filter searches.
   if (it.who || it.campaign) {
     var by = document.createElement('div');
     by.textContent = (it.who ? 'by ' + it.who : '') + (it.who && it.campaign ? ' \u00b7 ' : '') + (it.campaign || '');
-    by.style.cssText = 'font-size:11px;color:rgba(201,168,76,0.75);padding:0 8px 2px;';
+    by.style.cssText = 'font-size:11px;color:rgba(var(--accent-rgb),0.75);padding:0 8px 2px;';
     card.appendChild(by);
   }
   var btn = document.createElement('button');
@@ -17960,7 +17960,7 @@ function loadAdminStories() {
 }
 function adminStoryCard(it) {
   var card = document.createElement('div');
-  card.style.cssText = 'border:1px solid rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;background:rgba(12,8,4,0.5);display:flex;flex-direction:column;';
+  card.style.cssText = 'border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;background:rgba(var(--panel-deeper-rgb),0.5);display:flex;flex-direction:column;';
   var a = document.createElement('a');
   a.href = it.pdf_url; a.target = '_blank'; a.rel = 'noopener'; a.style.cssText = 'display:block;text-decoration:none;';
   if (it.cover_url) {
@@ -17970,12 +17970,12 @@ function adminStoryCard(it) {
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
-    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(201,168,76,0.45);font-size:12px;text-align:center;padding:8px;';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:#160e06;color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
     a.appendChild(ph);
   }
   card.appendChild(a);
   var meta = document.createElement('div');
-  meta.style.cssText = 'font-size:12px;color:rgba(240,232,208,0.8);padding:6px 8px;';
+  meta.style.cssText = 'font-size:12px;color:rgba(var(--on-panel-rgb),0.8);padding:6px 8px;';
   meta.textContent = (it.title || 'Untitled') + (it.author ? (' by ' + it.author) : '');
   card.appendChild(meta);
   var btn = document.createElement('button');
@@ -18308,7 +18308,7 @@ function renderStoryboard() {
       ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
       : '<div class="moment-img-placeholder">' +
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
-          '<div style="font-size:11px;color:rgba(201,168,76,0.3);margin-top:6px;">No image yet</div>' +
+          '<div style="font-size:11px;color:rgba(var(--accent-rgb),0.3);margin-top:6px;">No image yet</div>' +
         '</div>';
     var _shapeVal = (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard');
     var _canLock = canEditCurrentStatus();
@@ -19015,7 +19015,7 @@ function renderSessions() {
     }
     list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
-      '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:#c9a84c;font-size:13px;">It works best if you create your characters before making your session.</p>' +
+      '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:var(--accent);font-size:13px;">It works best if you create your characters before making your session.</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
     maybeShowNoCharacterHint();
     return;
@@ -20941,7 +20941,7 @@ function renderNovelSummary(sessions) {
     '</div>';
   }).join('') + '</div>';
 
-  container.innerHTML = '<div style="font-size:12px;color:rgba(201,168,76,0.5);margin-bottom:14px;">' +
+  container.innerHTML = '<div style="font-size:12px;color:rgba(var(--accent-rgb),0.5);margin-bottom:14px;">' +
     sessions.length + ' sessions in chronological order &middot; ' + totalMoments + ' total panels</div>' + html;
 }
 
@@ -21441,10 +21441,10 @@ function renderNarrativeEditor(data) {
       '<textarea class="narrative-textarea" id="narrative-before-' + i + '" placeholder="Prose leading into this panel...">' +
       (section.before || '') + '</textarea>' +
       (i < state.moments.length - 1
-        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(201,168,76,0.3);font-style:italic;">— panel image appears here —</div>' +
+        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-rgb),0.3);font-style:italic;">— panel image appears here —</div>' +
           '<textarea class="narrative-textarea" id="narrative-after-' + i + '" placeholder="Prose bridging from this panel to the next...">' +
           (section.after || '') + '</textarea>'
-        : '<div style="padding:4px 14px;font-size:10px;color:rgba(201,168,76,0.3);font-style:italic;">— final panel image appears here —</div>') +
+        : '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-rgb),0.3);font-style:italic;">— final panel image appears here —</div>') +
     '</div>';
   });
 
@@ -21846,7 +21846,7 @@ function loadMemberCap() {
     .then(function (d) {
       var t = memberCapLineText(d);
       el.textContent = t;
-      el.style.color = (d && d.full) ? '#e8b25c' : 'rgba(245,232,200,0.75)';
+      el.style.color = (d && d.full) ? '#e8b25c' : 'rgba(var(--on-panel-cream-rgb),0.75)';
       el.style.display = t ? '' : 'none';
     })
     .catch(function () { el.style.display = 'none'; });
@@ -21858,7 +21858,7 @@ function loadMembers() {
   loadMemberCap();   // v3.2.45
   var list = document.getElementById('members-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading members…</div>';
+  list.innerHTML = '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">Loading members…</div>';
 
   fetch('/api/campaigns/' + cur.id + '/members')
     .then(function(r) { return r.json(); })
@@ -21879,7 +21879,7 @@ function renderMembersList() {
   var list = document.getElementById('members-list');
   if (!list) return;
   if (!state.members.length) {
-    list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">No members yet.</div>';
+    list.innerHTML = '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">No members yet.</div>';
     return;
   }
   var meUserId = (state.user && state.user.id) || null;
@@ -21893,7 +21893,7 @@ function renderMembersList() {
     var roleBadge = isDM
       ? '<span class="role-badge role-badge-dm">Story Master</span>'
       : '<span class="role-badge role-badge-player">Member</span>';
-    var meTag = isMe ? '<span style="font-size:11px;color:rgba(245,232,200,0.75);">(you)</span>' : '';
+    var meTag = isMe ? '<span style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.75);">(you)</span>' : '';
     var charInfo = m.character_name
       ? 'Playing ' + escapeHtml(m.character_name) + (m.character_class ? ' (' + escapeHtml(m.character_class) + ')' : '')
       : (isDM ? 'No character owned' : 'No character');
@@ -21930,7 +21930,7 @@ function loadPendingInvites() {
   loadMemberCap();   // v3.2.45 -- an invite sent, revoked or reactivated moves the count
   var list = document.getElementById('pending-invites-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading invites…</div>';
+  list.innerHTML = '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">Loading invites…</div>';
 
   fetch('/api/campaigns/' + cur.id + '/invites')
     .then(function(r) { return r.json(); })
@@ -21951,7 +21951,7 @@ function renderPendingInvites() {
   var list = document.getElementById('pending-invites-list');
   if (!list) return;
   if (!state.pendingInvites.length) {
-    list.innerHTML = '<div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">No pending invites.</div>';
+    list.innerHTML = '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">No pending invites.</div>';
     return;
   }
   list.innerHTML = state.pendingInvites.map(function(inv) {
@@ -24245,7 +24245,7 @@ function renderPassesConfig(data) {
     [['tokens', 'Tokens', 'number', '1'],
      ['price_dollars', 'Price ($)', 'number', '0.01']].forEach(function (f) {
       var val = (p[f[0]] === null || p[f[0]] === undefined) ? '' : p[f[0]];
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);">' +
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(var(--accent-rgb),0.12);">' +
         '<label class="form-label" for="pcf-' + id + '-' + f[0] + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + f[1] + '</label>' +
         '<input id="pcf-' + id + '-' + f[0] + '" class="form-input pass-config-input" type="' + f[2] + '" min="0" step="' + f[3] + '" ' +
         'data-pass="' + id + '" data-field="' + f[0] + '" value="' + val + '" oninput="passPerMonth(\'' + id + '\')" ' +
@@ -24326,8 +24326,8 @@ function renderTiersConfig(data) {
       var val = (t[f] === null || t[f] === undefined) ? '' : t[f];
       var label = TIER_FIELD_LABELS[f] || f;
       // v3.3.58 -- TD-1071. Ian: "So I know not to over do it. Those CO tokens are like a bonus."
-      var labelNote = (f === 'signup_bonus') ? '<span style="display:block;margin-top:3px;font-size:11.5px;font-weight:400;letter-spacing:0;text-transform:none;color:rgba(240,232,208,0.72);">Remember they keep the Free Trial CO tokens as well, even on a sign-up that went right to payment.</span>' : '';
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(201,168,76,0.12);break-inside:avoid;">' +
+      var labelNote = (f === 'signup_bonus') ? '<span style="display:block;margin-top:3px;font-size:11.5px;font-weight:400;letter-spacing:0;text-transform:none;color:rgba(var(--on-panel-rgb),0.72);">Remember they keep the Free Trial CO tokens as well, even on a sign-up that went right to payment.</span>' : '';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(var(--accent-rgb),0.12);break-inside:avoid;">' +
         '<label class="form-label" for="tcf-' + tierKey + '-' + f + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + label + labelNote + '</label>' +
         '<input id="tcf-' + tierKey + '-' + f + '" class="form-input tier-config-input" type="number" min="0" step="1" ' +
         'data-tier="' + tierKey + '" data-field="' + f + '" value="' + val + '" ' +
@@ -24482,13 +24482,13 @@ function renderStats(d) {
   var _stWide = window.innerWidth > 900;
   box.innerHTML = '<div id="stats-split" style="display:flex;gap:' + (_stWide ? '0' : '28px') + ';flex-wrap:' + (_stWide ? 'nowrap' : 'wrap') + ';align-items:' + (_stWide ? 'stretch' : 'flex-start') + ';">' +
     '<div id="stats-left" style="flex:0 ' + (_stWide ? '0 ' + _statsSplitBasis() : '1 520px') + ';min-width:240px;">' + html + '</div>' +
-    (_stWide ? '<div id="stats-splitter" onmousedown="statsSplitStart(event)" title="Drag to resize" style="flex:0 0 14px;align-self:stretch;cursor:col-resize;display:flex;align-items:center;justify-content:center;margin:0 7px;"><div style="width:3px;height:60px;background:rgba(216,184,92,0.5);border-radius:2px;"></div></div>' : '') +
+    (_stWide ? '<div id="stats-splitter" onmousedown="statsSplitStart(event)" title="Drag to resize" style="flex:0 0 14px;align-self:stretch;cursor:col-resize;display:flex;align-items:center;justify-content:center;margin:0 7px;"><div style="width:3px;height:60px;background:rgba(var(--accent-bright-rgb),0.5);border-radius:2px;"></div></div>' : '') +
     '<div style="flex:1 1 520px;min-width:0;"><div class="stats-subhead" style="margin-top:0;">Users \u00b7 last active <span id="stats-lastactive-count" style="font-weight:400;opacity:0.75;"></span>' +
       // v3.4.52 -- Ian: a small refresh button over the user grid (reloads the list only)
       ' <button type="button" class="btn btn-xs" id="stats-lastactive-refresh" onclick="loadUserLastActive()" title="Reload the user list" style="margin-left:8px;">&#8635; Refresh</button></div>' +
     // v3.2.61 -- Ian: the rows came out black on dark brown. The box now sets its own dark background, light text
     // and dark scrollbars instead of inheriting the pane's.
-    '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;font-size:12px;">Loading\u2026</div></div>' +
+    '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--modal-rgb),0.94);color:var(--on-panel);color-scheme:dark;font-size:12px;">Loading\u2026</div></div>' +
     '</div>';
   loadUserLastActive();
 }
@@ -24514,8 +24514,8 @@ function renderUserLastActive(d) {
   var _ord = _ulaOrder(cols);   // v3.4.52 -- Ian's order and names
   if (cnt) cnt.textContent = '(' + rows.length + (d.capped ? '+' : '') + ')';
   if (!rows.length) { out.textContent = 'No rows.'; return; }
-  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(201,168,76,0.85);white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.25);';
-  var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';   // v3.2.61 -- light text
+  var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(var(--accent-rgb),0.85);white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.25);';
+  var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';   // v3.2.61 -- light text
   var h = '<table style="border-collapse:collapse;width:100%;"><thead><tr>' +
     _ord.map(function (o) { return '<th style="' + th + '">' + _ulaCell(o.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
   rows.forEach(function (r) { h += '<tr>' + _ord.map(function (o) { return '<td style="' + td + '">' + _ulaCell(r[o.col]) + '</td>'; }).join('') + '</tr>'; });
@@ -25540,7 +25540,7 @@ function fiPick() { var i = fiEl('fileimport-input'); if (i) i.click(); }
 function fiDragOver(ev) {
   ev.preventDefault();
   var z = fiEl('fileimport-zone');
-  if (z) { z.style.borderColor = 'var(--gold)'; z.style.background = 'rgba(201,168,76,0.10)'; }
+  if (z) { z.style.borderColor = 'var(--gold)'; z.style.background = 'rgba(var(--accent-rgb),0.10)'; }
 }
 function fiDragLeave() {
   var z = fiEl('fileimport-zone');
@@ -27563,7 +27563,7 @@ function finalizeShowPrintingVersion(at) {
   // the container and rendered dark text on a dark panel -- present, and unreadable. The estimate
   // line it sits under is gold at 60 percent; this is the same gold, a little brighter, because it
   // is the more important of the two.
-  d.style.cssText = 'font-size:11px;color:rgba(201,168,76,0.75);margin-bottom:4px;';
+  d.style.cssText = 'font-size:11px;color:rgba(var(--accent-rgb),0.75);margin-bottom:4px;';
   d.textContent = 'Printing the version you saved at ' + when + '.';
   var old = document.getElementById('print-approved-at');
   if (old && old.parentNode) old.parentNode.removeChild(old);
@@ -27816,9 +27816,9 @@ function showPrintBtnMsg(text, kind) {
   var ok = kind === 'ok';
   var info = kind === 'info';
   el.style.display = 'block';
-  el.style.background = ok ? 'rgba(120,180,90,0.12)' : (info ? 'rgba(201,168,76,0.12)' : 'rgba(201,120,76,0.12)');
-  el.style.border = '1px solid ' + (ok ? 'rgba(120,180,90,0.4)' : (info ? 'rgba(201,168,76,0.4)' : 'rgba(201,120,76,0.4)'));
-  el.style.color = ok ? 'rgba(200,235,180,0.95)' : (info ? 'rgba(232,213,163,0.95)' : 'rgba(245,200,180,0.95)');
+  el.style.background = ok ? 'rgba(120,180,90,0.12)' : (info ? 'rgba(var(--accent-rgb),0.12)' : 'rgba(201,120,76,0.12)');
+  el.style.border = '1px solid ' + (ok ? 'rgba(120,180,90,0.4)' : (info ? 'rgba(var(--accent-rgb),0.4)' : 'rgba(201,120,76,0.4)'));
+  el.style.color = ok ? 'rgba(200,235,180,0.95)' : (info ? 'rgba(var(--accent-pale-rgb),0.95)' : 'rgba(245,200,180,0.95)');
   el.textContent = text;
 }
 function printProgress(pct) {
@@ -28160,7 +28160,7 @@ function shippingOptionsLine(j) {
   var parts = opts.map(function (o) {
     return escapeHtmlPrint(o.tier) + ' $' + Number(o.customerCharge || 0).toFixed(2);
   }).join(' \u00b7 ');
-  return '<div style="margin-top:4px;font-size:11px;color:rgba(245,232,200,0.55);">' +
+  return '<div style="margin-top:4px;font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.55);">' +
     'Total by delivery option: ' + parts + '</div>';
 }
 
@@ -28168,8 +28168,8 @@ function shippingNoteInReview(quote) {
   var sum = document.getElementById('print-review-summary');
   if (!sum || !quote || !quote.shippingNote) return;
   sum.insertAdjacentHTML('beforeend',
-    '<div style="border-top:1px solid rgba(201,168,76,0.25);margin-top:8px;padding-top:8px;' +
-    'font-size:12px;color:#c9a84c;">' + escapeHtmlPrint(quote.shippingNote) + '</div>');
+    '<div style="border-top:1px solid rgba(var(--accent-rgb),0.25);margin-top:8px;padding-top:8px;' +
+    'font-size:12px;color:var(--accent);">' + escapeHtmlPrint(quote.shippingNote) + '</div>');
 }
 
 function reorderNoteInReview(R, quote) {
@@ -28177,7 +28177,7 @@ function reorderNoteInReview(R, quote) {
   if (!sum) return;
   var when = '';
   try { if (R.when) when = ' on ' + new Date(R.when).toLocaleDateString(); } catch (e) {}
-  var html = '<div style="border-top:1px solid rgba(201,168,76,0.25);margin-top:8px;padding-top:8px;font-size:12px;color:rgba(245,232,200,0.75);">' +
+  var html = '<div style="border-top:1px solid rgba(var(--accent-rgb),0.25);margin-top:8px;padding-top:8px;font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.75);">' +
     'Reprint of order ' + escapeHtmlPrint(R.label) + ' using the original print files.';
   if (R.oldCharge != null) {
     html += ' You paid $' + R.oldCharge.toFixed(2) + ' ' + escapeHtmlPrint(R.oldCurrency) + when +
@@ -29202,7 +29202,7 @@ function quotePrintOrder() {
         // three parts now add up to the number being charged.
         var _tx = Number((j.breakdown && j.breakdown.tax) || 0);
         out.innerHTML = '<strong style="color:var(--gold);">$' + Number(j.customerCharge).toFixed(2) + ' ' + escapeHtmlPrint(j.currency) + '</strong> ' +
-          '<span style="color:rgba(245,232,200,0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) +
+          '<span style="color:rgba(var(--on-panel-cream-rgb),0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) +
           ' + shipping $' + Number(j.breakdown.shipping).toFixed(2) +
           (_tx > 0 ? (' + tax $' + _tx.toFixed(2)) : '') + ')</span>' +
           // v3.0.880 -- TD-758. SAY IT WHERE THE PRICE IS. A reader who picked the
@@ -29210,7 +29210,7 @@ function quotePrintOrder() {
           // discover it on a receipt. The server composes the sentence so this panel
           // and the review panel cannot drift.
           (j.shippingNote
-            ? ('<div style="margin-top:4px;font-size:11px;color:#c9a84c;">' + escapeHtmlPrint(j.shippingNote) + '</div>')
+            ? ('<div style="margin-top:4px;font-size:11px;color:var(--accent);">' + escapeHtmlPrint(j.shippingNote) + '</div>')
             : '') +
           // v3.0.882 -- TD-757 stage 1.
           shippingOptionsLine(j);
@@ -29536,7 +29536,7 @@ function renderPrintReview(body, quote) {
   if (!panel || !sum) return;
   function row(label, value) {
     return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
-      '<span style="color:rgba(245,232,200,0.55);">' + escapeHtmlPrint(label) + '</span>' +
+      '<span style="color:rgba(var(--on-panel-cream-rgb),0.55);">' + escapeHtmlPrint(label) + '</span>' +
       '<span style="color:var(--cream);text-align:right;">' + escapeHtmlPrint(value) + '</span></div>';
   }
   // v3.0.796 -- TD-601. NAME THE VALUE BEING ORDERED, not whatever the control says now.
@@ -29570,7 +29570,7 @@ function renderPrintReview(body, quote) {
   html += row('Quantity', String(body.quantity));
   html += row('Ship to', addr);
   html += row('Shipping', body.shippingLevel);
-  html += '<div style="border-top:1px solid rgba(201,168,76,0.25);margin-top:8px;padding-top:8px;"></div>';
+  html += '<div style="border-top:1px solid rgba(var(--accent-rgb),0.25);margin-top:8px;padding-top:8px;"></div>';
   // v3.0.425 -- the breakdown, so the total can be checked rather than taken on trust.
   try {
     var _bd = quote && quote.breakdown;
@@ -32117,7 +32117,7 @@ function finalizeBuildNav(first, last) {
   if (nav) {
     var h = '';
     for (var n = first; n <= last; n++) {
-      h += '<div data-page="' + n + '" onclick="finalizeGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(245,232,200,0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
+      h += '<div data-page="' + n + '" onclick="finalizeGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(var(--on-panel-cream-rgb),0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
     }
     nav.innerHTML = h;
   }
@@ -32283,7 +32283,7 @@ function finalizeDecorateNavFix() {
     // gutter, and the dialog title says what it actually is.
     b.textContent = 'Edit';
     b.style.cssText = 'font-size:9px;line-height:1.5;padding:0 3px;border-radius:4px;' +   // v3.0.414 -- 3px so 'Edit' fits the 30px slot; 4px radius matches every other button
-      'background:rgba(201,168,76,0.22);border:1px solid rgba(201,168,76,0.5);color:var(--gold);cursor:pointer;';
+      'background:rgba(var(--accent-rgb),0.22);border:1px solid rgba(var(--accent-rgb),0.5);color:var(--gold);cursor:pointer;';
     b.setAttribute('data-fix-page', pg);
     b.title = 'This page holds ' + _fixOptions[pg].heldIn + 'in of ' + _fixOptions[pg].boxIn + 'in';
     b.onclick = function (ev) { ev.stopPropagation(); finalizeOpenFixDialog(Number(this.getAttribute('data-fix-page'))); };
@@ -32302,7 +32302,7 @@ function finalizeBuildAfterNav(first, last) {
     // fixed-width button cell: the number sits still whether or not it has a neighbour.
     h += '<div data-page="' + n + '" onclick="finalizeAfterGoToPage(' + n + ')" ' +
       'style="display:flex;align-items:center;cursor:pointer;font-size:10px;line-height:1.6;' +
-      'color:rgba(245,232,200,0.6);padding:0 3px;border-radius:4px;">' +
+      'color:rgba(var(--on-panel-cream-rgb),0.6);padding:0 3px;border-radius:4px;">' +
         '<span style="flex:0 0 20px;text-align:right;">' + n + '</span>' +
         '<span class="fix-slot" style="flex:0 0 30px;display:flex;justify-content:flex-end;"></span>' +
       '</div>';
@@ -32331,8 +32331,8 @@ function finalizeNavHighlight(navId, scrollId) {
   if (best == null) return;
   for (var j = 0; j < nav.children.length; j++) {
     var el = nav.children[j], on = (el.getAttribute('data-page') == best);
-    el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)';
-    el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent';
+    el.style.color = on ? 'var(--gold)' : 'rgba(var(--on-panel-cream-rgb),0.6)';
+    el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent';
     // v3.0.609 -- THE SPINE FOLLOWS AGAIN, AND THIS REVERSES v3.0.606 ON PURPOSE.
     // Ian, 2026-08-10: "when the preview panel scrolls past the page number on the right, the page
     // number panel should scroll too to always keep the page number you are on visible."
@@ -32425,10 +32425,10 @@ function finalizeOpenFixDialog(viewerPage) {
       ? ('<span style="margin-left:8px;font-size:11px;color:#8a6a2a;">by ' +
          '<input type="number" class="fix-pct" data-for="' + ix + '" value="10" min="1" max="75" step="5" ' +
          'onclick="event.stopPropagation();" onfocus="finalizeFixPickRadio(' + ix + ');" ' +
-         'style="width:46px;padding:1px 4px;font-size:11px;border-radius:3px;border:1px solid rgba(201,168,76,0.5);' +
-         'background:rgba(201,168,76,0.10);color:#8a6a2a;"> percent</span>' + _maxBox)
+         'style="width:46px;padding:1px 4px;font-size:11px;border-radius:3px;border:1px solid rgba(var(--accent-rgb),0.5);' +
+         'background:rgba(var(--accent-rgb),0.10);color:#8a6a2a;"> percent</span>' + _maxBox)
       : '';
-    h += '<label style="display:block;margin-bottom:8px;padding:7px 9px;border-radius:4px;border:1px solid rgba(201,168,76,0.18);' +
+    h += '<label style="display:block;margin-bottom:8px;padding:7px 9px;border-radius:4px;border:1px solid rgba(var(--accent-rgb),0.18);' +
       (dis ? 'cursor:not-allowed;' : 'cursor:pointer;') + '">' +   // v3.0.397 -- no opacity: colour carries it
       '<input type="radio" name="fixopt" value="' + ix + '"' + (dis ? ' disabled' : '') + ' style="margin-right:8px;">' +
       '<span style="color:' + (COL[o.verdict] || COL.GREY) + ';font-weight:600;">' + o.label + '</span>' + _pctBox +
@@ -32487,8 +32487,8 @@ function finalizeFixBusyBar(on) {
     if (!bar) {
       bar = document.createElement('div');
       bar.id = '__aiLoopBar';
-      bar.style.cssText = 'margin:0 0 4px;height:6px;border-radius:3px;overflow:hidden;background:rgba(201,168,76,0.18);';
-      bar.innerHTML = '<div style="height:100%;width:35%;border-radius:3px;background:#c9a84c;animation:aiLoopSlide 1.2s ease-in-out infinite;"></div>';
+      bar.style.cssText = 'margin:0 0 4px;height:6px;border-radius:3px;overflow:hidden;background:rgba(var(--accent-rgb),0.18);';
+      bar.innerHTML = '<div style="height:100%;width:35%;border-radius:3px;background:var(--accent);animation:aiLoopSlide 1.2s ease-in-out infinite;"></div>';
       if (!document.getElementById('__aiLoopBarStyle')) {
         var st = document.createElement('style');
         st.id = '__aiLoopBarStyle';
@@ -32673,7 +32673,7 @@ function finalizeAfterGoToPage(n) {
     if (canvas) after.scrollTop = canvas.offsetTop - (after.firstChild ? after.firstChild.offsetTop : 0) - 2;
   }
   var nav = document.getElementById('finalize-after-nav');
-  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
+  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(var(--on-panel-cream-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; } }
 }
 // After-pane zoom: scales the rendered PDF canvases. 'Fit' (default) lets them fill the pane width.
 // Persisted across refreshes so the user's choice sticks.
@@ -33429,7 +33429,7 @@ function finalizeGoToPage(n) {
     });
   }
   var nav = document.getElementById('finalize-page-nav');
-  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(245,232,200,0.6)'; el.style.background = on ? 'rgba(201,168,76,0.15)' : 'transparent'; } }
+  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(var(--on-panel-cream-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; } }
 }
 var LAYOUT_DISPLAY = {
   'classic': 'Picture Book', 'paired': 'Picture Book', 'picture book': 'Picture Book',
@@ -33475,14 +33475,14 @@ function finalizeUpdateHeader() {
   // v3.0.498 -- Narrative removed from this list with the option itself (TD-168).
   // optLabel reads the option text out of the #cl-narr <select>, which no longer exists.
   var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
-    (desc ? ' <span style="color:rgba(245,232,200,0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
-  h += '<div style="color:rgba(245,232,200,0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(201,168,76,0.6);">&middot;</span> ') + '</div>';
+    (desc ? ' <span style="color:rgba(var(--on-panel-cream-rgb),0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
+  h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(var(--accent-rgb),0.6);">&middot;</span> ') + '</div>';
   // SESSIONS INCLUDED. Sits under the layout attributes and above the Optimize button. Highlighted
   // only when some are left out -- that is the case worth catching before ordering a print.
   if (_finalizeSessInc != null && _finalizeSessTotal != null) {
     var _sAll = (_finalizeSessInc >= _finalizeSessTotal);
     h += '<div style="margin-top:5px;font-size:11px;letter-spacing:0.03em;color:' +
-         (_sAll ? 'rgba(245,232,200,0.75)' : 'var(--gold)') + ';">Sessions included: <strong>' +
+         (_sAll ? 'rgba(var(--on-panel-cream-rgb),0.75)' : 'var(--gold)') + ';">Sessions included: <strong>' +
          _finalizeSessInc + ' of ' + _finalizeSessTotal + '</strong>' +
          (_sAll ? '' : ' <span style="font-style:italic;opacity:0.8;">(some sessions are excluded)</span>') + '</div>';
   }
@@ -33498,13 +33498,13 @@ function finalizeShowFreeAnalysis(flagged, numPages) {
   out.style.maxHeight = '540px';   // scan fills the panel until Optimize runs
   var h = '';
   if (!flagged.length) {
-    h += '<div style="color:rgba(245,232,200,0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
+    h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
   } else {
     h += '<div style="color:var(--cream);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled:</div>';
     flagged.forEach(function (f) {
-      h += '<div onclick="finalizeGoToPage(' + f.page + ')" title="Go to page ' + f.page + '" style="cursor:pointer;border:1px solid rgba(201,168,76,0.3);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--cream);"><span style="font-family:var(--font-display);color:var(--gold);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
+      h += '<div onclick="finalizeGoToPage(' + f.page + ')" title="Go to page ' + f.page + '" style="cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--cream);"><span style="font-family:var(--font-display);color:var(--gold);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
     });
-    h += '<div style="color:rgba(245,232,200,0.7);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them.</div>';
+    h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.7);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them.</div>';
   }
   out.innerHTML = h;
 }
@@ -34099,8 +34099,8 @@ function _runLayoutAiOptimize() {
         if (!bar) {
           bar = document.createElement('div');
           bar.id = '__aiLoopBar';
-          bar.style.cssText = 'margin:0 0 4px;height:6px;border-radius:3px;overflow:hidden;background:rgba(201,168,76,0.18);';
-          bar.innerHTML = '<div id="__aiLoopBarFill" style="height:100%;width:35%;border-radius:3px;background:#c9a84c;animation:aiLoopSlide 1.2s ease-in-out infinite;"></div>';
+          bar.style.cssText = 'margin:0 0 4px;height:6px;border-radius:3px;overflow:hidden;background:rgba(var(--accent-rgb),0.18);';
+          bar.innerHTML = '<div id="__aiLoopBarFill" style="height:100%;width:35%;border-radius:3px;background:var(--accent);animation:aiLoopSlide 1.2s ease-in-out infinite;"></div>';
           if (!document.getElementById('__aiLoopBarStyle')) {
             var st = document.createElement('style');
             st.id = '__aiLoopBarStyle';
@@ -34285,15 +34285,15 @@ function _runLayoutAiOptimize() {
         if (!panel) {
           panel = document.createElement('div');
           panel.id = '__aiLoopLog';
-          panel.style.cssText = 'margin:8px 4px 0 4px;padding:8px 10px;max-height:180px;overflow-y:auto;background:#0c0805;border:1px solid rgba(201,168,76,0.3);border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#d8c79a;';
+          panel.style.cssText = 'margin:8px 4px 0 4px;padding:8px 10px;max-height:180px;overflow-y:auto;background:#0c0805;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#d8c79a;';
           var title = document.createElement('div');
-          title.style.cssText = 'color:#c9a84c;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;';
+          title.style.cssText = 'color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;';
           title.textContent = 'AI optimize log';
           panel.appendChild(title);
           host.parentNode.insertBefore(panel, host.nextSibling);
         }
         var line = document.createElement('div');
-        line.style.color = (kind === 'applied') ? '#7bd88f' : (kind === 'reject') ? '#e0a05a' : (kind === 'stop') ? '#c9a84c' : '#d8c79a';
+        line.style.color = (kind === 'applied') ? '#7bd88f' : (kind === 'reject') ? '#e0a05a' : (kind === 'stop') ? 'var(--accent)' : '#d8c79a';
         line.textContent = txt;
         panel.appendChild(line);
         panel.scrollTop = panel.scrollHeight;
@@ -34980,15 +34980,15 @@ function finalizeFreeAnalysis() {
     var fill = measureCanvasFill(canvases[n]);
     if (fill != null && fill < 0.62) flagged.push({ page: n + 1, fill: Math.round(fill * 100) });
   }
-  var h = '<div style="font-size:11px;color:rgba(245,232,200,0.5);margin-bottom:8px;">Free layout scan (no tokens) &middot; ' + canvases.length + ' pages</div>';
+  var h = '<div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.5);margin-bottom:8px;">Free layout scan (no tokens) &middot; ' + canvases.length + ' pages</div>';
   if (!flagged.length) {
-    h += '<div style="color:rgba(245,232,200,0.6);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
+    h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.6);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
   } else {
     h += '<div style="color:var(--cream);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled &mdash; content stops high with space below:</div>';
     flagged.forEach(function (f) {
-      h += '<div style="border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;"><span style="font-family:var(--font-display);color:var(--gold);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
+      h += '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;"><span style="font-family:var(--font-display);color:var(--gold);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
     });
-    h += '<div style="color:rgba(245,232,200,0.5);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them (grow image / flow text).</div>';
+    h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.5);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them (grow image / flow text).</div>';
   }
   out.innerHTML = h;
   out.setAttribute('data-mode', 'free');
@@ -34999,23 +34999,23 @@ function renderLayoutAiResult(j) {
   if (!out) return;
   if (!j || j.error) { out.innerHTML = '<div style="color:#e0a0a0;font-size:13px;">Error: ' + escapeHtml((j && j.error) || 'no response') + '</div>'; return; }
   var h = '';
-  h += '<div style="font-size:11px;color:rgba(245,232,200,0.5);margin-bottom:8px;">' + escapeHtml(j.layout || '') + ' &middot; ' + escapeHtml(j.model || '') + ' &middot; ' + (j.total_pages || 0) + ' pages &middot; ' + (j.pages_flagged || 0) + ' flagged &middot; ' + (j.applied != null ? j.applied + ' applied &middot; ' : '') + (Math.round((j.ms || 0) / 100) / 10) + 's</div>';
+  h += '<div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.5);margin-bottom:8px;">' + escapeHtml(j.layout || '') + ' &middot; ' + escapeHtml(j.model || '') + ' &middot; ' + (j.total_pages || 0) + ' pages &middot; ' + (j.pages_flagged || 0) + ' flagged &middot; ' + (j.applied != null ? j.applied + ' applied &middot; ' : '') + (Math.round((j.ms || 0) / 100) / 10) + 's</div>';
   if (j.settings) {
     var _co = j.settings.co || {};
     var _coStr = Object.keys(_co).map(function (k) { return k + '=' + _co[k]; }).join(', ');
-    h += '<div style="font-size:10px;color:rgba(245,232,200,0.4);margin-bottom:8px;font-family:monospace;word-break:break-all;">rendered: layout=' + escapeHtml(String(j.settings.layout || '')) + ' &middot; panels=' + (j.settings.panels || 0) + (_coStr ? ' &middot; ' + escapeHtml(_coStr) : '') + '</div>';
+    h += '<div style="font-size:10px;color:rgba(var(--on-panel-cream-rgb),0.4);margin-bottom:8px;font-family:monospace;word-break:break-all;">rendered: layout=' + escapeHtml(String(j.settings.layout || '')) + ' &middot; panels=' + (j.settings.panels || 0) + (_coStr ? ' &middot; ' + escapeHtml(_coStr) : '') + '</div>';
   }
-  if (j.book_assessment) h += '<div style="background:rgba(201,168,76,0.08);border-left:3px solid var(--gold);border-radius:4px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--cream);margin-bottom:10px;">' + escapeHtml(j.book_assessment) + '</div>';
+  if (j.book_assessment) h += '<div style="background:rgba(var(--accent-rgb),0.08);border-left:3px solid var(--gold);border-radius:4px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--cream);margin-bottom:10px;">' + escapeHtml(j.book_assessment) + '</div>';
   if (j.notes && j.notes.length) h += '<div style="color:#d0a86a;font-size:11px;margin-bottom:8px;">' + escapeHtml(j.notes.join(' | ')) + '</div>';
   var pages = j.pages || [];
-  if (!pages.length) h += '<div style="color:rgba(245,232,200,0.5);font-size:12px;">No page-level changes suggested.</div>';
+  if (!pages.length) h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.5);font-size:12px;">No page-level changes suggested.</div>';
   pages.forEach(function (pg) {
     var vc = pg.verdict === 'near_blank' ? '#c0392b' : (pg.verdict === 'under_filled' ? '#b06a2a' : '#3f7d4f');
-    h += '<div' + (pg.page != null && !isNaN(Number(pg.page)) ? ' onclick="finalizeGoToPage(' + Number(pg.page) + ')"' : '') + ' title="Go to page" style="cursor:pointer;border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:9px 11px;margin-bottom:7px;">';
+    h += '<div' + (pg.page != null && !isNaN(Number(pg.page)) ? ' onclick="finalizeGoToPage(' + Number(pg.page) + ')"' : '') + ' title="Go to page" style="cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:4px;padding:9px 11px;margin-bottom:7px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-family:var(--font-display);color:var(--gold);font-size:13px;">Page ' + escapeHtml(String(pg.page != null ? pg.page : '?')) + '</span>';
     h += '<span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:' + vc + ';">' + escapeHtml(String(pg.verdict || '')) + '</span></div>';
-    if (pg.problem && !/^none$/i.test(String(pg.problem))) h += '<div style="font-size:12px;color:rgba(245,232,200,0.85);margin-top:3px;font-style:italic;">' + escapeHtml(pg.problem) + '</div>';
-    if (pg.fix) h += '<div style="font-size:12px;color:rgba(245,232,200,0.7);margin-top:3px;">Fix: ' + escapeHtml(pg.fix) + '</div>';
+    if (pg.problem && !/^none$/i.test(String(pg.problem))) h += '<div style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.85);margin-top:3px;font-style:italic;">' + escapeHtml(pg.problem) + '</div>';
+    if (pg.fix) h += '<div style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.7);margin-top:3px;">Fix: ' + escapeHtml(pg.fix) + '</div>';
     var panels = pg.panels || [];
     if (panels.length) {
       h += '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">';
@@ -35565,7 +35565,7 @@ function sbSummaryCount() {
   var lim = state._sbSummaryLimit || 1500;
   var n = (ta.value || '').length;
   el.textContent = n + ' / ' + lim;
-  el.style.color = (n > lim) ? '#e08a6a' : 'rgba(201,168,76,0.35)';
+  el.style.color = (n > lim) ? '#e08a6a' : 'rgba(var(--accent-rgb),0.35)';
 }
 
 // =================================================================================================
@@ -35585,7 +35585,7 @@ function sbSummaryState(msg, kind) {
   var el = document.getElementById('sb-summary-msg');
   if (!el) return;
   el.textContent = msg || '';
-  el.style.color = (kind === 'error') ? '#e57373' : 'rgba(201,168,76,0.5)';
+  el.style.color = (kind === 'error') ? '#e57373' : 'rgba(var(--accent-rgb),0.5)';
 }
 
 // now === true writes immediately (a flush); otherwise it debounces.
@@ -35874,31 +35874,31 @@ function openAssetSuggestModal(data) {
 
   var overlay = document.createElement('div');
   overlay.id = 'asset-suggest-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
   var box = document.createElement('div');
-  box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px 22px 18px;color:#f0e8d0;';
+  box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px 22px 18px;color:var(--on-panel);';
   var h = '';
-  h += '<div style="font-family:\'Cinzel\',serif;color:#c9a84c;font-size:17px;margin-bottom:8px;">Keep these consistent?</div>';
-  h += '<div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:rgba(240,232,208,0.85);">Campaignia found these in more than one panel. Making each one an asset gives it a reference picture, so it looks the same every time it appears. You can change any description before you choose.</div>';
+  h += '<div style="font-family:\'Cinzel\',serif;color:var(--accent);font-size:17px;margin-bottom:8px;">Keep these consistent?</div>';
+  h += '<div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:rgba(var(--on-panel-rgb),0.85);">Campaignia found these in more than one panel. Making each one an asset gives it a reference picture, so it looks the same every time it appears. You can change any description before you choose.</div>';
   if (assetsOffer.length) {
     h += '<div id="asset-suggest-list">';
     assetsOffer.forEach(function (it) {
-      h += '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;margin-bottom:6px;border:1px solid rgba(201,168,76,0.18);border-radius:8px;cursor:' + (canCreate ? 'pointer' : 'default') + ';">' +
+      h += '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;margin-bottom:6px;border:1px solid rgba(var(--accent-rgb),0.18);border-radius:8px;cursor:' + (canCreate ? 'pointer' : 'default') + ';">' +
         (canCreate ? '<input type="checkbox" class="asset-suggest-cb" data-key="' + escapeHtmlReview(it.key) + '" checked style="margin-top:3px;">' : '') +
         '<span style="flex:1;min-width:0;"><span style="font-weight:600;">' + escapeHtmlReview(it.name) + '</span>' +
-        ' <span style="font-size:12px;color:rgba(201,168,76,0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
+        ' <span style="font-size:12px;color:rgba(var(--accent-rgb),0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
         // v3.1.12 -- TD-908. Ian: "allow them to edit the descriptions of the items." What Yes draws from, and what No writes into the panels.
-        '<textarea class="asset-suggest-desc" data-key="' + escapeHtmlReview(it.key) + '" rows="2" maxlength="1200" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;font:inherit;font-size:13px;line-height:1.4;color:#f0e8d0;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.25);border-radius:6px;padding:6px 8px;resize:vertical;">' + escapeHtmlReview(it.description || '') + '</textarea>' +
+        '<textarea class="asset-suggest-desc" data-key="' + escapeHtmlReview(it.key) + '" rows="2" maxlength="1200" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;font:inherit;font-size:13px;line-height:1.4;color:var(--on-panel);background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:6px 8px;resize:vertical;">' + escapeHtmlReview(it.description || '') + '</textarea>' +
         '</span><span class="asset-suggest-status" data-key="' + escapeHtmlReview(it.key) + '" style="flex:0 0 auto;align-self:center;"></span></label>';   // v3.1.10 -- spinner, then the picture
     });
     h += '</div>';
   }
   if (madeAlready.length) {
-    h += '<div style="font-size:13px;color:rgba(240,232,208,0.7);margin:8px 0;">Already assets: ' +
+    h += '<div style="font-size:13px;color:rgba(var(--on-panel-rgb),0.7);margin:8px 0;">Already assets: ' +
       madeAlready.map(function (it) { return escapeHtmlReview(it.name) + (it.asset_ready ? '' : ' (still drawing)'); }).join(', ') + '</div>';
   }
   if (chars.length) {
-    h += '<div style="font-size:13px;line-height:1.45;margin:12px 0 4px;padding:9px 10px;border-left:3px solid rgba(201,168,76,0.5);background:rgba(201,168,76,0.06);">' +
+    h += '<div style="font-size:13px;line-height:1.45;margin:12px 0 4px;padding:9px 10px;border-left:3px solid rgba(var(--accent-rgb),0.5);background:rgba(var(--accent-rgb),0.06);">' +
       'These look like main characters. Campaignia will not build them for you; consider adding them on the Characters tab:<br>' +
       chars.map(function (it) { return '<b>' + escapeHtmlReview(it.name) + '</b>' + (it.description ? ' &mdash; ' + escapeHtmlReview(it.description) : ''); }).join('<br>') + '</div>';
   }
@@ -36036,10 +36036,10 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
   bar.className = 'progress-bar asset-suggest-bar';
   bar.style.margin = '14px 0 0';
   bar.style.height = '6px';
-  bar.style.background = 'rgba(201,168,76,0.18)';
+  bar.style.background = 'rgba(var(--accent-rgb),0.18)';
   var fill = document.createElement('div');
   fill.className = 'progress-fill';
-  fill.style.background = '#c9a84c';
+  fill.style.background = 'var(--accent)';
   fill.style.width = '6%';
   bar.appendChild(fill);
   if (msgEl.parentNode) msgEl.parentNode.insertBefore(bar, msgEl);
@@ -36050,7 +36050,7 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
     s.innerHTML = '';
     var img = document.createElement('img');
     img.src = url; img.alt = '';
-    img.style.cssText = 'width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid rgba(201,168,76,0.55);display:block;';
+    img.style.cssText = 'width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.55);display:block;';
     s.appendChild(img);
   }
   var n = created.length, started = Date.now(), campId = state.currentCampaign.id;
@@ -36078,7 +36078,7 @@ function _assetSuggestWait(created, failed, msgEl, rowEl, close, box, offered) {
       if (Date.now() - started > 240000) {
         Object.keys(slotById).forEach(function (id) {
           var s = slotById[id];
-          if (!s.getAttribute('data-done')) s.innerHTML = '<span style="font-size:12px;color:rgba(240,232,208,0.7);">Still drawing</span>';
+          if (!s.getAttribute('data-done')) s.innerHTML = '<span style="font-size:12px;color:rgba(var(--on-panel-rgb),0.7);">Still drawing</span>';
         });
         msgEl.textContent = done + ' of ' + n + ' ready so far. The rest are still drawing; they will attach on their own, and you can check them in the Asset Library.' + failNote;
         return;
@@ -36198,7 +36198,7 @@ function _rpEls() {
   if (!tabs) {
     tabs = document.createElement('div');
     tabs.id = 'replace-picker-tabs';
-    tabs.style.cssText = 'display:flex;gap:6px;margin:0 0 12px;border-bottom:1px solid rgba(201,168,76,0.2);';
+    tabs.style.cssText = 'display:flex;gap:6px;margin:0 0 12px;border-bottom:1px solid rgba(var(--accent-rgb),0.2);';
     filters.parentNode.insertBefore(tabs, filters);
   }
   var pane = document.getElementById('replace-upload-pane');
@@ -36224,7 +36224,7 @@ function _rpSync() {
   e.tabs.innerHTML = ['archive', 'upload'].map(function (t) {
     var on = t === tab;
     return '<button type="button" class="rp-tab" data-tab="' + t + '" onclick="_rpShowTab(\'' + t + '\')" style="background:none;border:none;border-bottom:2px solid ' +
-      (on ? '#c9a84c' : 'transparent') + ';color:' + (on ? '#e8d49a' : 'rgba(240,232,208,0.6)') + ';padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;">' +
+      (on ? 'var(--accent)' : 'transparent') + ';color:' + (on ? '#e8d49a' : 'rgba(var(--on-panel-rgb),0.6)') + ';padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;">' +
       (t === 'archive' ? 'From Archive' : 'Upload your own') + '</button>';
   }).join('');
   e.filters.style.display = tab === 'archive' ? '' : 'none';
@@ -36250,11 +36250,11 @@ function _rpShapeStrip(activeKey, pickFn) {   // v3.3.71 -- TD-1080: pickFn, the
     var on = s.key === activeKey, clickable = pickFn ? true : !!(state.rpUp && state.rpUp.img);
     return '<button type="button" class="rp-shape" data-shape="' + s.key + '"' + (clickable ? ' onclick="' + (pickFn || '_rpPickShape') + '(\'' + s.key + '\')"' : '') +
       ' title="' + s.label + ' ' + s.w + ':' + s.h + '" style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;min-width:58px;min-height:82px;padding:4px;background:' +
-      (on ? 'rgba(201,168,76,0.14)' : 'transparent') + ';border:1px solid ' + (on ? '#c9a84c' : 'rgba(201,168,76,0.18)') + ';border-radius:8px;cursor:' + (clickable ? 'pointer' : 'default') + ';font:inherit;">' +
+      (on ? 'rgba(var(--accent-rgb),0.14)' : 'transparent') + ';border:1px solid ' + (on ? 'var(--accent)' : 'rgba(var(--accent-rgb),0.18)') + ';border-radius:8px;cursor:' + (clickable ? 'pointer' : 'default') + ';font:inherit;">' +
       // v3.1.16 -- flex-shrink:0 and border-box: in a button too short for it the icon was squashed, so
       // Square drew wider than tall (Ian's screenshot). The outline is now exactly the shape's ratio.
-      '<span style="display:block;flex-shrink:0;box-sizing:border-box;width:' + bw + 'px;height:' + bh + 'px;border:2px solid ' + (on ? '#e8d49a' : 'rgba(201,168,76,0.6)') + ';border-radius:2px;"></span>' +
-      '<span style="font-size:11px;line-height:1.1;color:' + (on ? '#e8d49a' : 'rgba(240,232,208,0.7)') + ';">' + s.label + '<br>' + s.w + ':' + s.h + '</span></button>';
+      '<span style="display:block;flex-shrink:0;box-sizing:border-box;width:' + bw + 'px;height:' + bh + 'px;border:2px solid ' + (on ? '#e8d49a' : 'rgba(var(--accent-rgb),0.6)') + ';border-radius:2px;"></span>' +
+      '<span style="font-size:11px;line-height:1.1;color:' + (on ? '#e8d49a' : 'rgba(var(--on-panel-rgb),0.7)') + ';">' + s.label + '<br>' + s.w + ':' + s.h + '</span></button>';
   }).join('');
 }
 
@@ -36262,11 +36262,11 @@ function _rpBuildPane() {
   var pane = document.getElementById('replace-upload-pane'); if (!pane) return;
   pane.setAttribute('data-built', '1');
   pane.innerHTML =
-    '<div style="font-size:14px;color:#f0e8d0;margin-bottom:10px;">We need to fit your image into one of these ' + RP_SHAPES.length + ' shapes. We will pick the one it fits best, and the panel will take that shape.</div>' +
+    '<div style="font-size:14px;color:var(--on-panel);margin-bottom:10px;">We need to fit your image into one of these ' + RP_SHAPES.length + ' shapes. We will pick the one it fits best, and the panel will take that shape.</div>' +
     '<div id="rp-shapes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">' + _rpShapeStrip(null) + '</div>' +
-    '<div id="rp-drop" style="border:2px dashed rgba(201,168,76,0.45);border-radius:10px;padding:26px 16px;text-align:center;cursor:pointer;color:rgba(240,232,208,0.85);">' +
+    '<div id="rp-drop" style="border:2px dashed rgba(var(--accent-rgb),0.45);border-radius:10px;padding:26px 16px;text-align:center;cursor:pointer;color:rgba(var(--on-panel-rgb),0.85);">' +
       '<div style="font-size:15px;">Drop an image here, or click to choose one</div>' +
-      '<div style="font-size:12px;color:rgba(240,232,208,0.6);margin-top:4px;">JPG, PNG, WebP or HEIC (iPhone), up to 20 MB</div>' +
+      '<div style="font-size:12px;color:rgba(var(--on-panel-rgb),0.6);margin-top:4px;">JPG, PNG, WebP or HEIC (iPhone), up to 20 MB</div>' +
       '<input type="file" id="rp-file" accept="image/*,.heic,.heif" style="display:none;">' +
     '</div>' +
     '<div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only upload images you own or have the rights to use. Do not upload copyrighted characters, logos, or artwork without permission.</div>' +
@@ -36280,9 +36280,9 @@ function _rpBuildPane() {
   drop.onclick = function () { input.click(); };
   input.onchange = function () { if (input.files && input.files[0]) _rpTakeFile(input.files[0]); input.value = ''; };
   drop.ondragover = function (ev) { ev.preventDefault(); drop.style.borderColor = '#e8d49a'; };
-  drop.ondragleave = function () { drop.style.borderColor = 'rgba(201,168,76,0.45)'; };
+  drop.ondragleave = function () { drop.style.borderColor = 'rgba(var(--accent-rgb),0.45)'; };
   drop.ondrop = function (ev) {
-    ev.preventDefault(); drop.style.borderColor = 'rgba(201,168,76,0.45)';
+    ev.preventDefault(); drop.style.borderColor = 'rgba(var(--accent-rgb),0.45)';
     var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
     if (f) _rpTakeFile(f);
   };
@@ -36297,7 +36297,7 @@ function _rpMsg(text, kind) {
   if (kind === 'warn') {
     m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;padding:8px 12px;border-radius:var(--radius);color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);';
   } else {
-    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(240,232,208,0.85)') + ';';
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(var(--on-panel-rgb),0.85)') + ';';
   }
 }
 
@@ -36389,7 +36389,7 @@ function _rpRender() {
   // cropRectFromFrac with a ratio is _rpRectFromFrac, and the guard proves it.
   var sh = _rpShapeByKey(u.shape);
   u.view = cropMount(stage, { url: u.url, W: u.W, H: u.H, ratio: sh.w / sh.h, minSide: RP_MIN_SIDE,
-    frac: { x: u.frac.x, y: u.frac.y, w: u.frac.w, h: 0 }, maxW: 640, maxH: 360, hintColor: 'rgba(240,232,208,0.6)',   // v3.1.18: light, as in v3.1.16
+    frac: { x: u.frac.x, y: u.frac.y, w: u.frac.w, h: 0 }, maxW: 640, maxH: 360, hintColor: 'rgba(var(--on-panel-rgb),0.6)',   // v3.1.18: light, as in v3.1.16
     onChange: function (r) { u.frac = _rpFracFromRect(u.W, u.H, r); _rpShowSize(u); } });
 }
 
@@ -36652,7 +36652,7 @@ function _cvShow(W, H) {
   var which = c.kind === 'cover' ? 'front cover' : 'back cover';
   grid.innerHTML =
     '<div id="cv-wrap" style="grid-column:1/-1;">' +
-      '<div style="font-size:14px;line-height:1.45;margin-bottom:8px;color:rgba(240,232,208,0.9);">Frame the part of this picture you want on the ' + which + '. The frame is the cover\u2019s shape.</div>' +
+      '<div style="font-size:14px;line-height:1.45;margin-bottom:8px;color:rgba(var(--on-panel-rgb),0.9);">Frame the part of this picture you want on the ' + which + '. The frame is the cover\u2019s shape.</div>' +
       '<div id="cv-stage"></div>' +
       '<div id="cv-msg"></div>' +
       // v3.1.20 -- the buttons stay pinned to the bottom of the window if it still has to scroll.
@@ -36672,7 +36672,7 @@ function _cvMsg(text, kind) {
   if (kind === 'warn') {
     m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;padding:8px 12px;border-radius:var(--radius);color:var(--warn-orange);background:var(--warn-orange-bg);border:1px solid var(--warn-orange-line);';
   } else {
-    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(240,232,208,0.85)') + ';';
+    m.style.cssText = 'font-size:13px;line-height:1.45;margin-top:10px;color:' + (kind === 'error' ? '#f0a090' : 'rgba(var(--on-panel-rgb),0.85)') + ';';
   }
 }
 
@@ -36795,7 +36795,7 @@ function _cvMount(W, H, maxH, frac) {
   var c = _cvCrop; if (!c) return;
   c.maxH = maxH;
   c.view = cropMount(document.getElementById('cv-stage'), { url: c.archive.image_url, W: W, H: H, ratio: COVER_CROP_ASPECT, minSide: COVER_MIN_SIDE,
-    frac: frac, maxW: 640, maxH: maxH, onChange: _cvShowSize, hintColor: 'rgba(240,232,208,0.6)' });
+    frac: frac, maxW: 640, maxH: maxH, onChange: _cvShowSize, hintColor: 'rgba(var(--on-panel-rgb),0.6)' });
 }
 
 function _cvFit(W, H) {
@@ -36932,7 +36932,7 @@ function _ciModal() {
       '<div class="modal archive-picker" style="max-width:760px;">' +
         '<div class="modal-header"><div class="modal-title" id="ci-title">Import a character</div>' +
         '<button class="modal-close" onclick="closeCharImport()">&times;</button></div>' +
-        '<div id="ci-sub" style="font-size:13px;color:rgba(240,232,208,0.75);margin:-4px 0 10px;"></div>' +
+        '<div id="ci-sub" style="font-size:13px;color:rgba(var(--on-panel-rgb),0.75);margin:-4px 0 10px;"></div>' +
         '<div id="ci-body" style="max-height:62vh;overflow-y:auto;"></div>' +
         '<div id="ci-msg" style="font-size:13px;margin-top:8px;color:#f0a090;"></div>' +
         '<div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:12px;">' +
@@ -36981,7 +36981,7 @@ function _ciGet(url, cb) {
     .catch(function () { _ciErr('Connection error. Please try again.'); });
 }
 
-var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:10px;border:1px solid rgba(201,168,76,0.25);border-radius:8px;background:rgba(0,0,0,0.25);color:#f0e8d0;cursor:pointer;font:inherit;';
+var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;background:rgba(0,0,0,0.25);color:var(--on-panel);cursor:pointer;font:inherit;';
 
 function _ciCampaigns() {
   _ci.step = 'campaigns';
@@ -36994,8 +36994,8 @@ function _ciCampaigns() {
     var b = document.getElementById('ci-body');
     b.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">' + list.map(function (c) {
       // v3.4.03 -- the campaign's picture, as on its My Campaigns card (Ian); the logo when it has none
-      var _cpic = c.image ? '<img class="ci-camp-pic" src="' + escapeHtml(c.image) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:16/10;object-fit:contain;display:block;border-radius:6px;background:rgba(15,10,5,0.5);">'
-        : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(15,10,5,0.5);display:flex;align-items:center;justify-content:center;"><img src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
+      var _cpic = c.image ? '<img class="ci-camp-pic" src="' + escapeHtml(c.image) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:16/10;object-fit:contain;display:block;border-radius:6px;background:rgba(var(--panel-deep-rgb),0.5);">'
+        : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(var(--panel-deep-rgb),0.5);display:flex;align-items:center;justify-content:center;"><img src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
       // v3.4.17 -- TD-1094: a pinned campaign carries the My Campaigns pin (pinning itself stays on My Campaigns).
       var _cpin = c.pinned ? '<span class="ci-pin" title="Pinned on My Campaigns" style="position:absolute;top:10px;right:12px;color:#e8c870;line-height:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));">' + _vpickPinSvg(true) + '</span>' : '';
       return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + 'position:relative;">' + _cpin + _cpic +
@@ -37040,7 +37040,7 @@ function _ciLookTile(l) {
     (l.changed ? '<br><span style="color:#e8d49a;">Appearance changed</span>' : '') +
     // v3.4.20 -- TD-1096 (Ian: "Way too much text"): the versions that use the picture open from a \u2026 pill.
     ((l.uses && l.uses.length) ? '<br><span class="ci-more" role="button" title="Which versions use this picture" data-uses="' + escapeHtml(JSON.stringify(l.uses)) + '"' +
-      ' style="display:inline-block;margin-top:5px;padding:0 10px;border:1px solid rgba(201,168,76,0.45);border-radius:999px;font-size:13px;line-height:18px;color:#e8d49a;cursor:pointer;">\u2026</span>' : '') +
+      ' style="display:inline-block;margin-top:5px;padding:0 10px;border:1px solid rgba(var(--accent-rgb),0.45);border-radius:999px;font-size:13px;line-height:18px;color:#e8d49a;cursor:pointer;">\u2026</span>' : '') +
     '</span></button>';
 }
 
@@ -37113,8 +37113,8 @@ function _ciMoreOpen(pill) {
   _ciMoreClose(); if (same) return;
   var uses = []; try { uses = JSON.parse(pill.getAttribute('data-uses') || '[]') || []; } catch (e) { uses = []; }
   var p = document.createElement('div'); p.id = 'ci-more-pop'; p._pill = pill;
-  p.style.cssText = 'position:fixed;z-index:100010;max-width:260px;max-height:50vh;overflow-y:auto;background:#16100a;border:1px solid rgba(201,168,76,0.45);' +
-    'border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.55);padding:8px 10px;font-size:12px;line-height:1.45;color:rgba(240,232,208,0.9);';
+  p.style.cssText = 'position:fixed;z-index:100010;max-width:260px;max-height:50vh;overflow-y:auto;background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.45);' +
+    'border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.55);padding:8px 10px;font-size:12px;line-height:1.45;color:rgba(var(--on-panel-rgb),0.9);';
   p.innerHTML = '<div style="color:#e8d49a;font-weight:600;margin-bottom:4px;">Used by these versions</div>' + uses.map(function (u) { return '<div>' + escapeHtml(u) + '</div>'; }).join('');
   document.body.appendChild(p);
   var r = pill.getBoundingClientRect(), W = window.innerWidth || document.documentElement.clientWidth, H = window.innerHeight || document.documentElement.clientHeight;
@@ -37215,7 +37215,7 @@ function _narratorPanelEnsure() {
   el.style.cssText = 'flex:1 1 240px;min-width:0;margin:2px 0 8px;';   // v3.1.28 -- no box; shares a row with Narrative length
   el.innerHTML =
     '<div style="display:flex;align-items:center;gap:8px;">' +
-      '<label id="narrator-on-label" style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:#f0e8d0;">' +
+      '<label id="narrator-on-label" style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:var(--on-panel);">' +
         '<input type="checkbox" id="narrator-on" onchange="_narratorToggle(this.checked)" style="margin:0;">' +
         '<span>In first person</span>' +
       '</label>' +
@@ -37223,7 +37223,7 @@ function _narratorPanelEnsure() {
       '<button type="button" class="info-tip" id="narrator-info" aria-controls="narrator-note" aria-expanded="false" aria-label="About In first person" onclick="_infoTipToggle(this, event)">i</button>' +
     '</div>' +
     '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
-      '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:#f0e8d0;border:1px solid rgba(201,168,76,0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
+      '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:#1a130c;color:var(--on-panel);border:1px solid rgba(var(--accent-rgb),0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
       '<div id="narrator-need" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;">Choose who is telling the story \u2014 or close, and it will be Nobody in particular.</div>' +
       '<div id="narrator-povwarn" style="display:none;font-size:11px;color:#e0a040;margin-top:4px;line-height:1.4;">Your Story Instructions mention point of view. In first person wins: the story is told as \u201cI\u201d, and the rest of your instructions are still followed.</div>' +   // v3.1.36
     '</div>' +
@@ -37422,14 +37422,14 @@ function _infoTipCss() {
   if (document.getElementById('info-tip-css')) return;
   var st = document.createElement('style');
   st.id = 'info-tip-css';
-  st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,#a08850);background:transparent;border:1px solid rgba(201,168,76,0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
-    '.info-tip:hover,.info-tip[aria-expanded="true"]{color:#f0e8d0;border-color:var(--gold,#c9a84c);}' +
-    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(201,168,76,0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}' +
+  st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,#a08850);background:transparent;border:1px solid rgba(var(--accent-rgb),0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
+    '.info-tip:hover,.info-tip[aria-expanded="true"]{color:var(--on-panel);border-color:var(--gold,var(--accent));}' +
+    '.info-tip-pop{font-size:11px;color:#e8dcc0;background:#1a130c;border:1px solid rgba(var(--accent-rgb),0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}' +
     // v3.1.29 -- the plain modals are LIGHT (white --surface); only the pickers (.archive-picker) are
     // dark. Explicit colours for each, never inherit (the 3.1.17 lesson: inherit gave dark on dark).
     '.modal:not(.archive-picker) .info-tip{color:#8a6a20;border-color:rgba(138,106,32,0.6);}' +
     '.modal:not(.archive-picker) .info-tip:hover,.modal:not(.archive-picker) .info-tip[aria-expanded=\"true\"]{color:#2c1810;border-color:#8a6a20;}' +
-    '.modal:not(.archive-picker) .info-tip-pop{color:#3a2e22;background:#faf6ea;border-color:rgba(201,168,76,0.55);text-transform:none;letter-spacing:0;font-weight:400;}';
+    '.modal:not(.archive-picker) .info-tip-pop{color:#3a2e22;background:#faf6ea;border-color:rgba(var(--accent-rgb),0.55);text-transform:none;letter-spacing:0;font-weight:400;}';
   document.head.appendChild(st);
   document.addEventListener('click', function (e) {
     if (e.target && e.target.closest && e.target.closest('.info-tip-pop')) return;
@@ -37487,7 +37487,7 @@ function _illusPanelEnsure() {
   el.style.cssText = 'margin:2px 0 10px;';
   el.innerHTML =
     '<div style="display:flex;align-items:center;gap:8px;">' +
-      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:#f0e8d0;">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:var(--on-panel);">' +
         '<input type="checkbox" id="illus-on" onchange="_illusToggle(this.checked)" style="margin:0;">' +
         '<span>I\u2019ll illustrate it myself</span>' +
       '</label>' +
@@ -37580,7 +37580,7 @@ function _selfBriefHtml(m) {
   else who = cast.map(function (c) {
     var pic = c.reference_url ? '<img src="' + escapeHtml(c.reference_url) + '" alt="" onclick="openLightbox(this.src,\'' + escapeHtml(c.name).replace(/'/g, '') + '\')" style="width:34px;height:34px;object-fit:cover;border-radius:4px;flex:none;cursor:pointer;background:#000;">' : '';
     return '<div style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;">' + pic +
-      '<div><b style="color:#f0e8d0;">' + escapeHtml(c.name) + '</b>' + (c.cls ? ' <span style="opacity:0.7;">(' + escapeHtml(c.cls) + ')</span>' : '') +
+      '<div><b style="color:var(--on-panel);">' + escapeHtml(c.name) + '</b>' + (c.cls ? ' <span style="opacity:0.7;">(' + escapeHtml(c.cls) + ')</span>' : '') +
       (c.description ? '<div style="opacity:0.85;">' + escapeHtml(c.description) + '</div>' : '') + '</div></div>';
   }).join('');
   var aim = (typeof artStyleLabel === 'function') ? artStyleLabel(state.artStyle || 'High fantasy illustration') : (state.artStyle || '');
@@ -37588,7 +37588,7 @@ function _selfBriefHtml(m) {
   // v3.1.31 -- Ian: "get rid of the word Draw and replace it with Art Brief... That way when you hover
   // over the panel... The buttons don't cover the word Art Brief." The top of the box is left clear
   // for the hover buttons; the heading and the shape sit on the first line below them.
-  return '<div class="self-brief" style="min-height:180px;padding:36px 14px 12px;border:1px dashed rgba(201,168,76,0.45);border-radius:6px;background:rgba(201,168,76,0.05);color:#e8dcc0;font-size:12px;line-height:1.45;text-align:left;">' +
+  return '<div class="self-brief" style="min-height:180px;padding:36px 14px 12px;border:1px dashed rgba(var(--accent-rgb),0.45);border-radius:6px;background:rgba(var(--accent-rgb),0.05);color:#e8dcc0;font-size:12px;line-height:1.45;text-align:left;">' +
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">' + L('Art brief') +
       '<span style="font-size:11px;opacity:0.8;">' + escapeHtml(SHAPE_NAMES[shape] || shape) + '</span></div>' +
     '<div>' + (m.prompt ? escapeHtml(m.prompt) : '<span style="opacity:0.7;">No prompt yet \u2014 run Generate Story, or use Edit prompt.</span>') + '</div>' +
@@ -37704,18 +37704,18 @@ function _vpickCss() {
     '.vpick-trigger:disabled{cursor:not-allowed;}' +
     '.vpick-trigger .vpick-label{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;}' +
     '.vpick-trigger .vpick-caret{flex:0 0 auto;opacity:0.7;font-size:10px;}' +
-    '.vpick-trigger .vpick-pin{flex:0 0 auto;display:inline-flex;color:#c9a84c;}' +
-    '.vpick-list{position:fixed;z-index:10050;background:#16100a;border:1px solid rgba(201,168,76,0.5);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);padding:4px 0;overflow-y:auto;color:#f0e8d0;font-size:13px;box-sizing:border-box;}' +
+    '.vpick-trigger .vpick-pin{flex:0 0 auto;display:inline-flex;color:var(--accent);}' +
+    '.vpick-list{position:fixed;z-index:10050;background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.5);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);padding:4px 0;overflow-y:auto;color:var(--on-panel);font-size:13px;box-sizing:border-box;}' +
     '.vpick-row{display:flex;align-items:center;gap:6px;padding:0 4px 0 12px;min-height:38px;}' +
-    '.vpick-row:hover,.vpick-row.is-cur{background:rgba(201,168,76,0.12);}' +
+    '.vpick-row:hover,.vpick-row.is-cur{background:rgba(var(--accent-rgb),0.12);}' +
     '.vpick-choose{flex:1 1 auto;min-width:0;background:none;border:none;color:inherit;text-align:left;font:inherit;padding:9px 0;cursor:pointer;white-space:normal;overflow-wrap:anywhere;line-height:1.35;}' +
-    '.vpick-choose:focus-visible,.vpick-pinbtn:focus-visible{outline:1px solid #c9a84c;outline-offset:1px;}' +
+    '.vpick-choose:focus-visible,.vpick-pinbtn:focus-visible{outline:1px solid var(--accent);outline-offset:1px;}' +
     '.vpick-row.is-cur .vpick-choose{color:#e8c870;font-weight:600;}' +
-    '.vpick-pinbtn{flex:0 0 auto;background:none;border:none;color:rgba(201,168,76,0.5);cursor:pointer;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:0;}' +
-    '.vpick-pinbtn:hover{background:rgba(201,168,76,0.18);color:#c9a84c;}' +
-    '.vpick-pinbtn.on{color:#c9a84c;}' +
+    '.vpick-pinbtn{flex:0 0 auto;background:none;border:none;color:rgba(var(--accent-rgb),0.5);cursor:pointer;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:0;}' +
+    '.vpick-pinbtn:hover{background:rgba(var(--accent-rgb),0.18);color:var(--accent);}' +
+    '.vpick-pinbtn.on{color:var(--accent);}' +
     '.vpick-pinbtn.off svg{transform:rotate(45deg);}' +
-    '.vpick-foot{font-size:11px;color:rgba(240,232,208,0.62);padding:7px 12px 5px;border-top:1px solid rgba(201,168,76,0.2);margin-top:4px;line-height:1.4;white-space:normal;}';
+    '.vpick-foot{font-size:11px;color:rgba(var(--on-panel-rgb),0.62);padding:7px 12px 5px;border-top:1px solid rgba(var(--accent-rgb),0.2);margin-top:4px;line-height:1.4;white-space:normal;}';
   document.head.appendChild(s);
 }
 function _vpickEnsure(selId, where) {
@@ -37947,11 +37947,11 @@ function _promoteDialog(info) {
   return new Promise(function (resolve) {
     var vName = info.version.name, cName = info.canonical.name;
     var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:16px;';
     var box = document.createElement('div');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
-    box.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:#f0e8d0;font-size:14px;line-height:1.55;';
+    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:var(--on-panel);font-size:14px;line-height:1.55;';
     var bullets = [
       // v3.1.41 -- no promise that members read all of it: only its Ready sessions (Ian chose a louder warning).
       'Members read \u201c' + vName + '\u201d as the book from now on \u2014 the sessions in it set to Ready \u2014 and new sessions start in its art style and narrative style.',
@@ -37962,7 +37962,7 @@ function _promoteDialog(info) {
     var draftBox = _promoteDraftBox(info, vName);
     var others = _promoteOthersLine(info.others_using);
     box.innerHTML =
-      '<div style="font-family:\'Cinzel\',serif;color:#c9a84c;font-size:17px;margin-bottom:12px;">Make \u201c' + escapeHtml(vName) + '\u201d the Canonical</div>' +
+      '<div style="font-family:\'Cinzel\',serif;color:var(--accent);font-size:17px;margin-bottom:12px;">Make \u201c' + escapeHtml(vName) + '\u201d the Canonical</div>' +
       draftBox +
       '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">What is the Canonical?</div>' +
       '<div style="margin-bottom:14px;">The Canonical is the campaign\u2019s official book. It\u2019s what every member reads, and every other version shows it on any session that version hasn\u2019t made its own copy of. Every campaign has exactly one, and it belongs to the Story Master.</div>' +
@@ -37971,9 +37971,9 @@ function _promoteDialog(info) {
       '<div style="font-weight:600;color:#e8c870;margin-bottom:4px;">Your current Canonical, \u201c' + escapeHtml(cName) + '\u201d</div>' +
       '<div style="margin-bottom:8px;">You need to name your old Canonical version, or do you want me to delete it once we make the switch?</div>' +
       '<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;cursor:pointer;"><input type="radio" name="promote-old" value="keep" checked style="margin-top:4px;"> <span>Keep it as one of my versions, named:</span></label>' +
-      '<input type="text" id="promote-old-name" maxlength="60" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:#f0e8d0;font-size:14px;margin:0 0 10px 0;">' +
+      '<input type="text" id="promote-old-name" maxlength="60" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.4);background:rgba(var(--accent-rgb),0.08);color:var(--on-panel);font-size:14px;margin:0 0 10px 0;">' +
       '<label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:4px;cursor:pointer;"><input type="radio" name="promote-old" value="delete" style="margin-top:4px;"> <span>Delete it</span></label>' +
-      (others ? '<div style="font-size:12.5px;color:rgba(240,232,208,0.7);margin:0 0 8px 26px;">Others are using it: ' + escapeHtml(others) + '</div>' : '') +
+      (others ? '<div style="font-size:12.5px;color:rgba(var(--on-panel-rgb),0.7);margin:0 0 8px 26px;">Others are using it: ' + escapeHtml(others) + '</div>' : '') +
       '<div id="promote-err" style="display:none;color:#f08a7a;font-size:13px;margin:6px 0 0 0;"></div>' +
       '<div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:16px;">' +
       '<button type="button" class="btn btn-sm" id="promote-cancel">Cancel</button>' +
@@ -38024,7 +38024,7 @@ function _promoteDeleteConfirm(info) {
 }
 function _promoteRun(c, vid, choice, info) {
   var cover = document.createElement('div');
-  cover.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;color:#f0e8d0;font-size:15px;';
+  cover.style.cssText = 'position:fixed;inset:0;z-index:100001;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;color:var(--on-panel);font-size:15px;';
   cover.textContent = 'Making \u201c' + info.version.name + '\u201d the Canonical\u2026';
   document.body.appendChild(cover);
   function unCover() { if (cover.parentNode) cover.parentNode.removeChild(cover); }
@@ -38770,7 +38770,7 @@ function versionTierGate(msg) {
 // =====================================================================================
 function _pubAsEsc(s) { return (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function _pubAsImg(url, w, h, fallback) {
-  var st = 'flex:0 0 ' + w + 'px;width:' + w + 'px;height:' + h + 'px;border-radius:5px;border:1px solid rgba(201,168,76,0.3);background:rgba(40,28,14,0.9) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(201,168,76,0.55);font-size:' + Math.round(h / 3) + 'px;';
+  var st = 'flex:0 0 ' + w + 'px;width:' + w + 'px;height:' + h + 'px;border-radius:5px;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(40,28,14,0.9) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(var(--accent-rgb),0.55);font-size:' + Math.round(h / 3) + 'px;';
   if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
   return '<span style=\'' + st + '\'>' + (url ? '' : (fallback || '')) + '</span>';
 }
@@ -38778,20 +38778,20 @@ function _pubAsCard(o) {
   // o: { cover, title, subtitle, meta, id, chosen, clickable }
   // v3.2.92 -- TD-1024. Ian: "We don't need two pictures for every story... just the cover image... make the panels
   // a little bigger and more vertical". The cover on top at the cover's own shape (7.1 : 9.6), the words under it.
-  var bd = o.chosen ? '2px solid var(--gold)' : '1px solid rgba(201,168,76,0.25)';
+  var bd = o.chosen ? '2px solid var(--gold)' : '1px solid rgba(var(--accent-rgb),0.25)';
   var inner = _pubAsCover(o.cover) +
     '<span style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
       '<span style="font-family:var(--font-display);color:var(--gold);font-size:15px;line-height:1.25;">' + _pubAsEsc(o.title) + '</span>' +
-      (o.subtitle ? '<span style="font-style:italic;color:rgba(240,232,208,0.9);font-size:13px;line-height:1.3;">' + _pubAsEsc(o.subtitle) + '</span>' : '') +
-      (o.meta ? '<span style="font-size:11px;color:rgba(201,168,76,0.8);margin-top:2px;line-height:1.35;">' + _pubAsEsc(o.meta) + '</span>' : '') +
+      (o.subtitle ? '<span style="font-style:italic;color:rgba(var(--on-panel-rgb),0.9);font-size:13px;line-height:1.3;">' + _pubAsEsc(o.subtitle) + '</span>' : '') +
+      (o.meta ? '<span style="font-size:11px;color:rgba(var(--accent-rgb),0.8);margin-top:2px;line-height:1.35;">' + _pubAsEsc(o.meta) + '</span>' : '') +
     '</span>';
-  var st = 'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + bd + ';background:rgba(20,12,4,0.7);font-family:inherit;box-sizing:border-box;';
+  var st = 'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + bd + ';background:rgba(var(--panel-rgb),0.7);font-family:inherit;box-sizing:border-box;';
   if (!o.clickable) return '<div style=\'' + st + '\'>' + inner + '</div>';
   return '<button type="button" class="pubas-card" data-id="' + _pubAsEsc(o.id) + '" style=\'' + st + 'cursor:pointer;\'>' + inner + '</button>';
 }
 function _pubAsCover(url, plus) {
-  var st = 'display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:71 / 96;border-radius:5px;background:rgba(40,28,14,0.9) center/cover no-repeat;color:rgba(201,168,76,0.55);font-size:40px;';
-  st += plus ? 'border:1px dashed rgba(201,168,76,0.5);color:var(--gold);' : 'border:1px solid rgba(201,168,76,0.3);';
+  var st = 'display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:71 / 96;border-radius:5px;background:rgba(40,28,14,0.9) center/cover no-repeat;color:rgba(var(--accent-rgb),0.55);font-size:40px;';
+  st += plus ? 'border:1px dashed rgba(var(--accent-rgb),0.5);color:var(--gold);' : 'border:1px solid rgba(var(--accent-rgb),0.3);';
   if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
   return '<span style=\'' + st + '\'>' + (plus ? '+' : (url ? '' : '&#128214;')) + '</span>';
 }
@@ -38807,7 +38807,7 @@ function _prepReplaceBtnSync() {
   var s = (typeof prepReplaceChosen === 'function') ? prepReplaceChosen() : null;
   b.innerHTML = s
     ? (_pubAsImg(s.cover_url, 30, 40, '&#128214;') + '<span style="flex:1 1 auto;min-width:0;">Replace \u201c' + _pubAsEsc(s.title || 'Untitled') + '\u201d' + (s.subtitle ? ' <i style="opacity:0.8;">' + _pubAsEsc(s.subtitle) + '</i>' : '') + '</span><span>&#9662;</span>')
-    : ('<span style="flex:0 0 30px;height:40px;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(201,168,76,0.5);border-radius:5px;font-size:18px;">+</span><span style="flex:1 1 auto;">A new story in the Library</span><span>&#9662;</span>');
+    : ('<span style="flex:0 0 30px;height:40px;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(var(--accent-rgb),0.5);border-radius:5px;font-size:18px;">+</span><span style="flex:1 1 auto;">A new story in the Library</span><span>&#9662;</span>');
 }
 function closePublishAsPicker() { var m = document.getElementById('pubas-modal'); if (m && m.parentNode) m.parentNode.removeChild(m); }
 function openPublishAsPicker() {
@@ -38821,20 +38821,20 @@ function openPublishAsPicker() {
   // v3.2.92 -- Ian: put the new-story card next to the book about to be published, the older books under it. Both
   // rows use the same columns, so every card is the same size.
   var cols = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(min(170px, calc(50% - 6px)),1fr));gap:12px;';
-  var lab = function (t) { return '<div style="font-size:12px;color:rgba(240,232,208,0.7);margin:0 0 6px;">' + t + '</div>'; };
+  var lab = function (t) { return '<div style="font-size:12px;color:rgba(var(--on-panel-rgb),0.7);margin:0 0 6px;">' + t + '</div>'; };
   var html = '<div style="' + cols + '">' +
       '<div style="display:flex;flex-direction:column;">' + lab('Your book') + _pubAsCard(mine) + '</div>' +
       '<div style="display:flex;flex-direction:column;">' + lab('Publish it as') +
-        '<button type="button" class="pubas-card" data-id="" style=\'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + (cur ? '1px solid rgba(201,168,76,0.25)' : '2px solid var(--gold)') + ';background:rgba(20,12,4,0.7);cursor:pointer;font-family:inherit;box-sizing:border-box;\'>' +
+        '<button type="button" class="pubas-card" data-id="" style=\'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + (cur ? '1px solid rgba(var(--accent-rgb),0.25)' : '2px solid var(--gold)') + ';background:rgba(var(--panel-rgb),0.7);cursor:pointer;font-family:inherit;box-sizing:border-box;\'>' +
           _pubAsCover('', true) +
-          '<span style="display:flex;flex-direction:column;gap:3px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;">A new story</span><span style="font-size:12px;color:rgba(240,232,208,0.85);line-height:1.35;">A new entry in the Library, with its own link.</span></span>' +
+          '<span style="display:flex;flex-direction:column;gap:3px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;">A new story</span><span style="font-size:12px;color:rgba(var(--on-panel-rgb),0.85);line-height:1.35;">A new entry in the Library, with its own link.</span></span>' +
         '</button></div>' +
     '</div>' +
     (list.length ? lab('<span style="display:block;margin-top:16px;">Or replace a story already published</span>') +
       '<div class="pubas-grid" style="' + cols + '">' +
         list.map(function (s) { return _pubAsCard({ id: s.id, cover: s.cover_url || '', title: s.title || 'Untitled', subtitle: s.subtitle || '', meta: _pubAsMeta(s), chosen: !!(cur && String(cur.id) === String(s.id)), clickable: true }); }).join('') +
       '</div>' +
-      '<div style="font-size:11px;color:rgba(240,232,208,0.55);margin-top:10px;">Replacing keeps the story\u2019s link and its place in the Library; its pages, cover, title and blurb become this book.</div>' : '');
+      '<div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.55);margin-top:10px;">Replacing keeps the story\u2019s link and its place in the Library; its pages, cover, title and blurb become this book.</div>' : '');
   var overlay = document.createElement('div'); overlay.id = 'pubas-modal'; overlay.className = 'prep-img-modal';
   overlay.addEventListener('click', function (e) { if (e.target === overlay) closePublishAsPicker(); });
   overlay.innerHTML = '<div class="prep-img-modal-box" style="max-width:860px;"><div class="prep-img-modal-head"><div class="prep-img-modal-title">Publish as</div>' +
@@ -39152,20 +39152,20 @@ function ibCss() {
   var st = document.createElement('style');
   st.id = 'ib-css';
   st.textContent =
-    '#ib-root{color:#f0e8d0;}' +
-    '#ib-root b,#ib-root label{color:#f0e8d0;}' +
+    '#ib-root{color:var(--on-panel);}' +
+    '#ib-root b,#ib-root label{color:var(--on-panel);}' +
     '.main-content > div#view-image-builder{padding-top:0.5rem;}' +
     '#view-image-builder .page-header{margin-bottom:8px;align-items:center;}' +
     '.ib-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}' +
-    '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(201,168,76,0.2);margin-bottom:10px;}' +
-    '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(240,232,208,0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
-    '.ib-tab.on{border-bottom-color:#c9a84c;color:#e8d49a;}' +
+    '.ib-tabs{display:flex;gap:6px;border-bottom:1px solid rgba(var(--accent-rgb),0.2);margin-bottom:10px;}' +
+    '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(var(--on-panel-rgb),0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
+    '.ib-tab.on{border-bottom-color:var(--accent);color:#e8d49a;}' +
     '.ib-make{display:grid;grid-template-columns:minmax(300px,460px) minmax(0,1fr);gap:20px;align-items:start;}' +
-    '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:14px;}' +
+    '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
     '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--gold);letter-spacing:0.04em;margin-bottom:6px;}' +
     '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:#e8a090;margin-left:6px;letter-spacing:0;font-weight:400;}' +
-    '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.3);border-radius:8px;color:#f0e8d0;padding:8px 10px;font:inherit;font-size:14px;}' +
+    '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;color:var(--on-panel);padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:#e07a6a;}' +
     '#ib-style-btn.ib-bad,#ib-shapes.ib-bad{outline:2px solid #e07a6a;outline-offset:2px;border-radius:8px;}' +
     '.ib-acc-title{display:flex;align-items:baseline;gap:8px;min-width:0;overflow:hidden;}' +
@@ -39191,26 +39191,26 @@ function ibCss() {
     '.ib-state{font-size:12px;padding:3px 9px;border-radius:10px;background:rgba(122,140,184,0.16);color:#9caedb;}' +
     '.ib-state.ready{background:rgba(120,180,110,0.16);color:#9fd28f;}' +
     '.ib-draft{position:absolute;top:6px;left:6px;z-index:3;font-size:11px;padding:2px 8px;border-radius:9px;background:rgba(20,20,40,0.85);color:#9caedb;}' +
-    '.ib-frame{position:relative;margin:0 auto;max-width:100%;border-radius:8px;background:#0a0604;border:1px solid rgba(201,168,76,0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;}' +
+    '.ib-frame{position:relative;margin:0 auto;max-width:100%;border-radius:8px;background:#0a0604;border:1px solid rgba(var(--accent-rgb),0.25);overflow:hidden;display:flex;align-items:center;justify-content:center;}' +
     '.ib-frame img{width:100%;height:100%;object-fit:contain;display:block;cursor:zoom-in;}' +
     // v3.3.89 -- the title being placed
-    '.ib-place{position:absolute;z-index:4;cursor:move;touch-action:none;outline:1px dashed rgba(201,168,76,0.9);}' +
+    '.ib-place{position:absolute;z-index:4;cursor:move;touch-action:none;outline:1px dashed rgba(var(--accent-rgb),0.9);}' +
     '.ib-place canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
-    '.ib-place-h{position:absolute;right:0;bottom:0;width:16px;height:16px;background:#c9a84c;border:2px solid #0a0604;border-radius:3px;cursor:nwse-resize;touch-action:none;}' +
+    '.ib-place-h{position:absolute;right:0;bottom:0;width:16px;height:16px;background:var(--accent);border:2px solid #0a0604;border-radius:3px;cursor:nwse-resize;touch-action:none;}' +
     '.ib-place-bar{position:absolute;left:8px;top:8px;z-index:5;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}' +
-    '.ib-place-tip{font-size:12px;padding:3px 8px;border-radius:8px;background:rgba(10,6,4,0.75);color:#e8d9b0;}' +
+    '.ib-place-tip{font-size:12px;padding:3px 8px;border-radius:8px;background:rgba(var(--well-rgb),0.75);color:#e8d9b0;}' +
     '.ib-placing .panel-img-actions{display:none !important;}' +
     // v3.3.92 -- the handout's writing being placed
-    '.ib-ho-box{position:absolute;z-index:4;cursor:move;touch-action:none;outline:2px dashed rgba(201,168,76,0.95);background:rgba(255,248,225,0.12);}' +
+    '.ib-ho-box{position:absolute;z-index:4;cursor:move;touch-action:none;outline:2px dashed rgba(var(--accent-rgb),0.95);background:rgba(255,248,225,0.12);}' +
     '.ib-ho-box canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
-    '.ib-ho-chip{display:inline-block;padding:6px 10px;border:1px dashed rgba(201,168,76,0.8);border-radius:8px;cursor:grab;font-size:13px;color:var(--gold-light);user-select:none;}' +
+    '.ib-ho-chip{display:inline-block;padding:6px 10px;border:1px dashed rgba(var(--accent-rgb),0.8);border-radius:8px;cursor:grab;font-size:13px;color:var(--gold-light);user-select:none;}' +
     '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
     '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
     '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}' +
-    '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.25);border:1px solid rgba(201,168,76,0.22);border-radius:10px;padding:8px;}' +
+    '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:8px;}' +
     '.ib-pic{position:relative;width:100%;aspect-ratio:4/3;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}' +
     '.ib-pic img{width:100%;height:100%;object-fit:contain;display:block;}' +
-    '.ib-meta{font-size:12px;color:rgba(240,232,208,0.7);}' +
+    '.ib-meta{font-size:12px;color:rgba(var(--on-panel-rgb),0.7);}' +
     '.ib-err{color:#f0a090;font-size:13px;}' +
     '@media (max-width:800px){.ib-make{grid-template-columns:1fr;}.ib-viewer{position:static;}}';
   document.head.appendChild(st);
@@ -39844,7 +39844,7 @@ function ibRender() {
       // v3.3.97 -- Image type sits under References (Ian); Shape and Art style follow it.
       ibAccHtml('type', 'Image type', '<select class="ib-in" id="ib-type" onchange="ibTypeChanged()">' + typeOpts + '</select>' +
         '<div class="ib-meta" style="margin-top:6px;">Optional. With none, the picture is built from your description alone.</div>' + ibTypeEditHtml() +
-        (IB.type === 'handout' ? '<div id="ib-ho-sec" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,168,76,0.2);"><div class="ib-lbl">Handout text</div>' + ibHandoutBody() + '</div>' : '')) +   // v3.3.86; v3.3.93 -- the handout's words, under the dropdown
+        (IB.type === 'handout' ? '<div id="ib-ho-sec" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(var(--accent-rgb),0.2);"><div class="ib-lbl">Handout text</div>' + ibHandoutBody() + '</div>' : '')) +   // v3.3.86; v3.3.93 -- the handout's words, under the dropdown
       ibAccHtml('shape', 'Shape', '<div class="ib-shapes" id="ib-shapes">' + _rpShapeStrip(IB.shape, 'ibPickShape') + '</div>') +
       ibAccHtml('style', 'Art style', '<button class="btn btn-sm" id="ib-style-btn" onclick="ibOpenStyle()">' + (IB.style ? escapeHtml(ibStyleName()) : 'Choose an art style') + '</button>') +
       ibAccHtml('desc', 'Description',
@@ -40364,12 +40364,12 @@ function ibEditPrompt(id) {
     '<div class="prep-img-modal-box" style="max-width:760px;">' +
       '<div class="prep-img-modal-head"><div class="prep-img-modal-title">Edit prompt \u2014 ' + escapeHtml(im.name || 'Untitled') + '</div>' +
         '<button type="button" class="prep-img-modal-x" onclick="ibClosePrompt()">&times;</button></div>' +
-      '<div style="overflow-y:auto;color:#f0e8d0;">' +
+      '<div style="overflow-y:auto;color:var(--on-panel);">' +
         '<div class="ib-lbl">The picture\u2019s words</div>' +
         '<div class="ib-meta" style="margin-bottom:6px;">What the picture shows. Campaignia adds its house rules, the art style and the reference pictures around these words when it draws.</div>' +
         '<textarea class="ib-in" id="ib-words" rows="10" maxlength="6000">' + escapeHtml(im.words || im.description || '') + '</textarea>' +
         '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:13px;color:#e8d49a;">The whole prompt last sent</summary>' +
-          '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(0,0,0,0.35);border:1px solid rgba(201,168,76,0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
+          '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
         '<div id="ib-words-msg" class="ib-err" style="margin-top:8px;"></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
@@ -40546,7 +40546,7 @@ function ibPickMark(btn, on, full) {
 function ibPickTile(kind, it, btn) {
   btn.style.position = 'relative'; btn.setAttribute('data-id', String(it.id));
   var ok = document.createElement('span'); ok.className = 'ib-pick-ok'; ok.textContent = '\u2713';
-  ok.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:#e8d49a;color:#16100a;font-weight:700;font-size:14px;align-items:center;justify-content:center;display:none;';
+  ok.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:#e8d49a;color:var(--window-bg);font-weight:700;font-size:14px;align-items:center;justify-content:center;display:none;';
   btn.appendChild(ok);
   btn.addEventListener('click', function () { ibPickToggle(kind, it); });
   ibPickMark(btn, ibPickHas(kind, it.id), ibPickList(kind).length >= ibRefRoom());
@@ -40909,15 +40909,15 @@ function _pmWarnOff() { try { return window.localStorage.getItem(PANEL_MOVE_WARN
 function _pmAsk(title, lines, okText, danger, offerQuiet) {
   return new Promise(function (resolve) {
     var ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(8,5,2,0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var bx = document.createElement('div');
-    bx.style.cssText = 'background:#16100a;border:1px solid rgba(201,168,76,0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
-    var h = document.createElement('div'); h.textContent = title; h.style.cssText = "font-family:'Cinzel',serif;color:#c9a84c;font-size:16px;margin-bottom:10px;";
-    var ul = document.createElement('ul'); ul.style.cssText = 'color:#f0e8d0;font-size:14px;line-height:1.5;margin:0 0 14px;padding-left:20px;';
+    bx.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
+    var h = document.createElement('div'); h.textContent = title; h.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:10px;";
+    var ul = document.createElement('ul'); ul.style.cssText = 'color:var(--on-panel);font-size:14px;line-height:1.5;margin:0 0 14px;padding-left:20px;';
     lines.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; li.style.marginBottom = '4px'; ul.appendChild(li); });
     var q = null;
     if (offerQuiet) {
-      var lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:8px;align-items:center;color:#e8d5a3;font-size:13px;margin-bottom:14px;cursor:pointer;';
+      var lab = document.createElement('label'); lab.style.cssText = 'display:flex;gap:8px;align-items:center;color:var(--accent-pale);font-size:13px;margin-bottom:14px;cursor:pointer;';
       q = document.createElement('input'); q.type = 'checkbox'; q.id = 'pm-quiet';
       lab.appendChild(q); lab.appendChild(document.createTextNode('Don\u2019t show this message again')); bx.appendChild(h); bx.appendChild(ul); bx.appendChild(lab);
     } else { bx.appendChild(h); bx.appendChild(ul); }
@@ -41082,7 +41082,7 @@ function spaceControls(src, t, id) {
   if (k < 0) return '';
   var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
   var what = t === 'p' ? 'panel' : 'bridge';
-  var bs = 'background:none;border:1px solid rgba(201,168,76,0.4);color:#e8d5a3;border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
+  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
   var off = 'opacity:0.35;cursor:default;';
   var can = function (j) {
     if (j < 0 || j >= flat.length) return false;
@@ -41099,7 +41099,7 @@ function spaceControls(src, t, id) {
     btn(k - 1, back, 'Move this ' + what + ' one place ' + (src === 'review' ? 'up' : 'earlier')) +
     '<button type="button" style="' + bs + '" title="Delete this ' + what + '" onclick="event.stopPropagation();' + del + '">&times;</button>' +
     btn(k + 1, fwd, 'Move this ' + what + ' one place ' + (src === 'review' ? 'down' : 'later')) +
-    '<span class="sp-grip" title="Drag to move this ' + what + '" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:#c9a84c;cursor:grab;user-select:none;">⠿</span></span>';
+    '<span class="sp-grip" title="Drag to move this ' + what + '" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:var(--accent);cursor:grab;user-select:none;">⠿</span></span>';
 }
 // Send a new page order (or a bridge to delete) for the version on screen, then reload both views.
 async function fxSend(src, body) {
