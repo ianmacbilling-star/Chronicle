@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.55",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3455-theme-sweep-app-html",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands, step 2a: app.html's colors now come from the theme sheet (nothing looks different).",
+        "detail": "Every brand color typed into app.html's style attributes and style blocks now names a value from css/themes/campaignia.css, which gains four names for the bookshelf look (foil, tooling, shelf shadow, inset well). Proved identical: expanded back it is the old file, and every computed style matches. Left as typed: the meta theme-color (the browser reads it before any style sheet) and comments.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.54",
     "staged_on": "2026-11-05",
     "entries": [

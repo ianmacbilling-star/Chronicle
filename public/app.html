@@ -80,13 +80,13 @@
          role/tabindex/keydown because this is a control now and the top banner is the first
          thing a keyboard reaches. preventDefault on Space stops the browser scrolling the page
          underneath goToPlans() while it is scrolling it somewhere else. -->
-    <span id="trial-badge" role="button" tabindex="0" onclick="goToPlans()" onkeydown="if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') { event.preventDefault(); goToPlans(); }" title="You are on the Free Trial plan (1 campaign, 1 session, character limit, watermark). Click to see plans and passes." style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#0a0806;background:#c9a84c;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;cursor:pointer;">&#9733; FREE TRIAL <span id="trial-badge-days" style="font-weight:600;opacity:0.8;"></span></span>
+    <span id="trial-badge" role="button" tabindex="0" onclick="goToPlans()" onkeydown="if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') { event.preventDefault(); goToPlans(); }" title="You are on the Free Trial plan (1 campaign, 1 session, character limit, watermark). Click to see plans and passes." style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:var(--page-bg);background:var(--accent);border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;cursor:pointer;">&#9733; FREE TRIAL <span id="trial-badge-days" style="font-weight:600;opacity:0.8;"></span></span>
     <!-- v3.0.676 -- TD-475. The lone-copper badge is retired: it said COPPER beside a tier badge
          already saying Copper. Its warning lives in the tier badge tooltip now. -->
     <span id="lone-badge" style="display:none;"></span>
     <!-- v3.1.47 -- TD-934. SOMEONE GAVE YOU A GIFT (Ian, 2026-10-01). Shown from the gift's day until it is
          redeemed, for gifts sent to this account's confirmed email. Filled by refreshGiftBadge(). -->
-    <a id="gift-badge" href="/redeem" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:#0a0806;background:#e8c766;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;text-decoration:none;cursor:pointer;" title="Someone gave you a Campaignia gift. Click to redeem it."><span aria-hidden="true">&#127873;</span> <span id="gift-badge-text">SOMEONE GAVE YOU A GIFT</span></a>
+    <a id="gift-badge" href="/redeem" style="display:none;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:var(--page-bg);background:#e8c766;border-radius:6px;padding:4px 9px;margin:0 4px;letter-spacing:0.4px;text-decoration:none;cursor:pointer;" title="Someone gave you a Campaignia gift. Click to redeem it."><span aria-hidden="true">&#127873;</span> <span id="gift-badge-text">SOMEONE GAVE YOU A GIFT</span></a>
     <!-- v3.1.48 -- On a phone the header has no room for it (Ian: no extra height either), so the gift is a small
          icon pinned to the corner of the account button (#gift-pin) and the top line of the account menu. -->
     <style>
@@ -186,17 +186,17 @@
            heading in the old dark ink (var(--text)), which vanished on the darkened background. The
            background behind a page heading is now always dark, so every heading is gold and every
            line under it cream. */
-        body.bg-dimmed .view .page-header .page-title { color:#e8cf7a; }
-        body.bg-dimmed .view .page-header .page-subtitle { color:rgba(240,232,208,0.78); }
+        body.bg-dimmed .view .page-header .page-title { color:var(--foil); }
+        body.bg-dimmed .view .page-header .page-subtitle { color:rgba(var(--on-panel-rgb),0.78); }
         body.text-halo .view .page-title, body.text-halo .view .page-subtitle, body.text-halo .view .sdh-date-display,
         body.text-halo .view .sess-tab, body.text-halo #view-session-detail .form-label {
           text-shadow:0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.9); }
-        #view-campaigns.camp-plain-bg .page-subtitle { color:rgba(232,207,122,0.85); text-shadow:0 1px 3px rgba(0,0,0,0.9); }
+        #view-campaigns.camp-plain-bg .page-subtitle { color:rgba(var(--foil-rgb),0.85); text-shadow:0 1px 3px rgba(0,0,0,0.9); }
         .camp-books .campaign-book { position:relative; display:flex; flex-direction:column; aspect-ratio:17/22; padding:0; overflow:hidden; cursor:pointer;
           border:none; border-radius:3px 6px 6px 3px; backdrop-filter:none; -webkit-backdrop-filter:none;
           background:radial-gradient(ellipse at 55% 32%, #2b1a0d 0%, #1a0f07 55%, #0e0804 100%);
           box-shadow:6px 8px 16px rgba(0,0,0,0.7), inset -1px 0 0 rgba(255,255,255,0.05); transition:transform .15s ease, box-shadow .15s ease; }
-        .camp-books .campaign-book:hover { transform:translateY(-4px); border:none; box-shadow:8px 12px 22px rgba(0,0,0,0.75), 0 0 0 1px rgba(201,168,76,0.45); }
+        .camp-books .campaign-book:hover { transform:translateY(-4px); border:none; box-shadow:8px 12px 22px rgba(0,0,0,0.75), 0 0 0 1px rgba(var(--accent-rgb),0.45); }
         .camp-books .campaign-book::before { content:''; position:absolute; top:0; bottom:0; left:0; width:14px; z-index:5; pointer-events:none;
           background:linear-gradient(90deg, rgba(0,0,0,0.6), rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0)); }
         .cbook-amb { position:absolute; inset:-24px; z-index:0; background-size:cover; background-position:center; filter:blur(18px) saturate(0.9); opacity:0.34; }
@@ -215,18 +215,18 @@
         .cbook-art img.cbook-title { object-fit:contain; box-sizing:border-box; padding:6px 4px; -webkit-mask-image:none; mask-image:none; }
         .cbook-art img.cbook-logo { width:34%; height:auto; max-width:96px; object-fit:contain; opacity:0.55; -webkit-mask-image:none; mask-image:none; align-self:center; }
         .cbook-fade { display:none; }
-        .cbook-frame { position:absolute; inset:8px 8px 8px 12px; z-index:5; pointer-events:none; border:1px solid rgba(214,180,90,0.7); border-radius:2px;
+        .cbook-frame { position:absolute; inset:8px 8px 8px 12px; z-index:5; pointer-events:none; border:1px solid rgba(var(--tooling-rgb),0.7); border-radius:2px;
           box-shadow:0 0 0 1px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(0,0,0,0.25); }
         .cbook-text { position:relative; flex:0 0 auto; margin-top:-60px; padding:60px 16px 16px 22px; z-index:4; display:flex; flex-direction:column; gap:4px;
-          background:linear-gradient(to bottom, rgba(12,7,3,0) 0, rgba(12,7,3,0.8) 48px, rgba(12,7,3,0.96) 78px, #0c0703 100%); }   /* v3.2.08 -- in the column, under the picture */
-        .camp-books .campaign-book .campaign-card-name { color:#e8cf7a; font-size:15px; line-height:1.25; margin:0; text-shadow:0 1px 2px rgba(0,0,0,0.9); }
-        .camp-books .campaign-book .campaign-card-desc { color:rgba(240,232,208,0.8); margin:0; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-        .camp-books .campaign-book .campaign-card-meta { color:rgba(232,207,122,0.6); }
+          background:linear-gradient(to bottom, rgba(var(--shelf-shadow-rgb),0) 0, rgba(var(--shelf-shadow-rgb),0.8) 48px, rgba(var(--shelf-shadow-rgb),0.96) 78px, #0c0703 100%); }   /* v3.2.08 -- in the column, under the picture */
+        .camp-books .campaign-book .campaign-card-name { color:var(--foil); font-size:15px; line-height:1.25; margin:0; text-shadow:0 1px 2px rgba(0,0,0,0.9); }
+        .camp-books .campaign-book .campaign-card-desc { color:rgba(var(--on-panel-rgb),0.8); margin:0; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .camp-books .campaign-book .campaign-card-meta { color:rgba(var(--foil-rgb),0.6); }
         .camp-books .campaign-book .campaign-card-footer { margin-top:4px; }
         .camp-books .add-campaign-book { aspect-ratio:17/22; min-height:0; border:none; border-radius:3px 6px 6px 3px; position:relative;
-          background:radial-gradient(ellipse at 55% 40%, rgba(43,26,13,0.75), rgba(14,8,4,0.85)); box-shadow:6px 8px 16px rgba(0,0,0,0.55); color:rgba(232,207,122,0.7); }
-        .camp-books .add-campaign-book::after { content:''; position:absolute; inset:8px 8px 8px 12px; border:1px dashed rgba(214,180,90,0.55); border-radius:2px; pointer-events:none; }
-        .camp-books .add-campaign-book:hover { color:#e8cf7a; transform:translateY(-4px); }
+          background:radial-gradient(ellipse at 55% 40%, rgba(43,26,13,0.75), rgba(14,8,4,0.85)); box-shadow:6px 8px 16px rgba(0,0,0,0.55); color:rgba(var(--foil-rgb),0.7); }
+        .camp-books .add-campaign-book::after { content:''; position:absolute; inset:8px 8px 8px 12px; border:1px dashed rgba(var(--tooling-rgb),0.55); border-radius:2px; pointer-events:none; }
+        .camp-books .add-campaign-book:hover { color:var(--foil); transform:translateY(-4px); }
         /* v3.0.998 -- the blank book gets its binding too (Ian). */
         .camp-books .add-campaign-book::before { content:''; position:absolute; top:0; bottom:0; left:0; width:14px; pointer-events:none;
           background:linear-gradient(90deg, rgba(0,0,0,0.6), rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0)); }
@@ -237,11 +237,11 @@
         .sess-books .session-card { position:relative; display:flex; flex-direction:column; aspect-ratio:17/22; overflow:hidden; border:none; border-radius:3px 6px 6px 3px;
           background:radial-gradient(ellipse at 55% 32%, #2b1a0d 0%, #1a0f07 55%, #0e0804 100%);
           box-shadow:6px 8px 16px rgba(0,0,0,0.7), inset -1px 0 0 rgba(255,255,255,0.05); transition:transform .15s ease, box-shadow .15s ease; }
-        .sess-books .session-card:hover { transform:translateY(-4px); border:none; box-shadow:8px 12px 22px rgba(0,0,0,0.75), 0 0 0 1px rgba(201,168,76,0.45); }
-        .sess-books .session-card.session-card-publish:hover { transform:none; box-shadow:6px 8px 16px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,168,76,0.3); }
+        .sess-books .session-card:hover { transform:translateY(-4px); border:none; box-shadow:8px 12px 22px rgba(0,0,0,0.75), 0 0 0 1px rgba(var(--accent-rgb),0.45); }
+        .sess-books .session-card.session-card-publish:hover { transform:none; box-shadow:6px 8px 16px rgba(0,0,0,0.7), 0 0 0 1px rgba(var(--accent-rgb),0.3); }
         .sess-books .session-card::before { content:''; position:absolute; top:0; bottom:0; left:0; width:14px; z-index:5; pointer-events:none;
           background:linear-gradient(90deg, rgba(0,0,0,0.6), rgba(255,255,255,0.16) 50%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0)); }
-        .sess-books .session-card::after { content:''; position:absolute; inset:8px 8px 8px 12px; z-index:6; pointer-events:none; border:1px solid rgba(214,180,90,0.7); border-radius:2px;
+        .sess-books .session-card::after { content:''; position:absolute; inset:8px 8px 8px 12px; z-index:6; pointer-events:none; border:1px solid rgba(var(--tooling-rgb),0.7); border-radius:2px;
           box-shadow:0 0 0 1px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(0,0,0,0.25); }
         /* v3.0.998 -- Ian: centred, and a little oversized so it fills more of the cover: a touch wider
            than the cover (its faded edges run past the gold line), centred in the upper part, its foot
@@ -266,15 +266,15 @@
         .sess-books .session-card .session-card-img.session-card-img-title { object-fit:contain; box-sizing:border-box; padding:6px 4px; -webkit-mask-image:none; mask-image:none; }
         .sess-books .session-card .session-card-img-empty { display:flex; align-items:center; justify-content:center; font-size:34px; opacity:0.3; -webkit-mask-image:none; mask-image:none; }
         .sess-books .session-card .session-card-body { position:relative; flex:0 0 auto; margin-top:-70px; z-index:4; padding:70px 16px 16px 22px; gap:4px;
-          background:linear-gradient(to bottom, rgba(12,7,3,0) 0, rgba(12,7,3,0.8) 55px, rgba(12,7,3,0.96) 90px, #0c0703 100%); }
-        .sess-books .session-card .session-card-title { color:#e8cf7a; font-size:14px; font-family:var(--font-display); text-shadow:0 1px 2px rgba(0,0,0,0.9); }
-        .sess-books .session-card .session-card-date { color:rgba(232,207,122,0.62); }
-        .sess-books .session-card .session-card-fork, .sess-books .session-card .session-card-include { color:rgba(240,232,208,0.72); }
+          background:linear-gradient(to bottom, rgba(var(--shelf-shadow-rgb),0) 0, rgba(var(--shelf-shadow-rgb),0.8) 55px, rgba(var(--shelf-shadow-rgb),0.96) 90px, #0c0703 100%); }
+        .sess-books .session-card .session-card-title { color:var(--foil); font-size:14px; font-family:var(--font-display); text-shadow:0 1px 2px rgba(0,0,0,0.9); }
+        .sess-books .session-card .session-card-date { color:rgba(var(--foil-rgb),0.62); }
+        .sess-books .session-card .session-card-fork, .sess-books .session-card .session-card-include { color:rgba(var(--on-panel-rgb),0.72); }
         /* v3.1.1 -- Ian: "lighten up the ellipses on the button on the session tile. You can't see the
            '...'". .row-menu-btn is shared app-wide and colours its dots var(--text), which is dark;
            on the dark book it vanished (TD-813). Gold here, on the session books only. */
-        .sess-books .session-card .row-menu-btn { color:#e8cf7a; border-color:rgba(214,180,90,0.5); background:rgba(0,0,0,0.35); font-size:18px; font-weight:700; }
-        .sess-books .session-card .row-menu-btn:hover { color:#fff1c4; border-color:rgba(214,180,90,0.85); background:rgba(201,168,76,0.18); }
+        .sess-books .session-card .row-menu-btn { color:var(--foil); border-color:rgba(var(--tooling-rgb),0.5); background:rgba(0,0,0,0.35); font-size:18px; font-weight:700; }
+        .sess-books .session-card .row-menu-btn:hover { color:#fff1c4; border-color:rgba(var(--tooling-rgb),0.85); background:rgba(var(--accent-rgb),0.18); }
       </style>
     </div>
 
@@ -375,7 +375,7 @@
           <!-- Version picker: the Story Master can assemble & export any
                player's novel (their versions per session, canonical where none). -->
           <div id="novel-version-row" style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:12px;color:rgba(201,168,76,0.7);">Version:</span>
+            <span style="font-size:12px;color:rgba(var(--accent-rgb),0.7);">Version:</span>
             <select id="novel-version-select" class="form-input" style="max-width:260px;height:30px;width:auto;flex:0 0 auto;font-size:11px;padding:0 10px;" onchange="onNovelVersionChange(this.value)"></select>
           </div>
           <button class="btn btn-sm" id="novel-nav-characters" onclick="showCampaignSection('characters')" title="The campaign's characters (the Canonical ones)">Characters</button><!-- v3.3.33 -->
@@ -417,22 +417,22 @@
           </div>
           <div id="novel-pager" style="display:none;align-items:center;gap:8px;flex-wrap:nowrap;min-width:0;">
             <button class="btn btn-sm" id="novel-pager-prev" onclick="novelPagePrev()" style="flex:0 0 auto;">Prev</button>
-            <select id="novel-pager-select" onchange="novelPageJump(this.value)" style="flex:1 1 auto;min-width:0;max-width:340px;background:rgba(20,12,4,0.8);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);"></select>
+            <select id="novel-pager-select" onchange="novelPageJump(this.value)" style="flex:1 1 auto;min-width:0;max-width:340px;background:rgba(var(--panel-rgb),0.8);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);"></select>
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()" style="flex:0 0 auto;">Next</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()" style="display:none">Review in a New Tab</button>
           <button class="btn btn-sm" id="prep-trueview-btn" onclick="prepTrueView()" style="display:none;margin-left:auto;" title="Opens the REAL paged PDF in a new tab, straight from the current settings. Skips the Optimize run -- so it is the un-optimised book, which is exactly what you want when you are judging how something RENDERS rather than how it paginates.">True View &mdash; admin only</button>
         </div>
-        <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:10px;">
+        <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(var(--accent-rgb),0.08);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius);font-size:11px;color:rgba(var(--accent-rgb),0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
         </div>
         <div class="progress-wrap" id="novel-preview-progress-wrap" style="display:none;margin-bottom:10px;">
           <div class="progress-bar"><div class="progress-fill" id="novel-preview-progress-fill"></div></div>
           <div class="progress-msg" id="novel-preview-progress-msg">Loading preview&hellip;</div>
         </div>
-        <div id="novel-preview-frame" style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;">
-          <div id="novel-preview-loading" style="width:100%;display:flex;align-items:center;justify-content:center;background:rgba(12,8,4,0.5);">
-            <div style="text-align:center;color:rgba(201,168,76,0.4);">
+        <div id="novel-preview-frame" style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);overflow:hidden;">
+          <div id="novel-preview-loading" style="width:100%;display:flex;align-items:center;justify-content:center;background:rgba(var(--panel-deeper-rgb),0.5);">
+            <div style="text-align:center;color:rgba(var(--accent-rgb),0.4);">
               <div style="font-size:32px;margin-bottom:8px;"></div>
               <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
             </div>
@@ -470,7 +470,7 @@
                book on screen belongs to somebody else; prepApplyOwnershipLock toggles it. Without
                it a reader meets a panel where nothing responds and nothing says why, which is the
                same complaint as a control that accepts an edit and discards it. -->
-          <div id="prep-readonly-note" style="display:none;margin-bottom:12px;padding:8px 10px;font-size:12px;line-height:1.5;color:var(--cream);background:rgba(201,168,76,0.06);border-left:2px solid rgba(201,168,76,0.4);border-radius:0 var(--radius) var(--radius) 0;">
+          <div id="prep-readonly-note" style="display:none;margin-bottom:12px;padding:8px 10px;font-size:12px;line-height:1.5;color:var(--cream);background:rgba(var(--accent-rgb),0.06);border-left:2px solid rgba(var(--accent-rgb),0.4);border-radius:0 var(--radius) var(--radius) 0;">
             You are looking at someone else&#8217;s version, so the title, cover and layout settings are read-only. Switch to your own version to change them.
           </div>
           <!-- v3.4.28 -- THE PANELS FOLLOW THE BOOK (Ian, 2026-11-04: "I want the accordion panels to the left to match the
@@ -497,7 +497,7 @@
                    pcl-ownTitle-words: the word check for an Image Builder cover (prepCoverWordsPaint). -->
               <label id="pcl-ownTitle-row" style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--gold-light);cursor:pointer;margin:14px 0 6px;"><input type="checkbox" id="pcl-ownTitle" onchange="prepOwnTitleChanged(this)"> My Cover Picture has Title Included</label>
               <div id="pcl-ownTitle-words" style="display:none;font-size:11px;line-height:1.4;color:#e0b070;margin:0 0 8px;"></div>
-              <div id="prep-title-panel" style="border:1px solid rgba(201,168,76,0.35);border-radius:8px;padding:10px 12px 4px;margin:6px 0 4px;">
+              <div id="prep-title-panel" style="border:1px solid rgba(var(--accent-rgb),0.35);border-radius:8px;padding:10px 12px 4px;margin:6px 0 4px;">
               <!-- v3.2.16 -- Ian: after an edit, when the cover uses a drawn title, "a small message under the text boxes". -->
               <div id="prep-drawn-title-note" style="display:none;font-size:11px;line-height:1.4;color:#e0b070;margin:4px 0 8px;"></div>
 
@@ -522,7 +522,7 @@
                      same display face, same letter-spacing -- these are the two controls on this panel
                      that SPEND A TOKEN, so they should read as the same kind of thing. -->
                 <button type="button" id="title-build-open" onclick="openTitleBuilder()"
-                        style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;font-size:12px;"
+                        style="background:var(--gold);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;font-size:12px;"
                         title="Draw the title and subtitle as artwork instead of setting them in a typeface. Costs a token each time you generate.">Title Builder</button>
               </div>
               <!-- v3.0.632 -- ON THE ROW WITH THE DROPDOWN, not the row with the label. v3.0.630 put
@@ -575,7 +575,7 @@
               <div class="prep-img-slots prep-img-one" style="max-width:150px;">
                 <div class="prep-img-slot"><div class="prep-img-thumb" id="prep-thumb-title" onclick="openPrepImagePicker('title')"></div><div class="prep-img-cap">Title</div></div>
               </div>
-              <div style="font-size:11px;line-height:1.4;color:rgba(232,213,163,0.72);">The title and subtitle print above it (set them in Cover).</div>
+              <div style="font-size:11px;line-height:1.4;color:rgba(var(--accent-pale-rgb),0.72);">The title and subtitle print above it (set them in Cover).</div>
             </div>
           </div>
 
@@ -585,7 +585,7 @@
               <!-- v3.2.82 -- TD-1017. Ian: a note to the readers, printed on the details page; PDF and print only. -->
               <div class="prep-field-label">Author&#8217;s Note</div>
               <textarea id="prep-author-note" maxlength="600" rows="4" onchange="prepSaveAuthorNote()" oninput="prepAuthorNoteCount()" placeholder="Optional. A note, message or dedication to your readers." class="prep-input" style="resize:vertical;min-height:84px;line-height:1.45;margin-bottom:2px;" title="Printed on the page with the copyright notice, right after the title page. In the PDF and the printed book only."></textarea>
-              <div id="prep-author-note-count" style="font-size:11px;color:rgba(232,213,163,0.72);text-align:right;margin:0 0 14px;">0 / 600</div>
+              <div id="prep-author-note-count" style="font-size:11px;color:rgba(var(--accent-pale-rgb),0.72);text-align:right;margin:0 0 14px;">0 / 600</div>
             </div>
           </div>
 
@@ -677,7 +677,7 @@
                   </select>
                 </label>
               </div>
-              <div class="pcl-toggles" style="margin-top:12px;border-top:1px solid rgba(201,168,76,0.2);padding-top:10px;">
+              <div class="pcl-toggles" style="margin-top:12px;border-top:1px solid rgba(var(--accent-rgb),0.2);padding-top:10px;">
                 <label class="cl-toggle" title="Large decorative first letter on the opening paragraph"><input type="checkbox" id="pcl-dropcap"><span>Drop cap on opening</span></label>
                 <label class="cl-toggle" title="Show the campaign / session header at the top of each page"><input type="checkbox" id="pcl-header"><span>Running page header</span></label>
               </div>
@@ -708,11 +708,11 @@
       <div id="novel-tab-finalize" style="display:none;">
         <div id="finalize-split" style="display:flex;align-items:stretch;gap:0;">
           <div id="finalize-left" style="flex:0 0 33%;min-width:220px;padding-right:8px;">
-            <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Optimize &mdash; Layout <span id="optimize-preview-pill" style="font-size:10px;background:rgba(201,168,76,0.18);border:1px solid rgba(201,168,76,0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
-            <div style="color:rgba(245,232,200,0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
-            <div id="layoutai-header" style="font-size:12px;color:var(--cream);background:rgba(201,168,76,0.06);border-left:2px solid rgba(201,168,76,0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
+            <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Optimize &mdash; Layout <span id="optimize-preview-pill" style="font-size:10px;background:rgba(var(--accent-rgb),0.18);border:1px solid rgba(var(--accent-rgb),0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
+            <div style="color:rgba(var(--on-panel-cream-rgb),0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
+            <div id="layoutai-header" style="font-size:12px;color:var(--cream);background:rgba(var(--accent-rgb),0.06);border-left:2px solid rgba(var(--accent-rgb),0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;"
+              <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;"
                       title="Hands the whole book to the AI art director to lay out again. This SPENDS TOKENS and takes several minutes -- both grow with the size of your book. The estimate beside this button is the most it can cost.">Optimize layout</button>
               <button id="layoutai-cancel-btn" onclick="finalizeCancelOptimize()" style="display:none;background:none;border:1px solid rgba(200,90,70,0.55);color:#e8a08c;border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Cancel</button>
               <!-- v3.0.382 -- shown only when an Optimize run COMPLETES, in the slot the Cancel
@@ -722,28 +722,28 @@
                    the book on screen but not the SAVED one, so the hand-off has to become an offer to
                    save. Without it a fix could not be kept at all: the only way forward was to re-run
                    Optimize, which undoes it. -->
-              <button id="layoutai-save-fixed-btn" onclick="finalizeSaveFixedVersion()" style="display:none;background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Save this Version</button>
-              <button id="layoutai-publish-btn" onclick="finalizeGoToPublish()" style="display:none;background:var(--gold);color:#140c04;border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Go to Publish &#8594;</button>
+              <button id="layoutai-save-fixed-btn" onclick="finalizeSaveFixedVersion()" style="display:none;background:var(--gold);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Save this Version</button>
+              <button id="layoutai-publish-btn" onclick="finalizeGoToPublish()" style="display:none;background:var(--gold);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Go to Publish &#8594;</button>
               <!-- v3.0.893 -- TD-768. Shown and hidden by finalizeSyncPublishBtn from the SAME
                    variable as Go to Publish, so the two cannot disagree. Outlined rather than
                    filled: Go to Publish stays the primary action in this slot. -->
-              <button id="layoutai-download-btn" onclick="finalizeDownloadPdf()" title="Download the saved optimized book as a PDF" style="display:none;background:none;border:1px solid rgba(201,168,76,0.45);color:var(--gold);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Download PDF</button>
+              <button id="layoutai-download-btn" onclick="finalizeDownloadPdf()" title="Download the saved optimized book as a PDF" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--gold);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Download PDF</button>
               <!-- v3.0.981 -- TD-901. Save to Bookshelf: same visibility as Download PDF (finalizeSyncPublishBtn). -->
-              <button id="layoutai-shelf-btn" onclick="finalizeSaveToShelf()" title="Keep a copy of this optimized book, layout and all, on your Bookshelf" style="display:none;background:none;border:1px solid rgba(201,168,76,0.45);color:var(--gold);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Save to Bookshelf</button>
-              <button id="layoutai-load-last" onclick="finalizeLoadLastOptimized(true)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.45);color:var(--gold);border-radius:var(--radius);padding:6px 12px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Load Last Optimized File</button>
-              <span id="layoutai-est-note" style="font-size:11px;color:rgba(245,232,200,0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>
-              <span id="layoutai-scan-label" style="display:none;font-size:13px;color:rgba(245,232,200,0.7);font-style:italic;flex:0 0 auto;">Scanning book&hellip;</span>
+              <button id="layoutai-shelf-btn" onclick="finalizeSaveToShelf()" title="Keep a copy of this optimized book, layout and all, on your Bookshelf" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--gold);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Save to Bookshelf</button>
+              <button id="layoutai-load-last" onclick="finalizeLoadLastOptimized(true)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--gold);border-radius:var(--radius);padding:6px 12px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Load Last Optimized File</button>
+              <span id="layoutai-est-note" style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>
+              <span id="layoutai-scan-label" style="display:none;font-size:13px;color:rgba(var(--on-panel-cream-rgb),0.7);font-style:italic;flex:0 0 auto;">Scanning book&hellip;</span>
               <div id="layoutai-delta" style="display:none;font-size:13px;color:#d8c9a8;line-height:1.5;flex:1 1 auto;min-width:0;"></div>
             </div>
-            <div id="layoutai-status" style="color:rgba(245,232,200,0.55);font-size:12px;margin-top:8px;"></div>
+            <div id="layoutai-status" style="color:rgba(var(--on-panel-cream-rgb),0.55);font-size:12px;margin-top:8px;"></div>
             <!-- Plain-language progress shown to everyone while Optimize runs (admins also get the diagnostics below). -->
-            <div id="optimize-progress" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.18);border-radius:var(--radius);font-size:13px;color:var(--cream);line-height:1.7;max-height:420px;overflow-y:auto;"></div>
+            <div id="optimize-progress" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(var(--accent-rgb),0.05);border:1px solid rgba(var(--accent-rgb),0.18);border-radius:var(--radius);font-size:13px;color:var(--cream);line-height:1.7;max-height:420px;overflow-y:auto;"></div>
             <!-- Choose which rendering goes to the Library. The optimized option stays disabled until
                  Optimize has run, because publishing it reuses that run's composed book. -->
-            <div id="layoutai-publish-pick" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid rgba(201,168,76,0.2);">
-              <div style="font-size:12px;color:rgba(245,232,200,0.7);margin-bottom:7px;">Carefully review both options and select the one that you feel is best.</div>
+            <div id="layoutai-publish-pick" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid rgba(var(--accent-rgb),0.2);">
+              <div style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.7);margin-bottom:7px;">Carefully review both options and select the one that you feel is best.</div>
               <!-- Plain-language read on the two versions, filled in once Optimize has run. -->
-              <div id="pub-pick-verdict" style="display:none;font-size:12px;color:rgba(245,232,200,0.85);line-height:1.5;margin-bottom:9px;padding:8px 10px;border-left:2px solid rgba(201,168,76,0.5);background:rgba(201,168,76,0.06);border-radius:0 var(--radius) var(--radius) 0;"></div>
+              <div id="pub-pick-verdict" style="display:none;font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.85);line-height:1.5;margin-bottom:9px;padding:8px 10px;border-left:2px solid rgba(var(--accent-rgb),0.5);background:rgba(var(--accent-rgb),0.06);border-radius:0 var(--radius) var(--radius) 0;"></div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="pub-pick-before" onclick="pickPublishSource('flow')">Publish the original layout</button>
                 <button class="btn btn-primary btn-sm" id="pub-pick-after" onclick="pickPublishSource('composed')" disabled title="Run Optimize first">Publish the optimized layout</button>
@@ -753,31 +753,31 @@
             <div id="layoutai-results" style="display:none;margin-top:10px;max-height:400px;overflow-y:auto;padding-right:6px;"></div>
           </div>
           <div id="finalize-splitter" onmousedown="finalizeSplitStart(event)" title="Drag to resize" style="flex:0 0 12px;cursor:col-resize;align-self:stretch;display:flex;align-items:center;justify-content:center;">
-            <div style="width:3px;height:70px;background:rgba(201,168,76,0.45);border-radius:2px;"></div>
+            <div style="width:3px;height:70px;background:rgba(var(--accent-rgb),0.45);border-radius:2px;"></div>
           </div>
           <div id="finalize-right" style="flex:1 1 auto;min-width:220px;padding-left:8px;display:flex;flex-direction:column;">
             <div id="finalize-pdf-panes" style="display:flex;gap:6px;align-items:stretch;">
               <div id="finalize-before-wrap" style="display:none;flex:1 1 auto;min-width:0;">
-                <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;"><span>Before</span><span style="display:flex;gap:8px;align-items:baseline;"><button id="finalize-before-open" onclick="finalizeOpenPdf(true)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button><span id="finalize-before-count" style="color:var(--gold);letter-spacing:0.03em;"></span></span></div>
-                <div id="finalize-before-scroll" data-toptarget style="overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;"></div>
+                <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;"><span>Before</span><span style="display:flex;gap:8px;align-items:baseline;"><button id="finalize-before-open" onclick="finalizeOpenPdf(true)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button><span id="finalize-before-count" style="color:var(--gold);letter-spacing:0.03em;"></span></span></div>
+                <div id="finalize-before-scroll" data-toptarget style="overflow-y:auto;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;"></div>
               </div>
               <div id="finalize-page-nav-wrap" style="flex:0 0 44px;display:none;flex-direction:column;">
-                <div style="font-size:11px;color:rgba(245,232,200,0.4);margin-bottom:4px;text-align:center;">Pg</div>
-                <div id="finalize-page-nav" title="Jump both panes to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
+                <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.4);margin-bottom:4px;text-align:center;">Pg</div>
+                <div id="finalize-page-nav" title="Jump both panes to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius);background:rgba(var(--well-rgb),0.4);padding:3px 0;"></div>
               </div>
               <div id="finalize-after-wrap" style="flex:1 1 100%;min-width:0;">
-                <div style="font-size:11px;color:rgba(245,232,200,0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+                <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
                   <span style="display:flex;gap:10px;align-items:baseline;min-width:0;">
                     <span id="finalize-after-label">After (optimized)</span>
-                    <span id="finalize-optimized-note" style="display:none;text-transform:none;letter-spacing:0.02em;font-size:11px;color:rgba(201,168,76,0.85);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+                    <span id="finalize-optimized-note" style="display:none;text-transform:none;letter-spacing:0.02em;font-size:11px;color:rgba(var(--accent-rgb),0.85);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
                   </span>
                   <span style="display:flex;gap:8px;align-items:center;flex:0 0 auto;">
                     <span id="finalize-after-zoom" style="display:none;align-items:center;gap:3px;" title="Fit / zoom the optimized book">
-                      <button type="button" onclick="finalizeAfterZoomStep(-1)" style="background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">&minus;</button>
+                      <button type="button" onclick="finalizeAfterZoomStep(-1)" style="background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--gold);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">&minus;</button>
                       <span id="finalize-after-zoom-label" style="font-size:10px;color:var(--gold);min-width:34px;text-align:center;letter-spacing:0.02em;">Fit</span>
-                      <button type="button" onclick="finalizeAfterZoomStep(1)" style="background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">+</button>
+                      <button type="button" onclick="finalizeAfterZoomStep(1)" style="background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--gold);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">+</button>
                     </span>
-                    <button id="finalize-after-open" onclick="finalizeOpenPdf(false)" style="display:none;background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button>
+                    <button id="finalize-after-open" onclick="finalizeOpenPdf(false)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button>
                     <span id="finalize-after-count" style="color:var(--gold);letter-spacing:0.03em;"></span>
                   </span>
                 </div>
@@ -788,11 +788,11 @@
                      beat the stretch rule v3.0.601 added and left the panes sizing to their CONTENT --
                      a 49 page canvas stack -- so the whole tab scrolled instead of the preview. -->
                 <div id="finalize-after-row" style="display:flex;gap:8px;">
-                  <div id="finalize-after-scroll" data-toptarget style="flex:1 1 auto;min-width:0;overflow-y:auto;border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
-                  <div id="finalize-after-body" style="flex:1 1 auto;border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(245,232,200,0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
+                  <div id="finalize-after-scroll" data-toptarget style="flex:1 1 auto;min-width:0;overflow-y:auto;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);background:#0c0805;padding:4px;box-sizing:border-box;display:none;"></div>
+                  <div id="finalize-after-body" style="flex:1 1 auto;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius);background:#0c0805;display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(var(--on-panel-cream-rgb),0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
                   <div id="finalize-after-nav-wrap" style="display:none;flex:0 0 44px;flex-direction:column;">
-                    <div style="font-size:11px;color:rgba(245,232,200,0.4);margin-bottom:4px;text-align:center;">Pg</div>
-                    <div id="finalize-after-nav" title="Jump to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius);background:rgba(10,6,4,0.4);padding:3px 0;"></div>
+                    <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.4);margin-bottom:4px;text-align:center;">Pg</div>
+                    <div id="finalize-after-nav" title="Jump to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius);background:rgba(var(--well-rgb),0.4);padding:3px 0;"></div>
                   </div>
                 </div>
               </div>
@@ -812,7 +812,7 @@
           <div id="ord-load-bar" class="ord-card" style="display:none;margin-bottom:14px;padding:10px 14px;">
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
               <button type="button" id="ord-load-btn" class="btn btn-primary btn-sm" onclick="orderLoadLastClick()">Load Last Optimized</button>
-              <div id="ord-load-text" style="flex:1 1 260px;min-width:0;font-size:12px;line-height:1.5;color:rgba(245,232,200,0.8);"></div>
+              <div id="ord-load-text" style="flex:1 1 260px;min-width:0;font-size:12px;line-height:1.5;color:rgba(var(--on-panel-cream-rgb),0.8);"></div>
             </div>
           </div>
           <!-- ============================ CARD 1: PRINT ORDER ============================ -->
@@ -835,7 +835,7 @@
                   <input id="print-order-name" type="text" maxlength="200" placeholder="e.g. Session 1-5, Hardcover gift copy" class="ord-in">
                   <label class="ord-lbl">Version <span class="ord-lbl-dim">(set with the selector at the top of this page)</span></label>
                   <input id="print-version-display" type="text" readonly class="ord-in ord-in-ro">
-                  <div id="print-page-est" style="font-size:11px;color:rgba(201,168,76,0.6);margin-bottom:4px;"></div>
+                  <div id="print-page-est" style="font-size:11px;color:rgba(var(--accent-rgb),0.6);margin-bottom:4px;"></div>
 
                   <div class="ord-sec ord-sec-gap">FORMAT</div>
                   <div class="ord-row ord-row-align-controls">
@@ -955,14 +955,14 @@
               <div id="book-mismatch-order" class="book-mismatch" style="display:none;"></div>
               <div id="print-place-msg" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:12px;flex:1 1 240px;min-width:0;"></div>
             </div>
-            <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(201,168,76,0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--gold);transition:width 0.4s ease;border-radius:4px;"></div></div>
-            <div id="print-trial-notice" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:12px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);color:rgba(245,232,200,0.9);"></div>
+            <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(var(--accent-rgb),0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--gold);transition:width 0.4s ease;border-radius:4px;"></div></div>
+            <div id="print-trial-notice" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:12px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.35);color:rgba(var(--on-panel-cream-rgb),0.9);"></div>
 
-            <div id="print-review" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(201,168,76,0.4);border-radius:var(--radius);background:rgba(20,12,4,0.5);">
+            <div id="print-review" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(var(--accent-rgb),0.4);border-radius:var(--radius);background:rgba(var(--panel-rgb),0.5);">
               <div style="font-weight:600;color:var(--gold);margin-bottom:10px;">Review your order</div>
               <div id="print-review-summary" style="font-size:13px;margin-bottom:12px;"></div>
               <a id="print-review-preview" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px;font-size:13px;color:#7fb0e0;text-decoration:underline;">Preview your book (opens the PDF in a new tab)</a>
-              <label id="print-attest-label" style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:12px;cursor:pointer;"><input type="checkbox" id="print-attest" onchange="updatePrintConfirmGate()" style="margin-top:2px;flex:0 0 auto;" /><span>I have reviewed both the interior and cover PDFs and agree they are ready for print.</span></label>
+              <label id="print-attest-label" style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.75);margin-bottom:12px;cursor:pointer;"><input type="checkbox" id="print-attest" onchange="updatePrintConfirmGate()" style="margin-top:2px;flex:0 0 auto;" /><span>I have reviewed both the interior and cover PDFs and agree they are ready for print.</span></label>
               <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button class="btn btn-primary" id="print-confirm-btn" onclick="submitPrintOrder()" disabled>Continue to secure payment</button>
                 <button class="btn btn-sm" onclick="cancelPrintReview()">Back</button>
@@ -982,7 +982,7 @@
             <!-- v3.0.385 -- was "Publishing the original layout / change on the Optimize tab", a leftover
                  from when Before and After were both publishable. Only the optimized book ever publishes,
                  so the choice is gone and this now links to the exact file that will be used. -->
-            <div style="font-size:12px;color:rgba(245,232,200,0.75);margin-bottom:10px;">Publishing: <a id="publish-book-link" href="#" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;">the optimized book</a><span id="publish-book-none" style="display:none;">nothing yet &mdash; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:#7fb0e0;text-decoration:underline;">run Optimize first</a></span></div>
+            <div style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.75);margin-bottom:10px;">Publishing: <a id="publish-book-link" href="#" target="_blank" rel="noopener" style="color:#7fb0e0;text-decoration:underline;">the optimized book</a><span id="publish-book-none" style="display:none;">nothing yet &mdash; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:#7fb0e0;text-decoration:underline;">run Optimize first</a></span></div>
             <label class="prep-attest"><input type="checkbox" id="prep-attest" onchange="prepAttestChanged(this)" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no pornographic, hateful, or graphically gratuitous content).</span></label>
             <div class="prep-field-label">Blurb for your Library page (optional)</div>
             <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
@@ -1005,7 +1005,7 @@
               <div class="prep-field-label">Publish as</div>
               <!-- v3.2.90 -- TD-1024. Ian: pictures, not a dropdown. The button opens a picker of book cards; the select stays,
                    hidden, because everything that reads the choice (prepReplaceChosen, publishStory) reads it. -->
-              <button type="button" id="prep-replace-btn" onclick="openPublishAsPicker()" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:rgba(20,12,4,0.85);border:1px solid rgba(201,168,76,0.35);border-radius:8px;padding:6px 10px;color:var(--gold);cursor:pointer;margin-bottom:6px;font-family:inherit;font-size:13px;">A new story in the Library</button>
+              <button type="button" id="prep-replace-btn" onclick="openPublishAsPicker()" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:rgba(var(--panel-rgb),0.85);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:8px;padding:6px 10px;color:var(--gold);cursor:pointer;margin-bottom:6px;font-family:inherit;font-size:13px;">A new story in the Library</button>
               <select id="prep-replace" class="prep-textarea" style="display:none;" onchange="prepReplaceChanged(this)"><option value="">A new story in the Library</option></select>
               <div id="prep-replace-note" class="prep-hint" style="display:none;"></div>
             </div>
@@ -1013,7 +1013,7 @@
                  pressed. Nothing here disables anything: Ian, 2026-08-26, "Warning not hard stop." -->
             <div id="book-mismatch-publish" class="book-mismatch" style="display:none;"></div>
             <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
-            <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(201,168,76,0.85);"></div>
+            <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(var(--accent-rgb),0.85);"></div>
             <div class="prep-hint">Manage or remove your published entries on <a href="#" onclick="return goToMyStories();" style="color:#7fb0e0;text-decoration:underline;">My Stuff &rarr; Published Stories</a>.</div>
               </section>
             </div>
@@ -1037,9 +1037,9 @@
           <button class="btn btn-primary btn-sm dm-only" style="flex-shrink:0;" onclick="openInviteModal()">&#9993; Invite member</button>
         </div>
         <!-- v3.2.45 -- TD-1007. The Story Master's members cap: filled by loadMemberCap(). -->
-        <div id="members-cap-line" class="dm-only" style="display:none;margin:-4px 0 10px;font-size:12px;color:rgba(245,232,200,0.75);"></div>
+        <div id="members-cap-line" class="dm-only" style="display:none;margin:-4px 0 10px;font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.75);"></div>
         <div id="members-list" style="display:flex;flex-direction:column;gap:8px;">
-          <div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading members…</div>
+          <div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">Loading members…</div>
         </div>
       </div>
 
@@ -1049,7 +1049,7 @@
       <div style="margin-top:24px;">
         <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Pending invites</div>
         <div id="pending-invites-list" style="display:flex;flex-direction:column;gap:8px;">
-          <div style="color:rgba(245,232,200,0.75);font-size:13px;padding:8px;">Loading invites…</div>
+          <div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">Loading invites…</div>
         </div>
       </div>
     </div>
@@ -1192,10 +1192,10 @@
              at all (#6b5f55 on near-black). Scoped to the Story tab. The counts take their colour from this rule, not
              an inline style, so the amber "past the Already Written limit" colour set by updateWordCounts still wins. -->
         <style>
-          #session-tab-notes .story-count { font-size: 12px; color: rgba(240,232,208,0.82); }
-          #session-tab-notes .form-hint { font-size: 12px; color: rgba(232,213,163,0.78); }
-          #session-tab-notes .story-sub { color: rgba(232,213,163,0.72); }
-          #session-tab-notes .story-savenote { font-size: 12px; color: rgba(201,168,76,0.8); }
+          #session-tab-notes .story-count { font-size: 12px; color: rgba(var(--on-panel-rgb),0.82); }
+          #session-tab-notes .form-hint { font-size: 12px; color: rgba(var(--accent-pale-rgb),0.78); }
+          #session-tab-notes .story-sub { color: rgba(var(--accent-pale-rgb),0.72); }
+          #session-tab-notes .story-savenote { font-size: 12px; color: rgba(var(--accent-rgb),0.8); }
         </style>
         <div class="notes-grid">
           <div class="form-group">
@@ -1220,7 +1220,7 @@
               <div id="transcript-wordcount" class="story-count" style="flex:0 0 auto;text-align:right;">0 words</div>
             </div>
             <!-- v3.3.01 -- TD-1037. Hidden until the Marketplace is switched on. A new tab, so nothing typed here is lost. -->
-            <div class="mkt-link" style="font-size:12px;margin-top:4px;"><a href="/library?from=app#guild-writer" target="_blank" rel="noopener" style="color:var(--gold-light,#e8d5a3);">Want a writer or editor? Find one in the Guild</a></div>
+            <div class="mkt-link" style="font-size:12px;margin-top:4px;"><a href="/library?from=app#guild-writer" target="_blank" rel="noopener" style="color:var(--gold-light,var(--accent-pale));">Want a writer or editor? Find one in the Guild</a></div>
             <!-- v3.2.59 -- the rights line moved below both boxes, full width (Ian). -->
           </div>
           <div class="form-group">
@@ -1294,8 +1294,8 @@
           <button class="btn" onclick="switchSessionTab('notes')">Go to Story</button>
         </div>
         <div id="sb-content" style="display:none;">
-          <div style="background:rgba(20,12,4,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:12px;">
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:rgba(201,168,76,0.4);margin-bottom:4px;">Select your style</div>
+          <div style="background:rgba(var(--panel-rgb),0.6);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:12px;">
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:rgba(var(--accent-rgb),0.4);margin-bottom:4px;">Select your style</div>
             <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
               <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="sb-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
@@ -1322,15 +1322,15 @@
           <!-- v3.0.967 -- TD-852. SUMMARY FOR NEXT SESSION. Last thing in #sb-content, which is
                the very bottom of the Storyboard. Styled like the "Select your style" panel at the
                top of this same tab so the two read as a pair bracketing the grid. -->
-          <div id="sb-summary-panel" style="background:rgba(20,12,4,0.6);border:1px solid rgba(201,168,76,0.15);border-radius:var(--radius-lg);padding:10px 14px;margin-top:14px;">
+          <div id="sb-summary-panel" style="background:rgba(var(--panel-rgb),0.6);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);padding:10px 14px;margin-top:14px;">
             <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;">
               <div class="moment-title" style="margin-bottom:0;">Summary For Next Session</div>
-              <div id="sb-summary-count" style="font-size:10px;color:rgba(201,168,76,0.35);"></div>
+              <div id="sb-summary-count" style="font-size:10px;color:rgba(var(--accent-rgb),0.35);"></div>
             </div>
             <!-- v3.0.969 -- TD-854. Hidden until there is something to say. A reader who has
                  never seen the feature should not be shown an empty row about it. -->
-            <div id="sb-summary-inherit" style="display:none;margin:4px 0 0;font-size:11px;color:rgba(201,168,76,0.45);"></div>
-            <div class="settings-section-desc" style="margin:4px 0 8px;font-size:11px;color:rgba(201,168,76,0.55);">
+            <div id="sb-summary-inherit" style="display:none;margin:4px 0 0;font-size:11px;color:rgba(var(--accent-rgb),0.45);"></div>
+            <div class="settings-section-desc" style="margin:4px 0 8px;font-size:11px;color:rgba(var(--accent-rgb),0.55);">
               What the next session will be told about this one &mdash; who matters, where they are, what is unresolved.
               <b>Generate Narrative</b> writes it; you can edit it, and yours is kept. Your changes save on their own.
             </div>
@@ -1338,7 +1338,7 @@
                  oninput debounces a write, onblur flushes one that is already pending. -->
             <textarea id="sb-summary-text" rows="5" style="width:100%;resize:vertical;" oninput="sbSummaryCount();sbSummaryDirty()" onblur="sbSummaryFlush()" placeholder="Nothing remembered yet. Generate Narrative writes this, or type it yourself."></textarea>
             <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
-              <span id="sb-summary-msg" style="font-size:11px;color:rgba(201,168,76,0.5);"></span>
+              <span id="sb-summary-msg" style="font-size:11px;color:rgba(var(--accent-rgb),0.5);"></span>
             </div>
           </div>
         </div>
@@ -1363,7 +1363,7 @@
             <button class="btn btn-primary btn-sm" id="session-export-pdf-btn" onclick="exportSessionPDF()" style="margin-left:6px;display:none;">Review in a New Tab</button>
           </div>
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
-            <span style="font-size:12px;color:rgba(240,232,208,0.7);">Publish or print the full book?</span>
+            <span style="font-size:12px;color:rgba(var(--on-panel-rgb),0.7);">Publish or print the full book?</span>
             <button class="btn btn-sm" id="session-all-publish-btn" onclick="goToPublishOptions()" title="Go to the Publish page for Library publishing and print orders">All publishing options &rarr;</button>
           </div>
         </div>
@@ -1371,9 +1371,9 @@
           <div class="progress-bar"><div class="progress-fill" id="session-preview-progress-fill"></div></div>
           <div class="progress-msg" id="session-preview-progress-msg">Loading preview&hellip;</div>
         </div>
-        <div id="session-preview-frame" style="border:1px solid rgba(201,168,76,0.2);border-radius:var(--radius-lg);overflow:hidden;min-height:75vh;">
-          <div id="session-preview-loading" style="width:100%;height:75vh;display:flex;align-items:center;justify-content:center;background:rgba(12,8,4,0.5);">
-            <div style="text-align:center;color:rgba(201,168,76,0.4);">
+        <div id="session-preview-frame" style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);overflow:hidden;min-height:75vh;">
+          <div id="session-preview-loading" style="width:100%;height:75vh;display:flex;align-items:center;justify-content:center;background:rgba(var(--panel-deeper-rgb),0.5);">
+            <div style="text-align:center;color:rgba(var(--accent-rgb),0.4);">
               <div style="font-size:32px;margin-bottom:8px;">&#128213;</div>
               <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
             </div>
@@ -1507,15 +1507,15 @@
                full width, and the page's own picture showing around it. The other two tabs keep their
                cards for now (Ian). */
             #view-orders > .page-header.mystuff-head { align-items:center; margin-bottom:6px; padding:6px 12px; border-radius:8px;
-              background:rgba(12,7,3,0.72); border:1px solid rgba(201,168,76,0.25); }
+              background:rgba(var(--shelf-shadow-rgb),0.72); border:1px solid rgba(var(--accent-rgb),0.25); }
             .mystuff-titleline { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 14px; min-width:0; }
-            .mystuff-head .page-title { color:#e8cf7a; font-family:var(--font-display); font-size:19px; margin:0; }
-            .mystuff-head .page-subtitle { color:rgba(240,232,208,0.85); font-size:13px; margin:0; }
+            .mystuff-head .page-title { color:var(--foil); font-family:var(--font-display); font-size:19px; margin:0; }
+            .mystuff-head .page-subtitle { color:rgba(var(--on-panel-rgb),0.85); font-size:13px; margin:0; }
             #bookshelf-section.settings-section { background:transparent; border:none; box-shadow:none; padding:0; margin:0; }
             /* v3.0.993 -- the count, lettered in gold on the base board. */
-            .bcase-count { font-size:14px; font-weight:600; letter-spacing:0.06em; color:#e8cf7a; font-family:var(--font-display);
+            .bcase-count { font-size:14px; font-weight:600; letter-spacing:0.06em; color:var(--foil); font-family:var(--font-display);
               text-shadow:0 1px 0 rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.5); white-space:nowrap; }
-            #bookshelf-body > .settings-section-desc { color:rgba(240,232,208,0.92); background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            #bookshelf-body > .settings-section-desc { color:rgba(var(--on-panel-rgb),0.92); background:rgba(var(--shelf-shadow-rgb),0.72); padding:8px 12px; border-radius:6px; }
             #bookshelf-body > .bcase { max-width:none; margin:8px 8px 0; }   /* 8px keeps the overhanging top and base inside the page */
             /* v3.0.993 -- Ian: the case "RIGHT UP UNDER the line separating the tab headers". The tabs
                keep their 6px below the rule on the other panels; the case takes it back here. */
@@ -1527,31 +1527,31 @@
                the order code -- and nothing outside #mystuff-panel-orders changes. */
             #mystuff-panel-orders {
               --surface: rgba(16,10,5,0.86);
-              --border: rgba(201,168,76,0.3);
+              --border: rgba(var(--accent-rgb),0.3);
               --text: #ecd9a8;
-              --text-muted: rgba(232,207,122,0.68);
-              --text-light: rgba(232,207,122,0.5);
-              --crimson: #e8cf7a;
+              --text-muted: rgba(var(--foil-rgb),0.68);
+              --text-light: rgba(var(--foil-rgb),0.5);
+              --crimson: var(--foil);
               --shadow: 0 6px 16px rgba(0,0,0,0.45);
             }
-            #mystuff-panel-orders #orders-list > .settings-section-desc { background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            #mystuff-panel-orders #orders-list > .settings-section-desc { background:rgba(var(--shelf-shadow-rgb),0.72); padding:8px 12px; border-radius:6px; }
             /* v3.0.994 -- PUBLISHED STORIES, DARK, the same way (Ian: "reverse the css like we did the
                order tiles"). The white card goes, as on the Bookshelf tab; the heading sits on a dark
                strip; each tile is a dark panel with a gold edge. Scoped to this panel only. */
             #mystuff-panel-stories {
               --surface: rgba(16,10,5,0.86);
-              --border: rgba(201,168,76,0.3);
+              --border: rgba(var(--accent-rgb),0.3);
               --text: #ecd9a8;
-              --text-muted: rgba(232,207,122,0.68);
-              --text-light: rgba(232,207,122,0.5);
-              --crimson: #e8cf7a;
+              --text-muted: rgba(var(--foil-rgb),0.68);
+              --text-light: rgba(var(--foil-rgb),0.5);
+              --crimson: var(--foil);
               --shadow: 0 6px 16px rgba(0,0,0,0.45);
             }
             #mystuff-panel-stories #my-stories-section.settings-section { background:transparent; border:none; box-shadow:none; padding:0; margin:0; }
-            #mystuff-panel-stories .mystories-head { padding:8px 12px; border-radius:8px; background:rgba(12,7,3,0.72); border:1px solid rgba(201,168,76,0.25); }
-            #mystuff-panel-stories .mystories-head .settings-section-title { color:#e8cf7a; }
-            #mystuff-panel-stories .mystories-head .settings-section-desc { color:rgba(240,232,208,0.85); margin-bottom:0; }
-            #mystuff-panel-stories #my-stories-empty { color:rgba(240,232,208,0.92); background:rgba(12,7,3,0.72); padding:8px 12px; border-radius:6px; }
+            #mystuff-panel-stories .mystories-head { padding:8px 12px; border-radius:8px; background:rgba(var(--shelf-shadow-rgb),0.72); border:1px solid rgba(var(--accent-rgb),0.25); }
+            #mystuff-panel-stories .mystories-head .settings-section-title { color:var(--foil); }
+            #mystuff-panel-stories .mystories-head .settings-section-desc { color:rgba(var(--on-panel-rgb),0.85); margin-bottom:0; }
+            #mystuff-panel-stories #my-stories-empty { color:rgba(var(--on-panel-rgb),0.92); background:rgba(var(--shelf-shadow-rgb),0.72); padding:8px 12px; border-radius:6px; }
             /* v3.0.992 -- the cover column on an order card: the picture, then the order's buttons at the
                same width (their inline margins were for sitting in a row under the details). */
             .ord-thumb-col { flex:0 0 140px; width:140px; display:flex; flex-direction:column; gap:6px; }
@@ -1581,17 +1581,17 @@
             .bslot { position:relative; height:250px; display:flex; align-items:flex-end; flex:0 0 auto; }
             .bookshelf-book { transition:transform .15s ease; cursor:pointer; }
             .bookshelf-book:hover, .bookshelf-book:focus-visible { transform:translateY(-8px); outline:none; }
-            .bookshelf-book.sel { transform:translateY(-8px); box-shadow:0 0 0 2px #c9a84c, 4px 6px 10px rgba(0,0,0,0.6); }
+            .bookshelf-book.sel { transform:translateY(-8px); box-shadow:0 0 0 2px var(--accent), 4px 6px 10px rgba(0,0,0,0.6); }
             .bface { position:relative; width:180px; height:233px; padding:0; border:none; overflow:hidden; border-radius:2px 4px 4px 2px; margin:0 8px;
               background:#3a2010; box-shadow:5px 6px 12px rgba(0,0,0,0.7); }
             .bface img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
             .bface::after { content:''; position:absolute; top:0; bottom:0; left:0; width:10px; z-index:1;
               background:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.18) 55%, rgba(0,0,0,0.15)); }
             .bface-t { position:absolute; inset:12px 10px 12px 16px; display:flex; align-items:center; justify-content:center; text-align:center;
-              color:#e8cf7a; font-family:var(--font-display); font-size:15px; line-height:1.25; }
+              color:var(--foil); font-family:var(--font-display); font-size:15px; line-height:1.25; }
             .bplaque { position:absolute; left:50%; bottom:-18px; transform:translateX(-50%); max-width:180px; z-index:3; padding:1px 9px;
               font-family:var(--font-display); font-size:10px; letter-spacing:0.04em; color:#2a1606; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-              background:linear-gradient(to bottom, #f0d88a, #c9a84c 55%, #9c7a2a); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.7); }
+              background:linear-gradient(to bottom, #f0d88a, var(--accent) 55%, #9c7a2a); border-radius:2px; box-shadow:0 1px 2px rgba(0,0,0,0.7); }
             .bspine { position:relative; flex:0 0 auto; padding:0; border:none; overflow:hidden; border-radius:2px 2px 1px 1px;
               background-image:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(255,255,255,0.14) 20%, rgba(255,255,255,0.04) 45%, rgba(0,0,0,0.22) 78%, rgba(0,0,0,0.55));
               box-shadow:2px 0 3px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12); }
@@ -1599,7 +1599,7 @@
               border-top:1px solid rgba(222,190,100,0.9); border-bottom:1px solid rgba(222,190,100,0.9); }
             .bspine::before { top:14px; } .bspine::after { bottom:16px; }
             .bspine-t { position:absolute; inset:30px 0 32px; display:flex; align-items:center; justify-content:center;
-              writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:#e8cf7a; font-family:var(--font-display);
+              writing-mode:vertical-rl; transform:rotate(180deg); padding:0 2px; color:var(--foil); font-family:var(--font-display);
               font-size:11px; letter-spacing:0.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 1px rgba(0,0,0,0.8); }
             /* v3.2.18 -- title and subtitle side by side on the spine (column = across, in vertical writing). */
             .bspine-t.bspine-two { flex-direction:column; gap:1px; }
@@ -1611,7 +1611,7 @@
             .bopen-overlay { position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; padding:20px;
               background:rgba(8,4,2,0.72); }
             .bopen { position:relative; display:flex; align-items:stretch; width:min(900px, 94vw); min-height:440px; max-height:90vh; padding:12px;
-              background:linear-gradient(to bottom, #4a2612, #2e170a); border-radius:6px; box-shadow:0 24px 60px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(201,168,76,0.25); }
+              background:linear-gradient(to bottom, #4a2612, #2e170a); border-radius:6px; box-shadow:0 24px 60px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(var(--accent-rgb),0.25); }
             .bopen-page { position:relative; flex:1 1 0; min-width:0; overflow:auto; padding:26px 28px;
               background:linear-gradient(to bottom, #f5e9cc, #ead8b0); color:#3a2210; }
             .bopen-left { display:flex; align-items:center; justify-content:center; border-radius:3px 0 0 3px;
@@ -1621,14 +1621,14 @@
             .bopen-cover { max-width:100%; max-height:calc(90vh - 90px); width:auto; height:auto; aspect-ratio:auto; object-fit:contain; border-radius:2px;
               box-shadow:4px 6px 14px rgba(40,20,5,0.55); position:relative; z-index:1; background:transparent; }
             .bopen-cover-ph { position:absolute; inset:26px 28px; display:flex; align-items:center; justify-content:center; text-align:center; padding:16px;
-              color:#e8cf7a; font-family:var(--font-display); font-size:18px; border-radius:2px; }
+              color:var(--foil); font-family:var(--font-display); font-size:18px; border-radius:2px; }
             .bopen .bshelf-card-title { color:#3a2210; font-family:var(--font-display); font-size:22px; margin:6px 0 12px; line-height:1.2; }
             .bopen .bshelf-card-sub { color:#5a3a1e; font-family:var(--font-display); font-style:italic; font-size:15px; margin:-6px 0 12px; line-height:1.3; }   /* v3.1.8 */
             .bopen .bshelf-card-meta { font-size:13px; color:#5a4228; margin-bottom:5px; }
             .bopen .bshelf-card-acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
             .bopen .bshelf-card-ask { margin-top:16px; padding-top:12px; border-top:1px solid rgba(90,66,40,0.3); }
-            .bopen-x { position:absolute; top:-14px; right:-14px; z-index:3; width:32px; height:32px; border-radius:50%; border:1px solid #c9a84c;
-              background:#2e170a; color:#e8cf7a; font-size:20px; line-height:28px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.6); }
+            .bopen-x { position:absolute; top:-14px; right:-14px; z-index:3; width:32px; height:32px; border-radius:50%; border:1px solid var(--accent);
+              background:#2e170a; color:var(--foil); font-size:20px; line-height:28px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.6); }
             @media (max-width:640px) {
               .bcase { padding:0 12px; } .bcase::before, .bcase::after { width:12px; } .bcase-crown, .bcase-base { margin:0 -16px; } .bcase-inner { padding:14px 8px 22px; }
               .bopen { flex-direction:column; overflow-y:auto; } .bopen-gutter { display:none; }
@@ -1698,7 +1698,7 @@
               <input class="form-input" id="settings-email-password" type="password" autocomplete="current-password" placeholder="Your current password" />
               <div style="font-size:12px;color:#9b8e80;margin-top:6px;line-height:1.4;">We will send a link to the new address. Your email stays the same until you click it.</div>
             </div>
-            <div id="settings-email-pending" class="hidden" style="margin:-4px 0 14px;padding:10px 12px;border:1px solid rgba(201,168,76,0.35);border-radius:8px;font-size:13px;line-height:1.5;color:#e8d5a3;">
+            <div id="settings-email-pending" class="hidden" style="margin:-4px 0 14px;padding:10px 12px;border:1px solid rgba(var(--accent-rgb),0.35);border-radius:8px;font-size:13px;line-height:1.5;color:var(--accent-pale);">
               Waiting for confirmation: <strong id="settings-email-pending-addr"></strong>. Click the link we sent there to switch to it. Until then your current email keeps working.
               <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
                 <button type="button" class="btn btn-sm" onclick="cmpEmailResend()">Resend link</button>
@@ -1757,7 +1757,7 @@
       <div id="account-upgrade-section" class="settings-section">
         <div class="settings-section-title">Plans &amp; Subscription Info</div>
         <div class="settings-section-desc">Your plan and your options</div>
-        <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
+        <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
         <div id="account-lone-banner" onclick="goToPlans()" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(184,115,51,0.12);border:1px solid rgba(184,115,51,0.4);border-radius:var(--radius);font-size:12px;color:var(--text);cursor:pointer;"></div>
         <!-- v3.0.929 -- TD-780 Push 6. WHAT YOU HAVE, as two facts rather than one.
              A pass does not replace the account tier, it sits on top of it for a while, and the
@@ -1766,7 +1766,7 @@
         <div id="account-standing" style="display:none;margin-top:14px;"></div>
         <div id="account-plans" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;"></div>
 
-        <div id="account-billing-status" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);font-size:12px;color:var(--text);line-height:1.5;"></div>
+        <div id="account-billing-status" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);font-size:12px;color:var(--text);line-height:1.5;"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
           <button class="btn btn-sm" id="account-manage-billing-btn" onclick="openBillingPortal()" style="display:none;">Manage subscription &amp; billing</button>
           <!-- v3.0.669 -- TD-473. Ian: "If there is a way to put a link in Campaignia to be able to
@@ -1778,7 +1778,7 @@
           <button class="btn btn-sm" id="account-payment-history-btn" onclick="openBillingPortal()" style="display:none;">View payment history</button>
           <button class="btn btn-danger btn-sm" onclick="openSuspendConfirm()">Suspend account</button>
         </div>
-        <div id="account-billing-msg" class="settings-section-desc" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.35);"></div>
+        <div id="account-billing-msg" class="settings-section-desc" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.35);"></div>
         <!-- v3.0.930 -- TD-780 Push 6b. THE PASSES MOVED BELOW THE BILLING CONTROLS. Ian:
              "99% of the time there is nothing to manage on a Pass but there might be on a
              subscription." Stronger than that, in fact: a pass is a one-time payment, so there is
@@ -1831,19 +1831,19 @@
       <!-- v3.0.980 -- TD-901. My Published Stories moved to its own tab on My Stuff. -->
 
       <!-- Legal links -->
-      <div style="margin-top:18px;text-align:center;font-size:12px;color:rgba(240,232,208,0.6);">
-        <a href="/terms.html" style="color:#c9a84c;text-decoration:none;">Terms of Service</a>
+      <div style="margin-top:18px;text-align:center;font-size:12px;color:rgba(var(--on-panel-rgb),0.6);">
+        <a href="/terms.html" style="color:var(--accent);text-decoration:none;">Terms of Service</a>
         &middot;
-        <a href="/privacy.html" style="color:#c9a84c;text-decoration:none;">Privacy Policy</a>
+        <a href="/privacy.html" style="color:var(--accent);text-decoration:none;">Privacy Policy</a>
       </div>
 
       <!-- Version label (tap 7x to reveal the Developer panel) -->
       <div style="margin-top:10px;text-align:center;">
-        <span id="app-version-label" onclick="cmpVersionTap()" style="font-size:11px;color:rgba(240,232,208,0.35);cursor:default;user-select:none;-webkit-user-select:none;">Campaignia</span>
+        <span id="app-version-label" onclick="cmpVersionTap()" style="font-size:11px;color:rgba(var(--on-panel-rgb),0.35);cursor:default;user-select:none;-webkit-user-select:none;">Campaignia</span>
       </div>
 
       <!-- Developer / Debug panel (hidden until the version label is tapped 7x) -->
-      <div id="dev-debug-panel" class="settings-section" style="display:none;margin-top:16px;border:1px solid rgba(201,168,76,0.35);">
+      <div id="dev-debug-panel" class="settings-section" style="display:none;margin-top:16px;border:1px solid rgba(var(--accent-rgb),0.35);">
         <div class="settings-section-title" style="display:flex;align-items:center;gap:8px;">
           <span>Developer &middot; Debug Mode</span>
           <span id="debug-rec-dot" onclick="cmpRecDotTap()" title="Recording" style="display:none;width:9px;height:9px;border-radius:50%;background:#e53935;box-shadow:0 0 6px #e53935;cursor:pointer;"></span>
@@ -1863,7 +1863,7 @@
             <button class="btn btn-sm" onclick="cmpCopyDebugLog()">Copy log</button>
             <button class="btn btn-sm" onclick="cmpClearDebugLog()" style="margin-left:auto;">Clear log</button>
           </div>
-          <pre id="debug-log-view" style="margin-top:12px;max-height:320px;overflow:auto;background:#0d0a06;border:1px solid rgba(201,168,76,0.2);border-radius:8px;padding:12px;font-size:11px;line-height:1.5;color:#d8cba0;white-space:pre-wrap;word-break:break-word;"></pre>
+          <pre id="debug-log-view" style="margin-top:12px;max-height:320px;overflow:auto;background:#0d0a06;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:12px;font-size:11px;line-height:1.5;color:#d8cba0;white-space:pre-wrap;word-break:break-word;"></pre>
         </div>
       </div>
 
@@ -1936,8 +1936,8 @@
         <div id="admin-set-balance-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
 
         <!-- Cross-user credit (the operational tool — credit any user) -->
-        <div style="margin-top:18px;padding:14px;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(201,168,76,0.04);">
-          <div style="font-size:13px;font-weight:600;color:#c9a84c;margin-bottom:10px;">Credit another user</div>
+        <div style="margin-top:18px;padding:14px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--accent-rgb),0.04);">
+          <div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:10px;">Credit another user</div>
           <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;">
             <div class="form-group" style="margin-bottom:0;flex:1 1 240px;">
               <label class="form-label">User</label>
@@ -1951,15 +1951,15 @@
             </div>
             <button class="btn btn-primary btn-sm" onclick="adminCreditUser()">Credit</button>
           </div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-top:6px;">
+          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-top:6px;">
             Adds to the user's existing balance (does not reset it). Use this to seed testers or comp users.
           </div>
         </div>
 
         <!-- Set-my-balance (the testing tool — deprecate later) -->
-        <div style="margin-top:14px;padding:14px;border:1px dashed rgba(201,168,76,0.2);border-radius:6px;">
-          <div style="font-size:13px;font-weight:600;color:rgba(201,168,76,0.8);margin-bottom:6px;">Set my own balance (testing)</div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:10px;">
+        <div style="margin-top:14px;padding:14px;border:1px dashed rgba(var(--accent-rgb),0.2);border-radius:6px;">
+          <div style="font-size:13px;font-weight:600;color:rgba(var(--accent-rgb),0.8);margin-bottom:6px;">Set my own balance (testing)</div>
+          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:10px;">
             Wipes <em>your own</em> ledger and sets a fresh balance. Useful for testing edge cases (zero, exactly-N, etc.).
           </div>
           <div style="display:flex;align-items:flex-end;gap:10px;">
@@ -2148,7 +2148,7 @@
         <div id="passes-config-msg" class="settings-section-desc" style="margin-bottom:10px;"></div>
         <div id="passes-config-container">Loading passes...</div>
 
-        <div style="height:1px;background:rgba(201,168,76,0.18);margin:26px 0 20px;"></div>
+        <div style="height:1px;background:rgba(var(--accent-rgb),0.18);margin:26px 0 20px;"></div>
 
         <div class="settings-section-title" style="margin-bottom:6px;">Subscription Tiers</div>
         <div class="settings-section-desc" style="margin-bottom:14px;">
@@ -2436,7 +2436,7 @@
           <button class="btn btn-sm" onclick="dbgUserSet(null, false, true)">Send to support</button>
         </div>
         <div id="dbg-user-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
-        <pre id="dbg-user-log" style="display:none;margin-top:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;border:1px solid rgba(201,168,76,0.2);border-radius:6px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;"></pre>
+        <pre id="dbg-user-log" style="display:none;margin-top:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(var(--modal-rgb),0.94);color:var(--on-panel);color-scheme:dark;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;"></pre>
       </div>
       </div>
 
@@ -2538,7 +2538,7 @@
             <span class="settings-section-desc">Moves them now, without waiting for the 1st. Click twice to confirm.</span></div>
           <div id="cleanup-out" style="margin-top:8px;font-size:13px;line-height:1.6;"></div>
           <!-- v3.2.69 -- TD-1006. The holding bucket. v3.2.72 -- reworded with Ian, a description beside every button. -->
-          <div style="font-weight:600;margin:16px 0 8px;padding-top:12px;border-top:1px solid rgba(201,168,76,0.2);">Manage holding bucket</div>
+          <div style="font-weight:600;margin:16px 0 8px;padding-top:12px;border-top:1px solid rgba(var(--accent-rgb),0.2);">Manage holding bucket</div>
           <div class="cu-row"><button class="btn btn-sm" onclick="holdLoad()">Check holding</button>
             <span class="settings-section-desc">Shows how many files are in holding, folder by folder, how much space they take, and when they were moved. Changes nothing.</span></div>
           <div class="cu-row"><button class="btn btn-sm" onclick="holdCsv()">Download the held list (CSV)</button>
@@ -2562,8 +2562,8 @@
       </div>
 
       <div class="settings-pane" id="settings-pane-usertesting" style="display:none;">
-        <div class="settings-section" style="border:1px solid rgba(201,168,76,0.45);background:rgba(201,168,76,0.06);">
-          <div class="settings-section-title" style="color:#c9a84c;">User Testing</div>
+        <div class="settings-section" style="border:1px solid rgba(var(--accent-rgb),0.45);background:rgba(var(--accent-rgb),0.06);">
+          <div class="settings-section-title" style="color:var(--accent);">User Testing</div>
           <div class="settings-section-desc">These controls affect ONLY your own signed-in account &mdash; never other users. (Other Dashboard tools may act across all users; these do not.)</div>
         </div>
       
@@ -2571,8 +2571,8 @@
       <!-- TESTING ONLY: self-service add tokens for ANY signed-in user while
            we test before Stripe. Backed by /api/tokens/dev-credit (session-
            gated, self only). REMOVE when checkout goes live. -->
-      <div class="settings-section" id="dev-add-tokens-section" style="border:1px dashed rgba(201,168,76,0.5);">
-        <div class="settings-section-title" style="color:#c9a84c;">&#9672; Add Tokens (Testing)</div>
+      <div class="settings-section" id="dev-add-tokens-section" style="border:1px dashed rgba(var(--accent-rgb),0.5);">
+        <div class="settings-section-title" style="color:var(--accent);">&#9672; Add Tokens (Testing)</div>
         <div class="settings-section-desc">Temporary: top up your own token balance while we&rsquo;re testing, before payments are set up. This will be removed once checkout goes live.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
           <input class="form-input" id="dev-add-tokens-input" type="number" min="1" step="1" value="100" style="max-width:140px;" />
@@ -2611,11 +2611,11 @@
            with its own checkbox, while "Free Trial" was ALSO an option in this dropdown -- two
            controls for one state that could disagree with each other. The dropdown option is gone;
            the trial is the third mode. -->
-      <div class="settings-section" id="account-tier-override-section" style="border:1px dashed rgba(201,168,76,0.5);">
+      <div class="settings-section" id="account-tier-override-section" style="border:1px dashed rgba(var(--accent-rgb),0.5);">
         <div class="settings-section-title">Testing &mdash; Account State</div>
         <div class="settings-section-desc">Temporary: put this account into one of the three states below, to test tier-gated features. Not a real upgrade &mdash; will be removed later.</div>
 
-        <div class="settings-section-desc" id="pass-override-state" style="margin:10px 0;padding:8px 10px;border-radius:6px;background:rgba(20,14,6,0.5);">Loading...</div>
+        <div class="settings-section-desc" id="pass-override-state" style="margin:10px 0;padding:8px 10px;border-radius:6px;background:rgba(var(--panel-alt-rgb),0.5);">Loading...</div>
 
         <label class="form-label">This account is on</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
@@ -2696,7 +2696,7 @@
       <!-- TESTING ONLY: clear this account's guided-tour history so tours
            play again on every screen. Self only. Remove with the other
            testing controls before production. -->
-      <div class="settings-section" id="dev-tours-section" style="border:1px dashed rgba(201,168,76,0.5);">
+      <div class="settings-section" id="dev-tours-section" style="border:1px dashed rgba(var(--accent-rgb),0.5);">
         <div class="settings-section-title">Testing &mdash; Guided Tours</div>
         <div class="settings-section-desc">Temporary: clears your own tour history so the guided tours play again on every screen. Will be removed later.</div>
         <div class="form-group" style="margin-top:10px;">
@@ -3104,7 +3104,7 @@
 
         <!-- Portrait -->
         <div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Portrait / Headshot</div>
+          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Portrait / Headshot</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-image_portrait"
             onclick="document.getElementById('input-image_portrait').click()"
             ondragover="handleSlotDragOver(event,'image_portrait')"
@@ -3113,7 +3113,7 @@
             style="padding:10px;">
             <img id="preview-image_portrait" class="slot-preview slot-portrait hidden" alt="Portrait" />
             <div class="slot-placeholder" id="placeholder-image_portrait">
-              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-rgb),0.4);">Click or drop</div>
             </div>
           </div>
           <input type="file" id="input-image_portrait" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_portrait')" />
@@ -3122,7 +3122,7 @@
 
         <!-- Full Body -->
         <div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Full Body</div>
+          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Full Body</div>
           <div class="image-upload-area image-slot slot-xtall" id="drop-image_fullbody"
             onclick="document.getElementById('input-image_fullbody').click()"
             ondragover="handleSlotDragOver(event,'image_fullbody')"
@@ -3131,7 +3131,7 @@
             style="padding:10px;">
             <img id="preview-image_fullbody" class="slot-preview slot-fullbody hidden" alt="Full body" />
             <div class="slot-placeholder" id="placeholder-image_fullbody">
-              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-rgb),0.4);">Click or drop</div>
             </div>
           </div>
           <input type="file" id="input-image_fullbody" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_fullbody')" />
@@ -3140,7 +3140,7 @@
 
         <!-- Action Shot -->
         <div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Action Shot</div>
+          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Action Shot</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-image_action"
             onclick="document.getElementById('input-image_action').click()"
             ondragover="handleSlotDragOver(event,'image_action')"
@@ -3149,7 +3149,7 @@
             style="padding:10px;">
             <img id="preview-image_action" class="slot-preview slot-action hidden" alt="Action shot" />
             <div class="slot-placeholder" id="placeholder-image_action">
-              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-rgb),0.4);">Click or drop</div>
             </div>
           </div>
           <input type="file" id="input-image_action" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_action')" />
@@ -3158,7 +3158,7 @@
 
         <!-- Other Reference -->
         <div>
-          <div style="font-size:11px;color:rgba(201,168,76,0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Other Reference</div>
+          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Other Reference</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-image_other"
             onclick="document.getElementById('input-image_other').click()"
             ondragover="handleSlotDragOver(event,'image_other')"
@@ -3167,7 +3167,7 @@
             style="padding:10px;">
             <img id="preview-image_other" class="slot-preview slot-other hidden" alt="Other reference" />
             <div class="slot-placeholder" id="placeholder-image_other">
-              <div style="font-size:10px;margin-top:3px;color:rgba(201,168,76,0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-rgb),0.4);">Click or drop</div>
             </div>
           </div>
           <input type="file" id="input-image_other" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_other')" />
@@ -3178,8 +3178,8 @@
       <div class="form-hint" style="margin-top:8px;">Drag images directly onto each slot or click to browse. Hero Forge screenshots, fan art, miniature photos all work great.</div>
 
       <!-- Canonical Character Prompt -->
-      <div id="char-modal-prompt-section" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(201,168,76,0.15);">
-        <div style="font-size:11px;color:rgba(201,168,76,0.6);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Character Prompt</div>
+      <div id="char-modal-prompt-section" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(var(--accent-rgb),0.15);">
+        <div style="font-size:11px;color:rgba(var(--accent-rgb),0.6);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Character Prompt</div>
         <div class="form-hint" style="margin-bottom:8px;">The look used to keep this character consistent across Story Panels. Built by analyzing the card info and uploaded images.</div>
         <div id="char-modal-prompt-body"></div>
       </div>
@@ -3204,9 +3204,9 @@
     </div>
 
     <!-- Current balance -->
-    <div style="text-align:center;padding:10px 0 18px;border-bottom:1px solid rgba(201,168,76,0.15);margin-bottom:18px;">
+    <div style="text-align:center;padding:10px 0 18px;border-bottom:1px solid rgba(var(--accent-rgb),0.15);margin-bottom:18px;">
       <div style="font-size:11px;color:#8a6a1f;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Your current balance</div>
-      <div style="font-size:34px;font-weight:700;color:#c9a84c;line-height:1;">
+      <div style="font-size:34px;font-weight:700;color:var(--accent);line-height:1;">
         <span id="tokens-modal-balance">&mdash;</span>
         <span style="font-size:15px;font-weight:500;opacity:0.7;margin-left:6px;">tokens</span>
       </div>
@@ -3227,7 +3227,7 @@
     <div id="token-packs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">
       <!-- Packs are rendered by renderTokenPacks() in app.js -->
     </div>
-    <div id="token-purchase-msg" style="display:none;margin-top:18px;padding:14px 16px;border-radius:8px;font-size:13px;text-align:center;background:#f5ecd4;border:1px solid rgba(201,168,76,0.55);color:#3d2a18;line-height:1.5;"></div>
+    <div id="token-purchase-msg" style="display:none;margin-top:18px;padding:14px 16px;border-radius:8px;font-size:13px;text-align:center;background:#f5ecd4;border:1px solid rgba(var(--accent-rgb),0.55);color:#3d2a18;line-height:1.5;"></div>
 
     <div class="modal-footer">
       <!-- v3.0.932 -- TD-780. A QUIET WAY OUT. See the batch note: packs are the CHEAPEST fuel in
@@ -3427,7 +3427,7 @@
   /* v3.3.22 -- Getting started, inside the Ask Us panel (light, like the panel itself) */
   #help-gs-bar:empty { display: none; }
   #help-gs-bar { padding: 10px 16px 0; }
-  .help-gs-pill { width: 100%; border: 1px solid #c9a84c; background: #fbf3dc; color: #7a5c12; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .help-gs-pill { width: 100%; border: 1px solid var(--accent); background: #fbf3dc; color: #7a5c12; border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
   .help-gs-pill:hover { background: #f6e8c0; }
   .help-gs-inline { align-self: flex-start; width: auto; }   /* v3.3.23 -- under a getting-started answer */
   .help-gs { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; color: #2a2f3a; }
@@ -3443,7 +3443,7 @@
   .help-gs .gs-nav { justify-content: space-between; margin-top: 4px; }
   .help-gs .gs-nav .btn[disabled] { opacity: 0.4; cursor: default; }
   .help-gs .gs-dots { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
-  .help-gs .gs-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #c9a84c; background: #fff; padding: 0; cursor: pointer; }
+  .help-gs .gs-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--accent); background: #fff; padding: 0; cursor: pointer; }
   .help-gs .gs-dot.done { background: #e6d3a0; }
   .help-gs .gs-dot.here { box-shadow: 0 0 0 2px #a3741a; }
   .help-gs .gs-dot.on { background: #a3741a; border-color: #a3741a; }
@@ -3501,8 +3501,8 @@
       <button class="modal-close" onclick="finalizeCloseFixDialog()">&times;</button>
     </div>
     <div id="fix-modal-body"></div>
-    <div id="fix-msg" style="font-size:12px;color:rgba(245,232,200,0.7);margin:8px 0 0;min-height:16px;"></div>
-    <div style="font-size:11px;color:rgba(245,232,200,0.5);margin-top:10px;">Running Optimize again will undo this. Save the book afterwards to keep it.</div>
+    <div id="fix-msg" style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.7);margin:8px 0 0;min-height:16px;"></div>
+    <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.5);margin-top:10px;">Running Optimize again will undo this. Save the book afterwards to keep it.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
       <button class="btn btn-sm" onclick="finalizeCloseFixDialog()">Cancel</button>
       <button class="btn btn-primary btn-sm" id="fix-try-btn" onclick="finalizeTryFix()">Try It</button>
@@ -3545,7 +3545,7 @@
 .cs-qedit-on{align-items:flex-start;}
 .cs-qbox{flex:1 1 auto;min-width:0;min-height:44px;font-size:13px;padding:6px 8px;}
 #cs-options{position:relative;}
-.cs-opt{position:relative;border:1px solid rgba(201,168,76,0.25);border-radius:10px;padding:12px;margin-top:12px;}
+.cs-opt{position:relative;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:10px;padding:12px;margin-top:12px;}
 .cs-opt.cs-win{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
 .cs-opt.cs-frozen .cs-dim{opacity:0.45;filter:grayscale(0.6);}
 .cs-opt-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
@@ -3562,7 +3562,7 @@
 .cs-bar{margin-top:6px;}
 .cs-bar .progress-bar{margin-bottom:3px;height:5px;}
 .cs-bar-msg{font-size:11px;color:#5c4a28;}
-.cs-shot-img{position:relative;aspect-ratio:16/9;background:rgba(0,0,0,0.3);border:1px dashed rgba(201,168,76,0.2);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.cs-shot-img{position:relative;aspect-ratio:16/9;background:rgba(0,0,0,0.3);border:1px dashed rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .cs-shot-img img{width:100%;height:100%;object-fit:contain;cursor:zoom-in;}
 .cs-shot-empty{font-size:11px;color:var(--text-muted);}
 .cs-gen{width:100%;margin-top:6px;}
@@ -3735,7 +3735,7 @@
     </div>
     <div id="style-picker-grid" class="style-card-grid"></div>
     <!-- v3.3.70 -- TD-1079. Shown for the art window only (openStylePicker); the page gates Platinum. -->
-    <div id="style-picker-cstyle" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 0;padding-top:12px;border-top:1px solid rgba(201,168,76,0.25);">
+    <div id="style-picker-cstyle" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 0;padding-top:12px;border-top:1px solid rgba(var(--accent-rgb),0.25);">
       <button type="button" class="btn btn-sm" onclick="cstyleFromPicker()">Go to Custom Art Styles</button>
       <span style="font-size:11px;color:var(--gold-dim);line-height:1.4;">Make your own art style from reference pictures (Platinum).</span>
     </div>
@@ -3827,7 +3827,7 @@
       <textarea class="form-textarea" id="cs-desc-input" rows="3" maxlength="2000" oninput="csDirty(true)"
                 placeholder="What is this campaign about?"></textarea>
     </div>
-    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(var(--accent-rgb),0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:10px;">Campaign image</div>
       <!-- v3.0.743 -- shown only while creating. Ian: "On new they will not have any pictures but
            still show them the image options with the note. I want them to know it is there." -->
@@ -3837,14 +3837,14 @@
         <div class="settings-section-desc" style="margin:0;">Shown on this campaign's tile, and used as the default cover when you publish if no cover has been chosen.</div>
       </div>
     </div>
-    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(var(--accent-rgb),0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Genre</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Steers how the story is written and which moments become pictures, and files your book in the Library. Choose up to 3 &mdash; the first one is the main one.</div>
       <div id="cs-genre-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
       <select id="cs-genre-add" class="camp-edit-textarea" style="min-height:0;height:30px;max-width:260px;margin-top:0;" onchange="csGenreAdd(this)"></select>
       <div class="settings-section-desc" id="cs-genre-note" style="margin:6px 0 0;"></div>
     </div>
-    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(var(--accent-rgb),0.18);padding-top:16px;">
       <!-- v3.0.866 -- TD-735. Same control, same row shape as the Story tab: the heading and the
            Import button share one flex line, so this costs no vertical space either. -->
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
@@ -3857,7 +3857,7 @@
       </div>
       <div class="camp-lore-count" id="cs-lore-count"></div>
     </div>
-    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(201,168,76,0.18);padding-top:16px;">
+    <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(var(--accent-rgb),0.18);padding-top:16px;">
       <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">General Campaign Prompt</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Applies to every session in this campaign &mdash; both the writing and the pictures. For example: &quot;Tell the story from Piper's point of view.&quot; or &quot;Put a bird somewhere in every image.&quot;</div>
       <textarea id="cs-cprompt-input" class="camp-edit-textarea" style="max-width:none;min-height:60px;" maxlength="500" placeholder="Optional. One or two sentences works best. e.g. always refer to the war as the Long Winter" oninput="cpromptCount(this);csDirty()" onblur="csFlush()"></textarea>
@@ -3946,7 +3946,7 @@
       </label>
     </div>
 
-    <div class="cl-grid" style="margin-top:16px;border-top:1px solid rgba(201,168,76,0.2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;">
+    <div class="cl-grid" style="margin-top:16px;border-top:1px solid rgba(var(--accent-rgb),0.2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;">
       <label class="cl-toggle" title="Large decorative first letter on the opening paragraph"><input type="checkbox" id="cl-dropcap"><span>Drop cap on opening</span></label>
       <label class="cl-toggle" title="Show the campaign / session header at the top of each page"><input type="checkbox" id="cl-header"><span>Running page header</span></label>
     </div>
@@ -3956,7 +3956,7 @@
       <label class="cl-toggle" id="cl-markerbreak-label" title="Start each session on a fresh page (only applies when Session dividers is on)" style="padding-left:26px;"><input type="checkbox" id="cl-markerbreak"><span>New page per session</span></label>
     </div>
 
-    <div id="cl-pages-group" class="cl-grid" style="margin-top:12px;border-top:1px solid rgba(201,168,76,0.2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;">
+    <div id="cl-pages-group" class="cl-grid" style="margin-top:12px;border-top:1px solid rgba(var(--accent-rgb),0.2);padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;">
       <label class="cl-toggle" title="Include the cover page"><input type="checkbox" id="cl-cover"><span>Include cover page</span></label>
                 <!-- v3.0.616 -- HIDE CAMPAIGNIA LOGO IS GONE. Ian: the mark moves to the BACK cover and
                      is always on, so there is nothing left to toggle. It was a Platinum-gated control;
@@ -3985,7 +3985,7 @@
      charged (1 for the composer, then each AI pass metered), and it contradicted the estimate
      sitting beside it. The estimate note is now the single source of price on this screen. */
   #layoutai-est-note .est-spin { display:inline-block; width:9px; height:9px; margin-right:6px; vertical-align:-1px;
-    border:1.5px solid rgba(245,232,200,0.28); border-top-color:rgba(245,232,200,0.75); border-radius:50%;
+    border:1.5px solid rgba(var(--on-panel-cream-rgb),0.28); border-top-color:rgba(var(--on-panel-cream-rgb),0.75); border-radius:50%;
     animation:estspin 0.7s linear infinite; }
   @keyframes estspin { to { transform:rotate(360deg); } }
   /* v3.0.602 -- THESE MATCH THE TITLE & COVER PANEL NOW, NOT THE OTHER WAY ROUND. Ian, 2026-08-10,
@@ -3999,10 +3999,10 @@
      classes for the same four controls -- it is one form rendered in two places. Scoping this to
      .novel-prep-panel would have given the same form two appearances, which is the fault this
      project keeps paying for. The modal now matches as well. */
-  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(201,168,76,0.9);font-family:inherit; }
-  .cl-field select { background:rgba(20,12,4,0.85);color:var(--gold);border:1px solid rgba(201,168,76,0.3);border-radius:var(--radius);padding:8px 10px;font-size:14px;font-family:inherit;width:100%;max-width:100%;box-sizing:border-box; }
+  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(var(--accent-rgb),0.9);font-family:inherit; }
+  .cl-field select { background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);padding:8px 10px;font-size:14px;font-family:inherit;width:100%;max-width:100%;box-sizing:border-box; }
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }
-  .cl-toggle input { accent-color:#c9a84c;width:15px;height:15px; }
+  .cl-toggle input { accent-color:var(--accent);width:15px;height:15px; }
   /* TF-11: the Layout modal's two-column grids + split footer cramp on a phone. */
   @media (max-width: 640px) {
     #custom-layout-modal .cl-grid { grid-template-columns: 1fr !important; }

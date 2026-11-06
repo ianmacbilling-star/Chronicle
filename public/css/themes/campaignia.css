@@ -26,6 +26,12 @@
   --on-panel-cream:#f5e8c8;   /* cream text on a dark panel */
   --accent-bright:#d8b85c;   /* the bright gold */
   --accent-pale:#e8d5a3;   /* the pale gold */
+  /* v3.4.55 -- names the bookshelf look in app.html adds */
+  --foil-rgb:232,207,122;   /* gold-foil lettering on the bookshelf books */
+  --tooling-rgb:214,180,90;   /* the gold lines tooled on the bookshelf books */
+  --shelf-shadow-rgb:12,7,3;   /* the dark fade under the shelves and behind settings text */
+  --well-rgb:10,6,4;   /* dark inset wells (lists inside panels) */
+  --foil:#e8cf7a;   /* gold-foil lettering as a solid color */
 }
 :root{
   --ink:#2c1810;--ink-light:#5c3d2e;
