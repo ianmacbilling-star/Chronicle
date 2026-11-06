@@ -3,29 +3,21 @@
    looks the same. A second brand gets its own sheet with the same names and its own values.
    *-rgb names hold three numbers so a rule can keep its own see-through level: rgba(var(--accent-rgb),0.2).
    The :root rules below the new names are style.css's original tokens, moved here word for word. */
-/* v3.4.58 -- names folded into the name that does the same job (Ian, 2026-11-06). Each folded name now points at the name that
-   replaced it, so pages not yet swept keep working; a second brand sets only the kept name. Folded: gold -> accent-bright, gold-light -> accent-pale, parchment -> on-panel, on-panel-cream -> on-panel, cream -> on-panel, crimson -> danger, error-fill -> danger, surface-ink -> panel, panel-alt -> panel, modal -> panel, panel-raised -> panel, window-bg -> panel, card -> panel, panel-deeper -> panel-deep. */
+/* v3.4.58 -- near-duplicate names were folded into the name that does the same job (Ian, 2026-11-06).
+   v3.4.62 -- the folded names, which only pointed at their replacements, are gone, with every other name nothing used. */
 :root{
   --accent-rgb:201,168,76;   /* the Campaignia gold: borders, glows, faint fills, focus rings */
-  --accent-bright-rgb:216,184,92;   /* the bright gold (same as --gold), used in shimmer animations */
-  --accent-pale-rgb:232,213,163;   /* the pale gold (same as --gold-light): hints and soft labels on dark */
-  --on-panel-rgb:240,232,208;   /* parchment text on a dark panel (same as --parchment) */
-  --on-panel-cream-rgb:var(--on-panel-rgb);   /* cream text on a dark panel (same as --cream) */
+  --accent-bright-rgb:216,184,92;   /* the bright gold, used in shimmer animations */
+  --accent-pale-rgb:232,213,163;   /* the pale gold: hints and soft labels on dark */
+  --on-panel-rgb:240,232,208;   /* parchment text on a dark panel */
   --panel-rgb:20,12,4;   /* the main dark-brown panel: inputs, review panel, pickers */
   --panel-deep-rgb:15,10,5;   /* a deeper panel: picture frames, input wells */
-  --panel-deeper-rgb:var(--panel-deep-rgb);   /* the deepest panel: page views, busy overlays, drop zones */
-  --panel-raised-rgb:var(--panel-rgb);   /* the sidebar and campaign cards */
-  --card-rgb:var(--panel-rgb);   /* character, moment and settings cards */
-  --modal-rgb:var(--panel-rgb);   /* modals and the lightbox */
-  --panel-alt-rgb:var(--panel-rgb);   /* add-character card and .panel-dark */
   --scrim-rgb:8,5,2;   /* the dimmer behind windows */
-  --danger-rgb:139,26,26;   /* the crimson (same as --crimson): remove and delete */
+  --danger-rgb:139,26,26;   /* the crimson: remove and delete */
   --accent:#c9a84c;   /* the Campaignia gold as a solid color (spinners, labels) */
   --page-bg:#0a0806;   /* the page background */
-  --window-bg:var(--panel);   /* the background of windows (Edit, picture pickers) */
   --panel:#140c04;   /* the main dark-brown panel as a solid color */
   --on-panel:#f0e8d0;   /* parchment text on a dark panel */
-  --on-panel-cream:var(--on-panel);   /* cream text on a dark panel */
   --accent-bright:#d8b85c;   /* the bright gold */
   --accent-pale:#e8d5a3;   /* the pale gold */
   /* v3.4.55 -- names the bookshelf look in app.html adds */
@@ -37,8 +29,6 @@
   /* v3.4.57 -- every remaining color, named by its job (Ian, 2026-11-06). Near-identical shades were merged into one;
      the names say what the color is for, so a second brand gives each its own value. *-rgb hold three numbers. */
   /* brand golds, browns and creams */
-  --surface-ink:var(--panel);
-  --surface-ink-rgb:var(--panel-rgb);
   --surface-ink-text:#160e06;
   --surface-ink-text-rgb:22,14,6;
   --hover-fill:#2a1d08;
@@ -128,7 +118,6 @@
   --npc-deep-rgb:60,52,137;
   --info-rgb:31,80,102;
   --error-rgb:163,45,45;
-  --error-fill-rgb:var(--danger-rgb);
   --success-rgb:15,110,86;
   --success-text:#0f6e56;
   --warning-rgb:138,90,0;
@@ -181,13 +170,11 @@
   /* v3.4.61 -- names the public pages add: tier metals, the AI tag, the writer and editor labels, the added-to-shelf button */
   --tier-silver:#c0c0c0;
   --tier-platinum:#e5e4e2;
-  --ai-tag-fill:#3b5aa0;
   --ai-tag-line:#5b7bc0;
   --ai-tag-text:#dbeafe;
   --writer-pill-fill:#2f4a5c;
   --editor-pill-fill:#3f5232;
   --editor-pill-line:#283821;
-  --added-fill:#284628;
   --added-line:#1f3a1f;
   --panel-deep:#0f0a05;
   --tooling:#d6b45a;
@@ -196,13 +183,19 @@
   --change-pending:#e07a6a;
   --rights-warn-line-rgb:217,119,6;
   --ai-tag-fill-rgb:59,90,160;
+  /* v3.4.62 -- the tier badges and headers in the app (Account, Plans and Passes); Gold uses --accent */
+  --tier-copper-fill:#6b4a2f;
+  --tier-copper-text:#f0d8b8;
+  --tier-silver-fill:#8a8d93;
+  --tier-silver-text:#1a1a1a;
+  --tier-gold-text:#1a1a1a;
+  --tier-platinum-fill:#3a3d6b;
+  --tier-platinum-text:#e8e8f0;
 }
 :root{
-  --ink:#2c1810;--ink-light:#5c3d2e;
-  --gold:var(--accent-bright);--gold-light:var(--accent-pale);--gold-dim:rgba(201,168,76,0.6);
-  --crimson:var(--danger);--crimson-light:#fcebeb;
-  --parchment:var(--on-panel);--parchment-dark:#e0d0a8;
-  --cream:var(--on-panel);
+  --ink:#2c1810;
+  --gold-dim:rgba(201,168,76,0.6);
+  --crimson-light:#fcebeb;
   --bg:#f9f7f4;--surface:#ffffff;
   --border:#e2ddd5;--border-dark:#c4bfb5;
   --text:#1a1410;--text-muted:#6b5f55;--text-light:#9e9088;

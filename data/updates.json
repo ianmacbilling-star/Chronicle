@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.62",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3462-theme-tiers-tidy",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: the tier badges take their colors from the theme sheet, and names nothing used are gone from it.",
+        "detail": "The Copper, Silver, Gold and Platinum badges and headers in the app (Account, Plans and Passes) now read their colors from css/themes/campaignia.css: seven new tier names, exact colors; Gold uses the brand gold. The theme sheet loses 20 names nothing in the code base uses any more: the folded names that only pointed at their replacements (gold, gold-light, parchment, cream, crimson, surface-ink, window-bg and the rest), two old light tokens, and two hex forms whose rgb forms are the ones in use. Nothing on screen changes.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.61",
     "staged_on": "2026-11-06",
     "entries": [

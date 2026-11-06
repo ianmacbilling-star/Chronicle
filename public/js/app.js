@@ -3076,11 +3076,12 @@ function setTierOverride() {
   .catch(function (e) { if (msg) msg.textContent = 'Could not change tier: ' + e.message; });
 }
 
+// v3.4.62 -- two brands: the tier badge colors are the brand theme sheet's (css/themes/campaignia.css). Gold is the brand gold.
 var TIER_COLORS = {
-  copper:   { bg:'#6b4a2f', fg:'#f0d8b8' },
-  silver:   { bg:'#8a8d93', fg:'#1a1a1a' },
-  gold:     { bg:'#c9a84c', fg:'#1a1a1a' },
-  platinum: { bg:'#3a3d6b', fg:'#e8e8f0' }
+  copper:   { bg:'var(--tier-copper-fill)', fg:'var(--tier-copper-text)' },
+  silver:   { bg:'var(--tier-silver-fill)', fg:'var(--tier-silver-text)' },
+  gold:     { bg:'var(--accent)', fg:'var(--tier-gold-text)' },
+  platinum: { bg:'var(--tier-platinum-fill)', fg:'var(--tier-platinum-text)' }
 };
 
 function renderAccountTier(me) {
@@ -3433,7 +3434,7 @@ function renderAccountPasses(me, data) {
   var hasPass = !!(me && me.pass);
   // Platinum's own colour, from the one table that defines it. Retyping #3a3d6b here would be a
   // second definition of Platinum waiting to disagree with the first.
-  var PLAT = (TIER_COLORS.platinum && TIER_COLORS.platinum.bg) || '#3a3d6b';
+  var PLAT = (TIER_COLORS.platinum && TIER_COLORS.platinum.bg) || 'var(--tier-platinum-fill)';
 
   // IAN, 2026-09-16: a live subscriber CAN buy a pass, "with the overlap spelled out". The line
   // changes, the buttons never do.
