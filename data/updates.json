@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.64",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3464-brand2-dots-text",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Brand 2 on /story: the halftone dots are barely there and the text is easier to read.",
+        "detail": "Ian on staging: the dots were too dark and some text was hard to read. The halftone dot color is now a theme name, --halftone-dot (Campaignia keeps its rgba(0,0,0,0.15), so the Campaignia landing pages are unchanged); brand 2's is a faint slate blue at 4.5 percent. Brand 2's two text colors are deeper: on-panel #3f4668 to #262b4a, accent-pale #6a74a6 to #4f5a94.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.63",
     "staged_on": "2026-11-06",
     "entries": [

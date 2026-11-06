@@ -1,7 +1,8 @@
 /* BRAND 2 (name to come) -- the theme sheet for the storyteller brand (v3.4.63, Ian 2026-11-06: "Sky and Lavender").
    A copy of campaignia.css with the same names; only the values below differ, chosen from the pastel/watercolor trial.
    Light page: cool paper, slate-blue ink, periwinkle accent, pink button. Used by /story only for now.
-   Changed from Campaignia: accent, accent-pale, accent-pale-rgb, accent-rgb, button-cta, danger, danger-rgb, hover-fill, hover-fill-rgb, light-panel-text, light-panel-text-rgb, on-panel, on-panel-rgb, page-bg, page-bg-rgb, panel, panel-deep, panel-deep-rgb, panel-rgb, surface-ink-text, surface-ink-text-rgb, tier-platinum, tier-platinum-rgb, tier-silver. Every other name keeps Campaignia's value until brand 2 needs its own. */
+   Changed from Campaignia: accent, accent-pale, accent-pale-rgb, accent-rgb, button-cta, danger, danger-rgb, hover-fill, hover-fill-rgb, light-panel-text, light-panel-text-rgb, on-panel, on-panel-rgb, page-bg, page-bg-rgb, panel, panel-deep, panel-deep-rgb, panel-rgb, surface-ink-text, surface-ink-text-rgb, tier-platinum, tier-platinum-rgb, tier-silver. Every other name keeps Campaignia's value until brand 2 needs its own.
+   v3.4.64 (Ian: dots too dark, some text hard to read): halftone-dot barely there; on-panel and accent-pale (the text colors) deeper. */
 /* Campaignia -- the theme sheet (v3.4.54, two brands step 1).
    Every brand color style.css uses is named here, holding exactly the value it always had, so Campaignia
    looks the same. A second brand gets its own sheet with the same names and its own values.
@@ -12,8 +13,8 @@
 :root{
   --accent-rgb:125,142,212;   /* the Campaignia gold: borders, glows, faint fills, focus rings */
   --accent-bright-rgb:216,184,92;   /* the bright gold, used in shimmer animations */
-  --accent-pale-rgb:106,116,166;   /* the pale gold: hints and soft labels on dark */
-  --on-panel-rgb:63,70,104;   /* parchment text on a dark panel */
+  --accent-pale-rgb:79,90,148;   /* the pale gold: hints and soft labels on dark */
+  --on-panel-rgb:38,43,74;   /* parchment text on a dark panel */
   --panel-rgb:253,252,255;   /* the main dark-brown panel: inputs, review panel, pickers */
   --panel-deep-rgb:236,238,250;   /* a deeper panel: picture frames, input wells */
   --scrim-rgb:8,5,2;   /* the dimmer behind windows */
@@ -21,9 +22,9 @@
   --accent:#7d8ed4;   /* the Campaignia gold as a solid color (spinners, labels) */
   --page-bg:#f6f6fc;   /* the page background */
   --panel:#fdfcff;   /* the main dark-brown panel as a solid color */
-  --on-panel:#3f4668;   /* parchment text on a dark panel */
+  --on-panel:#262b4a;   /* parchment text on a dark panel */
   --accent-bright:#d8b85c;   /* the bright gold */
-  --accent-pale:#6a74a6;   /* the pale gold */
+  --accent-pale:#4f5a94;   /* the pale gold */
   /* v3.4.55 -- names the bookshelf look in app.html adds */
   --foil-rgb:232,207,122;   /* gold-foil lettering on the bookshelf books */
   --tooling-rgb:214,180,90;   /* the gold lines tooled on the bookshelf books */
@@ -195,6 +196,8 @@
   --tier-gold-text:#1a1a1a;
   --tier-platinum-fill:#3a3d6b;
   --tier-platinum-text:#e8e8f0;
+  /* v3.4.64 -- the halftone dots laid over the landing pages (landing.css body::before) */
+  --halftone-dot:rgba(43,49,82,0.045);
 }
 :root{
   --ink:#2c1810;

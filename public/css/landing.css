@@ -41,7 +41,7 @@
       content: '';
       position: fixed;
       inset: 0;
-      background-image: radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px);
+      background-image: radial-gradient(circle, var(--halftone-dot) 1px, transparent 1px);
       background-size: 6px 6px;
       pointer-events: none;
       z-index: 1000;
