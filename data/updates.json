@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.66",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3466-story-hero-slot",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/story: the space above and below the hero picture matches the panel beside it.",
+        "detail": "Ian on staging: the strip above and below the turning-page picture was the page color, lighter than the text panel next to it. The picture slot, the page under it and the page-turn sweep now use --panel-deep, the left panel's color. landing-story.css is used by /story only.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.65",
     "staged_on": "2026-11-06",
     "entries": [

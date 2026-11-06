@@ -51,7 +51,7 @@
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
-  background-color: var(--page-bg, #0a0806);
+  background-color: var(--panel-deep, #0f0a05);
 }
 
 /* The turning surface. Three layers: the next page underneath, the leaf that rotates, and the
@@ -67,7 +67,7 @@
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
-  background-color: var(--page-bg, #0a0806);
+  background-color: var(--panel-deep, #0f0a05);
 }
 .pt-leaf {
   transform-origin: left center;
@@ -86,7 +86,7 @@
 }
 .pt-sweep {
   position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 2;
-  background: linear-gradient(to right, rgba(var(--page-bg-rgb),0.55) 0%, rgba(var(--page-bg-rgb),0.12) 45%, rgba(var(--page-bg-rgb),0) 70%);
+  background: linear-gradient(to right, rgba(var(--panel-deep-rgb),0.55) 0%, rgba(var(--panel-deep-rgb),0.12) 45%, rgba(var(--panel-deep-rgb),0) 70%);
   transition: opacity 1.2s ease;
 }
 .pageturn.turning .pt-sweep { opacity: 1; }
