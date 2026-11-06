@@ -4904,7 +4904,7 @@ function openChangeReview(charId) {
   var isManual = !isAccepted && !r.change_detail;
   var titleText;
   if (isAccepted) {
-    titleText = '&#10003; Change applied — adjust or un-approve';
+    titleText = '&#10003; Change applied';   // v3.4.50 -- there is no Un-approve button any more
   } else if (isManual) {
     titleText = '&#10010; Amend ' + r.name + '\u2019s appearance';
   } else {
@@ -4912,12 +4912,15 @@ function openChangeReview(charId) {
   }
   // For an accepted change, the textarea holds the clean change_note
   // (the approved detail), not change_detail.
-  var detailText = isAccepted
-    ? (r.change_note || r.change_detail || '')
-    : (r.change_detail || '');
-  // Only show the "AI detected" line when the AI actually detected something.
-  var detectedLine = (r.change_detail && !isManual)
-    ? '<div class="sc-review-detected">The AI detected: <em>' + r.change_detail + '</em></div>'
+  // v3.4.50 -- (Ian: "Once a change is done and accepted... Can you clear it from the Retouch window?") The box holds
+  // only a suggestion still waiting for a decision. An approved change lives on in the Description (its RECENT CHANGE
+  // line, which is what the story pictures are drawn from), so the box opens empty for the next change.
+  var _pendingSugg = (r.change_status === 'pending' && !!r.change_detail);
+  var detailText = _pendingSugg ? r.change_detail : '';
+  // v3.4.50 -- the suggestion says what to do with it (Ian's wording, tightened); nothing once it is decided.
+  var detectedLine = _pendingSugg
+    ? '<div class="sc-review-detected"><b>Generate Story spotted a change:</b> <em>' + r.change_detail + '</em>. It is in the Amended appearance box. ' +
+      'Edit it if needed, then press <b>Retouch image</b> to apply it, or <b>Ignore suggested change</b> if it is wrong. You can always Revert.</div>'
     : (isManual
         ? ''   // v3.4.48 -- the Amended appearance label's hover says it
         : '');
@@ -41521,14 +41524,20 @@ function scSaveEdit(charId) {
   if (descEl && norm(descEl.value) !== norm(row.prompt)) steps.push(function () { return _scSaveDesc(charId, descEl.value).then(function (e) { if (!e) row.prompt = descEl.value; return e; }); });
   if (waiting) {
     if (styled) steps.push(function () { return _scPost(charId, 'approve-styled-reference', { image_url: waiting }); });
-    if (changed) steps.push(function () { return _scPost(charId, 'approve-change', { detail: detail, image_url: waiting, moment_index: moment }); });
+    // v3.4.50 -- a second change ADDS to the approved one (the server rewrites the RECENT CHANGE line from this detail,
+    // so sending only the new words would drop the old change from the text while the picture still shows it).
+    var _prev = accepted ? String(row.change_note || row.change_detail || '').trim() : '';
+    var _both = !_prev ? detail : (!detail || norm(detail) === norm(_prev) ? _prev : _prev.replace(/[\s.;,]+$/, '') + '; ' + detail);
+    if (changed) steps.push(function () { return _scPost(charId, 'approve-change', { detail: _both, image_url: waiting, moment_index: moment }); });
   } else if (accepted) {
+    // v3.4.50 -- the box is empty for an approved change now, so moving "Change starts at" re-sends the APPROVED text.
     var curMoment = (typeof row.change_moment_index === 'number') ? row.change_moment_index : -1;
-    if (norm(detail) !== norm(row.change_note || row.change_detail) || moment !== curMoment) {
-      steps.push(function () { return _scPost(charId, 'approve-change', { detail: detail, image_url: row.reference_url || row.canonical_reference_url || null, moment_index: moment }); });
+    if (moment !== curMoment) {
+      steps.push(function () { return _scPost(charId, 'approve-change', { detail: row.change_note || row.change_detail || '', image_url: row.reference_url || row.canonical_reference_url || null, moment_index: moment }); });
     }
   }
-  var typedOnly = !waiting && !accepted && detail && norm(detail) !== norm(row.change_detail);
+  // v3.4.50 -- anything typed but never retouched, except an untouched suggestion (which simply stays a suggestion)
+  var typedOnly = !waiting && !!detail && !(row.change_status === 'pending' && norm(detail) === norm(row.change_detail));
   if (btn) btn.disabled = true;
   if (msg) msg.textContent = steps.length ? 'Saving\u2026' : '';
   var k = 0;

@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.4.50",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3450-approved-change-clears",
+        "kind": "improvement",
+        "public": true,
+        "summary": "An approved character change no longer reappears in the Edit window, and a suggested change says what to do.",
+        "detail": "Once a change is approved, the Amended appearance box opens empty for the next one; the change stays in the Description, which is what the pictures are drawn from. A change Generate Story suggests now explains itself: retouch to apply it, or ignore it. A second change adds to the first instead of replacing it.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.4.49",
     "staged_on": "2026-11-05",
     "entries": [

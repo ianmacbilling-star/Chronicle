@@ -1069,7 +1069,9 @@ clears the suggestion so it is not suggested again. Retouch and Regenerate build
 keeps the restyle. While a new picture waits, a **Revert** pill on it goes back to the saved picture. Either keeps going if
 you close the window; the card spins, then says **New image ready**, and opening Edit again shows it. One **Save** keeps
 everything as it is in the window: the description, and a new picture as the change from the chosen panel onward (a
-picture only restyled becomes the reference, not a change). A suggestion nobody retouched stays a suggestion. It also:
+picture only restyled becomes the reference, not a change). A suggestion nobody retouched stays a suggestion. Once a change
+is approved, the Amended appearance box opens empty for the next one; the change itself stays in the Description as its
+RECENT CHANGE line, which is what the pictures are drawn from. A second change adds to the first. It also:
 - **Detects visual changes** — if the story describes a change (a horn breaks off, a
   sunburn, a hole in a hat), Campaignia flags the character with a **review badge**.
   Open it with the character's **Edit** button.
