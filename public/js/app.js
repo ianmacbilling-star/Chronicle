@@ -4902,7 +4902,7 @@ function openChangeReview(charId) {
     return '<option value="' + i + '"' + sel + '>' + label + '</option>';
   }).join('');
   var momentSelector = moments.length
-    ? '<label class="sc-review-label"><span class="sc-tip" data-tip="The Moment Panel where the change first shows. The character looks as before until this picture and changed from it onward. Choose Empty to apply the change throughout.">Change starts at</span></label>' +   // v3.4.48 -- one line, the rest on hover (Ian)
+    ? '<label class="sc-review-label"><span class="sc-tip" data-tip="This is the moment where this change first shows up. The character keeps their prior look prior to this moment. Then at this moment the change takes effect and is carried over to the next session. Choose the Empty option to apply this change throughout the entire session.">Change Starts at Moment</span></label>' +   // v3.4.48 -- one line, the rest on hover (Ian)
       '<select class="form-input sc-review-moment" id="sc-review-moment-' + charId + '">' +
         emptyOpt + momentOptions +
       '</select>'

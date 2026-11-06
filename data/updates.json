@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.4.53",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3453-change-starts-wording",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Clearer wording for when a character change starts.",
+        "detail": "In a character's Edit window, Change Starts at Moment explains on hover that the character keeps their earlier look until that moment, then the change takes effect and carries into the next session; Empty applies it to the whole session.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.4.52",
     "staged_on": "2026-11-05",
     "entries": [
