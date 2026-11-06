@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.59",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3459-signin-pages-theme",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: the sign-in, gift, redeem, invite and reset-password pages take their colors from the theme sheet.",
+        "detail": "136 colors on login, gift, redeem, invite and reset-password now use 22 existing theme names (no new names; two solid/see-through forms added). Near-identical shades take the name's color, so a few shift very slightly. The reset page's old --gold now uses --accent-bright. Black, white and greys stay as typed.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.58",
     "staged_on": "2026-11-06",
     "entries": [

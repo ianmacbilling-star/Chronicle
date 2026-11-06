@@ -16,7 +16,7 @@
     align-items: center;
     justify-content: center;
     padding: 16px;
-    background: #0a0806;
+    background: var(--page-bg);
     background-image: url('/images/Campaignia_background.png');
     background-size: cover;
     background-position: center;
@@ -26,13 +26,13 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(10, 8, 6, 0.65);
+    background: rgba(var(--page-bg-rgb), 0.65);
   }
   .invite-card {
     position: relative;
     z-index: 1;
-    background: rgba(20, 16, 12, 0.92);
-    border: 1px solid rgba(201, 168, 76, 0.3);
+    background: rgba(var(--panel-deep-rgb), 0.92);
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
     border-radius: 10px;
     padding: 32px 28px;
     width: 100%;
@@ -52,26 +52,26 @@
     font-family: 'Cinzel', serif;
     font-weight: 700;
     font-size: 18px;
-    color: #c9a84c;
+    color: var(--accent);
     letter-spacing: 4px;
     margin-top: 8px;
   }
   .invite-title {
     font-family: 'Cinzel', serif;
     font-size: 22px;
-    color: #c9a84c;
+    color: var(--accent);
     text-align: center;
     margin: 6px 0 4px;
   }
   .invite-subtitle {
     text-align: center;
-    color: rgba(245, 232, 200, 0.7);
+    color: rgba(var(--soft-line-text-rgb), 0.7);
     font-size: 14px;
     margin-bottom: 22px;
   }
   .invite-details {
     background: rgba(0,0,0,0.25);
-    border: 1px solid rgba(201, 168, 76, 0.15);
+    border: 1px solid rgba(var(--accent-rgb), 0.15);
     border-radius: 8px;
     padding: 16px 18px;
     margin-bottom: 22px;
@@ -80,13 +80,13 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: rgba(201, 168, 76, 0.7);
+    color: rgba(var(--accent-rgb), 0.7);
     margin-top: 10px;
   }
   .invite-details .label:first-child { margin-top: 0; }
   .invite-details .value {
     font-size: 16px;
-    color: #f5e8c8;
+    color: var(--soft-line-text);
     margin-top: 2px;
   }
   .invite-actions {
@@ -95,9 +95,9 @@
     gap: 10px;
   }
   .invite-status {
-    background: rgba(40, 12, 8, 0.6);
-    border: 1px solid rgba(240, 160, 144, 0.3);
-    color: #f5d8d0;
+    background: rgba(var(--surface-ink-text-rgb), 0.6);
+    border: 1px solid rgba(var(--error-light-line-rgb), 0.3);
+    color: var(--error-pale-text);
     border-radius: 8px;
     padding: 14px 16px;
     font-size: 14px;
@@ -107,27 +107,27 @@
     margin-top: 14px;
     text-align: center;
     font-size: 13px;
-    color: rgba(245, 232, 200, 0.5);
+    color: rgba(var(--soft-line-text-rgb), 0.5);
   }
   .form-field { margin-bottom: 10px; }
-  .form-field label { display:block; font-size:12px; color: rgba(201,168,76,0.8); margin-bottom: 4px; }
+  .form-field label { display:block; font-size:12px; color: rgba(var(--accent-rgb),0.8); margin-bottom: 4px; }
   .form-field input {
     width: 100%; box-sizing: border-box;
     padding: 9px 12px;
     background: rgba(0,0,0,0.4);
-    border: 1px solid rgba(201, 168, 76, 0.25);
+    border: 1px solid rgba(var(--accent-rgb), 0.25);
     border-radius: 6px;
-    color: #f5e8c8;
+    color: var(--soft-line-text);
     font-size: 14px;
   }
   .form-field input:focus {
     outline: none;
-    border-color: rgba(201, 168, 76, 0.6);
+    border-color: rgba(var(--accent-rgb), 0.6);
   }
   .form-error {
-    background: rgba(40, 12, 8, 0.6);
-    border: 1px solid rgba(240, 160, 144, 0.3);
-    color: #f5d8d0;
+    background: rgba(var(--surface-ink-text-rgb), 0.6);
+    border: 1px solid rgba(var(--error-light-line-rgb), 0.3);
+    color: var(--error-pale-text);
     border-radius: 6px;
     padding: 8px 12px;
     font-size: 13px;
@@ -150,7 +150,7 @@
       <div class="invite-title">Invitation Unavailable</div>
       <div class="invite-status" id="error-message"></div>
       <div class="invite-help">
-        <a href="/login" style="color:#c9a84c;">Go to Campaignia home</a>
+        <a href="/login" style="color:var(--accent);">Go to Campaignia home</a>
       </div>
     </div>
     <div id="invite-state" style="display:none;">
@@ -217,7 +217,7 @@ function renderAuthArea(invite, authState) {
     if (invitedEmail && loggedEmail && invitedEmail !== loggedEmail) {
       var warn = document.createElement('div');
       warn.className = 'invite-help';
-      warn.style.color = '#e6b800';
+      warn.style.color = 'var(--rights-warn-text)';
       warn.style.marginBottom = '12px';
       warn.textContent = 'This invitation was sent to ' + invite.email_hint + ', but you are signed in as ' + authState.email + '. Switch to that account to accept it.';
       area.appendChild(warn);
@@ -259,7 +259,7 @@ function renderAuthArea(invite, authState) {
 
   var divider = document.createElement('div');
   divider.style.textAlign = 'center';
-  divider.style.color = 'rgba(245, 232, 200, 0.4)';
+  divider.style.color = 'rgba(var(--soft-line-text-rgb), 0.4)';
   divider.style.margin = '14px 0 10px';
   divider.style.fontSize = '12px';
   divider.textContent = '— or —';

@@ -173,6 +173,9 @@
   --error-bg-line:#fcebeb;
   /* v3.4.58 -- forms the kept names gained when near-duplicates were folded into them */
   --danger:#8b1a1a;
+  /* v3.4.59 -- forms the sign-in and gift pages needed */
+  --amber-note-rgb:224,160,64;
+  --page-bg-rgb:10,8,6;
 }
 :root{
   --ink:#2c1810;--ink-light:#5c3d2e;
