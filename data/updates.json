@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.58",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3458-theme-names-combined",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: theme names that held the same or nearly the same color were combined (14 names folded into 6).",
+        "detail": "Folded: gold into accent-bright, gold-light into accent-pale, parchment into on-panel, on-panel-cream into on-panel, cream into on-panel, crimson into danger, error-fill into danger, surface-ink into panel, panel-alt into panel, modal into panel, panel-raised into panel, window-bg into panel, card into panel, panel-deeper into panel-deep. style.css, app.html and app.js now use the kept names; each folded name stays in the theme sheet pointing at its replacement until the other pages are swept. The light text on dark panels is now one cream and the delete red one red, so a few colors shift very slightly.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.57",
     "staged_on": "2026-11-06",
     "entries": [

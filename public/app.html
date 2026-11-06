@@ -92,7 +92,7 @@
     <style>
       @media (max-width: 640px) { #gift-badge { display: none !important; } #gift-pin.on { display: flex !important; } }
       #gift-pin { position: absolute; top: -6px; left: -9px; z-index: 5; width: 22px; height: 22px; border-radius: 50%;
-        background: var(--highlight-fill); box-shadow: 0 0 0 2px rgba(var(--surface-ink-rgb),0.85); align-items: center; justify-content: center;
+        background: var(--highlight-fill); box-shadow: 0 0 0 2px rgba(var(--panel-rgb),0.85); align-items: center; justify-content: center;
         font-size: 12px; line-height: 1; text-decoration: none; }
     </style>
     <span id="token-balance-label" class="btn btn-sm" title="Buy more tokens" onclick="openTokensModal()">&#9672; <span id="token-balance-value">—</span></span>
@@ -328,7 +328,7 @@
       <div class="page-header">
         <div>
           <div class="page-title">Asset Library</div>
-          <div class="page-subtitle">Locations, Supporting Characters / NPCs / Monsters and items — referenced in your storyboard panels by name<span id="asset-count" style="color:var(--gold);font-weight:600;"></span></div>
+          <div class="page-subtitle">Locations, Supporting Characters / NPCs / Monsters and items — referenced in your storyboard panels by name<span id="asset-count" style="color:var(--accent-bright);font-weight:600;"></span></div>
         </div>
         <div class="flex gap-1">
           <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
@@ -352,7 +352,7 @@
       <div class="page-header">
         <div>
           <div class="page-title">Archives</div>
-          <div class="page-subtitle">Saved copies of generated images — kept safe even if a panel is regenerated or a session is deleted<span id="archives-count" style="color:var(--gold);font-weight:600;"></span></div>
+          <div class="page-subtitle">Saved copies of generated images — kept safe even if a panel is regenerated or a session is deleted<span id="archives-count" style="color:var(--accent-bright);font-weight:600;"></span></div>
         </div>
         <div class="flex gap-1">
           <button class="btn btn-sm" onclick="sectionBack()">&larr; Back</button>
@@ -410,14 +410,14 @@
             <button class="btn btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()" title="Redraw the preview with your latest changes.">&#8635; Refresh preview</button>
             <div id="novel-zoom-ctrl" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;" title="Zoom the Quick View (or Ctrl/Cmd + scroll over the preview)">
               <button class="btn btn-sm" onclick="novelZoomStep(-0.1)" title="Zoom out">&minus;</button>
-              <span id="novel-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">100%</span>
+              <span id="novel-zoom-label" style="font-size:11px;color:var(--accent-bright);min-width:38px;text-align:center;">100%</span>
               <button class="btn btn-sm" onclick="novelZoomStep(0.1)" title="Zoom in">+</button>
               <button class="btn btn-sm" onclick="novelZoomFit()" title="Fit to width">Fit</button>
             </div>
           </div>
           <div id="novel-pager" style="display:none;align-items:center;gap:8px;flex-wrap:nowrap;min-width:0;">
             <button class="btn btn-sm" id="novel-pager-prev" onclick="novelPagePrev()" style="flex:0 0 auto;">Prev</button>
-            <select id="novel-pager-select" onchange="novelPageJump(this.value)" style="flex:1 1 auto;min-width:0;max-width:340px;background:rgba(var(--panel-rgb),0.8);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);"></select>
+            <select id="novel-pager-select" onchange="novelPageJump(this.value)" style="flex:1 1 auto;min-width:0;max-width:340px;background:rgba(var(--panel-rgb),0.8);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);padding:5px 10px;font-size:12px;font-family:var(--font-display);"></select>
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()" style="flex:0 0 auto;">Next</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()" style="display:none">Review in a New Tab</button>
@@ -431,7 +431,7 @@
           <div class="progress-msg" id="novel-preview-progress-msg">Loading preview&hellip;</div>
         </div>
         <div id="novel-preview-frame" style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);overflow:hidden;">
-          <div id="novel-preview-loading" style="width:100%;display:flex;align-items:center;justify-content:center;background:rgba(var(--panel-deeper-rgb),0.5);">
+          <div id="novel-preview-loading" style="width:100%;display:flex;align-items:center;justify-content:center;background:rgba(var(--panel-deep-rgb),0.5);">
             <div style="text-align:center;color:rgba(var(--accent-rgb),0.4);">
               <div style="font-size:32px;margin-bottom:8px;"></div>
               <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
@@ -470,7 +470,7 @@
                book on screen belongs to somebody else; prepApplyOwnershipLock toggles it. Without
                it a reader meets a panel where nothing responds and nothing says why, which is the
                same complaint as a control that accepts an edit and discards it. -->
-          <div id="prep-readonly-note" style="display:none;margin-bottom:12px;padding:8px 10px;font-size:12px;line-height:1.5;color:var(--cream);background:rgba(var(--accent-rgb),0.06);border-left:2px solid rgba(var(--accent-rgb),0.4);border-radius:0 var(--radius) var(--radius) 0;">
+          <div id="prep-readonly-note" style="display:none;margin-bottom:12px;padding:8px 10px;font-size:12px;line-height:1.5;color:var(--on-panel);background:rgba(var(--accent-rgb),0.06);border-left:2px solid rgba(var(--accent-rgb),0.4);border-radius:0 var(--radius) var(--radius) 0;">
             You are looking at someone else&#8217;s version, so the title, cover and layout settings are read-only. Switch to your own version to change them.
           </div>
           <!-- v3.4.28 -- THE PANELS FOLLOW THE BOOK (Ian, 2026-11-04: "I want the accordion panels to the left to match the
@@ -495,7 +495,7 @@
                    you can hide all of it when the check box is checked"; "move the Titling options UNDER the cover pictures"). The
                    box is still titlePlace 'none' underneath (prepOwnTitleChanged); prepApplyTitleModeLock hides #prep-title-panel.
                    pcl-ownTitle-words: the word check for an Image Builder cover (prepCoverWordsPaint). -->
-              <label id="pcl-ownTitle-row" style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--gold-light);cursor:pointer;margin:14px 0 6px;"><input type="checkbox" id="pcl-ownTitle" onchange="prepOwnTitleChanged(this)"> My Cover Picture has Title Included</label>
+              <label id="pcl-ownTitle-row" style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--accent-pale);cursor:pointer;margin:14px 0 6px;"><input type="checkbox" id="pcl-ownTitle" onchange="prepOwnTitleChanged(this)"> My Cover Picture has Title Included</label>
               <div id="pcl-ownTitle-words" style="display:none;font-size:11px;line-height:1.4;color:var(--soft-gold-note);margin:0 0 8px;"></div>
               <div id="prep-title-panel" style="border:1px solid rgba(var(--accent-rgb),0.35);border-radius:8px;padding:10px 12px 4px;margin:6px 0 4px;">
               <!-- v3.2.16 -- Ian: after an edit, when the cover uses a drawn title, "a small message under the text boxes". -->
@@ -522,7 +522,7 @@
                      same display face, same letter-spacing -- these are the two controls on this panel
                      that SPEND A TOKEN, so they should read as the same kind of thing. -->
                 <button type="button" id="title-build-open" onclick="openTitleBuilder()"
-                        style="background:var(--gold);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;font-size:12px;"
+                        style="background:var(--accent-bright);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;font-size:12px;"
                         title="Draw the title and subtitle as artwork instead of setting them in a typeface. Costs a token each time you generate.">Title Builder</button>
               </div>
               <!-- v3.0.632 -- ON THE ROW WITH THE DROPDOWN, not the row with the label. v3.0.630 put
@@ -605,7 +605,7 @@
                   <!-- v3.4.27 -- TD-1103: the character page's heading and the words under the line-up or the picture. -->
                   <label class="cl-field" id="prep-cast-head-label" title="The heading at the top of the character page. Clear it for no heading."><span>Heading</span><input type="text" id="prep-cast-head" class="prep-input" maxlength="48" placeholder="No heading" onchange="prepSaveCastHead()" style="margin-bottom:0;"></label>
                   <div class="cl-field" id="prep-cast-cap-wrap" style="flex:1 1 auto;display:flex;flex-direction:column;">
-                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;"><span>Text below</span><button type="button" id="prep-cast-cap-auto" onclick="prepCastCapUseAuto()" title="Go back to the names of the characters, from left to right, kept up to date for you." style="display:none;background:none;border:0;padding:0;color:var(--gold-light);text-decoration:underline;cursor:pointer;font-size:11px;font-family:inherit;">Use the automatic names</button></div>
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;"><span>Text below</span><button type="button" id="prep-cast-cap-auto" onclick="prepCastCapUseAuto()" title="Go back to the names of the characters, from left to right, kept up to date for you." style="display:none;background:none;border:0;padding:0;color:var(--accent-pale);text-decoration:underline;cursor:pointer;font-size:11px;font-family:inherit;">Use the automatic names</button></div>
                     <textarea id="prep-cast-cap" class="prep-input" maxlength="400" rows="3" onchange="prepSaveCastCap()" placeholder="Optional. Printed under the picture." title="Printed under the line-up or the picture, in smaller italic. Line breaks are kept." style="flex:1 1 auto;resize:vertical;min-height:64px;line-height:1.45;margin-bottom:0;"></textarea>
                   </div>
                   </div>
@@ -708,11 +708,11 @@
       <div id="novel-tab-finalize" style="display:none;">
         <div id="finalize-split" style="display:flex;align-items:stretch;gap:0;">
           <div id="finalize-left" style="flex:0 0 33%;min-width:220px;padding-right:8px;">
-            <div style="font-family:var(--font-display);color:var(--gold);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Optimize &mdash; Layout <span id="optimize-preview-pill" style="font-size:10px;background:rgba(var(--accent-rgb),0.18);border:1px solid rgba(var(--accent-rgb),0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
-            <div style="color:rgba(var(--on-panel-cream-rgb),0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
-            <div id="layoutai-header" style="font-size:12px;color:var(--cream);background:rgba(var(--accent-rgb),0.06);border-left:2px solid rgba(var(--accent-rgb),0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
+            <div style="font-family:var(--font-display);color:var(--accent-bright);font-size:15px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Optimize &mdash; Layout <span id="optimize-preview-pill" style="font-size:10px;background:rgba(var(--accent-rgb),0.18);border:1px solid rgba(var(--accent-rgb),0.4);border-radius:10px;padding:1px 7px;letter-spacing:0.1em;vertical-align:middle;">PREVIEW</span></div>
+            <div style="color:rgba(var(--on-panel-rgb),0.6);font-size:12px;margin-bottom:12px;">Our AI art director reviews your book and optimizes it for the best reading experience.</div>
+            <div id="layoutai-header" style="font-size:12px;color:var(--on-panel);background:rgba(var(--accent-rgb),0.06);border-left:2px solid rgba(var(--accent-rgb),0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--gold);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;"
+              <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--accent-bright);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;"
                       title="Hands the whole book to the AI art director to lay out again. This SPENDS TOKENS and takes several minutes -- both grow with the size of your book. The estimate beside this button is the most it can cost.">Optimize layout</button>
               <button id="layoutai-cancel-btn" onclick="finalizeCancelOptimize()" style="display:none;background:none;border:1px solid rgba(var(--error-soft-line-rgb),0.55);color:var(--error-light);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Cancel</button>
               <!-- v3.0.382 -- shown only when an Optimize run COMPLETES, in the slot the Cancel
@@ -722,28 +722,28 @@
                    the book on screen but not the SAVED one, so the hand-off has to become an offer to
                    save. Without it a fix could not be kept at all: the only way forward was to re-run
                    Optimize, which undoes it. -->
-              <button id="layoutai-save-fixed-btn" onclick="finalizeSaveFixedVersion()" style="display:none;background:var(--gold);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Save this Version</button>
-              <button id="layoutai-publish-btn" onclick="finalizeGoToPublish()" style="display:none;background:var(--gold);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Go to Publish &#8594;</button>
+              <button id="layoutai-save-fixed-btn" onclick="finalizeSaveFixedVersion()" style="display:none;background:var(--accent-bright);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Save this Version</button>
+              <button id="layoutai-publish-btn" onclick="finalizeGoToPublish()" style="display:none;background:var(--accent-bright);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;font-weight:600;cursor:pointer;flex:0 0 auto;">Go to Publish &#8594;</button>
               <!-- v3.0.893 -- TD-768. Shown and hidden by finalizeSyncPublishBtn from the SAME
                    variable as Go to Publish, so the two cannot disagree. Outlined rather than
                    filled: Go to Publish stays the primary action in this slot. -->
-              <button id="layoutai-download-btn" onclick="finalizeDownloadPdf()" title="Download the saved optimized book as a PDF" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--gold);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Download PDF</button>
+              <button id="layoutai-download-btn" onclick="finalizeDownloadPdf()" title="Download the saved optimized book as a PDF" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--accent-bright);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Download PDF</button>
               <!-- v3.0.981 -- TD-901. Save to Bookshelf: same visibility as Download PDF (finalizeSyncPublishBtn). -->
-              <button id="layoutai-shelf-btn" onclick="finalizeSaveToShelf()" title="Keep a copy of this optimized book, layout and all, on your Bookshelf" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--gold);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Save to Bookshelf</button>
-              <button id="layoutai-load-last" onclick="finalizeLoadLastOptimized(true)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--gold);border-radius:var(--radius);padding:6px 12px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Load Last Optimized File</button>
-              <span id="layoutai-est-note" style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>
-              <span id="layoutai-scan-label" style="display:none;font-size:13px;color:rgba(var(--on-panel-cream-rgb),0.7);font-style:italic;flex:0 0 auto;">Scanning book&hellip;</span>
+              <button id="layoutai-shelf-btn" onclick="finalizeSaveToShelf()" title="Keep a copy of this optimized book, layout and all, on your Bookshelf" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--accent-bright);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Save to Bookshelf</button>
+              <button id="layoutai-load-last" onclick="finalizeLoadLastOptimized(true)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--accent-bright);border-radius:var(--radius);padding:6px 12px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Load Last Optimized File</button>
+              <span id="layoutai-est-note" style="font-size:11px;color:rgba(var(--on-panel-rgb),0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>
+              <span id="layoutai-scan-label" style="display:none;font-size:13px;color:rgba(var(--on-panel-rgb),0.7);font-style:italic;flex:0 0 auto;">Scanning book&hellip;</span>
               <div id="layoutai-delta" style="display:none;font-size:13px;color:var(--soft-line-text);line-height:1.5;flex:1 1 auto;min-width:0;"></div>
             </div>
-            <div id="layoutai-status" style="color:rgba(var(--on-panel-cream-rgb),0.55);font-size:12px;margin-top:8px;"></div>
+            <div id="layoutai-status" style="color:rgba(var(--on-panel-rgb),0.55);font-size:12px;margin-top:8px;"></div>
             <!-- Plain-language progress shown to everyone while Optimize runs (admins also get the diagnostics below). -->
-            <div id="optimize-progress" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(var(--accent-rgb),0.05);border:1px solid rgba(var(--accent-rgb),0.18);border-radius:var(--radius);font-size:13px;color:var(--cream);line-height:1.7;max-height:420px;overflow-y:auto;"></div>
+            <div id="optimize-progress" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(var(--accent-rgb),0.05);border:1px solid rgba(var(--accent-rgb),0.18);border-radius:var(--radius);font-size:13px;color:var(--on-panel);line-height:1.7;max-height:420px;overflow-y:auto;"></div>
             <!-- Choose which rendering goes to the Library. The optimized option stays disabled until
                  Optimize has run, because publishing it reuses that run's composed book. -->
             <div id="layoutai-publish-pick" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid rgba(var(--accent-rgb),0.2);">
-              <div style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.7);margin-bottom:7px;">Carefully review both options and select the one that you feel is best.</div>
+              <div style="font-size:12px;color:rgba(var(--on-panel-rgb),0.7);margin-bottom:7px;">Carefully review both options and select the one that you feel is best.</div>
               <!-- Plain-language read on the two versions, filled in once Optimize has run. -->
-              <div id="pub-pick-verdict" style="display:none;font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.85);line-height:1.5;margin-bottom:9px;padding:8px 10px;border-left:2px solid rgba(var(--accent-rgb),0.5);background:rgba(var(--accent-rgb),0.06);border-radius:0 var(--radius) var(--radius) 0;"></div>
+              <div id="pub-pick-verdict" style="display:none;font-size:12px;color:rgba(var(--on-panel-rgb),0.85);line-height:1.5;margin-bottom:9px;padding:8px 10px;border-left:2px solid rgba(var(--accent-rgb),0.5);background:rgba(var(--accent-rgb),0.06);border-radius:0 var(--radius) var(--radius) 0;"></div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-sm" id="pub-pick-before" onclick="pickPublishSource('flow')">Publish the original layout</button>
                 <button class="btn btn-primary btn-sm" id="pub-pick-after" onclick="pickPublishSource('composed')" disabled title="Run Optimize first">Publish the optimized layout</button>
@@ -758,27 +758,27 @@
           <div id="finalize-right" style="flex:1 1 auto;min-width:220px;padding-left:8px;display:flex;flex-direction:column;">
             <div id="finalize-pdf-panes" style="display:flex;gap:6px;align-items:stretch;">
               <div id="finalize-before-wrap" style="display:none;flex:1 1 auto;min-width:0;">
-                <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;"><span>Before</span><span style="display:flex;gap:8px;align-items:baseline;"><button id="finalize-before-open" onclick="finalizeOpenPdf(true)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button><span id="finalize-before-count" style="color:var(--gold);letter-spacing:0.03em;"></span></span></div>
-                <div id="finalize-before-scroll" data-toptarget style="overflow-y:auto;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);background:var(--surface-ink);padding:4px;box-sizing:border-box;"></div>
+                <div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;"><span>Before</span><span style="display:flex;gap:8px;align-items:baseline;"><button id="finalize-before-open" onclick="finalizeOpenPdf(true)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-bright);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button><span id="finalize-before-count" style="color:var(--accent-bright);letter-spacing:0.03em;"></span></span></div>
+                <div id="finalize-before-scroll" data-toptarget style="overflow-y:auto;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);background:var(--panel);padding:4px;box-sizing:border-box;"></div>
               </div>
               <div id="finalize-page-nav-wrap" style="flex:0 0 44px;display:none;flex-direction:column;">
-                <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.4);margin-bottom:4px;text-align:center;">Pg</div>
+                <div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.4);margin-bottom:4px;text-align:center;">Pg</div>
                 <div id="finalize-page-nav" title="Jump both panes to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius);background:rgba(var(--well-rgb),0.4);padding:3px 0;"></div>
               </div>
               <div id="finalize-after-wrap" style="flex:1 1 100%;min-width:0;">
-                <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+                <div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
                   <span style="display:flex;gap:10px;align-items:baseline;min-width:0;">
                     <span id="finalize-after-label">After (optimized)</span>
                     <span id="finalize-optimized-note" style="display:none;text-transform:none;letter-spacing:0.02em;font-size:11px;color:rgba(var(--accent-rgb),0.85);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
                   </span>
                   <span style="display:flex;gap:8px;align-items:center;flex:0 0 auto;">
                     <span id="finalize-after-zoom" style="display:none;align-items:center;gap:3px;" title="Fit / zoom the optimized book">
-                      <button type="button" onclick="finalizeAfterZoomStep(-1)" style="background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--gold);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">&minus;</button>
-                      <span id="finalize-after-zoom-label" style="font-size:10px;color:var(--gold);min-width:34px;text-align:center;letter-spacing:0.02em;">Fit</span>
-                      <button type="button" onclick="finalizeAfterZoomStep(1)" style="background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--gold);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">+</button>
+                      <button type="button" onclick="finalizeAfterZoomStep(-1)" style="background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-bright);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">&minus;</button>
+                      <span id="finalize-after-zoom-label" style="font-size:10px;color:var(--accent-bright);min-width:34px;text-align:center;letter-spacing:0.02em;">Fit</span>
+                      <button type="button" onclick="finalizeAfterZoomStep(1)" style="background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-bright);border-radius:var(--radius);width:20px;height:20px;line-height:1;font-size:13px;cursor:pointer;padding:0;">+</button>
                     </span>
-                    <button id="finalize-after-open" onclick="finalizeOpenPdf(false)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--gold);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button>
-                    <span id="finalize-after-count" style="color:var(--gold);letter-spacing:0.03em;"></span>
+                    <button id="finalize-after-open" onclick="finalizeOpenPdf(false)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-bright);border-radius:var(--radius);padding:1px 8px;font-size:10px;letter-spacing:0.04em;cursor:pointer;text-transform:none;">Review in a New Tab</button>
+                    <span id="finalize-after-count" style="color:var(--accent-bright);letter-spacing:0.03em;"></span>
                   </span>
                 </div>
                 <div id="finalize-after-progress" style="display:none;margin-bottom:6px;"></div>
@@ -788,10 +788,10 @@
                      beat the stretch rule v3.0.601 added and left the panes sizing to their CONTENT --
                      a 49 page canvas stack -- so the whole tab scrolled instead of the preview. -->
                 <div id="finalize-after-row" style="display:flex;gap:8px;">
-                  <div id="finalize-after-scroll" data-toptarget style="flex:1 1 auto;min-width:0;overflow-y:auto;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);background:var(--surface-ink);padding:4px;box-sizing:border-box;display:none;"></div>
-                  <div id="finalize-after-body" style="flex:1 1 auto;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius);background:var(--surface-ink);display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(var(--on-panel-cream-rgb),0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
+                  <div id="finalize-after-scroll" data-toptarget style="flex:1 1 auto;min-width:0;overflow-y:auto;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);background:var(--panel);padding:4px;box-sizing:border-box;display:none;"></div>
+                  <div id="finalize-after-body" style="flex:1 1 auto;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius);background:var(--panel);display:flex;align-items:center;justify-content:center;text-align:center;color:rgba(var(--on-panel-rgb),0.4);font-size:12px;padding:20px;box-sizing:border-box;">Run Optimize to generate the optimized book here.</div>
                   <div id="finalize-after-nav-wrap" style="display:none;flex:0 0 44px;flex-direction:column;">
-                    <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.4);margin-bottom:4px;text-align:center;">Pg</div>
+                    <div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.4);margin-bottom:4px;text-align:center;">Pg</div>
                     <div id="finalize-after-nav" title="Jump to a page" style="overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius);background:rgba(var(--well-rgb),0.4);padding:3px 0;"></div>
                   </div>
                 </div>
@@ -812,7 +812,7 @@
           <div id="ord-load-bar" class="ord-card" style="display:none;margin-bottom:14px;padding:10px 14px;">
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
               <button type="button" id="ord-load-btn" class="btn btn-primary btn-sm" onclick="orderLoadLastClick()">Load Last Optimized</button>
-              <div id="ord-load-text" style="flex:1 1 260px;min-width:0;font-size:12px;line-height:1.5;color:rgba(var(--on-panel-cream-rgb),0.8);"></div>
+              <div id="ord-load-text" style="flex:1 1 260px;min-width:0;font-size:12px;line-height:1.5;color:rgba(var(--on-panel-rgb),0.8);"></div>
             </div>
           </div>
           <!-- ============================ CARD 1: PRINT ORDER ============================ -->
@@ -943,7 +943,7 @@
             <div class="ord-divider"></div>
             <div class="ord-actions" style="margin-bottom:10px;">
               <button class="btn btn-sm" onclick="quotePrintOrder()">Get price</button>
-              <div id="print-quote" style="font-size:13px;color:var(--cream);"></div>
+              <div id="print-quote" style="font-size:13px;color:var(--on-panel);"></div>
             </div>
             <div class="ord-actions">
               <button class="btn btn-primary" id="print-place-btn" onclick="reviewPrintOrder()">Prepare Your Order</button>
@@ -955,14 +955,14 @@
               <div id="book-mismatch-order" class="book-mismatch" style="display:none;"></div>
               <div id="print-place-msg" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:12px;flex:1 1 240px;min-width:0;"></div>
             </div>
-            <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(var(--accent-rgb),0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--gold);transition:width 0.4s ease;border-radius:4px;"></div></div>
-            <div id="print-trial-notice" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:12px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.35);color:rgba(var(--on-panel-cream-rgb),0.9);"></div>
+            <div id="print-progress" style="display:none;height:6px;border-radius:4px;background:rgba(var(--accent-rgb),0.15);margin-top:10px;overflow:hidden;"><div id="print-progress-bar" style="height:100%;width:0%;background:var(--accent-bright);transition:width 0.4s ease;border-radius:4px;"></div></div>
+            <div id="print-trial-notice" style="display:none;margin-top:10px;padding:8px 12px;border-radius:var(--radius);font-size:12px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.35);color:rgba(var(--on-panel-rgb),0.9);"></div>
 
             <div id="print-review" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(var(--accent-rgb),0.4);border-radius:var(--radius);background:rgba(var(--panel-rgb),0.5);">
-              <div style="font-weight:600;color:var(--gold);margin-bottom:10px;">Review your order</div>
+              <div style="font-weight:600;color:var(--accent-bright);margin-bottom:10px;">Review your order</div>
               <div id="print-review-summary" style="font-size:13px;margin-bottom:12px;"></div>
               <a id="print-review-preview" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-bottom:10px;font-size:13px;color:var(--player-text);text-decoration:underline;">Preview your book (opens the PDF in a new tab)</a>
-              <label id="print-attest-label" style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.75);margin-bottom:12px;cursor:pointer;"><input type="checkbox" id="print-attest" onchange="updatePrintConfirmGate()" style="margin-top:2px;flex:0 0 auto;" /><span>I have reviewed both the interior and cover PDFs and agree they are ready for print.</span></label>
+              <label id="print-attest-label" style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:rgba(var(--on-panel-rgb),0.75);margin-bottom:12px;cursor:pointer;"><input type="checkbox" id="print-attest" onchange="updatePrintConfirmGate()" style="margin-top:2px;flex:0 0 auto;" /><span>I have reviewed both the interior and cover PDFs and agree they are ready for print.</span></label>
               <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button class="btn btn-primary" id="print-confirm-btn" onclick="submitPrintOrder()" disabled>Continue to secure payment</button>
                 <button class="btn btn-sm" onclick="cancelPrintReview()">Back</button>
@@ -982,7 +982,7 @@
             <!-- v3.0.385 -- was "Publishing the original layout / change on the Optimize tab", a leftover
                  from when Before and After were both publishable. Only the optimized book ever publishes,
                  so the choice is gone and this now links to the exact file that will be used. -->
-            <div style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.75);margin-bottom:10px;">Publishing: <a id="publish-book-link" href="#" target="_blank" rel="noopener" style="color:var(--link-blue);text-decoration:underline;">the optimized book</a><span id="publish-book-none" style="display:none;">nothing yet &mdash; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:var(--link-blue);text-decoration:underline;">run Optimize first</a></span></div>
+            <div style="font-size:12px;color:rgba(var(--on-panel-rgb),0.75);margin-bottom:10px;">Publishing: <a id="publish-book-link" href="#" target="_blank" rel="noopener" style="color:var(--link-blue);text-decoration:underline;">the optimized book</a><span id="publish-book-none" style="display:none;">nothing yet &mdash; <a href="#" onclick="switchNovelTab('finalize');return false;" style="color:var(--link-blue);text-decoration:underline;">run Optimize first</a></span></div>
             <label class="prep-attest"><input type="checkbox" id="prep-attest" onchange="prepAttestChanged(this)" /> <span>I own or have the rights to this content, and it is suitable for a general audience (stylized fantasy violence is fine; no pornographic, hateful, or graphically gratuitous content).</span></label>
             <div class="prep-field-label">Blurb for your Library page (optional)</div>
             <textarea id="prep-blurb" maxlength="600" placeholder="Leave blank to use your opening narrative as the teaser." class="prep-textarea"></textarea>
@@ -1005,7 +1005,7 @@
               <div class="prep-field-label">Publish as</div>
               <!-- v3.2.90 -- TD-1024. Ian: pictures, not a dropdown. The button opens a picker of book cards; the select stays,
                    hidden, because everything that reads the choice (prepReplaceChosen, publishStory) reads it. -->
-              <button type="button" id="prep-replace-btn" onclick="openPublishAsPicker()" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:rgba(var(--panel-rgb),0.85);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:8px;padding:6px 10px;color:var(--gold);cursor:pointer;margin-bottom:6px;font-family:inherit;font-size:13px;">A new story in the Library</button>
+              <button type="button" id="prep-replace-btn" onclick="openPublishAsPicker()" style="width:100%;display:flex;align-items:center;gap:10px;text-align:left;background:rgba(var(--panel-rgb),0.85);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:8px;padding:6px 10px;color:var(--accent-bright);cursor:pointer;margin-bottom:6px;font-family:inherit;font-size:13px;">A new story in the Library</button>
               <select id="prep-replace" class="prep-textarea" style="display:none;" onchange="prepReplaceChanged(this)"><option value="">A new story in the Library</option></select>
               <div id="prep-replace-note" class="prep-hint" style="display:none;"></div>
             </div>
@@ -1031,15 +1031,15 @@
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
           <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px;min-width:0;">
             <!-- v3.2.50 -- Ian: the same size as the other page headers (the Sessions title: .page-title, gold, display font). -->
-            <div class="page-title" style="color:var(--gold);font-family:var(--font-display);letter-spacing:1px;">Current Members</div>
+            <div class="page-title" style="color:var(--accent-bright);font-family:var(--font-display);letter-spacing:1px;">Current Members</div>
             <div class="page-subtitle" style="margin-top:0;">Who's in this campaign and what character they play</div>
           </div>
           <button class="btn btn-primary btn-sm dm-only" style="flex-shrink:0;" onclick="openInviteModal()">&#9993; Invite member</button>
         </div>
         <!-- v3.2.45 -- TD-1007. The Story Master's members cap: filled by loadMemberCap(). -->
-        <div id="members-cap-line" class="dm-only" style="display:none;margin:-4px 0 10px;font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.75);"></div>
+        <div id="members-cap-line" class="dm-only" style="display:none;margin:-4px 0 10px;font-size:12px;color:rgba(var(--on-panel-rgb),0.75);"></div>
         <div id="members-list" style="display:flex;flex-direction:column;gap:8px;">
-          <div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">Loading members…</div>
+          <div style="color:rgba(var(--on-panel-rgb),0.75);font-size:13px;padding:8px;">Loading members…</div>
         </div>
       </div>
 
@@ -1047,9 +1047,9 @@
            action buttons (Copy link, Revoke) are individually marked
            dm-only so players see the list but can't act on it. -->
       <div style="margin-top:24px;">
-        <div style="font-family:var(--font-display);color:var(--gold);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Pending invites</div>
+        <div style="font-family:var(--font-display);color:var(--accent-bright);font-size:14px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Pending invites</div>
         <div id="pending-invites-list" style="display:flex;flex-direction:column;gap:8px;">
-          <div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">Loading invites…</div>
+          <div style="color:rgba(var(--on-panel-rgb),0.75);font-size:13px;padding:8px;">Loading invites…</div>
         </div>
       </div>
     </div>
@@ -1220,7 +1220,7 @@
               <div id="transcript-wordcount" class="story-count" style="flex:0 0 auto;text-align:right;">0 words</div>
             </div>
             <!-- v3.3.01 -- TD-1037. Hidden until the Marketplace is switched on. A new tab, so nothing typed here is lost. -->
-            <div class="mkt-link" style="font-size:12px;margin-top:4px;"><a href="/library?from=app#guild-writer" target="_blank" rel="noopener" style="color:var(--gold-light,var(--accent-pale));">Want a writer or editor? Find one in the Guild</a></div>
+            <div class="mkt-link" style="font-size:12px;margin-top:4px;"><a href="/library?from=app#guild-writer" target="_blank" rel="noopener" style="color:var(--accent-pale,var(--accent-pale));">Want a writer or editor? Find one in the Guild</a></div>
             <!-- v3.2.59 -- the rights line moved below both boxes, full width (Ian). -->
           </div>
           <div class="form-group">
@@ -1372,7 +1372,7 @@
           <div class="progress-msg" id="session-preview-progress-msg">Loading preview&hellip;</div>
         </div>
         <div id="session-preview-frame" style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);overflow:hidden;min-height:75vh;">
-          <div id="session-preview-loading" style="width:100%;height:75vh;display:flex;align-items:center;justify-content:center;background:rgba(var(--panel-deeper-rgb),0.5);">
+          <div id="session-preview-loading" style="width:100%;height:75vh;display:flex;align-items:center;justify-content:center;background:rgba(var(--panel-deep-rgb),0.5);">
             <div style="text-align:center;color:rgba(var(--accent-rgb),0.4);">
               <div style="font-size:32px;margin-bottom:8px;">&#128213;</div>
               <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
@@ -1407,7 +1407,7 @@
     <div id="view-image-builder" class="view" style="display:none;">
       <div class="page-header">
         <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">   <!-- v3.3.76 -- the subtitle on the title's line (Ian) -->
-          <div class="page-title" style="color:var(--gold);font-family:var(--font-display);letter-spacing:1px;">Image Builder</div>   <!-- v3.3.84 -- the campaign page's header face (#view-sessions .page-title) -->
+          <div class="page-title" style="color:var(--accent-bright);font-family:var(--font-display);letter-spacing:1px;">Image Builder</div>   <!-- v3.3.84 -- the campaign page's header face (#view-sessions .page-title) -->
           <div class="page-subtitle" style="margin-top:0;">Posters, portraits, maps and handouts for a campaign &mdash; shared with its members</div>
         </div>
         <div class="flex gap-1">
@@ -1757,7 +1757,7 @@
       <div id="account-upgrade-section" class="settings-section">
         <div class="settings-section-title">Plans &amp; Subscription Info</div>
         <div class="settings-section-desc">Your plan and your options</div>
-        <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);font-size:12px;color:var(--gold-light);"></div>
+        <div id="account-trial-banner" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(var(--accent-rgb),0.1);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);font-size:12px;color:var(--accent-pale);"></div>
         <div id="account-lone-banner" onclick="goToPlans()" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(var(--copper-rgb),0.12);border:1px solid rgba(var(--copper-rgb),0.4);border-radius:var(--radius);font-size:12px;color:var(--text);cursor:pointer;"></div>
         <!-- v3.0.929 -- TD-780 Push 6. WHAT YOU HAVE, as two facts rather than one.
              A pass does not replace the account tier, it sits on top of it for a while, and the
@@ -1792,7 +1792,7 @@
           <div id="account-passes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px;"></div>
           <!-- v3.1.46 -- TD-934. Shown only while gifts are switched on. -->
           <div id="account-gift-link" class="settings-section-desc" style="display:none;margin-top:12px;">
-            Know someone who would love this? <a href="/gift" target="_blank" rel="noopener" style="color:var(--gold);font-weight:600;">Give Campaignia as a gift</a>.
+            Know someone who would love this? <a href="/gift" target="_blank" rel="noopener" style="color:var(--accent-bright);font-weight:600;">Give Campaignia as a gift</a>.
           </div>
         </div>
       </div>
@@ -1863,7 +1863,7 @@
             <button class="btn btn-sm" onclick="cmpCopyDebugLog()">Copy log</button>
             <button class="btn btn-sm" onclick="cmpClearDebugLog()" style="margin-left:auto;">Clear log</button>
           </div>
-          <pre id="debug-log-view" style="margin-top:12px;max-height:320px;overflow:auto;background:var(--surface-ink);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:12px;font-size:11px;line-height:1.5;color:var(--label);white-space:pre-wrap;word-break:break-word;"></pre>
+          <pre id="debug-log-view" style="margin-top:12px;max-height:320px;overflow:auto;background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:12px;font-size:11px;line-height:1.5;color:var(--label);white-space:pre-wrap;word-break:break-word;"></pre>
         </div>
       </div>
 
@@ -1978,7 +1978,7 @@
         <div class="settings-section-title">Print pricing</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">Markup added to the printer's cost on every print order. Applied to the print cost only &mdash; shipping is passed through to the customer at cost.</div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label for="print-markup-input" style="color:var(--gold);font-size:13px;">Print Markup Percentage</label>
+          <label for="print-markup-input" style="color:var(--accent-bright);font-size:13px;">Print Markup Percentage</label>
           <input class="form-input" id="print-markup-input" type="number" min="0" step="0.5" value="10" style="width:110px;">
           <span style="color:var(--text-muted);">%</span>
           <button class="btn btn-primary btn-sm" onclick="savePrintMarkup()">Save</button>
@@ -1992,7 +1992,7 @@
         <div class="settings-section-title">Signup bonus</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">Carry-over (CO) tokens granted to the Story Master when a new member signs up through their campaign invite. Set to 0 to turn off.</div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label for="signup-bonus-input" style="color:var(--gold);font-size:13px;">Signup Bonus Tokens to the SM</label>
+          <label for="signup-bonus-input" style="color:var(--accent-bright);font-size:13px;">Signup Bonus Tokens to the SM</label>
           <input class="form-input" id="signup-bonus-input" type="number" min="0" step="1" value="0" style="width:110px;">
           <span style="color:var(--text-muted);">CO</span>
           <button class="btn btn-primary btn-sm" onclick="saveSignupBonus()">Save</button>
@@ -2005,8 +2005,8 @@
         <div class="settings-section-title">Help transcript emails</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">Email the in-app AI help chat transcript to support@campaignia.com so you can see what users are asking. Two independent triggers, each on/off on its own.</div>
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <label style="color:var(--gold);font-size:13px;"><input type="checkbox" id="help-aidone-toggle"> When the AI decides the conversation is over</label>
-          <label style="color:var(--gold);font-size:13px;"><input type="checkbox" id="help-logout-toggle"> When the user logs out</label>
+          <label style="color:var(--accent-bright);font-size:13px;"><input type="checkbox" id="help-aidone-toggle"> When the AI decides the conversation is over</label>
+          <label style="color:var(--accent-bright);font-size:13px;"><input type="checkbox" id="help-logout-toggle"> When the user logs out</label>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
           <button class="btn btn-primary btn-sm" onclick="saveHelpEmailSettings()">Save</button>
@@ -2020,34 +2020,34 @@
 
         <!-- v3.0.356: existing story/narrative charging, boxed as its own sub-section -->
         <div style="border:1px solid rgba(var(--amber-note-line-rgb),0.35);border-radius:6px;padding:12px 14px;margin-bottom:14px;">
-        <div style="color:var(--gold);font-size:13px;font-weight:600;margin-bottom:6px;">Story &amp; narrative generation</div>
+        <div style="color:var(--accent-bright);font-size:13px;font-weight:600;margin-bottom:6px;">Story &amp; narrative generation</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">Charge tokens for story/narrative generation, scaled by size. Tokens = max(floor, size &divide; rate) rounded down. Set a rate to 0 to charge only the floor; set both floor and rate to 0 to charge nothing.</div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;max-width:460px;">
-          <label style="color:var(--gold);font-size:13px;">Generate Story &mdash; words per token</label>
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; words per token</label>
           <input type="number" min="0" step="1" id="gen-story-wpt" style="width:110px;" />
-          <label style="color:var(--gold);font-size:13px;">Generate Story &mdash; floor (min tokens)</label>
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; floor (min tokens)</label>
           <input type="number" min="0" step="1" id="gen-story-floor" style="width:110px;" />
-          <label style="color:var(--gold);font-size:13px;">Generate Narrative &mdash; panels per token</label>
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; panels per token</label>
           <input type="number" min="0" step="1" id="gen-narr-ppt" style="width:110px;" />
-          <label style="color:var(--gold);font-size:13px;">Generate Narrative &mdash; floor (min tokens)</label>
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; floor (min tokens)</label>
           <input type="number" min="0" step="1" id="gen-narr-floor" style="width:110px;" />
-          <label style="color:var(--gold);font-size:13px;">Transcript cache duration</label>
+          <label style="color:var(--accent-bright);font-size:13px;">Transcript cache duration</label>
           <select id="transcript-cache-ttl" style="width:110px;">
             <option value="5m">5 minutes</option>
             <option value="1h">1 hour</option>
           </select>
           <!-- v3.0.967 -- TD-852. The model is told this number and writes to fit it. -->
-          <label style="color:var(--gold);font-size:13px;">Summary For Next Session &mdash; character limit</label>
+          <label style="color:var(--accent-bright);font-size:13px;">Summary For Next Session &mdash; character limit</label>
           <input type="number" min="200" step="50" id="gen-summary-limit" style="width:110px;" />
           <!-- v3.1.51 -- TD-941. A warning, never a refusal: past this, Already Written asks before generating. -->
-          <label style="color:var(--gold);font-size:13px;" title="Already Written keeps every word, so a long story makes a wall of text between pictures. Past this many words in one session, people are warned and can still continue.">Already Written &mdash; recommended words per session</label>
+          <label style="color:var(--accent-bright);font-size:13px;" title="Already Written keeps every word, so a long story makes a wall of text between pictures. Past this many words in one session, people are warned and can still continue.">Already Written &mdash; recommended words per session</label>
           <input type="number" min="100" step="100" id="gen-written-max-words" style="width:110px;" />
         </div>
         </div>
 
         <!-- v3.0.356: layout optimization charging -->
         <div style="border:1px solid rgba(var(--amber-note-line-rgb),0.35);border-radius:6px;padding:12px 14px;">
-        <div style="color:var(--gold);font-size:13px;font-weight:600;margin-bottom:6px;">Layout optimization (Optimize button)</div>
+        <div style="color:var(--accent-bright);font-size:13px;font-weight:600;margin-bottom:6px;">Layout optimization (Optimize button)</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">
           An Optimize run charges <b>1 token</b> for the composer/packer pass (the first look at the PDF), then charges
           <b>each AI loop separately</b> based on what that loop actually cost us to run. A run that settles after 2 loops
@@ -2063,7 +2063,7 @@
           about twice as much text per page.
         </div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;max-width:460px;">
-          <label style="color:var(--gold);font-size:13px;">Our cost per layout loop (cents)</label>
+          <label style="color:var(--accent-bright);font-size:13px;">Our cost per layout loop (cents)</label>
           <input type="number" min="1" step="1" id="layout-loop-cost" style="width:110px;" />
         </div>
         </div>
@@ -2079,13 +2079,13 @@
         <div class="settings-section-title">Account lifecycle</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">Idle lone-copper accounts are warned, then suspended, then purged. Timeframes (days) are tunable; the sweep reads these live. Floor is 1 day.</div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label for="lifecycle-idle-input" style="color:var(--gold);font-size:13px;">Lone copper -&gt; Suspended (days)</label>
+          <label for="lifecycle-idle-input" style="color:var(--accent-bright);font-size:13px;">Lone copper -&gt; Suspended (days)</label>
           <input class="form-input" id="lifecycle-idle-input" type="number" min="1" step="1" style="width:90px;">
-          <label for="lifecycle-purge-input" style="color:var(--gold);font-size:13px;">Suspended -&gt; Deleted (days)</label>
+          <label for="lifecycle-purge-input" style="color:var(--accent-bright);font-size:13px;">Suspended -&gt; Deleted (days)</label>
           <input class="form-input" id="lifecycle-purge-input" type="number" min="1" step="1" style="width:90px;">
-          <label for="lifecycle-grace-input" style="color:var(--gold);font-size:13px;">Warn -&gt; Suspend grace (days)</label>
+          <label for="lifecycle-grace-input" style="color:var(--accent-bright);font-size:13px;">Warn -&gt; Suspend grace (days)</label>
           <input class="form-input" id="lifecycle-grace-input" type="number" min="1" step="1" style="width:90px;">
-          <label for="lifecycle-purgewarn-input" style="color:var(--gold);font-size:13px;">Purge warnings (days, comma)</label>
+          <label for="lifecycle-purgewarn-input" style="color:var(--accent-bright);font-size:13px;">Purge warnings (days, comma)</label>
           <input class="form-input" id="lifecycle-purgewarn-input" type="text" placeholder="30,7" style="width:90px;">
           <button class="btn btn-primary btn-sm" onclick="saveLifecycleConfig()">Save</button>
           <span class="settings-section-desc" id="lifecycle-config-msg" style="margin:0;"></span>
@@ -2094,20 +2094,20 @@
           <div class="settings-section-desc" style="margin-bottom:8px;"><strong>Test tools.</strong> Stage a user as an idle lone copper, then run the sweep on demand (warn-only in this phase).</div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             <input class="form-input" id="lifecycle-test-email" type="email" placeholder="user@email" style="width:200px;">
-            <label style="color:var(--gold);font-size:13px;">idle days</label>
+            <label style="color:var(--accent-bright);font-size:13px;">idle days</label>
             <input class="form-input" id="lifecycle-test-days" type="number" min="0" step="1" value="100" style="width:90px;">
             <button class="btn btn-sm" onclick="stageIdleUser()">Stage as idle lone copper</button>
             <label style="color:var(--text-muted);font-size:12px;"><input type="checkbox" id="lifecycle-dryrun"> dry run</label>
             <button class="btn btn-primary btn-sm" onclick="runSweepNow()">Run sweep now</button>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;">
-            <label style="color:var(--gold);font-size:13px;">warned days ago</label>
+            <label style="color:var(--accent-bright);font-size:13px;">warned days ago</label>
             <input class="form-input" id="lifecycle-test-warned" type="number" min="0" step="1" value="20" style="width:90px;">
             <button class="btn btn-sm" onclick="stageWarnedUser()">Stage as warned lone copper</button>
             <span class="settings-section-desc" style="margin:0;font-size:11px;">(idle + already warned; run sweep to suspend)</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;">
-            <label style="color:var(--gold);font-size:13px;">suspended days ago</label>
+            <label style="color:var(--accent-bright);font-size:13px;">suspended days ago</label>
             <input class="form-input" id="lifecycle-test-suspended" type="number" min="0" step="1" value="200" style="width:90px;">
             <button class="btn btn-sm" onclick="stageSuspendedUser()">Stage as suspended</button>
             <span class="settings-section-desc" style="margin:0;font-size:11px;">(run sweep to purge-warn / tombstone)</span>
@@ -2121,7 +2121,7 @@
         <div class="settings-section-title">Print limits</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">Maximum pages allowed for any print, publish, or order &mdash; across all layouts. Books over this are blocked with a prompt to split into multiple books.</div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label for="max-pages-input" style="color:var(--gold);font-size:13px;">Max Pages Per Print</label>
+          <label for="max-pages-input" style="color:var(--accent-bright);font-size:13px;">Max Pages Per Print</label>
           <input class="form-input" id="max-pages-input" type="number" min="1" step="1" value="250" style="width:110px;">
           <span style="color:var(--text-muted);">pages</span>
           <button class="btn btn-primary btn-sm" onclick="saveMaxPagesPerPrint()">Save</button>
@@ -2189,19 +2189,19 @@
           <!-- v3.3.50 -- TD-1063. "Make a Tester" codes: the rows marked promo-std are hidden for them. -->
           <style>#settings-pane-promos.promo-is-tester .promo-std { display:none !important; }</style>
           <div style="display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;max-width:640px;">
-            <label style="color:var(--gold);font-size:13px;">Type</label>
+            <label style="color:var(--accent-bright);font-size:13px;">Type</label>
             <select class="form-input" id="promo-kind" onchange="promoFormRefresh()" style="width:260px;">
               <option value="std">Discount and/or bonus tokens</option>
               <option value="tester">Make a Tester (Platinum)</option>
             </select>
 
-            <label style="color:var(--gold);font-size:13px;">Code</label>
+            <label style="color:var(--accent-bright);font-size:13px;">Code</label>
             <input class="form-input" id="promo-code-input" maxlength="40" placeholder="e.g. GOGOLD" style="text-transform:uppercase;" />
 
-            <label style="color:var(--gold);font-size:13px;">Label (source)</label>
+            <label style="color:var(--accent-bright);font-size:13px;">Label (source)</label>
             <input class="form-input" id="promo-label-input" maxlength="120" placeholder="e.g. TikTok-Jan (where this code is used)" />
 
-            <label class="promo-std" style="color:var(--gold);font-size:13px;">Discount</label>
+            <label class="promo-std" style="color:var(--accent-bright);font-size:13px;">Discount</label>
             <div class="promo-std" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <select class="form-input" id="promo-discount-type" onchange="promoFormRefresh()" style="width:160px;">
                 <option value="none">No discount</option>
@@ -2211,16 +2211,16 @@
               <input class="form-input" id="promo-discount-value" type="number" min="0" step="1" placeholder="e.g. 20" style="width:120px;display:none;" oninput="promoFormRefresh()" />
             </div>
 
-            <label class="promo-std" style="color:var(--gold);font-size:13px;">Bonus tokens</label>
+            <label class="promo-std" style="color:var(--accent-bright);font-size:13px;">Bonus tokens</label>
             <input class="form-input promo-std" id="promo-bonus-input" type="number" min="0" step="1" value="0" style="width:120px;" />
 
-            <label class="promo-std" style="color:var(--gold);font-size:13px;">Sign-up code</label>
+            <label class="promo-std" style="color:var(--accent-bright);font-size:13px;">Sign-up code</label>
             <label class="promo-std" style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
               <input type="checkbox" id="promo-signup-input" onchange="promoFormRefresh()" />
               <span>First-time only: can be entered at sign-up, applies to a customer's first pass or subscription purchase</span>
             </label>
 
-            <label class="promo-std" style="color:var(--gold);font-size:13px;align-self:start;padding-top:4px;">Applies to</label>
+            <label class="promo-std" style="color:var(--accent-bright);font-size:13px;align-self:start;padding-top:4px;">Applies to</label>
             <div class="promo-std" id="promo-products" style="display:flex;gap:6px 14px;flex-wrap:wrap;font-size:13px;">
               <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="token_pack" onchange="promoFormRefresh()" /> Token packs</label>
               <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="pass" onchange="promoFormRefresh()" /> Passes</label>
@@ -2230,7 +2230,7 @@
               <label style="cursor:pointer;"><input type="checkbox" class="promo-prod" value="sub:platinum" onchange="promoFormRefresh()" /> Platinum subscription</label>
             </div>
 
-            <label class="promo-std" id="promo-subdur-label" style="color:var(--gold);font-size:13px;display:none;">Subscription discount lasts</label>
+            <label class="promo-std" id="promo-subdur-label" style="color:var(--accent-bright);font-size:13px;display:none;">Subscription discount lasts</label>
             <div class="promo-std" id="promo-subdur-wrap" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;">
               <select class="form-input" id="promo-subdur-input" onchange="promoFormRefresh()" style="width:180px;">
                 <option value="once">First payment only</option>
@@ -2240,16 +2240,16 @@
               <input class="form-input" id="promo-submonths-input" type="number" min="1" max="36" step="1" placeholder="payments" style="width:110px;display:none;" />
             </div>
 
-            <label class="promo-std" style="color:var(--gold);font-size:13px;">Once per customer</label>
+            <label class="promo-std" style="color:var(--accent-bright);font-size:13px;">Once per customer</label>
             <label class="promo-std" style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;">
               <input type="checkbox" id="promo-once-input" />
               <span>Each customer can use it one time</span>
             </label>
 
-            <label style="color:var(--gold);font-size:13px;">Total uses (optional)</label>
+            <label style="color:var(--accent-bright);font-size:13px;">Total uses (optional)</label>
             <input class="form-input" id="promo-max-input" type="number" min="1" step="1" placeholder="unlimited" style="width:140px;" />
 
-            <label style="color:var(--gold);font-size:13px;">Expires (optional)</label>
+            <label style="color:var(--accent-bright);font-size:13px;">Expires (optional)</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <input class="form-input" id="promo-expires-input" type="date" style="width:180px;" />
               <span class="settings-section-desc" style="margin:0;">end of that day, Eastern</span>
@@ -2317,17 +2317,17 @@
           <div class="settings-section-title">Send a free gift</div>
           <div class="settings-section-desc">For giveaways, influencers and apologies. Kept apart from sales. Leave the date empty to send it now; a date sends it at 9am Eastern that day.</div>
           <div style="display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:center;max-width:620px;">
-            <label style="color:var(--gold);font-size:13px;" for="gift-item-input">Gift</label>
+            <label style="color:var(--accent-bright);font-size:13px;" for="gift-item-input">Gift</label>
             <select class="form-input" id="gift-item-input"></select>
-            <label style="color:var(--gold);font-size:13px;" for="gift-to-name">Recipient&#39;s name</label>
+            <label style="color:var(--accent-bright);font-size:13px;" for="gift-to-name">Recipient&#39;s name</label>
             <input class="form-input" id="gift-to-name" maxlength="80" />
-            <label style="color:var(--gold);font-size:13px;" for="gift-to-email">Recipient&#39;s email</label>
+            <label style="color:var(--accent-bright);font-size:13px;" for="gift-to-email">Recipient&#39;s email</label>
             <input class="form-input" id="gift-to-email" type="email" maxlength="254" />
-            <label style="color:var(--gold);font-size:13px;" for="gift-from-name">From</label>
+            <label style="color:var(--accent-bright);font-size:13px;" for="gift-from-name">From</label>
             <input class="form-input" id="gift-from-name" maxlength="80" value="Campaignia" />
-            <label style="color:var(--gold);font-size:13px;" for="gift-message">Message <span style="color:var(--text-muted);">(optional)</span></label>
+            <label style="color:var(--accent-bright);font-size:13px;" for="gift-message">Message <span style="color:var(--text-muted);">(optional)</span></label>
             <textarea class="form-input" id="gift-message" maxlength="300" rows="3" style="resize:vertical;"></textarea>
-            <label style="color:var(--gold);font-size:13px;" for="gift-deliver-on">Deliver on <span style="color:var(--text-muted);">(optional)</span></label>
+            <label style="color:var(--accent-bright);font-size:13px;" for="gift-deliver-on">Deliver on <span style="color:var(--text-muted);">(optional)</span></label>
             <input class="form-input" id="gift-deliver-on" type="date" style="width:180px;" />
           </div>
           <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -2416,7 +2416,7 @@
         <div id="imp-admin-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
         <div style="margin-top:14px;">
           <button class="btn btn-sm" onclick="impersonateLoadLog()">Recent support sessions</button>
-          <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--cream);"></div>
+          <div id="imp-log" style="margin-top:10px;font-size:12px;color:var(--on-panel);"></div>
         </div>
       </div>
       <!-- v3.2.63 -- Debug Mode for one user, by email (Ian). Shown to admins, like Support Access above. -->
@@ -2436,7 +2436,7 @@
           <button class="btn btn-sm" onclick="dbgUserSet(null, false, true)">Send to support</button>
         </div>
         <div id="dbg-user-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
-        <pre id="dbg-user-log" style="display:none;margin-top:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(var(--modal-rgb),0.94);color:var(--on-panel);color-scheme:dark;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;"></pre>
+        <pre id="dbg-user-log" style="display:none;margin-top:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;background:rgba(var(--panel-rgb),0.94);color:var(--on-panel);color-scheme:dark;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;padding:10px 12px;font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;"></pre>
       </div>
       </div>
 
@@ -2469,7 +2469,7 @@
         <div class="settings-section-title">Email preview / test-send</div>
         <div class="settings-section-desc" style="margin-bottom:10px;">Send a copy of any transactional email &mdash; filled with sample data &mdash; to your own admin address, so you can see exactly how it renders in a real inbox. Subjects are prefixed with [TEST].</div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label for="email-preview-select" style="color:var(--gold);font-size:13px;">Template</label>
+          <label for="email-preview-select" style="color:var(--accent-bright);font-size:13px;">Template</label>
           <select id="email-preview-select" class="form-input" style="width:260px;">
             <option value="welcome">Welcome (new account)</option>
             <option value="password_reset">Password reset</option>
@@ -2615,7 +2615,7 @@
         <div class="settings-section-title">Testing &mdash; Account State</div>
         <div class="settings-section-desc">Temporary: put this account into one of the three states below, to test tier-gated features. Not a real upgrade &mdash; will be removed later.</div>
 
-        <div class="settings-section-desc" id="pass-override-state" style="margin:10px 0;padding:8px 10px;border-radius:6px;background:rgba(var(--panel-alt-rgb),0.5);">Loading...</div>
+        <div class="settings-section-desc" id="pass-override-state" style="margin:10px 0;padding:8px 10px;border-radius:6px;background:rgba(var(--panel-rgb),0.5);">Loading...</div>
 
         <label class="form-label">This account is on</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
@@ -3018,7 +3018,7 @@
              onchange="aimpFilesChosen(event)" />
     </div>
     <div id="assetimport-body" style="max-height:46vh;overflow-y:auto;"></div>
-    <div class="form-hint" id="assetimport-note" style="margin-top:6px;color:var(--gold);"></div>
+    <div class="form-hint" id="assetimport-note" style="margin-top:6px;color:var(--accent-bright);"></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeAssetImport()">Cancel</button>
       <button class="btn btn-primary" id="assetimport-go" onclick="aimpRun()" disabled>Import</button>
@@ -3501,8 +3501,8 @@
       <button class="modal-close" onclick="finalizeCloseFixDialog()">&times;</button>
     </div>
     <div id="fix-modal-body"></div>
-    <div id="fix-msg" style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.7);margin:8px 0 0;min-height:16px;"></div>
-    <div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.5);margin-top:10px;">Running Optimize again will undo this. Save the book afterwards to keep it.</div>
+    <div id="fix-msg" style="font-size:12px;color:rgba(var(--on-panel-rgb),0.7);margin:8px 0 0;min-height:16px;"></div>
+    <div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.5);margin-top:10px;">Running Optimize again will undo this. Save the book afterwards to keep it.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
       <button class="btn btn-sm" onclick="finalizeCloseFixDialog()">Cancel</button>
       <button class="btn btn-primary btn-sm" id="fix-try-btn" onclick="finalizeTryFix()">Try It</button>
@@ -3546,12 +3546,12 @@
 .cs-qbox{flex:1 1 auto;min-width:0;min-height:44px;font-size:13px;padding:6px 8px;}
 #cs-options{position:relative;}
 .cs-opt{position:relative;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:10px;padding:12px;margin-top:12px;}
-.cs-opt.cs-win{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
+.cs-opt.cs-win{border-color:var(--accent-bright);box-shadow:inset 0 0 0 1px var(--accent-bright);}
 .cs-opt.cs-frozen .cs-dim{opacity:0.45;filter:grayscale(0.6);}
 .cs-opt-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
 .cs-opt-title{font-weight:700;font-size:15px;}
 .cs-opt-hint{font-size:12px;color:var(--hint-text);}
-.cs-badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--gold);color:var(--surface-ink-text);}
+.cs-badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--accent-bright);color:var(--surface-ink-text);}
 .cs-opt-btns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
 .cs-opt-text{min-height:90px;font-size:13px;}
 /* v3.1.68 -- slots shaped to their pictures: the close up is square, the others wide; 9:16:16 keeps the row level. */
@@ -3828,7 +3828,7 @@
                 placeholder="What is this campaign about?"></textarea>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(var(--accent-rgb),0.18);padding-top:16px;">
-      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:10px;">Campaign image</div>
+      <div style="font-family:var(--font-display);font-size:14px;color:var(--accent-bright);margin-bottom:10px;">Campaign image</div>
       <!-- v3.0.743 -- shown only while creating. Ian: "On new they will not have any pictures but
            still show them the image options with the note. I want them to know it is there." -->
       <div class="settings-section-desc hidden" id="cs-image-newnote" style="margin:0 0 10px;">Archive some images then come back here and set this.</div>
@@ -3838,7 +3838,7 @@
       </div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(var(--accent-rgb),0.18);padding-top:16px;">
-      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">Genre</div>
+      <div style="font-family:var(--font-display);font-size:14px;color:var(--accent-bright);margin-bottom:6px;">Genre</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Steers how the story is written and which moments become pictures, and files your book in the Library. Choose up to 3 &mdash; the first one is the main one.</div>
       <div id="cs-genre-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
       <select id="cs-genre-add" class="camp-edit-textarea" style="min-height:0;height:30px;max-width:260px;margin-top:0;" onchange="csGenreAdd(this)"></select>
@@ -3848,7 +3848,7 @@
       <!-- v3.0.866 -- TD-735. Same control, same row shape as the Story tab: the heading and the
            Import button share one flex line, so this costs no vertical space either. -->
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;">
-        <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);">Lore / Background</div>
+        <div style="font-family:var(--font-display);font-size:14px;color:var(--accent-bright);">Lore / Background</div>
         <button class="btn btn-sm" type="button" id="lore-import-btn" onclick="loreImportFromFile()" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
       </div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Describe the world your campaign takes place in — the backstory, key locations, factions, history, and tone. Every session draws on this when its story and image prompts are generated, keeping the whole campaign consistent and connected. Story Master only.</div>
@@ -3858,7 +3858,7 @@
       <div class="camp-lore-count" id="cs-lore-count"></div>
     </div>
     <div class="cs-section" style="margin-top:18px;border-top:1px solid rgba(var(--accent-rgb),0.18);padding-top:16px;">
-      <div style="font-family:var(--font-display);font-size:14px;color:var(--gold);margin-bottom:6px;">General Campaign Prompt</div>
+      <div style="font-family:var(--font-display);font-size:14px;color:var(--accent-bright);margin-bottom:6px;">General Campaign Prompt</div>
       <div class="settings-section-desc" style="margin:0 0 8px;">Applies to every session in this campaign &mdash; both the writing and the pictures. For example: &quot;Tell the story from Piper's point of view.&quot; or &quot;Put a bird somewhere in every image.&quot;</div>
       <textarea id="cs-cprompt-input" class="camp-edit-textarea" style="max-width:none;min-height:60px;" maxlength="500" placeholder="Optional. One or two sentences works best. e.g. always refer to the war as the Long Winter" oninput="cpromptCount(this);csDirty()" onblur="csFlush()"></textarea>
       <div class="camp-lore-count" id="cs-cprompt-count"></div>
@@ -3985,7 +3985,7 @@
      charged (1 for the composer, then each AI pass metered), and it contradicted the estimate
      sitting beside it. The estimate note is now the single source of price on this screen. */
   #layoutai-est-note .est-spin { display:inline-block; width:9px; height:9px; margin-right:6px; vertical-align:-1px;
-    border:1.5px solid rgba(var(--on-panel-cream-rgb),0.28); border-top-color:rgba(var(--on-panel-cream-rgb),0.75); border-radius:50%;
+    border:1.5px solid rgba(var(--on-panel-rgb),0.28); border-top-color:rgba(var(--on-panel-rgb),0.75); border-radius:50%;
     animation:estspin 0.7s linear infinite; }
   @keyframes estspin { to { transform:rotate(360deg); } }
   /* v3.0.602 -- THESE MATCH THE TITLE & COVER PANEL NOW, NOT THE OTHER WAY ROUND. Ian, 2026-08-10,
@@ -4000,7 +4000,7 @@
      .novel-prep-panel would have given the same form two appearances, which is the fault this
      project keeps paying for. The modal now matches as well. */
   .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(var(--accent-rgb),0.9);font-family:inherit; }
-  .cl-field select { background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);padding:8px 10px;font-size:14px;font-family:inherit;width:100%;max-width:100%;box-sizing:border-box; }
+  .cl-field select { background:rgba(var(--panel-rgb),0.85);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);padding:8px 10px;font-size:14px;font-family:inherit;width:100%;max-width:100%;box-sizing:border-box; }
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }
   .cl-toggle input { accent-color:var(--accent);width:15px;height:15px; }
   /* TF-11: the Layout modal's two-column grids + split footer cramp on a phone. */

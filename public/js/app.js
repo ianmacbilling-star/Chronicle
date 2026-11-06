@@ -671,11 +671,11 @@ function renderTokenPacks() {
       ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--surface-ink-text);font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:99px;">' + p.tagline.toUpperCase() + '</div>'
       : '';
     return '' +
-      '<div style="position:relative;background:rgba(var(--card-rgb),0.85);' + highlightStyle + 'border-radius:10px;padding:22px 18px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;">' +
+      '<div style="position:relative;background:rgba(var(--panel-rgb),0.85);' + highlightStyle + 'border-radius:10px;padding:22px 18px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;">' +
         badge +
         '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--accent-rgb),0.7);">' + p.name + '</div>' +
         '<div style="font-size:32px;font-weight:700;color:var(--accent);line-height:1;margin:4px 0 2px;">$' + p.price + '</div>' +
-        '<div style="font-size:16px;color:var(--gold-light);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
+        '<div style="font-size:16px;color:var(--accent-pale);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
         (_bonusPct > 0 ? '<div style="font-size:11px;font-weight:700;color:var(--good-text);margin-bottom:6px;">+' + _bonusPct + '% more tokens per $</div>' : '') +
         (p.highlight ? '' : '<div style="font-size:11px;color:rgba(var(--accent-rgb),0.6);font-style:italic;">' + p.tagline + '</div>') +
         (canBuy
@@ -1054,7 +1054,7 @@ function uiPrompt(title, message, initial) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
     var h = document.createElement('div');
     h.textContent = title || '';
     h.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:8px;";
@@ -1097,7 +1097,7 @@ function uiDeleteLastSession(versionName, sessionName) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
     var h = document.createElement('div');
     h.textContent = 'That is the only session in \u201c' + versionName + '\u201d';
     h.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:10px;";
@@ -1144,7 +1144,7 @@ function uiVersionPick(srcLabel, mine) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
     var h = document.createElement('div');
     h.textContent = mine.length ? 'Add this session to a version' : 'Name this version';
     h.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:8px;";
@@ -1168,7 +1168,7 @@ function uiVersionPick(srcLabel, mine) {
       // OS, not by the select's own rule, so on Windows the panel came up near-white with the
       // cream text set on the parent -- cream on white, effectively invisible. Reported by Ian
       // with a screenshot. Set on every option including the placeholder.
-      var _optCss = 'background:var(--window-bg);color:var(--on-panel);';
+      var _optCss = 'background:var(--panel);color:var(--on-panel);';
       o0.style.cssText = _optCss;
       mine.forEach(function (v) {
         var o = document.createElement('option');
@@ -1237,7 +1237,7 @@ function uiConfirm(message, opts) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
     // v3.0.461 -- three OPT-IN options, so every existing caller renders exactly as before:
     //   opts.title         a heading above the message
     //   opts.preserveLines honour blank lines, for a message written as paragraphs. Without it a
@@ -1297,7 +1297,7 @@ function uiChoose(title, message, items) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px;max-height:80vh;overflow-y:auto;';
+    box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px;max-height:80vh;overflow-y:auto;';
     var head = document.createElement('div');
     head.textContent = String(title || 'Choose one');
     head.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:10px;";
@@ -1343,7 +1343,7 @@ function uiPublishPrompt(message, opts) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
-    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
+    box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:460px;width:100%;padding:22px 22px 18px;';
     var msg = document.createElement('div');
     msg.textContent = (message == null) ? '' : String(message);
     msg.style.cssText = 'color:var(--on-panel);font-size:15px;line-height:1.5;margin-bottom:14px;';
@@ -1353,14 +1353,14 @@ function uiPublishPrompt(message, opts) {
     var ti = document.createElement('input');
     ti.type = 'text'; ti.maxLength = 200; ti.value = opts.defaultTitle || '';
     ti.placeholder = 'e.g. The Shattered Crown, or Summer at the Lake';   // v3.0.852 -- TD-711, and this is the twin of the one in app.html
-    ti.style.cssText = 'width:100%;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:14px;';
+    ti.style.cssText = 'width:100%;background:rgba(var(--panel-rgb),0.85);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:14px;';
     var label = document.createElement('div');
     label.textContent = 'Add a short blurb for your Library page (optional)';
     label.style.cssText = 'color:rgba(var(--accent-rgb),0.9);font-size:12px;margin-bottom:6px;';
     var ta = document.createElement('textarea');
     ta.maxLength = 600;
     ta.placeholder = 'Leave blank to use your opening narrative as the teaser.';
-    ta.style.cssText = 'width:100%;min-height:64px;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:8px;';
+    ta.style.cssText = 'width:100%;min-height:64px;background:rgba(var(--panel-rgb),0.85);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:8px;';
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = opts.cancelText || 'Cancel';
@@ -1601,7 +1601,7 @@ function _impShowEnded(ended) {
   wrap.setAttribute('role', 'alertdialog');
   wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px;';
   var box = document.createElement('div');
-  box.style.cssText = 'max-width:440px;width:100%;background:var(--surface-ink);color:var(--light-panel-text);border:2px solid var(--support-orange);border-radius:10px;padding:18px 20px;font-family:Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,0.5);';
+  box.style.cssText = 'max-width:440px;width:100%;background:var(--panel);color:var(--light-panel-text);border:2px solid var(--support-orange);border-radius:10px;padding:18px 20px;font-family:Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,0.5);';
   var h = document.createElement('div');
   h.style.cssText = 'font-weight:700;letter-spacing:0.04em;color:var(--soft-gold-note);margin-bottom:8px;';
   h.textContent = 'SUPPORT SESSION ENDED';
@@ -1781,11 +1781,11 @@ function renderUnusedPics(d) {
   _unusedPics = d;
   // v3.2.73 -- every folder: a line per folder, then the totals, then the oldest 200 with their folder.
   var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';
-  var th = 'position:sticky;top:0;background:var(--surface-ink);text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-rgb),0.85);';
+  var th = 'position:sticky;top:0;background:var(--panel);text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-rgb),0.85);';
   var tdr = td + 'text-align:right;';
   var h = '<div style="line-height:1.6;">' +
     '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div></div>' +
-    '<div style="overflow:auto;margin-top:8px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--modal-rgb),0.94);color-scheme:dark;font-size:12px;">' +
+    '<div style="overflow:auto;margin-top:8px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--panel-rgb),0.94);color-scheme:dark;font-size:12px;">' +
     '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">folder</th><th style="' + th + 'text-align:right;">files</th><th style="' + th + 'text-align:right;">size</th><th style="' + th + 'text-align:right;">in use</th><th style="' + th + 'text-align:right;">too new (left out)</th><th style="' + th + 'text-align:right;color:var(--highlight);">orphaned</th><th style="' + th + 'text-align:right;color:var(--highlight);">orphaned size</th></tr></thead><tbody>' +
     (d.folders || []).map(function (f) { return '<tr><td style="' + td + '">' + _upEsc(f.label) + ' <span style="opacity:0.6;">' + _upEsc(f.prefix) + '</span></td><td style="' + tdr + '">' + f.listed + '</td><td style="' + tdr + '">' + _upBytes(f.listed_bytes) + '</td><td style="' + tdr + '">' + f.in_use + '</td><td style="' + tdr + '">' + f.recent + ' <span style="opacity:0.6;">(' + (f.min_age_days >= 1 ? (f.min_age_days + (f.min_age_days === 1 ? ' day' : ' days')) : '1 day') + ')</span></td><td style="' + tdr + 'color:var(--highlight);">' + f.unused + '</td><td style="' + tdr + 'color:var(--highlight);">' + _upBytes(f.unused_bytes) + '</td></tr>'; }).join('') +
     '<tr><td style="' + td + 'font-weight:600;">Total</td><td style="' + tdr + 'font-weight:600;">' + d.listed + '</td><td style="' + tdr + 'font-weight:600;">' + _upBytes(d.listed_bytes) + '</td><td style="' + tdr + 'font-weight:600;">' + d.in_use + '</td><td style="' + tdr + 'font-weight:600;">' + d.recent + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + d.unused + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + _upBytes(d.unused_bytes) + '</td></tr>' +
@@ -1793,7 +1793,7 @@ function renderUnusedPics(d) {
   var items = d.items || [];
   if (items.length) {
     h += '<div style="margin-top:8px;opacity:0.8;">Oldest ' + Math.min(200, items.length) + ' of ' + items.length + ' shown; the CSV has them all.</div>' +
-      '<div style="overflow:auto;max-height:50vh;margin-top:6px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--modal-rgb),0.94);color-scheme:dark;font-size:12px;">' +
+      '<div style="overflow:auto;max-height:50vh;margin-top:6px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--panel-rgb),0.94);color-scheme:dark;font-size:12px;">' +
       '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">folder</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th></tr></thead><tbody>' +
       items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.folder || '') + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td></tr>'; }).join('') +
       '</tbody></table></div>';
@@ -2329,7 +2329,7 @@ function myStoryCard(it) {
   if (it.cover_page_url || it.cover_url) {
     var img = document.createElement('img');
     img.setAttribute('loading', 'lazy'); img.alt = it.title || 'story';
-    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:var(--surface-ink);';
+    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:var(--panel);';
     // v3.3.39 -- the book's own cover page, title and all, as the Library shows it (Ian). If it cannot be drawn, the
     // cover picture as before; if that fails too, the title placeholder.
     var _fbCover = it.cover_url || '';
@@ -2337,14 +2337,14 @@ function myStoryCard(it) {
       if (_fbCover && img.getAttribute('data-fell') !== '1' && img.src.indexOf(_fbCover) < 0) { img.setAttribute('data-fell', '1'); img.src = _fbCover; return; }
       img.onerror = null;
       var ph0 = document.createElement('div'); ph0.textContent = it.title || 'Untitled';
-      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--surface-ink);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
       if (img.parentNode) img.parentNode.replaceChild(ph0, img);
     };
     img.src = it.cover_page_url || it.cover_url;
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
-    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--surface-ink);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
     a.appendChild(ph);
   }
   card.appendChild(a);
@@ -2368,9 +2368,9 @@ function myStoryCard(it) {
   var showView = function(){ blWrap.innerHTML = ''; renderBlurbView(); blWrap.appendChild(blView); blWrap.appendChild(editBtn); };
   editBtn.onclick = function(){
     var ti = document.createElement('input'); ti.type = 'text'; ti.value = it.title || ''; ti.maxLength = 200; ti.placeholder = 'Title';
-    ti.style.cssText = 'width:100%;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:6px;';
+    ti.style.cssText = 'width:100%;background:rgba(var(--panel-rgb),0.85);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:6px 8px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:6px;';
     var ta = document.createElement('textarea'); ta.value = it.blurb || ''; ta.maxLength = 600; ta.placeholder = 'Blurb (optional)';
-    ta.style.cssText = 'width:100%;min-height:54px;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:6px;';
+    ta.style.cssText = 'width:100%;min-height:54px;background:rgba(var(--panel-rgb),0.85);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box;margin-bottom:6px;';
     var save = document.createElement('button'); save.className = 'btn btn-primary btn-sm'; save.textContent = 'Save'; save.style.cssText = 'font-size:11px;padding:3px 10px;margin-right:6px;';
     var cancel = document.createElement('button'); cancel.className = 'btn btn-sm'; cancel.textContent = 'Cancel'; cancel.style.cssText = 'font-size:11px;padding:3px 10px;';
     blWrap.innerHTML = ''; blWrap.appendChild(ti); blWrap.appendChild(ta);
@@ -2577,7 +2577,7 @@ function _msMoveSelect(current, onPick, label) {
   if (!others.length) return null;
   var sel = document.createElement('select'); sel.className = 'ms-move';
   sel.title = label;
-  sel.style.cssText = 'font-size:11px;max-width:150px;background:rgba(var(--panel-rgb),0.85);color:var(--gold);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:2px 4px;';
+  sel.style.cssText = 'font-size:11px;max-width:150px;background:rgba(var(--panel-rgb),0.85);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;padding:2px 4px;';
   var o0 = document.createElement('option'); o0.value = ''; o0.textContent = label; sel.appendChild(o0);
   others.forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
   sel.onchange = function () { var v = sel.value; sel.value = ''; if (v) onPick(v); };
@@ -3007,7 +3007,7 @@ function updatesGroup(title, entries, priv, vi) {
     var key = vi + '-' + title.charAt(0) + '-' + i;
     h += '<li style="margin-bottom:6px;">' + escapeHtml(e.summary);
     if (priv && e.public === false) {
-      h += ' <span class="form-hint" style="color:var(--gold);">not shown to users</span>';
+      h += ' <span class="form-hint" style="color:var(--accent-bright);">not shown to users</span>';
     }
     if (priv && e.detail) {
       h += ' <button class="btn btn-sm" id="upd-toggle-' + key + '" onclick="updatesToggle(\'' + key + '\')">Tester detail</button>';
@@ -3144,7 +3144,7 @@ function renderAccountTier(me) {
       return '<div>' + mark + label + '</div>';
     }
     function val(label, v) {
-      return '<div><span style="color:var(--gold);">' + v + '</span> ' + label + '</div>';
+      return '<div><span style="color:var(--accent-bright);">' + v + '</span> ' + label + '</div>';
     }
     var campLimit = (feat.max_campaigns === null || feat.max_campaigns === undefined)
       ? 'Unlimited' : feat.max_campaigns;
@@ -3176,7 +3176,7 @@ function renderAccountUsage(usage) {
       : '';
     return '<div style="background:rgba(var(--accent-rgb),0.06);border:1px solid rgba(var(--accent-rgb),0.18);' +
       'border-radius:var(--radius);padding:16px;text-align:center;">' +
-      '<div style="font-family:var(--font-display);font-size:28px;color:var(--gold);">' + num + '</div>' +
+      '<div style="font-family:var(--font-display);font-size:28px;color:var(--accent-bright);">' + num + '</div>' +
       '<div style="font-size:11px;color:var(--text-light);letter-spacing:0.5px;margin-top:4px;">' +
       label + '</div>' + subRow + '</div>';
   }
@@ -3482,7 +3482,7 @@ function renderAccountPasses(me, data) {
     var months = Number(p.months) || 0;
     // v3.0.930 -- THE HEADER IS PLATINUM'S OWN COLOUR, READ FROM TIER_COLORS. It was #e5e4e2,
     // which is 1.27:1 on a white card -- this page is a LIGHT theme and the first version of these
-    // cards was written as if it were dark. The token figure was var(--gold) at 1.92:1, which is
+    // cards was written as if it were dark. The token figure was var(--accent-bright) at 1.92:1, which is
     // worse, because it is the biggest thing on the card and the number the card exists to show.
     return '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);' +
       'padding:16px;display:flex;flex-direction:column;">' +
@@ -3552,13 +3552,13 @@ function renderAccountPlans(me) {
     } else if (key !== 'copper' && isCurrent && live) {
       action = '<button class="btn btn-sm" style="margin-top:10px;width:100%;" onclick="openBillingPortal()">Manage</button>';
     }
-    return '<div style="border:1px solid ' + (markCurrent ? 'var(--gold)' : 'rgba(var(--accent-rgb),0.2)') + ';' +
+    return '<div style="border:1px solid ' + (markCurrent ? 'var(--accent-bright)' : 'rgba(var(--accent-rgb),0.2)') + ';' +
       'border-radius:var(--radius-lg);padding:16px;background:' +
       (markCurrent ? 'rgba(var(--accent-rgb),0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;">' +
         '<span style="font-family:var(--font-display);font-size:14px;letter-spacing:1px;color:' + col.bg + ';">' +
           (t.name || key).toUpperCase() + '</span>' +
-        (markCurrent ? '<span style="font-size:10px;color:var(--gold);font-weight:600;">CURRENT</span>' : '') +
+        (markCurrent ? '<span style="font-size:10px;color:var(--accent-bright);font-weight:600;">CURRENT</span>' : '') +
       '</div>' +
       '<div style="font-family:var(--font-display);font-size:22px;color:var(--text);margin:8px 0;">' + priceText + '</div>' +
       '<div style="font-size:11px;color:var(--text-light);line-height:1.5;">' + (t.description || '') + '</div>' +
@@ -6529,7 +6529,7 @@ function charPicCss() {
     '.char-card--wide .char-avatar{aspect-ratio:16/9;}' +
     '.char-card--pic .char-avatar>span{font-size:44px !important;}' +
     '.char-card--pic .char-actions{position:absolute;top:8px;right:8px;z-index:2;}' +
-    '.char-card--pic .char-btn{background:rgba(var(--panel-alt-rgb),0.78);color:var(--on-panel);border-color:rgba(var(--accent-rgb),0.45);font-size:11px;padding:4px 9px;}' +
+    '.char-card--pic .char-btn{background:rgba(var(--panel-rgb),0.78);color:var(--on-panel);border-color:rgba(var(--accent-rgb),0.45);font-size:11px;padding:4px 9px;}' +
     '.char-card--pic .char-btn:hover{background:rgba(var(--accent-rgb),0.92);color:var(--surface-ink-text);}' +
     '.char-card--pic .char-btn-delete:hover{background:rgba(var(--danger-rgb),0.92);color:#fff;border-color:rgba(var(--error-light-line-rgb),0.6);}';
   document.head.appendChild(st);
@@ -8062,13 +8062,13 @@ function showErrorDialog(msg, title) {
   var ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
   var box = document.createElement('div');
-  box.style.cssText = 'background:var(--error-dialog-bg);border:1px solid var(--gold,var(--accent));border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
+  box.style.cssText = 'background:var(--error-dialog-bg);border:1px solid var(--accent-bright,var(--accent));border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
   var h = document.createElement('div');
   h.textContent = title || 'Heads up';
-  h.style.cssText = 'font-size:16px;font-weight:700;color:var(--gold,var(--accent));margin-bottom:10px;';
+  h.style.cssText = 'font-size:16px;font-weight:700;color:var(--accent-bright,var(--accent));margin-bottom:10px;';
   var p = document.createElement('div');
   p.textContent = msg;
-  p.style.cssText = 'font-size:14px;line-height:1.5;color:var(--gold,var(--accent));margin-bottom:18px;white-space:pre-wrap;';
+  p.style.cssText = 'font-size:14px;line-height:1.5;color:var(--accent-bright,var(--accent));margin-bottom:18px;white-space:pre-wrap;';
   var bar = document.createElement('div');
   bar.style.cssText = 'text-align:right;';
   var ok = document.createElement('button');
@@ -8543,7 +8543,7 @@ function aimpRender() {
          ' file' + (aimpRows.length === 1 ? '' : 's') + ' ready. Check the names and categories before importing.</div>';
     aimpRows.forEach(function (r, i) {
       var unset = !r.category;
-      var border = unset ? 'border-left:3px solid var(--gold);' : 'border-left:3px solid transparent;';
+      var border = unset ? 'border-left:3px solid var(--accent-bright);' : 'border-left:3px solid transparent;';
       h += '<div class="aimp-row" style="display:flex;gap:6px;align-items:center;padding:4px 0 4px 6px;' + border + '">' +
         // v3.0.916 -- Ian: "add a small thumbnail of each in front of the name." FIRST in the
         // row, because that is what he asked for and because the eye wants the picture before
@@ -8568,14 +8568,14 @@ function aimpRender() {
         h += '<div class="form-hint" style="margin:0 0 4px 9px;">guessed from the name &mdash; check this one</div>';
       }
       if (r.warn) {
-        h += '<div class="form-hint" style="margin:0 0 4px 9px;color:var(--gold);">' + aimpEsc(r.warn) + '</div>';
+        h += '<div class="form-hint" style="margin:0 0 4px 9px;color:var(--accent-bright);">' + aimpEsc(r.warn) + '</div>';
       }
     });
   }
 
   if (aimpRejects.length) {
-    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(var(--on-panel-cream-rgb),0.15);">' +
-         '<div class="form-hint" style="color:var(--gold);font-weight:600;">' + aimpRejects.length +
+    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(var(--on-panel-rgb),0.15);">' +
+         '<div class="form-hint" style="color:var(--accent-bright);font-weight:600;">' + aimpRejects.length +
          ' file' + (aimpRejects.length === 1 ? '' : 's') + ' could not be used:</div>';
     aimpRejects.forEach(function (x) {
       h += '<div class="form-hint" style="margin-left:6px;">' + aimpEsc(x.filename) + ' &mdash; ' + aimpEsc(x.reason) + '</div>';
@@ -11045,7 +11045,7 @@ function refreshNovelVersionOptions(done) {
         var opts = '';
         rows.forEach(function(v) {
           var n = v.session_count === 1 ? '1 session' : (v.session_count + ' sessions');
-          opts += '<option value="' + v.version_id + '" style="background:var(--window-bg);color:var(--on-panel);">' + escapeHtml(v.label) + ' (' + n + ')</option>';
+          opts += '<option value="' + v.version_id + '" style="background:var(--panel);color:var(--on-panel);">' + escapeHtml(v.label) + ' (' + n + ')</option>';
         });
         if (!opts) opts = '<option value="">Story Master \u2014 Canonical</option>';
         sel.innerHTML = opts;
@@ -15672,7 +15672,7 @@ function fpApply(area, cid, f) {   // the pinned filters over f, when pinned; re
 function fpButtonHTML(on, handler) {
   return '<button type="button" class="archive-filter archive-pin" onclick="' + handler + '()" aria-pressed="' + (on ? 'true' : 'false') + '"' +
     ' title="' + (on ? 'Pinned: these filters come back the next time you open this. Click to unpin.' : 'Pin: keep these filters for the next time you open this.') + '"' +
-    ' style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;' + (on ? 'border-color:var(--gold);color:var(--gold);' : '') + '">' +
+    ' style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;' + (on ? 'border-color:var(--accent-bright);color:var(--accent-bright);' : '') + '">' +
     _vpickPinSvg(on) + '<span>' + (on ? 'Pinned' : 'Pin') + '</span></button>';
 }
 function _fpPickerArea() { return (state.pickerCtx && state.pickerCtx.pinArea) || ''; }
@@ -16239,7 +16239,7 @@ function rgCastBlockInner(label) {
   });
   ((p && p.assets) || []).forEach(function (a) { if (a && a.name && !have[a.name]) missing.push(a.name); });
   var note = missing.length
-    ? ('<div style="font-size:11px;color:var(--gold-light);margin-top:2px;">' + rgEsc(missing.join(', ')) + ' \u00b7 No Picture Exists</div>')
+    ? ('<div style="font-size:11px;color:var(--accent-pale);margin-top:2px;">' + rgEsc(missing.join(', ')) + ' \u00b7 No Picture Exists</div>')
     : '';
   if (!cs.length) {
     return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add one below, then regenerate -- a retouch on its own would send the same empty cast again.</div>' +
@@ -16318,7 +16318,7 @@ function rgCellRow(slot, question) {
     '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + tint +
     ';border:1px solid rgba(255,255,255,0.4);margin-right:6px;vertical-align:middle;"></span>' +
     '<span style="font-size:11px;color:var(--gold-dim);">' + question + '</span>' +
-    '<span id="rg-readout-' + slot + '" style="font-size:11px;color:var(--gold-light);margin-left:6px;">' +
+    '<span id="rg-readout-' + slot + '" style="font-size:11px;color:var(--accent-pale);margin-left:6px;">' +
     (filled ? 'marked' : (isActive ? 'waiting for a click' : '')) + '</span></div>';
 }
 
@@ -16348,7 +16348,7 @@ function rgActionChange() {
     var _ibRg = rgState.ib;
     var _sn = _ibRg ? (_ibRg.styleLabel || '') : ((typeof artStyleLabel === 'function' && state && state.artStyle) ? artStyleLabel(state.artStyle) : '');
     html += '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">' + (_ibRg ? 'Reapplies this picture\u2019s art style:' : 'Reapplies the art style set at the top of the storyboard:') +
-      '<div style="margin-top:3px;color:var(--gold-light);font-size:13px;">' + rgEsc(_sn || 'the current art style') + '</div></div>';
+      '<div style="margin-top:3px;color:var(--accent-pale);font-size:13px;">' + rgEsc(_sn || 'the current art style') + '</div></div>';
     html += rgSelect('rg-convert', 'What is happening', [['drift', 'this picture drifted and needs putting back'], ['cross', 'this picture is in a different style and needs converting']]);
   }
   if (def.objsize) html += rgSelect('rg-objsize', 'Size', [['same', 'leave the size alone'], ['s25', 'a bit smaller (25%)'], ['half', 'half the size'], ['l25', 'a bit larger (25%)'], ['double', 'twice the size']]);
@@ -17795,12 +17795,12 @@ function adminOrderCard(o) {
   var status = (typeof orderStatusLabel === 'function') ? orderStatusLabel(o) : (o.status || '');
   var fmt = [o.binding, orderTierLabel(o.color_tier), o.cover_finish, o.paper].filter(Boolean).join(', ');
   var links = '';
-  var lnk = 'color:var(--crimson);text-decoration:underline;margin-right:10px;';
+  var lnk = 'color:var(--danger);text-decoration:underline;margin-right:10px;';
   if (o.stripeUrl) links += '<a href="' + escapeHtmlPrint(o.stripeUrl) + '" target="_blank" rel="noopener" style="' + lnk + '">Stripe</a>';
   if (o.tracking_url) links += '<a href="' + escapeHtmlPrint(o.tracking_url) + '" target="_blank" rel="noopener" style="' + lnk + '">Track</a>';
   // The status carries the only colour that changes: gold for an order needing attention, crimson
   // for one that failed, muted otherwise. Same vocabulary the promo rows use for Active/Inactive.
-  var statusColor = _bad ? 'var(--crimson)' : (_warn ? 'var(--gold)' : 'var(--text-muted)');
+  var statusColor = _bad ? 'var(--danger)' : (_warn ? 'var(--accent-bright)' : 'var(--text-muted)');
   var html =
       // v3.0.793 -- TD-593. Ian: "list the Lulu order number alongside the Campaignia order number so
       // I can see it in the list." It was only ever the LABEL of a link, so finding an order from a
@@ -17812,7 +17812,7 @@ function adminOrderCard(o) {
       '<span style="min-width:150px;color:var(--text-muted);">Lulu ' +
         (o.provider_order_id
           ? (o.luluUrl
-              ? ('<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="color:var(--crimson);text-decoration:underline;">' + esc(o.provider_order_id) + '</a>')
+              ? ('<a href="' + escapeHtmlPrint(o.luluUrl) + '" target="_blank" rel="noopener" style="color:var(--danger);text-decoration:underline;">' + esc(o.provider_order_id) + '</a>')
               : esc(o.provider_order_id))
           : '\u2014') +
       '</span>' +
@@ -17826,7 +17826,7 @@ function adminOrderCard(o) {
       cell('pp/qty', String(o.page_count == null ? '?' : o.page_count) + '/' + String(o.quantity == null ? '?' : o.quantity)) +
       cell('track', o.tracking_number) +
       (links ? ('<span style="min-width:150px;">' + links + '</span>') : '') +
-      (o.error ? ('<span style="flex:1 1 100%;color:var(--crimson);word-break:break-word;">' + esc(String(o.error).slice(0, 400)) + '</span>') : '');
+      (o.error ? ('<span style="flex:1 1 100%;color:var(--danger);word-break:break-word;">' + esc(String(o.error).slice(0, 400)) + '</span>') : '');
   card.innerHTML = html;
   return card;
 }
@@ -17856,12 +17856,12 @@ function loadAdminLibrary() {
 }
 function adminLibCard(it) {
   var card = document.createElement('div');
-  card.style.cssText = 'border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;background:rgba(var(--panel-deeper-rgb),0.5);display:flex;flex-direction:column;';
+  card.style.cssText = 'border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;background:rgba(var(--panel-deep-rgb),0.5);display:flex;flex-direction:column;';
   var img = document.createElement('img');
   img.setAttribute('loading', 'lazy');
   img.src = it.image_url;
   img.alt = it.caption || 'shared image';
-  img.style.cssText = 'width:100%;height:auto;display:block;background:var(--surface-ink);cursor:zoom-in;';
+  img.style.cssText = 'width:100%;height:auto;display:block;background:var(--panel);cursor:zoom-in;';
   img.onclick = function () { openLightbox(it.image_url, it.caption); };
   card.appendChild(img);
   if (it.caption) {
@@ -17960,17 +17960,17 @@ function loadAdminStories() {
 }
 function adminStoryCard(it) {
   var card = document.createElement('div');
-  card.style.cssText = 'border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;background:rgba(var(--panel-deeper-rgb),0.5);display:flex;flex-direction:column;';
+  card.style.cssText = 'border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;background:rgba(var(--panel-deep-rgb),0.5);display:flex;flex-direction:column;';
   var a = document.createElement('a');
   a.href = it.pdf_url; a.target = '_blank'; a.rel = 'noopener'; a.style.cssText = 'display:block;text-decoration:none;';
   if (it.cover_url) {
     var img = document.createElement('img');
     img.setAttribute('loading', 'lazy'); img.src = it.cover_url; img.alt = it.title || 'story';
-    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:var(--surface-ink);';
+    img.style.cssText = 'width:100%;aspect-ratio:17/22;object-fit:cover;display:block;background:var(--panel);';
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
-    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--surface-ink);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
     a.appendChild(ph);
   }
   card.appendChild(a);
@@ -21846,7 +21846,7 @@ function loadMemberCap() {
     .then(function (d) {
       var t = memberCapLineText(d);
       el.textContent = t;
-      el.style.color = (d && d.full) ? 'var(--amber-note)' : 'rgba(var(--on-panel-cream-rgb),0.75)';
+      el.style.color = (d && d.full) ? 'var(--amber-note)' : 'rgba(var(--on-panel-rgb),0.75)';
       el.style.display = t ? '' : 'none';
     })
     .catch(function () { el.style.display = 'none'; });
@@ -21858,7 +21858,7 @@ function loadMembers() {
   loadMemberCap();   // v3.2.45
   var list = document.getElementById('members-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">Loading members…</div>';
+  list.innerHTML = '<div style="color:rgba(var(--on-panel-rgb),0.75);font-size:13px;padding:8px;">Loading members…</div>';
 
   fetch('/api/campaigns/' + cur.id + '/members')
     .then(function(r) { return r.json(); })
@@ -21879,7 +21879,7 @@ function renderMembersList() {
   var list = document.getElementById('members-list');
   if (!list) return;
   if (!state.members.length) {
-    list.innerHTML = '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">No members yet.</div>';
+    list.innerHTML = '<div style="color:rgba(var(--on-panel-rgb),0.75);font-size:13px;padding:8px;">No members yet.</div>';
     return;
   }
   var meUserId = (state.user && state.user.id) || null;
@@ -21893,7 +21893,7 @@ function renderMembersList() {
     var roleBadge = isDM
       ? '<span class="role-badge role-badge-dm">Story Master</span>'
       : '<span class="role-badge role-badge-player">Member</span>';
-    var meTag = isMe ? '<span style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.75);">(you)</span>' : '';
+    var meTag = isMe ? '<span style="font-size:11px;color:rgba(var(--on-panel-rgb),0.75);">(you)</span>' : '';
     var charInfo = m.character_name
       ? 'Playing ' + escapeHtml(m.character_name) + (m.character_class ? ' (' + escapeHtml(m.character_class) + ')' : '')
       : (isDM ? 'No character owned' : 'No character');
@@ -21930,7 +21930,7 @@ function loadPendingInvites() {
   loadMemberCap();   // v3.2.45 -- an invite sent, revoked or reactivated moves the count
   var list = document.getElementById('pending-invites-list');
   if (!list) return;
-  list.innerHTML = '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">Loading invites…</div>';
+  list.innerHTML = '<div style="color:rgba(var(--on-panel-rgb),0.75);font-size:13px;padding:8px;">Loading invites…</div>';
 
   fetch('/api/campaigns/' + cur.id + '/invites')
     .then(function(r) { return r.json(); })
@@ -21951,7 +21951,7 @@ function renderPendingInvites() {
   var list = document.getElementById('pending-invites-list');
   if (!list) return;
   if (!state.pendingInvites.length) {
-    list.innerHTML = '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:13px;padding:8px;">No pending invites.</div>';
+    list.innerHTML = '<div style="color:rgba(var(--on-panel-rgb),0.75);font-size:13px;padding:8px;">No pending invites.</div>';
     return;
   }
   list.innerHTML = state.pendingInvites.map(function(inv) {
@@ -23515,7 +23515,7 @@ function renderPassOverride(me) {
   // whole point of the pass design is that the account tier and what they actually HAVE differ.
   var effective = me.tier || acct;
   var who = pass ? 'PASS HOLDER' : 'SUBSCRIBER';
-  var line = '<strong style="color:var(--gold);">' + who + '</strong>' +
+  var line = '<strong style="color:var(--accent-bright);">' + who + '</strong>' +
     ' &mdash; account tier <strong>' + aimpEsc(acct) + '</strong>';
   if (pass) {
     line += ', pass <strong>' + aimpEsc(pass.tier || '?') + '</strong> until <strong>' +
@@ -23766,7 +23766,7 @@ function renderPromoCodes(codes) {
       '<span>' + escapeHtml(uses) + '</span>' +
       '<span>expires ' + escapeHtml(promoEasternDate(c.expires_at)) + '</span>' +
       (stripe ? '<span style="color:var(--text-muted);">' + escapeHtml(stripe) + '</span>' : '') +
-      '<span style="min-width:64px;color:' + (_dead ? 'var(--error)' : (c.active ? 'var(--gold)' : 'var(--text-muted)')) + ';">' + (_dead || (c.active ? 'On' : 'Off')) + '</span>' +
+      '<span style="min-width:64px;color:' + (_dead ? 'var(--error)' : (c.active ? 'var(--accent-bright)' : 'var(--text-muted)')) + ';">' + (_dead || (c.active ? 'On' : 'Off')) + '</span>' +
       '<button class="btn btn-sm" onclick="togglePromoCode(' + c.id + ')">' + (c.active ? 'Switch off' : 'Switch on') + '</button>' +
       '<span class="settings-section-desc" id="promo-row-msg-' + c.id + '" style="margin:0;flex-basis:100%;"></span>' +
       '</div>';
@@ -23879,7 +23879,7 @@ function renderTesters(list, env) {
       '<span>' + escapeHtml(t.tier) + '</span>' +
       '<span style="color:var(--text-muted);">' + escapeHtml(src) + (since ? ', ' + escapeHtml(since) : '') + '</span>' +
       (t.onEnvList ? '<span style="color:var(--text-muted);">also on TESTER_EMAILS</span>' : '') +
-      '<span style="min-width:64px;color:' + (t.on ? 'var(--gold)' : 'var(--text-muted)') + ';">' + (t.on ? 'Tester' : 'Off') + '</span>' +
+      '<span style="min-width:64px;color:' + (t.on ? 'var(--accent-bright)' : 'var(--text-muted)') + ';">' + (t.on ? 'Tester' : 'Off') + '</span>' +
       '<button class="btn btn-sm" onclick="switchTester(' + t.id + ', ' + (t.on ? 'false' : 'true') + ')">' + (t.on ? 'Turn off' : 'Turn on') + '</button>' +
       '<span class="settings-section-desc" id="tester-row-msg-' + t.id + '" style="margin:0;"></span>' +
       '</div>';
@@ -23984,7 +23984,7 @@ function renderGiftSwitch(on) {
   var desc = document.getElementById('gift-switch-desc');
   var btn = document.getElementById('gift-switch-btn');
   if (desc) desc.innerHTML = on
-    ? 'Gifts are <b style="color:var(--gold);">ON</b> here. Customers can use gift links, and dated gifts are being sent.'
+    ? 'Gifts are <b style="color:var(--accent-bright);">ON</b> here. Customers can use gift links, and dated gifts are being sent.'
     : 'Gifts are <b>OFF</b> here. Gift links do not work, nothing is sent, and no free gift can be issued. This switch is separate on staging and production.';
   if (btn) { btn.style.display = ''; btn.textContent = on ? 'Switch off' : 'Switch on'; btn.setAttribute('data-on', on ? '1' : '0'); }
 }
@@ -24026,7 +24026,7 @@ function renderGifts(rows) {
     if (live && !g.comp && g.has_payment) acts += '<button class="btn btn-sm" onclick="voidGift(' + g.id + ', true)">Void &amp; refund</button>';
     return '<div style="display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border);">' +
       '<strong class="adm-row-id">#' + g.id + '</strong>' +
-      '<span style="min-width:96px;color:' + (g.status === 'redeemed' ? 'var(--gold)' : g.status === 'void' ? 'var(--text-muted)' : 'inherit') + ';">' + escapeHtml(GIFT_STATUS_LABEL[g.status] || g.status) + '</span>' +
+      '<span style="min-width:96px;color:' + (g.status === 'redeemed' ? 'var(--accent-bright)' : g.status === 'void' ? 'var(--text-muted)' : 'inherit') + ';">' + escapeHtml(GIFT_STATUS_LABEL[g.status] || g.status) + '</span>' +
       '<span style="min-width:230px;">' + escapeHtml(item) + (g.comp ? ' <span style="color:var(--text-muted);">(free)</span>' : ' <span style="color:var(--text-muted);">(paid $' + escapeHtml((Number(g.price_cents) / 100).toFixed(2)) + ')</span>') + '</span>' +
       '<span>to ' + escapeHtml((g.recipient_name || '') + ' <' + g.recipient_email + '>') + '</span>' +
       '<span>from ' + escapeHtml(g.buyer_name || g.buyer_email || '') + '</span>' +
@@ -24252,7 +24252,7 @@ function renderPassesConfig(data) {
         'style="width:88px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
         '</div>';
     });
-    html += '<div class="settings-section-desc" id="pass-derived-' + id + '" data-months="' + p.months + '" style="margin:10px 0 0;color:var(--gold);"></div>';
+    html += '<div class="settings-section-desc" id="pass-derived-' + id + '" data-months="' + p.months + '" style="margin:10px 0 0;color:var(--accent-bright);"></div>';
     html += '<div class="pass-panel-foot" style="padding-top:12px;">' +
       '<button class="btn btn-primary btn-sm" onclick="savePassPanel(\'' + id + '\')">Save</button>' +
       '<div class="settings-section-desc" id="pass-save-msg-' + id + '" style="margin:6px 0 0;"></div>' +
@@ -24285,7 +24285,7 @@ function savePassPanel(id) {
       if (data && data.success) {
         // Re-render from what the SERVER stored, not from what was typed. A blank that fell
         // back to a code default has to show that default, or the box lies about what is live.
-        if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--gold)'; }
+        if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--accent-bright)'; }
         loadPassesConfig();
       } else {
         if (msgEl) { msgEl.textContent = (data && (data.message || data.error)) || 'Save failed.'; msgEl.style.color = 'var(--error)'; }
@@ -24340,7 +24340,7 @@ function renderTiersConfig(data) {
     });
     html += '</div>';
     // v3.0.922 -- the same readout the pass panels carry, just above the Save button.
-    html += '<div class="settings-section-desc" id="tier-derived-' + tierKey + '" style="margin:10px 0 0;color:var(--gold);"></div>';
+    html += '<div class="settings-section-desc" id="tier-derived-' + tierKey + '" style="margin:10px 0 0;color:var(--accent-bright);"></div>';
     html += '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;">' +
       '<button class="btn btn-primary btn-sm" onclick="saveTierPanel(\'' + tierKey + '\')">Save ' + (t.name || tierKey) + '</button>' +
       '<span class="settings-section-desc" id="tier-save-msg-' + tierKey + '" style="margin:0;"></span>' +
@@ -24421,7 +24421,7 @@ function saveTierPanel(tierKey) {
     .then(function (r) { return r.json(); })
     .then(function (data) {
       if (data && data.success) {
-        if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--gold)'; }
+        if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--accent-bright)'; }
       } else {
         if (msgEl) { msgEl.textContent = (data && (data.message || data.error)) || 'Save failed.'; msgEl.style.color = 'var(--error)'; }
       }
@@ -24488,7 +24488,7 @@ function renderStats(d) {
       ' <button type="button" class="btn btn-xs" id="stats-lastactive-refresh" onclick="loadUserLastActive()" title="Reload the user list" style="margin-left:8px;">&#8635; Refresh</button></div>' +
     // v3.2.61 -- Ian: the rows came out black on dark brown. The box now sets its own dark background, light text
     // and dark scrollbars instead of inheriting the pane's.
-    '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--modal-rgb),0.94);color:var(--on-panel);color-scheme:dark;font-size:12px;">Loading\u2026</div></div>' +
+    '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--panel-rgb),0.94);color:var(--on-panel);color-scheme:dark;font-size:12px;">Loading\u2026</div></div>' +
     '</div>';
   loadUserLastActive();
 }
@@ -24514,7 +24514,7 @@ function renderUserLastActive(d) {
   var _ord = _ulaOrder(cols);   // v3.4.52 -- Ian's order and names
   if (cnt) cnt.textContent = '(' + rows.length + (d.capped ? '+' : '') + ')';
   if (!rows.length) { out.textContent = 'No rows.'; return; }
-  var th = 'position:sticky;top:0;background:var(--surface-ink);text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(var(--accent-rgb),0.85);white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.25);';
+  var th = 'position:sticky;top:0;background:var(--panel);text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(var(--accent-rgb),0.85);white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.25);';
   var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';   // v3.2.61 -- light text
   var h = '<table style="border-collapse:collapse;width:100%;"><thead><tr>' +
     _ord.map(function (o) { return '<th style="' + th + '">' + _ulaCell(o.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
@@ -25540,7 +25540,7 @@ function fiPick() { var i = fiEl('fileimport-input'); if (i) i.click(); }
 function fiDragOver(ev) {
   ev.preventDefault();
   var z = fiEl('fileimport-zone');
-  if (z) { z.style.borderColor = 'var(--gold)'; z.style.background = 'rgba(var(--accent-rgb),0.10)'; }
+  if (z) { z.style.borderColor = 'var(--accent-bright)'; z.style.background = 'rgba(var(--accent-rgb),0.10)'; }
 }
 function fiDragLeave() {
   var z = fiEl('fileimport-zone');
@@ -27379,7 +27379,7 @@ function runSnapshotNow() {
     .then(function (data) {
       if (btn) btn.disabled = false;
       if (data && data.success) {
-        if (msg) { msg.textContent = 'Snapshot saved for week of ' + data.week_start + ' (' + data.written + ' values).'; msg.style.color = 'var(--gold)'; }
+        if (msg) { msg.textContent = 'Snapshot saved for week of ' + data.week_start + ' (' + data.written + ' values).'; msg.style.color = 'var(--accent-bright)'; }
       } else {
         if (msg) { msg.textContent = (data && (data.message || data.error)) || 'Snapshot failed.'; msg.style.color = 'var(--error)'; }
       }
@@ -27416,10 +27416,10 @@ function renderTrends(data) {
   var tc = data.tier_counts || {};
   var html = '';
   html += trendBlock('Active users (weekly)', svgFromSeries([
-    { name: 'Active users', color: 'var(--gold)', points: data.active_users || [] }
+    { name: 'Active users', color: 'var(--accent-bright)', points: data.active_users || [] }
   ]));
   html += trendBlock('Tokens purchased (weekly)', svgFromSeries([
-    { name: 'Tokens purchased', color: 'var(--gold)', points: data.tokens_purchased || [] }
+    { name: 'Tokens purchased', color: 'var(--accent-bright)', points: data.tokens_purchased || [] }
   ]));
   // v3.0.948 -- TD-800. ACTIVE PASSES. Each line counts the people holding a live pass right now,
   // grouped by the pass they most recently bought, so the three add up to all live pass holders.
@@ -28160,7 +28160,7 @@ function shippingOptionsLine(j) {
   var parts = opts.map(function (o) {
     return escapeHtmlPrint(o.tier) + ' $' + Number(o.customerCharge || 0).toFixed(2);
   }).join(' \u00b7 ');
-  return '<div style="margin-top:4px;font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.55);">' +
+  return '<div style="margin-top:4px;font-size:11px;color:rgba(var(--on-panel-rgb),0.55);">' +
     'Total by delivery option: ' + parts + '</div>';
 }
 
@@ -28177,7 +28177,7 @@ function reorderNoteInReview(R, quote) {
   if (!sum) return;
   var when = '';
   try { if (R.when) when = ' on ' + new Date(R.when).toLocaleDateString(); } catch (e) {}
-  var html = '<div style="border-top:1px solid rgba(var(--accent-rgb),0.25);margin-top:8px;padding-top:8px;font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.75);">' +
+  var html = '<div style="border-top:1px solid rgba(var(--accent-rgb),0.25);margin-top:8px;padding-top:8px;font-size:12px;color:rgba(var(--on-panel-rgb),0.75);">' +
     'Reprint of order ' + escapeHtmlPrint(R.label) + ' using the original print files.';
   if (R.oldCharge != null) {
     html += ' You paid $' + R.oldCharge.toFixed(2) + ' ' + escapeHtmlPrint(R.oldCurrency) + when +
@@ -29201,8 +29201,8 @@ function quotePrintOrder() {
         // nothing to show it, so a customer could not reconcile the total and neither could we. The
         // three parts now add up to the number being charged.
         var _tx = Number((j.breakdown && j.breakdown.tax) || 0);
-        out.innerHTML = '<strong style="color:var(--gold);">$' + Number(j.customerCharge).toFixed(2) + ' ' + escapeHtmlPrint(j.currency) + '</strong> ' +
-          '<span style="color:rgba(var(--on-panel-cream-rgb),0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) +
+        out.innerHTML = '<strong style="color:var(--accent-bright);">$' + Number(j.customerCharge).toFixed(2) + ' ' + escapeHtmlPrint(j.currency) + '</strong> ' +
+          '<span style="color:rgba(var(--on-panel-rgb),0.55);font-size:11px;">(print $' + Number(j.breakdown.print).toFixed(2) +
           ' + shipping $' + Number(j.breakdown.shipping).toFixed(2) +
           (_tx > 0 ? (' + tax $' + _tx.toFixed(2)) : '') + ')</span>' +
           // v3.0.880 -- TD-758. SAY IT WHERE THE PRICE IS. A reader who picked the
@@ -29536,8 +29536,8 @@ function renderPrintReview(body, quote) {
   if (!panel || !sum) return;
   function row(label, value) {
     return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
-      '<span style="color:rgba(var(--on-panel-cream-rgb),0.55);">' + escapeHtmlPrint(label) + '</span>' +
-      '<span style="color:var(--cream);text-align:right;">' + escapeHtmlPrint(value) + '</span></div>';
+      '<span style="color:rgba(var(--on-panel-rgb),0.55);">' + escapeHtmlPrint(label) + '</span>' +
+      '<span style="color:var(--on-panel);text-align:right;">' + escapeHtmlPrint(value) + '</span></div>';
   }
   // v3.0.796 -- TD-601. NAME THE VALUE BEING ORDERED, not whatever the control says now.
   // lbl() reads the live <select>, so this line described the form at render time rather than the
@@ -29977,7 +29977,7 @@ function orderCardHtml(o) {
   var charge = (o.customer_charge != null) ? ('$' + Number(o.customer_charge).toFixed(2) + ' ' + (o.currency || 'USD')) : '';
   var card = (o.card_brand && o.card_last4) ? maskedCard(o.card_brand, o.card_last4) : '';
   var when = o.created_at ? formatOrderDate(o.created_at) : '';
-  var linkBase = 'color:var(--crimson);text-decoration:underline;font-size:12px;';
+  var linkBase = 'color:var(--danger);text-decoration:underline;font-size:12px;';
   var links = '';
   if (o.interior_pdf_url) links += '<a href="' + esc(o.interior_pdf_url) + '" target="_blank" rel="noopener" style="' + linkBase + 'margin-right:14px;">Interior PDF</a>';
   if (o.cover_pdf_url) links += '<a href="' + esc(o.cover_pdf_url) + '" target="_blank" rel="noopener" style="' + linkBase + 'margin-right:14px;">Cover PDF</a>';
@@ -31059,7 +31059,7 @@ function replayTours() {
     .then(function(d){
       if (d && d.success) {
         _tourProgress = {};
-        if (msg) { msg.style.color = 'var(--gold-light)'; msg.textContent = 'Guided tours are back on. Visit any screen to see its tour again.'; }
+        if (msg) { msg.style.color = 'var(--accent-pale)'; msg.textContent = 'Guided tours are back on. Visit any screen to see its tour again.'; }
       } else {
         if (msg) { msg.style.color = 'var(--error)'; msg.textContent = (d && d.error) ? d.error : 'Could not turn tours back on. Please try again.'; }
       }
@@ -32117,7 +32117,7 @@ function finalizeBuildNav(first, last) {
   if (nav) {
     var h = '';
     for (var n = first; n <= last; n++) {
-      h += '<div data-page="' + n + '" onclick="finalizeGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(var(--on-panel-cream-rgb),0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
+      h += '<div data-page="' + n + '" onclick="finalizeGoToPage(' + n + ')" style="cursor:pointer;font-size:10px;line-height:1.6;color:rgba(var(--on-panel-rgb),0.6);padding:0 5px;border-radius:2px;">' + n + '</div>';
     }
     nav.innerHTML = h;
   }
@@ -32283,7 +32283,7 @@ function finalizeDecorateNavFix() {
     // gutter, and the dialog title says what it actually is.
     b.textContent = 'Edit';
     b.style.cssText = 'font-size:9px;line-height:1.5;padding:0 3px;border-radius:4px;' +   // v3.0.414 -- 3px so 'Edit' fits the 30px slot; 4px radius matches every other button
-      'background:rgba(var(--accent-rgb),0.22);border:1px solid rgba(var(--accent-rgb),0.5);color:var(--gold);cursor:pointer;';
+      'background:rgba(var(--accent-rgb),0.22);border:1px solid rgba(var(--accent-rgb),0.5);color:var(--accent-bright);cursor:pointer;';
     b.setAttribute('data-fix-page', pg);
     b.title = 'This page holds ' + _fixOptions[pg].heldIn + 'in of ' + _fixOptions[pg].boxIn + 'in';
     b.onclick = function (ev) { ev.stopPropagation(); finalizeOpenFixDialog(Number(this.getAttribute('data-fix-page'))); };
@@ -32302,7 +32302,7 @@ function finalizeBuildAfterNav(first, last) {
     // fixed-width button cell: the number sits still whether or not it has a neighbour.
     h += '<div data-page="' + n + '" onclick="finalizeAfterGoToPage(' + n + ')" ' +
       'style="display:flex;align-items:center;cursor:pointer;font-size:10px;line-height:1.6;' +
-      'color:rgba(var(--on-panel-cream-rgb),0.6);padding:0 3px;border-radius:4px;">' +
+      'color:rgba(var(--on-panel-rgb),0.6);padding:0 3px;border-radius:4px;">' +
         '<span style="flex:0 0 20px;text-align:right;">' + n + '</span>' +
         '<span class="fix-slot" style="flex:0 0 30px;display:flex;justify-content:flex-end;"></span>' +
       '</div>';
@@ -32331,7 +32331,7 @@ function finalizeNavHighlight(navId, scrollId) {
   if (best == null) return;
   for (var j = 0; j < nav.children.length; j++) {
     var el = nav.children[j], on = (el.getAttribute('data-page') == best);
-    el.style.color = on ? 'var(--gold)' : 'rgba(var(--on-panel-cream-rgb),0.6)';
+    el.style.color = on ? 'var(--accent-bright)' : 'rgba(var(--on-panel-rgb),0.6)';
     el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent';
     // v3.0.609 -- THE SPINE FOLLOWS AGAIN, AND THIS REVERSES v3.0.606 ON PURPOSE.
     // Ian, 2026-08-10: "when the preview panel scrolls past the page number on the right, the page
@@ -32673,7 +32673,7 @@ function finalizeAfterGoToPage(n) {
     if (canvas) after.scrollTop = canvas.offsetTop - (after.firstChild ? after.firstChild.offsetTop : 0) - 2;
   }
   var nav = document.getElementById('finalize-after-nav');
-  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(var(--on-panel-cream-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; } }
+  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--accent-bright)' : 'rgba(var(--on-panel-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; } }
 }
 // After-pane zoom: scales the rendered PDF canvases. 'Fit' (default) lets them fill the pane width.
 // Persisted across refreshes so the user's choice sticks.
@@ -33213,7 +33213,7 @@ function optimizeSaveFailText(raw) {
   raw = String(raw || '');
   var temp = /Image upload failed: (5\d\d|429|408)\b|cloudflare|ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN|network error|Failed to fetch/i.test(raw);
   try { cgLogClient({ url: '/optimize/save', fn: 'finalizeSaveOptimized', kind: temp ? 'storage' : 'save', message: raw }); } catch (e) {}
-  var again = ' <a href="#" onclick="optimizeSaveRetry(this);return false;" style="color:var(--gold);text-decoration:underline;">Try again</a>';
+  var again = ' <a href="#" onclick="optimizeSaveRetry(this);return false;" style="color:var(--accent-bright);text-decoration:underline;">Try again</a>';
   if (temp) return 'Couldn\u2019t save: Cloudflare\u2019s file storage was briefly unavailable. Your optimized book is still on screen; wait a minute, then' + again + '.';
   return 'Could not save this version: ' + escapeHtml(raw.slice(0, 300)) + '.' + again;
 }
@@ -33429,7 +33429,7 @@ function finalizeGoToPage(n) {
     });
   }
   var nav = document.getElementById('finalize-page-nav');
-  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--gold)' : 'rgba(var(--on-panel-cream-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; } }
+  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--accent-bright)' : 'rgba(var(--on-panel-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; } }
 }
 var LAYOUT_DISPLAY = {
   'classic': 'Picture Book', 'paired': 'Picture Book', 'picture book': 'Picture Book',
@@ -33474,15 +33474,15 @@ function finalizeUpdateHeader() {
   parts.push('Drop cap: ' + (o.dropcap ? 'On' : 'Off'));
   // v3.0.498 -- Narrative removed from this list with the option itself (TD-168).
   // optLabel reads the option text out of the #cl-narr <select>, which no longer exists.
-  var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
-    (desc ? ' <span style="color:rgba(var(--on-panel-cream-rgb),0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
-  h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(var(--accent-rgb),0.6);">&middot;</span> ') + '</div>';
+  var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--accent-bright);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
+    (desc ? ' <span style="color:rgba(var(--on-panel-rgb),0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
+  h += '<div style="color:rgba(var(--on-panel-rgb),0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(var(--accent-rgb),0.6);">&middot;</span> ') + '</div>';
   // SESSIONS INCLUDED. Sits under the layout attributes and above the Optimize button. Highlighted
   // only when some are left out -- that is the case worth catching before ordering a print.
   if (_finalizeSessInc != null && _finalizeSessTotal != null) {
     var _sAll = (_finalizeSessInc >= _finalizeSessTotal);
     h += '<div style="margin-top:5px;font-size:11px;letter-spacing:0.03em;color:' +
-         (_sAll ? 'rgba(var(--on-panel-cream-rgb),0.75)' : 'var(--gold)') + ';">Sessions included: <strong>' +
+         (_sAll ? 'rgba(var(--on-panel-rgb),0.75)' : 'var(--accent-bright)') + ';">Sessions included: <strong>' +
          _finalizeSessInc + ' of ' + _finalizeSessTotal + '</strong>' +
          (_sAll ? '' : ' <span style="font-style:italic;opacity:0.8;">(some sessions are excluded)</span>') + '</div>';
   }
@@ -33498,13 +33498,13 @@ function finalizeShowFreeAnalysis(flagged, numPages) {
   out.style.maxHeight = '540px';   // scan fills the panel until Optimize runs
   var h = '';
   if (!flagged.length) {
-    h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
+    h += '<div style="color:rgba(var(--on-panel-rgb),0.85);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
   } else {
-    h += '<div style="color:var(--cream);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled:</div>';
+    h += '<div style="color:var(--on-panel);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled:</div>';
     flagged.forEach(function (f) {
-      h += '<div onclick="finalizeGoToPage(' + f.page + ')" title="Go to page ' + f.page + '" style="cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--cream);"><span style="font-family:var(--font-display);color:var(--gold);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
+      h += '<div onclick="finalizeGoToPage(' + f.page + ')" title="Go to page ' + f.page + '" style="cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.3);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--on-panel);"><span style="font-family:var(--font-display);color:var(--accent-bright);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
     });
-    h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.7);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them.</div>';
+    h += '<div style="color:rgba(var(--on-panel-rgb),0.7);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them.</div>';
   }
   out.innerHTML = h;
 }
@@ -33794,7 +33794,7 @@ function optimizeShowBusy(j) {
     // the stylesheet rather than a new orange invented here.
     //
     // AND IT IS MARKED WITH A FLAG, NOT RECOGNISED BY ITS COLOUR. The clear path below used to test
-    // `host.style.color === 'var(--gold)'` to decide whether the message was its own to remove --
+    // `host.style.color === 'var(--accent-bright)'` to decide whether the message was its own to remove --
     // so changing the colour here would have left the warning on screen forever after the run
     // finished, and the bug would have looked like the run never ending. A thing that writes a
     // message should say so, not be identified by how it looks.
@@ -34285,7 +34285,7 @@ function _runLayoutAiOptimize() {
         if (!panel) {
           panel = document.createElement('div');
           panel.id = '__aiLoopLog';
-          panel.style.cssText = 'margin:8px 4px 0 4px;padding:8px 10px;max-height:180px;overflow-y:auto;background:var(--surface-ink);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--label);';
+          panel.style.cssText = 'margin:8px 4px 0 4px;padding:8px 10px;max-height:180px;overflow-y:auto;background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:6px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--label);';
           var title = document.createElement('div');
           title.style.cssText = 'color:var(--accent);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;';
           title.textContent = 'AI optimize log';
@@ -34980,15 +34980,15 @@ function finalizeFreeAnalysis() {
     var fill = measureCanvasFill(canvases[n]);
     if (fill != null && fill < 0.62) flagged.push({ page: n + 1, fill: Math.round(fill * 100) });
   }
-  var h = '<div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.5);margin-bottom:8px;">Free layout scan (no tokens) &middot; ' + canvases.length + ' pages</div>';
+  var h = '<div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.5);margin-bottom:8px;">Free layout scan (no tokens) &middot; ' + canvases.length + ' pages</div>';
   if (!flagged.length) {
-    h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.6);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
+    h += '<div style="color:rgba(var(--on-panel-rgb),0.6);font-size:12px;">No obviously under-filled pages. Run Optimize for a full art-director pass.</div>';
   } else {
-    h += '<div style="color:var(--cream);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled &mdash; content stops high with space below:</div>';
+    h += '<div style="color:var(--on-panel);font-size:12px;margin-bottom:8px;">' + flagged.length + ' page(s) look under-filled &mdash; content stops high with space below:</div>';
     flagged.forEach(function (f) {
-      h += '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;"><span style="font-family:var(--font-display);color:var(--gold);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
+      h += '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:12px;"><span style="font-family:var(--font-display);color:var(--accent-bright);">Page ' + f.page + '</span> &middot; content fills ~' + f.fill + '% of the page</div>';
     });
-    h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.5);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them (grow image / flow text).</div>';
+    h += '<div style="color:rgba(var(--on-panel-rgb),0.5);font-size:11px;margin-top:6px;">Run Optimize for the AI to decide how to fill them (grow image / flow text).</div>';
   }
   out.innerHTML = h;
   out.setAttribute('data-mode', 'free');
@@ -34999,29 +34999,29 @@ function renderLayoutAiResult(j) {
   if (!out) return;
   if (!j || j.error) { out.innerHTML = '<div style="color:var(--error-light);font-size:13px;">Error: ' + escapeHtml((j && j.error) || 'no response') + '</div>'; return; }
   var h = '';
-  h += '<div style="font-size:11px;color:rgba(var(--on-panel-cream-rgb),0.5);margin-bottom:8px;">' + escapeHtml(j.layout || '') + ' &middot; ' + escapeHtml(j.model || '') + ' &middot; ' + (j.total_pages || 0) + ' pages &middot; ' + (j.pages_flagged || 0) + ' flagged &middot; ' + (j.applied != null ? j.applied + ' applied &middot; ' : '') + (Math.round((j.ms || 0) / 100) / 10) + 's</div>';
+  h += '<div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.5);margin-bottom:8px;">' + escapeHtml(j.layout || '') + ' &middot; ' + escapeHtml(j.model || '') + ' &middot; ' + (j.total_pages || 0) + ' pages &middot; ' + (j.pages_flagged || 0) + ' flagged &middot; ' + (j.applied != null ? j.applied + ' applied &middot; ' : '') + (Math.round((j.ms || 0) / 100) / 10) + 's</div>';
   if (j.settings) {
     var _co = j.settings.co || {};
     var _coStr = Object.keys(_co).map(function (k) { return k + '=' + _co[k]; }).join(', ');
-    h += '<div style="font-size:10px;color:rgba(var(--on-panel-cream-rgb),0.4);margin-bottom:8px;font-family:monospace;word-break:break-all;">rendered: layout=' + escapeHtml(String(j.settings.layout || '')) + ' &middot; panels=' + (j.settings.panels || 0) + (_coStr ? ' &middot; ' + escapeHtml(_coStr) : '') + '</div>';
+    h += '<div style="font-size:10px;color:rgba(var(--on-panel-rgb),0.4);margin-bottom:8px;font-family:monospace;word-break:break-all;">rendered: layout=' + escapeHtml(String(j.settings.layout || '')) + ' &middot; panels=' + (j.settings.panels || 0) + (_coStr ? ' &middot; ' + escapeHtml(_coStr) : '') + '</div>';
   }
-  if (j.book_assessment) h += '<div style="background:rgba(var(--accent-rgb),0.08);border-left:3px solid var(--gold);border-radius:4px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--cream);margin-bottom:10px;">' + escapeHtml(j.book_assessment) + '</div>';
+  if (j.book_assessment) h += '<div style="background:rgba(var(--accent-rgb),0.08);border-left:3px solid var(--accent-bright);border-radius:4px;padding:10px 12px;font-size:13px;line-height:1.5;color:var(--on-panel);margin-bottom:10px;">' + escapeHtml(j.book_assessment) + '</div>';
   if (j.notes && j.notes.length) h += '<div style="color:var(--soft-gold-note);font-size:11px;margin-bottom:8px;">' + escapeHtml(j.notes.join(' | ')) + '</div>';
   var pages = j.pages || [];
-  if (!pages.length) h += '<div style="color:rgba(var(--on-panel-cream-rgb),0.5);font-size:12px;">No page-level changes suggested.</div>';
+  if (!pages.length) h += '<div style="color:rgba(var(--on-panel-rgb),0.5);font-size:12px;">No page-level changes suggested.</div>';
   pages.forEach(function (pg) {
     var vc = pg.verdict === 'near_blank' ? '#c0392b' : (pg.verdict === 'under_filled' ? '#b06a2a' : '#3f7d4f');
     h += '<div' + (pg.page != null && !isNaN(Number(pg.page)) ? ' onclick="finalizeGoToPage(' + Number(pg.page) + ')"' : '') + ' title="Go to page" style="cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:4px;padding:9px 11px;margin-bottom:7px;">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-family:var(--font-display);color:var(--gold);font-size:13px;">Page ' + escapeHtml(String(pg.page != null ? pg.page : '?')) + '</span>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-family:var(--font-display);color:var(--accent-bright);font-size:13px;">Page ' + escapeHtml(String(pg.page != null ? pg.page : '?')) + '</span>';
     h += '<span style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:' + vc + ';">' + escapeHtml(String(pg.verdict || '')) + '</span></div>';
-    if (pg.problem && !/^none$/i.test(String(pg.problem))) h += '<div style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.85);margin-top:3px;font-style:italic;">' + escapeHtml(pg.problem) + '</div>';
-    if (pg.fix) h += '<div style="font-size:12px;color:rgba(var(--on-panel-cream-rgb),0.7);margin-top:3px;">Fix: ' + escapeHtml(pg.fix) + '</div>';
+    if (pg.problem && !/^none$/i.test(String(pg.problem))) h += '<div style="font-size:12px;color:rgba(var(--on-panel-rgb),0.85);margin-top:3px;font-style:italic;">' + escapeHtml(pg.problem) + '</div>';
+    if (pg.fix) h += '<div style="font-size:12px;color:rgba(var(--on-panel-rgb),0.7);margin-top:3px;">Fix: ' + escapeHtml(pg.fix) + '</div>';
     var panels = pg.panels || [];
     if (panels.length) {
       h += '<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">';
       panels.forEach(function (pn) {
         var tag = (pn.label ? escapeHtml(String(pn.label)) : 'panel') + ': e' + escapeHtml(String(pn.emphasis)) + '/' + escapeHtml(String(pn.size_hint || 'keep')) + (pn.flow === true ? ' +flow' : '');
-        h += '<span style="font-size:10px;font-family:monospace;background:var(--surface-ink);border:1px solid rgba(var(--gold-muted-line-rgb),0.5);border-radius:3px;padding:1px 6px;color:var(--label);">' + tag + '</span>';
+        h += '<span style="font-size:10px;font-family:monospace;background:var(--panel);border:1px solid rgba(var(--gold-muted-line-rgb),0.5);border-radius:3px;padding:1px 6px;color:var(--label);">' + tag + '</span>';
       });
       h += '</div>';
     }
@@ -35876,7 +35876,7 @@ function openAssetSuggestModal(data) {
   overlay.id = 'asset-suggest-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
   var box = document.createElement('div');
-  box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px 22px 18px;color:var(--on-panel);';
+  box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:22px 22px 18px;color:var(--on-panel);';
   var h = '';
   h += '<div style="font-family:\'Cinzel\',serif;color:var(--accent);font-size:17px;margin-bottom:8px;">Keep these consistent?</div>';
   h += '<div style="font-size:14px;line-height:1.5;margin-bottom:14px;color:rgba(var(--on-panel-rgb),0.85);">Campaignia found these in more than one panel. Making each one an asset gives it a reference picture, so it looks the same every time it appears. You can change any description before you choose.</div>';
@@ -36459,7 +36459,7 @@ function cropMount(host, o) {
   var s = Math.min((maxW - 20) / o.W, maxH / o.H, 1);
   var dw = Math.round(o.W * s), dh = Math.round(o.H * s);
   var Hd = function (pos, cur, css) {
-    return '<div class="crop-handle" data-h="' + pos + '" style="position:absolute;' + css + 'width:16px;height:16px;margin:-8px;background:var(--label-fill);border:2px solid var(--surface-ink);border-radius:3px;cursor:' + cur + ';touch-action:none;"></div>';
+    return '<div class="crop-handle" data-h="' + pos + '" style="position:absolute;' + css + 'width:16px;height:16px;margin:-8px;background:var(--label-fill);border:2px solid var(--panel);border-radius:3px;cursor:' + cur + ';touch-action:none;"></div>';
   };
   // A 10px margin round the picture inside the clip, so the handles stay whole at the picture's edge.
   host.innerHTML =
@@ -36656,7 +36656,7 @@ function _cvShow(W, H) {
       '<div id="cv-stage"></div>' +
       '<div id="cv-msg"></div>' +
       // v3.1.20 -- the buttons stay pinned to the bottom of the window if it still has to scroll.
-      '<div id="cv-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;position:sticky;bottom:0;z-index:2;background:var(--surface-ink);padding:10px 0 2px;">' +
+      '<div id="cv-actions" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px;position:sticky;bottom:0;z-index:2;background:var(--panel);padding:10px 0 2px;">' +
         '<button class="btn" onclick="_cvBack()">Back to the Archive</button>' +
         '<button class="btn btn-primary" id="cv-use" onclick="_cvUse()">Use this framing</button>' +
       '</div>' +
@@ -37113,7 +37113,7 @@ function _ciMoreOpen(pill) {
   _ciMoreClose(); if (same) return;
   var uses = []; try { uses = JSON.parse(pill.getAttribute('data-uses') || '[]') || []; } catch (e) { uses = []; }
   var p = document.createElement('div'); p.id = 'ci-more-pop'; p._pill = pill;
-  p.style.cssText = 'position:fixed;z-index:100010;max-width:260px;max-height:50vh;overflow-y:auto;background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.45);' +
+  p.style.cssText = 'position:fixed;z-index:100010;max-width:260px;max-height:50vh;overflow-y:auto;background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.45);' +
     'border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.55);padding:8px 10px;font-size:12px;line-height:1.45;color:rgba(var(--on-panel-rgb),0.9);';
   p.innerHTML = '<div style="color:var(--label);font-weight:600;margin-bottom:4px;">Used by these versions</div>' + uses.map(function (u) { return '<div>' + escapeHtml(u) + '</div>'; }).join('');
   document.body.appendChild(p);
@@ -37223,7 +37223,7 @@ function _narratorPanelEnsure() {
       '<button type="button" class="info-tip" id="narrator-info" aria-controls="narrator-note" aria-expanded="false" aria-label="About In first person" onclick="_infoTipToggle(this, event)">i</button>' +
     '</div>' +
     '<div id="narrator-pick" style="display:none;margin-top:6px;">' +
-      '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:var(--surface-ink);color:var(--on-panel);border:1px solid rgba(var(--accent-rgb),0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
+      '<select id="narrator-select" autocomplete="off" title="' + escapeHtml(NARRATOR_TIP) + '" onchange="_narratorChoose(this.value)" style="width:100%;max-width:340px;background:var(--panel);color:var(--on-panel);border:1px solid rgba(var(--accent-rgb),0.5);border-radius:6px;padding:5px 8px;font-size:13px;"></select>' +
       '<div id="narrator-need" style="display:none;font-size:11px;color:var(--amber-note);margin-top:4px;">Choose who is telling the story \u2014 or close, and it will be Nobody in particular.</div>' +
       '<div id="narrator-povwarn" style="display:none;font-size:11px;color:var(--amber-note);margin-top:4px;line-height:1.4;">Your Story Instructions mention point of view. In first person wins: the story is told as \u201cI\u201d, and the rest of your instructions are still followed.</div>' +   // v3.1.36
     '</div>' +
@@ -37423,8 +37423,8 @@ function _infoTipCss() {
   var st = document.createElement('style');
   st.id = 'info-tip-css';
   st.textContent = '.info-tip{flex:none;font:italic 11px/1 Georgia,serif;color:var(--gold-dim,var(--gold-faint));background:transparent;border:1px solid rgba(var(--accent-rgb),0.55);border-radius:50%;width:16px;height:16px;padding:0;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}' +
-    '.info-tip:hover,.info-tip[aria-expanded="true"]{color:var(--on-panel);border-color:var(--gold,var(--accent));}' +
-    '.info-tip-pop{font-size:11px;color:var(--soft-line-text);background:var(--surface-ink);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}' +
+    '.info-tip:hover,.info-tip[aria-expanded="true"]{color:var(--on-panel);border-color:var(--accent-bright,var(--accent));}' +
+    '.info-tip-pop{font-size:11px;color:var(--soft-line-text);background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:6px;padding:6px 8px;margin:5px 0 0;line-height:1.45;max-width:340px;}' +
     // v3.1.29 -- the plain modals are LIGHT (white --surface); only the pickers (.archive-picker) are
     // dark. Explicit colours for each, never inherit (the 3.1.17 lesson: inherit gave dark on dark).
     '.modal:not(.archive-picker) .info-tip{color:var(--gold-muted);border-color:rgba(var(--gold-muted-line-rgb),0.6);}' +
@@ -37705,7 +37705,7 @@ function _vpickCss() {
     '.vpick-trigger .vpick-label{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;}' +
     '.vpick-trigger .vpick-caret{flex:0 0 auto;opacity:0.7;font-size:10px;}' +
     '.vpick-trigger .vpick-pin{flex:0 0 auto;display:inline-flex;color:var(--accent);}' +
-    '.vpick-list{position:fixed;z-index:10050;background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.5);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);padding:4px 0;overflow-y:auto;color:var(--on-panel);font-size:13px;box-sizing:border-box;}' +
+    '.vpick-list{position:fixed;z-index:10050;background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.5);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.6);padding:4px 0;overflow-y:auto;color:var(--on-panel);font-size:13px;box-sizing:border-box;}' +
     '.vpick-row{display:flex;align-items:center;gap:6px;padding:0 4px 0 12px;min-height:38px;}' +
     '.vpick-row:hover,.vpick-row.is-cur{background:rgba(var(--accent-rgb),0.12);}' +
     '.vpick-choose{flex:1 1 auto;min-width:0;background:none;border:none;color:inherit;text-align:left;font:inherit;padding:9px 0;cursor:pointer;white-space:normal;overflow-wrap:anywhere;line-height:1.35;}' +
@@ -37951,7 +37951,7 @@ function _promoteDialog(info) {
     var box = document.createElement('div');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
-    box.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:var(--on-panel);font-size:14px;line-height:1.55;';
+    box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:520px;width:100%;padding:22px 22px 18px;max-height:88vh;overflow-y:auto;box-sizing:border-box;color:var(--on-panel);font-size:14px;line-height:1.55;';
     var bullets = [
       // v3.1.41 -- no promise that members read all of it: only its Ready sessions (Ian chose a louder warning).
       'Members read \u201c' + vName + '\u201d as the book from now on \u2014 the sessions in it set to Ready \u2014 and new sessions start in its art style and narrative style.',
@@ -38778,10 +38778,10 @@ function _pubAsCard(o) {
   // o: { cover, title, subtitle, meta, id, chosen, clickable }
   // v3.2.92 -- TD-1024. Ian: "We don't need two pictures for every story... just the cover image... make the panels
   // a little bigger and more vertical". The cover on top at the cover's own shape (7.1 : 9.6), the words under it.
-  var bd = o.chosen ? '2px solid var(--gold)' : '1px solid rgba(var(--accent-rgb),0.25)';
+  var bd = o.chosen ? '2px solid var(--accent-bright)' : '1px solid rgba(var(--accent-rgb),0.25)';
   var inner = _pubAsCover(o.cover) +
     '<span style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
-      '<span style="font-family:var(--font-display);color:var(--gold);font-size:15px;line-height:1.25;">' + _pubAsEsc(o.title) + '</span>' +
+      '<span style="font-family:var(--font-display);color:var(--accent-bright);font-size:15px;line-height:1.25;">' + _pubAsEsc(o.title) + '</span>' +
       (o.subtitle ? '<span style="font-style:italic;color:rgba(var(--on-panel-rgb),0.9);font-size:13px;line-height:1.3;">' + _pubAsEsc(o.subtitle) + '</span>' : '') +
       (o.meta ? '<span style="font-size:11px;color:rgba(var(--accent-rgb),0.8);margin-top:2px;line-height:1.35;">' + _pubAsEsc(o.meta) + '</span>' : '') +
     '</span>';
@@ -38791,7 +38791,7 @@ function _pubAsCard(o) {
 }
 function _pubAsCover(url, plus) {
   var st = 'display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:71 / 96;border-radius:5px;background:rgba(var(--hover-fill-rgb),0.9) center/cover no-repeat;color:rgba(var(--accent-rgb),0.55);font-size:40px;';
-  st += plus ? 'border:1px dashed rgba(var(--accent-rgb),0.5);color:var(--gold);' : 'border:1px solid rgba(var(--accent-rgb),0.3);';
+  st += plus ? 'border:1px dashed rgba(var(--accent-rgb),0.5);color:var(--accent-bright);' : 'border:1px solid rgba(var(--accent-rgb),0.3);';
   if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
   return '<span style=\'' + st + '\'>' + (plus ? '+' : (url ? '' : '&#128214;')) + '</span>';
 }
@@ -38825,9 +38825,9 @@ function openPublishAsPicker() {
   var html = '<div style="' + cols + '">' +
       '<div style="display:flex;flex-direction:column;">' + lab('Your book') + _pubAsCard(mine) + '</div>' +
       '<div style="display:flex;flex-direction:column;">' + lab('Publish it as') +
-        '<button type="button" class="pubas-card" data-id="" style=\'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + (cur ? '1px solid rgba(var(--accent-rgb),0.25)' : '2px solid var(--gold)') + ';background:rgba(var(--panel-rgb),0.7);cursor:pointer;font-family:inherit;box-sizing:border-box;\'>' +
+        '<button type="button" class="pubas-card" data-id="" style=\'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + (cur ? '1px solid rgba(var(--accent-rgb),0.25)' : '2px solid var(--accent-bright)') + ';background:rgba(var(--panel-rgb),0.7);cursor:pointer;font-family:inherit;box-sizing:border-box;\'>' +
           _pubAsCover('', true) +
-          '<span style="display:flex;flex-direction:column;gap:3px;"><span style="font-family:var(--font-display);color:var(--gold);font-size:15px;">A new story</span><span style="font-size:12px;color:rgba(var(--on-panel-rgb),0.85);line-height:1.35;">A new entry in the Library, with its own link.</span></span>' +
+          '<span style="display:flex;flex-direction:column;gap:3px;"><span style="font-family:var(--font-display);color:var(--accent-bright);font-size:15px;">A new story</span><span style="font-size:12px;color:rgba(var(--on-panel-rgb),0.85);line-height:1.35;">A new entry in the Library, with its own link.</span></span>' +
         '</button></div>' +
     '</div>' +
     (list.length ? lab('<span style="display:block;margin-top:16px;">Or replace a story already published</span>') +
@@ -39163,7 +39163,7 @@ function ibCss() {
     '.ib-make{display:grid;grid-template-columns:minmax(300px,460px) minmax(0,1fr);gap:20px;align-items:start;}' +
     '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
-    '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--gold);letter-spacing:0.04em;margin-bottom:6px;}' +
+    '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--accent-bright);letter-spacing:0.04em;margin-bottom:6px;}' +
     '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:var(--error-light);margin-left:6px;letter-spacing:0;font-weight:400;}' +
     '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;color:var(--on-panel);padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:var(--change-pending-line);}' +
@@ -39203,7 +39203,7 @@ function ibCss() {
     // v3.3.92 -- the handout's writing being placed
     '.ib-ho-box{position:absolute;z-index:4;cursor:move;touch-action:none;outline:2px dashed rgba(var(--accent-rgb),0.95);background:rgba(var(--light-panel-rgb),0.12);}' +
     '.ib-ho-box canvas{width:100%;height:100%;display:block;pointer-events:none;}' +
-    '.ib-ho-chip{display:inline-block;padding:6px 10px;border:1px dashed rgba(var(--accent-rgb),0.8);border-radius:8px;cursor:grab;font-size:13px;color:var(--gold-light);user-select:none;}' +
+    '.ib-ho-chip{display:inline-block;padding:6px 10px;border:1px dashed rgba(var(--accent-rgb),0.8);border-radius:8px;cursor:grab;font-size:13px;color:var(--accent-pale);user-select:none;}' +
     '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
     '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
     '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}' +
@@ -39944,7 +39944,7 @@ function ibTypeNoteHtml() {
   return (IB.type === 'character' && IB.chars.length > 1) ? 'A Character Study works best with one character. With ' + IB.chars.length + ', it will do what it can.' : '';
 }
 function ibTypeEditHtml() {
-  var note = '<div class="ib-meta" id="ib-type-note" style="margin-top:6px;color:var(--gold-light);">' + ibTypeNoteHtml() + '</div>';
+  var note = '<div class="ib-meta" id="ib-type-note" style="margin-top:6px;color:var(--accent-pale);">' + ibTypeNoteHtml() + '</div>';
   if (!IB.type || !ibTypeDefault(IB.type)) return note;
   return note + '<div style="margin-top:6px;"><button type="button" class="panel-pill" style="opacity:1;font-size:12px;padding:4px 10px;" onclick="ibTypeEditToggle()">' + (IB.typeEditOpen ? 'Hide Prompt' : 'Edit Prompt') + '</button></div>' +
     '<div id="ib-type-edit"' + (IB.typeEditOpen ? '' : ' style="display:none;"') + '>' +
@@ -40027,7 +40027,7 @@ function ibViewerHtml() {
     '</div>' +
     '<div class="ib-zoom" title="Zoom the picture">' +
       '<button class="btn btn-sm" onclick="ibZoomStep(-0.1)" title="Zoom out">&minus;</button>' +
-      '<span id="ib-zoom-label" style="font-size:11px;color:var(--gold);min-width:38px;text-align:center;">' + (IB.zoom ? Math.round(IB.zoom * 100) + '%' : 'Fit') + '</span>' +
+      '<span id="ib-zoom-label" style="font-size:11px;color:var(--accent-bright);min-width:38px;text-align:center;">' + (IB.zoom ? Math.round(IB.zoom * 100) + '%' : 'Fit') + '</span>' +
       '<button class="btn btn-sm" onclick="ibZoomStep(0.1)" title="Zoom in">+</button>' +
       '<button class="btn btn-sm" onclick="ibZoomFit()" title="Fit the picture to the pane">Fit</button>' +
     '</div></div>' +
@@ -40083,7 +40083,7 @@ function ibViewerHtml() {
       '<b style="font-size:16px;">' + escapeHtml(im.name || 'Untitled') + '</b>' +
       '<div class="ib-meta">' + escapeHtml(ibBits(im)) + ' \u00b7 By ' + escapeHtml(mine ? 'you' : (im.maker || 'a member')) + '</div>' +
       (mine && im.last_error ? '<div class="ib-err">The last Regen did not work: ' + escapeHtml(im.last_error) + '</div>' : '') +
-      (ibHoWaiting(im, mine, busy) ? '<div class="ib-meta" style="color:var(--gold-light);">Next: drag your writing onto the picture (in the Image type panel), size it with the yellow corner square, then press Apply writing here.</div>' : '') +   // v3.4.01
+      (ibHoWaiting(im, mine, busy) ? '<div class="ib-meta" style="color:var(--accent-pale);">Next: drag your writing onto the picture (in the Image type panel), size it with the yellow corner square, then press Apply writing here.</div>' : '') +   // v3.4.01
       '<div id="ib-act-msg" class="ib-err"></div>' +
     '</div>';
 }
@@ -40546,7 +40546,7 @@ function ibPickMark(btn, on, full) {
 function ibPickTile(kind, it, btn) {
   btn.style.position = 'relative'; btn.setAttribute('data-id', String(it.id));
   var ok = document.createElement('span'); ok.className = 'ib-pick-ok'; ok.textContent = '\u2713';
-  ok.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:var(--label-fill);color:var(--window-bg);font-weight:700;font-size:14px;align-items:center;justify-content:center;display:none;';
+  ok.style.cssText = 'position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:var(--label-fill);color:var(--panel);font-weight:700;font-size:14px;align-items:center;justify-content:center;display:none;';
   btn.appendChild(ok);
   btn.addEventListener('click', function () { ibPickToggle(kind, it); });
   ibPickMark(btn, ibPickHas(kind, it.id), ibPickList(kind).length >= ibRefRoom());
@@ -40911,7 +40911,7 @@ function _pmAsk(title, lines, okText, danger, offerQuiet) {
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
     var bx = document.createElement('div');
-    bx.style.cssText = 'background:var(--window-bg);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
+    bx.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:480px;width:100%;padding:22px 22px 18px;';
     var h = document.createElement('div'); h.textContent = title; h.style.cssText = "font-family:'Cinzel',serif;color:var(--accent);font-size:16px;margin-bottom:10px;";
     var ul = document.createElement('ul'); ul.style.cssText = 'color:var(--on-panel);font-size:14px;line-height:1.5;margin:0 0 14px;padding-left:20px;';
     lines.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; li.style.marginBottom = '4px'; ul.appendChild(li); });
