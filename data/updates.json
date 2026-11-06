@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.68",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3468-story-brand-by-host",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/story picks its look by web address: brand 2 on chroniclemygame.com (staging), Campaignia's on campaignia.com.",
+        "detail": "So the brand work can be promoted without showing the new look in production (Ian, 2026-11-06). /story links Campaignia's theme sheet; on chroniclemygame.com (staging) it also writes in brand 2's sheet, which overrides every name, and sets the light toolbar color. On campaignia.com and any other address /story looks as it did before v3.4.63. brand2.css and the brand 2 font files ship but are used only on chroniclemygame.com. Temporary: the server-side brand switch replaces this.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.67",
     "staged_on": "2026-11-06",
     "entries": [
