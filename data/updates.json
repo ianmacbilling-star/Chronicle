@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.4.52",
+    "staged_on": "2026-11-05",
+    "entries": [
+      {
+        "id": "3452-stats-user-grid",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Dashboard Stats user list: columns reordered and renamed, and a Refresh button.",
+        "detail": "Days, Name, Email, Last Action DT, Last Action, Tier, Pass, Expires, Status, then any other column the view has. Refresh reloads the list.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.4.51",
     "staged_on": "2026-11-05",
     "entries": [

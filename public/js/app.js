@@ -24483,7 +24483,9 @@ function renderStats(d) {
   box.innerHTML = '<div id="stats-split" style="display:flex;gap:' + (_stWide ? '0' : '28px') + ';flex-wrap:' + (_stWide ? 'nowrap' : 'wrap') + ';align-items:' + (_stWide ? 'stretch' : 'flex-start') + ';">' +
     '<div id="stats-left" style="flex:0 ' + (_stWide ? '0 ' + _statsSplitBasis() : '1 520px') + ';min-width:240px;">' + html + '</div>' +
     (_stWide ? '<div id="stats-splitter" onmousedown="statsSplitStart(event)" title="Drag to resize" style="flex:0 0 14px;align-self:stretch;cursor:col-resize;display:flex;align-items:center;justify-content:center;margin:0 7px;"><div style="width:3px;height:60px;background:rgba(216,184,92,0.5);border-radius:2px;"></div></div>' : '') +
-    '<div style="flex:1 1 520px;min-width:0;"><div class="stats-subhead" style="margin-top:0;">Users \u00b7 last active <span id="stats-lastactive-count" style="font-weight:400;opacity:0.75;"></span></div>' +
+    '<div style="flex:1 1 520px;min-width:0;"><div class="stats-subhead" style="margin-top:0;">Users \u00b7 last active <span id="stats-lastactive-count" style="font-weight:400;opacity:0.75;"></span>' +
+      // v3.4.52 -- Ian: a small refresh button over the user grid (reloads the list only)
+      ' <button type="button" class="btn btn-xs" id="stats-lastactive-refresh" onclick="loadUserLastActive()" title="Reload the user list" style="margin-left:8px;">&#8635; Refresh</button></div>' +
     // v3.2.61 -- Ian: the rows came out black on dark brown. The box now sets its own dark background, light text
     // and dark scrollbars instead of inheriting the pane's.
     '<div id="stats-lastactive" style="overflow:auto;max-height:70vh;border:1px solid rgba(201,168,76,0.2);border-radius:6px;background:rgba(18,12,6,0.94);color:#f0e8d0;color-scheme:dark;font-size:12px;">Loading\u2026</div></div>' +
@@ -24509,16 +24511,30 @@ function renderUserLastActive(d) {
   if (!d || d.error) { out.textContent = (d && d.error) || 'Could not load the user list.'; return; }
   if (d.missing) { out.textContent = 'The view vuuserlastactive is not in this database yet.'; return; }
   var rows = d.rows || [], cols = d.columns || [];
+  var _ord = _ulaOrder(cols);   // v3.4.52 -- Ian's order and names
   if (cnt) cnt.textContent = '(' + rows.length + (d.capped ? '+' : '') + ')';
   if (!rows.length) { out.textContent = 'No rows.'; return; }
   var th = 'position:sticky;top:0;background:#1a120a;text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(201,168,76,0.85);white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.25);';
   var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(201,168,76,0.12);color:#f0e8d0;';   // v3.2.61 -- light text
   var h = '<table style="border-collapse:collapse;width:100%;"><thead><tr>' +
-    cols.map(function (c) { return '<th style="' + th + '">' + _ulaCell(c) + '</th>'; }).join('') + '</tr></thead><tbody>';
-  rows.forEach(function (r) { h += '<tr>' + cols.map(function (c) { return '<td style="' + td + '">' + _ulaCell(r[c]) + '</td>'; }).join('') + '</tr>'; });
+    _ord.map(function (o) { return '<th style="' + th + '">' + _ulaCell(o.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  rows.forEach(function (r) { h += '<tr>' + _ord.map(function (o) { return '<td style="' + td + '">' + _ulaCell(r[o.col]) + '</td>'; }).join('') + '</tr>'; });
   out.innerHTML = h + '</tbody></table>';
 }
+// v3.4.52 -- (Ian, 2026-11-05) the user grid's columns in this order, under these names. The view's own names are matched
+// whatever their case; a view column not listed here still shows, after these, under its own name; a listed one the view
+// does not have is skipped.
+var ULA_ORDER = [['days_since_activity', 'Days'], ['name', 'Name'], ['email', 'Email'], ['last_action_est', 'Last Action DT'],
+  ['last_action', 'Last Action'], ['tier', 'Tier'], ['pass', 'Pass'], ['pass_ends', 'Expires'], ['status', 'Status']];
+function _ulaOrder(cols) {
+  var byLower = {}, used = {}, out = [];
+  (cols || []).forEach(function (c) { byLower[String(c).toLowerCase()] = c; });
+  ULA_ORDER.forEach(function (p) { var c = byLower[p[0]]; if (c !== undefined && !used[c]) { used[c] = true; out.push({ col: c, label: p[1] }); } });
+  (cols || []).forEach(function (c) { if (!used[c]) { used[c] = true; out.push({ col: c, label: c }); } });
+  return out;
+}
 function loadUserLastActive() {
+  var _o = document.getElementById('stats-lastactive'); if (_o) _o.textContent = 'Loading\u2026';   // v3.4.52 -- Refresh shows it is working
   fetch('/api/admin/user-last-active')
     .then(function (r) { return r.json(); })
     .then(renderUserLastActive)
