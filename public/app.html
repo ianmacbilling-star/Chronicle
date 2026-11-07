@@ -1933,6 +1933,14 @@
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button type="button" class="btn btn-primary btn-sm" onclick="if (window.Mkt) Mkt.openReview()">Review listings</button><span id="mkt-admin-waiting" style="font-size:12px;opacity:0.8;"></span><span id="mkt-admin-msg" class="mkt-msg"></span></div>
       </div>
 
+      <!-- v3.4.85 -- TD-1105. ADMIN: which brands are on (app_settings.brands_enabled). Shown to admins by app.js. -->
+      <div id="admin-brands-section" class="settings-section" style="display:none;">
+        <div class="settings-section-title">Brands on this site</div>
+        <div class="settings-section-desc">Tick the brands people can use here. With two or more on, everyone picks their own under Brand Theme on My Account. With one on, everyone sees that one. Accounts keep their own pick, so switching a brand back on brings it back for the people who chose it. Takes effect within a minute, no deploy.</div>
+        <div id="admin-brands-list">Loading...</div>
+        <div id="admin-brands-msg" style="font-size:13px;margin-top:6px;"></div>
+      </div>
+
       <!-- ==================== ADMIN TESTING WIDGET ====================
            TEMPORARY: lets admins set their own token balance for testing
            edge cases (out-of-tokens, exactly-enough, etc.). Backed by the

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.85",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3485-brands-switch",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admins choose on the Dashboard which brands are on; with more than one on, people pick theirs on My Account.",
+        "detail": "TD-1105. New Dashboard section Brands on this site, beside The Guild switch: a tick box per brand (Campaignia, Story), saved as app_settings.brands_enabled. Two or more on: the Brand Theme choice appears on My Account and each person picks, and an account on Story gets its look, words, emails and help wording. One on: the choice goes away and everyone sees that brand. Accounts keep their own pick underneath. At least one stays on. Not set: production Campaignia only, staging every brand, as before. The staging ?brand= switch still shows any brand. Replaces the live flag as the rule.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.84",
     "staged_on": "2026-11-07",
     "entries": [
