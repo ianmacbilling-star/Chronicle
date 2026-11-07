@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.79",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3479-brand-words-server",
+        "kind": "feature",
+        "public": false,
+        "summary": "Story: emails and the help assistant say story and chapter too.",
+        "detail": "Ian: swap campaign for story and session for chapter in the emails and the Brain; the product stays Campaignia and the logo stays. Emails to an account whose home brand is Story get the words swapped in the subject and the email's own wording (never inside links, tags or styles), while names people typed (campaign and character names, book titles, gift messages) are kept as written; reports to support and Guild messages are sent unchanged. The help assistant is told the person's brand words on each question (from the brand on screen). Production does nothing while only Campaignia is live.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.78",
     "staged_on": "2026-11-06",
     "entries": [

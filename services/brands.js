@@ -96,6 +96,75 @@ function choicesFor(req, userBrand) {
 }
 function canChoose(req, key) { return allowed(key, isProdHost(req.hostname)); }
 
+// v3.4.79 -- TD-1105. BRAND WORDS ON THE SERVER: emails and the help assistant (Ian, 2026-11-06: "Just swap...
+// Campaign for Story and Session for Chapter in the emails and in the brain"). The product is still called
+// Campaignia on every brand, and the logo stays. The same lists as public/js/brand-words.js (the page's swap).
+const WORDS = {
+  brand2: [['campaign', 'campaigns', 'story', 'stories'], ['session', 'sessions', 'chapter', 'chapters']]
+};
+function wordsOn(key) { return (isKnown(key) && Object.prototype.hasOwnProperty.call(WORDS, key) && WORDS[key].length) ? WORDS[key] : null; }
+// People's own words (a campaign's name, a book title, a gift message) are wrapped by keep() where an email puts
+// them in; the swap skips what is between the markers, and sendEmail strips every marker on every brand.
+const KEEP_OPEN = '\u0001', KEEP_CLOSE = '\u0002';
+function keep(v) { return (v == null || v === '') ? v : KEEP_OPEN + String(v) + KEEP_CLOSE; }
+function stripKeep(s) { return (s == null) ? s : String(s).replace(/[\u0001\u0002]/g, ''); }
+function swapPlain(key, s) {
+  var list = wordsOn(key); if (!list || !s) return s;
+  var map = {}, keys = [];
+  list.forEach(function (w) { map[w[0]] = w[2]; map[w[1]] = w[3]; keys.push(w[1], w[0]); });
+  // Whole words only, and never inside a web address or a file path (/sessions/12, campaign-url, .session).
+  var rx = new RegExp('(?<![\\w/.?&=#-])(' + keys.join('|') + ')(?![\\w/=-])', 'gi');
+  // A web address written out as text (https://... or www....) is left exactly as it is.
+  return String(s).split(/((?:https?:\/\/|www\.)\S+)/i).map(function (part, i) {
+    if (i % 2 === 1) return part;
+    return part.replace(rx, function (hit) {
+      var to = map[hit.toLowerCase()];
+      if (hit === hit.toUpperCase()) return to.toUpperCase();
+      if (hit.charAt(0) === hit.charAt(0).toUpperCase()) return to.charAt(0).toUpperCase() + to.slice(1);
+      return to;
+    });
+  }).join('');
+}
+// A subject line or other plain text: swap everything outside the kept parts.
+function swapText(key, s) {
+  if (s == null || !wordsOn(key)) return s;
+  return String(s).split(/(\u0001[\s\S]*?\u0002)/).map(function (part) { return part.charAt(0) === KEEP_OPEN ? part : swapPlain(key, part); }).join('');
+}
+// An email's HTML: only the words between tags; never a tag (links, class names), a <style> block, or a kept part.
+function swapHtml(key, html) {
+  if (html == null || !wordsOn(key)) return html;
+  return String(html).split(/(<style[\s\S]*?<\/style>|<head[\s\S]*?<\/head>|<[^>]*>|\u0001[\s\S]*?\u0002)/i).map(function (part) {
+    if (!part || part.charAt(0) === '<' || part.charAt(0) === KEEP_OPEN) return part;
+    return swapPlain(key, part);
+  }).join('');
+}
+// Which brand's words an email to this address gets: the account's home brand, if that brand has words and is
+// allowed where this server runs. Production with only Campaignia live: no database read at all.
+function appHost() { try { return new URL(process.env.APP_URL || 'https://campaignia.com').hostname; } catch (e) { return 'campaignia.com'; } }
+async function emailBrand(getDb, to) {
+  if (typeof to !== 'string' || !to.trim() || to.indexOf(',') !== -1) return null;
+  var prod = isProdHost(appHost());
+  if (prod && !anyOtherLive()) return null;
+  var db = await getDb();
+  var u = await db.prepare('SELECT home_brand FROM users WHERE LOWER(email) = LOWER(?)').get(to.trim());
+  var k = u && u.home_brand;
+  return (allowed(k, prod) && wordsOn(k)) ? k : null;
+}
+// The help assistant: the brand the person is looking at right now (the page's cmp_brand cookie, checked
+// against this host), so its answers match the screen. Returns the instruction line, or '' for Campaignia.
+function helpWordsLine(req) {
+  var host = req && req.hostname; var prod = isProdHost(host);
+  if (prod && !anyOtherLive()) return '';
+  var k = readCookie(req, COOKIE_BRAND);
+  var list = (allowed(k, prod) && wordsOn(k)) ? WORDS[k] : null;
+  if (!list) return '';
+  var pairs = list.map(function (w) { return 'a ' + w[0] + ' is called a ' + w[2] + ' (' + w[1] + ' are ' + w[3] + ')'; }).join(', and ');
+  return 'BRAND WORDS: this person uses Campaignia with some words changed on every screen: ' + pairs + '. ' +
+    'Use those words in every reply, for things and for screen and button names alike (so "+ New story", "My Stories", "+ New chapter"), ' +
+    'even where the Brain says the other word. Buttons that already say Story, such as Generate Story, keep their names. ' +
+    'The product is still called Campaignia; never call it anything else.';
+}
+
 function isPagePath(path) {
   var p = String(path || '');
   if (/^\/(api|css|js|images|fonts|uploads)\//i.test(p)) return false;
@@ -151,4 +220,5 @@ function middleware(getDb) {
   };
 }
 
-module.exports = { BRANDS: BRANDS, DEFAULT_BRAND: DEFAULT_BRAND, isKnown: isKnown, isProdHost: isProdHost, pick: pick, forSignup: forSignup, isPagePath: isPagePath, landingBrand: landingBrand, middleware: middleware, choicesFor: choicesFor, canChoose: canChoose };
+module.exports = { BRANDS: BRANDS, DEFAULT_BRAND: DEFAULT_BRAND, isKnown: isKnown, isProdHost: isProdHost, pick: pick, forSignup: forSignup, isPagePath: isPagePath, landingBrand: landingBrand, middleware: middleware, choicesFor: choicesFor, canChoose: canChoose,
+  WORDS: WORDS, wordsOn: wordsOn, keep: keep, stripKeep: stripKeep, swapText: swapText, swapHtml: swapHtml, emailBrand: emailBrand, helpWordsLine: helpWordsLine };
