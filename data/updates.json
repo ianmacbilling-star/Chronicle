@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.96",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3496-video-version",
+        "kind": "fix",
+        "public": false,
+        "summary": "Picking another version while the Video tab is open now shows that version's cuts.",
+        "detail": "TD-090. Ian: switching versions did not load the cuts on the Video tab. onForkChange now reopens the tab when it is the one showing, and a draft typed a moment before is saved first.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.95",
     "staged_on": "2026-11-07",
     "entries": [

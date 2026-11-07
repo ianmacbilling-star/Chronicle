@@ -22994,6 +22994,9 @@ function onForkChange(forkId) {
   // art/narrative with any session-specific value.
   mpLoadAndApply('session', function(){ reloadSessionForFork(); });
   if (typeof loadCampaignLayoutOpts === 'function') loadCampaignLayoutOpts('session');   // unified layout follows the viewed fork
+  // v3.4.96 -- THE VIDEO TAB FOLLOWS THE VERSION (Ian: "switching versions doesn't really load the cuts... if you are on the video
+  // tab"). Its cuts belong to one version, so picking another while it is showing loads that version's cuts.
+  if (typeof _activeSessionTab === 'function' && _activeSessionTab() === 'videolab' && typeof vlOpen === 'function') vlOpen();
 }
 
 function updateNotesBox(data) {
@@ -41808,7 +41811,7 @@ function vlOpen() {
   var sid = state.currentSession && state.currentSession.id;
   var f = vlFork();
   var fid = f ? f.fork_id : null;
-  if (String(VL.sid) !== String(sid) || String(VL.fid) !== String(fid)) { VL.sid = sid; VL.fid = fid; VL.cuts = []; VL.openId = null; VL.draft = null; }
+  if (String(VL.sid) !== String(sid) || String(VL.fid) !== String(fid)) { vlFlushSave(); VL.sid = sid; VL.fid = fid; VL.cuts = []; VL.openId = null; VL.draft = null; }   // v3.4.96: words typed a moment ago are saved first
   if (!sid || !fid) { host.innerHTML = '<div class="empty-state"><h3>Video</h3><p>Loading the versions of this session...</p></div>'; setTimeout(function () { if (vlFork()) vlOpen(); }, 800); return; }
   host.innerHTML =
     '<div class="storyboard-header" style="flex-wrap:wrap;gap:10px;">' +
