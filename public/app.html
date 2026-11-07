@@ -55,8 +55,8 @@
     <button id="imp-banner-stay" type="button" onclick="impersonateStay()" style="display:none;background:var(--light-panel);color:var(--support-banner-text);border:none;border-radius:4px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Stay</button>
     <span style="flex:1 1 auto;"></span>
     <input id="imp-banner-tokens" type="number" min="1" step="1" value="25" title="Tokens to add to this account"
-           style="width:78px;padding:4px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.5);background:rgba(0,0,0,0.2);color:#fff;font-size:12px;" />
-    <button type="button" onclick="impersonateGrantTokens()" style="background:rgba(0,0,0,0.25);color:#fff;border:1px solid rgba(255,255,255,0.55);border-radius:4px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;">Add tokens</button>
+           style="width:78px;padding:4px 6px;border-radius:4px;border:1px solid rgba(255,255,255,0.5);background:rgba(var(--glass-rgb),0.2);color:#fff;font-size:12px;" />
+    <button type="button" onclick="impersonateGrantTokens()" style="background:rgba(var(--glass-rgb),0.25);color:#fff;border:1px solid rgba(255,255,255,0.55);border-radius:4px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;">Add tokens</button>
     <button type="button" onclick="impersonateStop()" style="background:#fff;color:var(--support-banner-text);border:none;border-radius:4px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Exit</button>
   </div>
   <div id="imp-banner-msg" style="max-width:1200px;margin:6px auto 0;font-size:12px;opacity:0.95;display:none;"></div>
@@ -221,7 +221,7 @@
         .cbook-text { position:relative; flex:0 0 auto; margin-top:-60px; padding:60px 16px 16px 22px; z-index:4; display:flex; flex-direction:column; gap:4px;
           background:linear-gradient(to bottom, rgba(var(--shelf-shadow-rgb),0) 0, rgba(var(--shelf-shadow-rgb),0.8) 48px, rgba(var(--shelf-shadow-rgb),0.96) 78px, #0c0703 100%); }   /* v3.2.08 -- in the column, under the picture */
         .camp-books .campaign-book .campaign-card-name { color:var(--foil); font-size:15px; line-height:1.25; margin:0; text-shadow:0 1px 2px rgba(0,0,0,0.9); }
-        .camp-books .campaign-book .campaign-card-desc { color:rgba(var(--on-panel-rgb),0.8); margin:0; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+        .camp-books .campaign-book .campaign-card-desc { color:rgba(var(--on-book-rgb),0.8); margin:0; line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
         .camp-books .campaign-book .campaign-card-meta { color:rgba(var(--foil-rgb),0.6); }
         .camp-books .campaign-book .campaign-card-footer { margin-top:4px; }
         .camp-books .add-campaign-book { aspect-ratio:17/22; min-height:0; border:none; border-radius:3px 6px 6px 3px; position:relative;
@@ -270,11 +270,11 @@
           background:linear-gradient(to bottom, rgba(var(--shelf-shadow-rgb),0) 0, rgba(var(--shelf-shadow-rgb),0.8) 55px, rgba(var(--shelf-shadow-rgb),0.96) 90px, #0c0703 100%); }
         .sess-books .session-card .session-card-title { color:var(--foil); font-size:14px; font-family:var(--font-display); text-shadow:0 1px 2px rgba(0,0,0,0.9); }
         .sess-books .session-card .session-card-date { color:rgba(var(--foil-rgb),0.62); }
-        .sess-books .session-card .session-card-fork, .sess-books .session-card .session-card-include { color:rgba(var(--on-panel-rgb),0.72); }
+        .sess-books .session-card .session-card-fork, .sess-books .session-card .session-card-include { color:rgba(var(--on-book-rgb),0.72); }
         /* v3.1.1 -- Ian: "lighten up the ellipses on the button on the session tile. You can't see the
            '...'". .row-menu-btn is shared app-wide and colours its dots var(--text), which is dark;
            on the dark book it vanished (TD-813). Gold here, on the session books only. */
-        .sess-books .session-card .row-menu-btn { color:var(--foil); border-color:rgba(var(--tooling-rgb),0.5); background:rgba(0,0,0,0.35); font-size:18px; font-weight:700; }
+        .sess-books .session-card .row-menu-btn { color:var(--foil); border-color:rgba(var(--tooling-rgb),0.5); background:rgba(var(--glass-rgb),0.35); font-size:18px; font-weight:700; }
         .sess-books .session-card .row-menu-btn:hover { color:var(--shelf-page); border-color:rgba(var(--tooling-rgb),0.85); background:rgba(var(--accent-rgb),0.18); }
       </style>
     </div>
@@ -2113,7 +2113,7 @@
             <button class="btn btn-sm" onclick="stageSuspendedUser()">Stage as suspended</button>
             <span class="settings-section-desc" style="margin:0;font-size:11px;">(run sweep to purge-warn / tombstone)</span>
           </div>
-          <pre id="lifecycle-test-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
+          <pre id="lifecycle-test-output" style="margin-top:10px;padding:10px;background:rgba(var(--glass-rgb),0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
         </div>
       </div>
 
@@ -2462,7 +2462,7 @@
           <button class="btn btn-sm" id="pass-sweep-live-btn" onclick="runPassSweepLive()" style="background:var(--error);border-color:var(--error);color:#fff;">Send for real</button>
           <span class="settings-section-desc" id="pass-sweep-msg" style="margin:0;"></span>
         </div>
-        <pre id="pass-sweep-output" style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
+        <pre id="pass-sweep-output" style="margin-top:10px;padding:10px;background:rgba(var(--glass-rgb),0.25);border:1px solid var(--border);border-radius:6px;font-size:12px;white-space:pre-wrap;display:none;"></pre>
       </div>
 
       <!-- Email preview / test-send (admin) -->
@@ -3291,7 +3291,7 @@
       <p style="color:var(--text);margin-bottom:14px;" id="invite-modal-step2-status">
         Invite created. Copy this link and send it to your member however you like (Discord, text, email, etc.).
       </p>
-      <div style="background:rgba(0,0,0,0.06);border:1px solid rgba(0,0,0,0.18);border-radius:6px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;color:var(--text);" id="invite-link-display"></div>
+      <div style="background:rgba(var(--glass-rgb),0.06);border:1px solid rgba(0,0,0,0.18);border-radius:6px;padding:10px;font-family:monospace;font-size:12px;word-break:break-all;color:var(--text);" id="invite-link-display"></div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
         Link expires in 7 days. Single use.
       </div>
@@ -3563,7 +3563,7 @@
 .cs-bar{margin-top:6px;}
 .cs-bar .progress-bar{margin-bottom:3px;height:5px;}
 .cs-bar-msg{font-size:11px;color:var(--hint-text);}
-.cs-shot-img{position:relative;aspect-ratio:16/9;background:rgba(0,0,0,0.3);border:1px dashed rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.cs-shot-img{position:relative;aspect-ratio:16/9;background:rgba(var(--glass-rgb),0.3);border:1px dashed rgba(var(--accent-rgb),0.2);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .cs-shot-img img{width:100%;height:100%;object-fit:contain;cursor:zoom-in;}
 .cs-shot-empty{font-size:11px;color:var(--text-muted);}
 .cs-gen{width:100%;margin-top:6px;}

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.73",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3473-glass",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: buttons, chips and the account menu on a light page are light, not grey or brown.",
+        "detail": "Ian on staging: the grey buttons on Review (Edit Image Prompt, Add character and the like) could not be read on Story. They, and every other plain see-through black background in the app (56 of them; the Details button on the dark books keeps its dark glass), now use the theme's --glass-rgb: black on Campaignia, so nothing changes there; white on Story. Shadows and the dark gradients over pictures stay as they were. Also from Ian: the account menu was dark brown with dark text on Story. The solid dark surfaces (app header, account menu, corner menu, selected chips, novel cover and chapter headers) now use a new theme name, --ink-bg: the same dark brown on Campaignia, pale lavender on Story. And the description and fork lines on the dark campaign and session books use a new --on-book-rgb, parchment on every brand, since the books stay dark.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.72",
     "staged_on": "2026-11-06",
     "entries": [

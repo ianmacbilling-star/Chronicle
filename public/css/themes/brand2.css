@@ -208,6 +208,9 @@
   --picture-dim:0;   /* v3.4.71 -- no dark veil: the wash is light (multiplies each page's veil: login, redeem, gift, My Campaigns) */
   --page-title:#2b3152;   /* v3.4.72 -- the big page titles over the picture (My Campaigns and the like); Campaignia's foil gold */
   --page-title-rgb:43,49,82;
+  --glass-rgb:255,255,255;   /* v3.4.73 -- white: on a light page the glass is light (every plain rgba(0,0,0,x) background in style.css, app.html, app.js, marketplace.css; not shadows, not gradients over pictures) */
+  --ink-bg:#eef0fb;   /* v3.4.73 -- pale lavender: on a light page those menus and the header are light, so their periwinkle text reads */
+  --on-book-rgb:240,232,208;   /* v3.4.73 -- parchment text on the dark leather books (campaign and session cards); the books stay dark on every brand */
 }
 :root{
   --ink:#2c1810;

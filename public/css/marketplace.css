@@ -98,7 +98,7 @@ html.mkt-modal-open { overflow: hidden; }
 .mkt-samples { display: flex; flex-wrap: wrap; gap: 8px; }
 .mkt-sample { position: relative; width: 120px; }
 .mkt-sample img { width: 120px; height: 90px; object-fit: cover; border-radius: 3px; display: block; background: #0a0705; }
-.mkt-sx { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(0,0,0,0.75); color: #fff; cursor: pointer; line-height: 20px; font-size: 16px; padding: 0; }
+.mkt-sx { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(var(--glass-rgb),0.75); color: #fff; cursor: pointer; line-height: 20px; font-size: 16px; padding: 0; }
 .mkt-sfirst { display: block; width: 100%; margin-top: 3px; background: none; border: none; color: var(--highlight); font: inherit; font-size: 12px; cursor: pointer; text-align: center; padding: 0; }
 .mkt-sfirst-on { color: rgba(var(--on-panel-rgb),0.55); cursor: default; }
 

@@ -1599,7 +1599,7 @@ function _impShowEnded(ended) {
   var wrap = document.createElement('div');
   wrap.id = 'imp-ended';
   wrap.setAttribute('role', 'alertdialog');
-  wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--glass-rgb),0.6);display:flex;align-items:center;justify-content:center;padding:16px;';
   var box = document.createElement('div');
   box.style.cssText = 'max-width:440px;width:100%;background:var(--panel);color:var(--light-panel-text);border:2px solid var(--support-orange);border-radius:10px;padding:18px 20px;font-family:Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,0.5);';
   var h = document.createElement('div');
@@ -2618,7 +2618,7 @@ function myStoriesPaint() {
         var card = myStoryCard(it);
         card.draggable = true; card.setAttribute('data-ms-story', String(it.id));
         var bar = document.createElement('div');
-        bar.style.cssText = 'display:flex;align-items:center;gap:4px;padding:5px 6px;background:rgba(0,0,0,0.35);cursor:grab;flex-wrap:wrap;';
+        bar.style.cssText = 'display:flex;align-items:center;gap:4px;padding:5px 6px;background:rgba(var(--glass-rgb),0.35);cursor:grab;flex-wrap:wrap;';
         bar.title = 'Drag to change the order';
         bar.appendChild(_msBtn('\u2190', 'Move earlier', function () { myStoriesMoveStory(pen.key, gi, si, si - 1); }, si === 0));
         bar.appendChild(_msBtn('\u2192', 'Move later', function () { myStoriesMoveStory(pen.key, gi, si, si + 1); }, si === g.items.length - 1));
@@ -8061,7 +8061,7 @@ function setCampaignTitleImage(archiveId, cb) {
 
 function showErrorDialog(msg, title) {
   var ov = document.createElement('div');
-  ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--glass-rgb),0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
   var box = document.createElement('div');
   box.style.cssText = 'background:var(--error-dialog-bg);border:1px solid var(--accent-bright,var(--accent));border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
   var h = document.createElement('div');
@@ -35889,7 +35889,7 @@ function openAssetSuggestModal(data) {
         '<span style="flex:1;min-width:0;"><span style="font-weight:600;">' + escapeHtmlReview(it.name) + '</span>' +
         ' <span style="font-size:12px;color:rgba(var(--accent-rgb),0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
         // v3.1.12 -- TD-908. Ian: "allow them to edit the descriptions of the items." What Yes draws from, and what No writes into the panels.
-        '<textarea class="asset-suggest-desc" data-key="' + escapeHtmlReview(it.key) + '" rows="2" maxlength="1200" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;font:inherit;font-size:13px;line-height:1.4;color:var(--on-panel);background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:6px 8px;resize:vertical;">' + escapeHtmlReview(it.description || '') + '</textarea>' +
+        '<textarea class="asset-suggest-desc" data-key="' + escapeHtmlReview(it.key) + '" rows="2" maxlength="1200" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;font:inherit;font-size:13px;line-height:1.4;color:var(--on-panel);background:rgba(var(--glass-rgb),0.35);border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:6px 8px;resize:vertical;">' + escapeHtmlReview(it.description || '') + '</textarea>' +
         '</span><span class="asset-suggest-status" data-key="' + escapeHtmlReview(it.key) + '" style="flex:0 0 auto;align-self:center;"></span></label>';   // v3.1.10 -- spinner, then the picture
     });
     h += '</div>';
@@ -36982,7 +36982,7 @@ function _ciGet(url, cb) {
     .catch(function () { _ciErr('Connection error. Please try again.'); });
 }
 
-var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;background:rgba(0,0,0,0.25);color:var(--on-panel);cursor:pointer;font:inherit;';
+var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;background:rgba(var(--glass-rgb),0.25);color:var(--on-panel);cursor:pointer;font:inherit;';
 
 function _ciCampaigns() {
   _ci.step = 'campaigns';
@@ -39162,11 +39162,11 @@ function ibCss() {
     '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(var(--on-panel-rgb),0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
     '.ib-tab.on{border-bottom-color:var(--accent);color:var(--label);}' +
     '.ib-make{display:grid;grid-template-columns:minmax(300px,460px) minmax(0,1fr);gap:20px;align-items:start;}' +
-    '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:14px;}' +
+    '.ib-card{background:rgba(var(--glass-rgb),0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
     '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--accent-bright);letter-spacing:0.04em;margin-bottom:6px;}' +
     '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:var(--error-light);margin-left:6px;letter-spacing:0;font-weight:400;}' +
-    '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;color:var(--on-panel);padding:8px 10px;font:inherit;font-size:14px;}' +
+    '.ib-in{width:100%;box-sizing:border-box;background:rgba(var(--glass-rgb),0.35);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;color:var(--on-panel);padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:var(--change-pending-line);}' +
     '#ib-style-btn.ib-bad,#ib-shapes.ib-bad{outline:2px solid var(--change-pending-line);outline-offset:2px;border-radius:8px;}' +
     '.ib-acc-title{display:flex;align-items:baseline;gap:8px;min-width:0;overflow:hidden;}' +
@@ -39208,7 +39208,7 @@ function ibCss() {
     '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
     '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
     '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}' +
-    '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:8px;}' +
+    '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(var(--glass-rgb),0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:8px;}' +
     '.ib-pic{position:relative;width:100%;aspect-ratio:4/3;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}' +
     '.ib-pic img{width:100%;height:100%;object-fit:contain;display:block;}' +
     '.ib-meta{font-size:12px;color:rgba(var(--on-panel-rgb),0.7);}' +
@@ -40370,7 +40370,7 @@ function ibEditPrompt(id) {
         '<div class="ib-meta" style="margin-bottom:6px;">What the picture shows. Campaignia adds its house rules, the art style and the reference pictures around these words when it draws.</div>' +
         '<textarea class="ib-in" id="ib-words" rows="10" maxlength="6000">' + escapeHtml(im.words || im.description || '') + '</textarea>' +
         '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:13px;color:var(--label);">The whole prompt last sent</summary>' +
-          '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
+          '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(var(--glass-rgb),0.35);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
         '<div id="ib-words-msg" class="ib-err" style="margin-top:8px;"></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
