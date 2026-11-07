@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.76",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3476-story-faint-labels",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: faint labels across the app (panel style lines, Moment and Bridge headers and the like) are darker.",
+        "detail": "Ian on staging, Story brand: the style line under a panel title (Watercolor, Discovery, Fullpage) and the 6 - MOMENT header were too faint. Every text color written as see-through accent in the app (89 in style.css, 26 in app.html, 28 in app.js) now uses --accent-text-rgb from v3.4.74: the same gold on Campaignia, dark periwinkle on Story, so the faint labels keep their lightness but read. Also from Ian: the Edit prompt / Regen / Retouch / Replace / Lock / Archive buttons over a picture had turned light in v3.4.73 and were hard to read on the dark frame; they are back to dark glass with accent text on every brand.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.75",
     "staged_on": "2026-11-06",
     "entries": [

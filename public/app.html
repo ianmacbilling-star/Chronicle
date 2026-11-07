@@ -376,7 +376,7 @@
           <!-- Version picker: the Story Master can assemble & export any
                player's novel (their versions per session, canonical where none). -->
           <div id="novel-version-row" style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:12px;color:rgba(var(--accent-rgb),0.7);">Version:</span>
+            <span style="font-size:12px;color:rgba(var(--accent-text-rgb),0.7);">Version:</span>
             <select id="novel-version-select" class="form-input" style="max-width:260px;height:30px;width:auto;flex:0 0 auto;font-size:11px;padding:0 10px;" onchange="onNovelVersionChange(this.value)"></select>
           </div>
           <button class="btn btn-sm" id="novel-nav-characters" onclick="showCampaignSection('characters')" title="The campaign's characters (the Canonical ones)">Characters</button><!-- v3.3.33 -->
@@ -424,7 +424,7 @@
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()" style="display:none">Review in a New Tab</button>
           <button class="btn btn-sm" id="prep-trueview-btn" onclick="prepTrueView()" style="display:none;margin-left:auto;" title="Opens the REAL paged PDF in a new tab, straight from the current settings. Skips the Optimize run -- so it is the un-optimised book, which is exactly what you want when you are judging how something RENDERS rather than how it paginates.">True View &mdash; admin only</button>
         </div>
-        <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(var(--accent-rgb),0.08);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius);font-size:11px;color:rgba(var(--accent-rgb),0.6);margin-bottom:10px;">
+        <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(var(--accent-rgb),0.08);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius);font-size:11px;color:rgba(var(--accent-text-rgb),0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.
         </div>
         <div class="progress-wrap" id="novel-preview-progress-wrap" style="display:none;margin-bottom:10px;">
@@ -433,7 +433,7 @@
         </div>
         <div id="novel-preview-frame" style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);overflow:hidden;">
           <div id="novel-preview-loading" style="width:100%;display:flex;align-items:center;justify-content:center;background:rgba(var(--panel-deep-rgb),0.5);">
-            <div style="text-align:center;color:rgba(var(--accent-rgb),0.4);">
+            <div style="text-align:center;color:rgba(var(--accent-text-rgb),0.4);">
               <div style="font-size:32px;margin-bottom:8px;"></div>
               <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
             </div>
@@ -770,7 +770,7 @@
                 <div style="font-size:11px;color:rgba(var(--on-panel-rgb),0.55);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
                   <span style="display:flex;gap:10px;align-items:baseline;min-width:0;">
                     <span id="finalize-after-label">After (optimized)</span>
-                    <span id="finalize-optimized-note" style="display:none;text-transform:none;letter-spacing:0.02em;font-size:11px;color:rgba(var(--accent-rgb),0.85);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+                    <span id="finalize-optimized-note" style="display:none;text-transform:none;letter-spacing:0.02em;font-size:11px;color:rgba(var(--accent-text-rgb),0.85);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
                   </span>
                   <span style="display:flex;gap:8px;align-items:center;flex:0 0 auto;">
                     <span id="finalize-after-zoom" style="display:none;align-items:center;gap:3px;" title="Fit / zoom the optimized book">
@@ -836,7 +836,7 @@
                   <input id="print-order-name" type="text" maxlength="200" placeholder="e.g. Session 1-5, Hardcover gift copy" class="ord-in">
                   <label class="ord-lbl">Version <span class="ord-lbl-dim">(set with the selector at the top of this page)</span></label>
                   <input id="print-version-display" type="text" readonly class="ord-in ord-in-ro">
-                  <div id="print-page-est" style="font-size:11px;color:rgba(var(--accent-rgb),0.6);margin-bottom:4px;"></div>
+                  <div id="print-page-est" style="font-size:11px;color:rgba(var(--accent-text-rgb),0.6);margin-bottom:4px;"></div>
 
                   <div class="ord-sec ord-sec-gap">FORMAT</div>
                   <div class="ord-row ord-row-align-controls">
@@ -1014,7 +1014,7 @@
                  pressed. Nothing here disables anything: Ian, 2026-08-26, "Warning not hard stop." -->
             <div id="book-mismatch-publish" class="book-mismatch" style="display:none;"></div>
             <button class="btn btn-primary btn-sm" id="novel-publish-btn" onclick="publishStory()" style="width:100%;">Publish to Library</button>
-            <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(var(--accent-rgb),0.85);"></div>
+            <div id="novel-publish-status" style="display:none;font-size:12px;margin:8px 0 0;color:rgba(var(--accent-text-rgb),0.85);"></div>
             <div class="prep-hint">Manage or remove your published entries on <a href="#" onclick="return goToMyStories();" style="color:var(--player-text);text-decoration:underline;">My Stuff &rarr; Published Stories</a>.</div>
               </section>
             </div>
@@ -1196,7 +1196,7 @@
           #session-tab-notes .story-count { font-size: 12px; color: rgba(var(--on-panel-rgb),0.82); }
           #session-tab-notes .form-hint { font-size: 12px; color: rgba(var(--accent-pale-rgb),0.78); }
           #session-tab-notes .story-sub { color: rgba(var(--accent-pale-rgb),0.72); }
-          #session-tab-notes .story-savenote { font-size: 12px; color: rgba(var(--accent-rgb),0.8); }
+          #session-tab-notes .story-savenote { font-size: 12px; color: rgba(var(--accent-text-rgb),0.8); }
         </style>
         <div class="notes-grid">
           <div class="form-group">
@@ -1296,7 +1296,7 @@
         </div>
         <div id="sb-content" style="display:none;">
           <div style="background:rgba(var(--panel-rgb),0.6);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:12px;">
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:rgba(var(--accent-rgb),0.4);margin-bottom:4px;">Select your style</div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:rgba(var(--accent-text-rgb),0.4);margin-bottom:4px;">Select your style</div>
             <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
               <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="sb-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
@@ -1326,12 +1326,12 @@
           <div id="sb-summary-panel" style="background:rgba(var(--panel-rgb),0.6);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);padding:10px 14px;margin-top:14px;">
             <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;">
               <div class="moment-title" style="margin-bottom:0;">Summary For Next Session</div>
-              <div id="sb-summary-count" style="font-size:10px;color:rgba(var(--accent-rgb),0.35);"></div>
+              <div id="sb-summary-count" style="font-size:10px;color:rgba(var(--accent-text-rgb),0.35);"></div>
             </div>
             <!-- v3.0.969 -- TD-854. Hidden until there is something to say. A reader who has
                  never seen the feature should not be shown an empty row about it. -->
-            <div id="sb-summary-inherit" style="display:none;margin:4px 0 0;font-size:11px;color:rgba(var(--accent-rgb),0.45);"></div>
-            <div class="settings-section-desc" style="margin:4px 0 8px;font-size:11px;color:rgba(var(--accent-rgb),0.55);">
+            <div id="sb-summary-inherit" style="display:none;margin:4px 0 0;font-size:11px;color:rgba(var(--accent-text-rgb),0.45);"></div>
+            <div class="settings-section-desc" style="margin:4px 0 8px;font-size:11px;color:rgba(var(--accent-text-rgb),0.55);">
               What the next session will be told about this one &mdash; who matters, where they are, what is unresolved.
               <b>Generate Narrative</b> writes it; you can edit it, and yours is kept. Your changes save on their own.
             </div>
@@ -1339,7 +1339,7 @@
                  oninput debounces a write, onblur flushes one that is already pending. -->
             <textarea id="sb-summary-text" rows="5" style="width:100%;resize:vertical;" oninput="sbSummaryCount();sbSummaryDirty()" onblur="sbSummaryFlush()" placeholder="Nothing remembered yet. Generate Narrative writes this, or type it yourself."></textarea>
             <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
-              <span id="sb-summary-msg" style="font-size:11px;color:rgba(var(--accent-rgb),0.5);"></span>
+              <span id="sb-summary-msg" style="font-size:11px;color:rgba(var(--accent-text-rgb),0.5);"></span>
             </div>
           </div>
         </div>
@@ -1374,7 +1374,7 @@
         </div>
         <div id="session-preview-frame" style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius-lg);overflow:hidden;min-height:75vh;">
           <div id="session-preview-loading" style="width:100%;height:75vh;display:flex;align-items:center;justify-content:center;background:rgba(var(--panel-deep-rgb),0.5);">
-            <div style="text-align:center;color:rgba(var(--accent-rgb),0.4);">
+            <div style="text-align:center;color:rgba(var(--accent-text-rgb),0.4);">
               <div style="font-size:32px;margin-bottom:8px;">&#128213;</div>
               <div style="font-family:var(--font-display);font-size:13px;letter-spacing:1px;">Select a layout to preview</div>
             </div>
@@ -1960,15 +1960,15 @@
             </div>
             <button class="btn btn-primary btn-sm" onclick="adminCreditUser()">Credit</button>
           </div>
-          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-top:6px;">
+          <div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.5);margin-top:6px;">
             Adds to the user's existing balance (does not reset it). Use this to seed testers or comp users.
           </div>
         </div>
 
         <!-- Set-my-balance (the testing tool — deprecate later) -->
         <div style="margin-top:14px;padding:14px;border:1px dashed rgba(var(--accent-rgb),0.2);border-radius:6px;">
-          <div style="font-size:13px;font-weight:600;color:rgba(var(--accent-rgb),0.8);margin-bottom:6px;">Set my own balance (testing)</div>
-          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:10px;">
+          <div style="font-size:13px;font-weight:600;color:rgba(var(--accent-text-rgb),0.8);margin-bottom:6px;">Set my own balance (testing)</div>
+          <div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.5);margin-bottom:10px;">
             Wipes <em>your own</em> ledger and sets a fresh balance. Useful for testing edge cases (zero, exactly-N, etc.).
           </div>
           <div style="display:flex;align-items:flex-end;gap:10px;">
@@ -3113,7 +3113,7 @@
 
         <!-- Portrait -->
         <div>
-          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Portrait / Headshot</div>
+          <div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Portrait / Headshot</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-image_portrait"
             onclick="document.getElementById('input-image_portrait').click()"
             ondragover="handleSlotDragOver(event,'image_portrait')"
@@ -3122,7 +3122,7 @@
             style="padding:10px;">
             <img id="preview-image_portrait" class="slot-preview slot-portrait hidden" alt="Portrait" />
             <div class="slot-placeholder" id="placeholder-image_portrait">
-              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-rgb),0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-text-rgb),0.4);">Click or drop</div>
             </div>
           </div>
           <input type="file" id="input-image_portrait" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_portrait')" />
@@ -3131,7 +3131,7 @@
 
         <!-- Full Body -->
         <div>
-          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Full Body</div>
+          <div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Full Body</div>
           <div class="image-upload-area image-slot slot-xtall" id="drop-image_fullbody"
             onclick="document.getElementById('input-image_fullbody').click()"
             ondragover="handleSlotDragOver(event,'image_fullbody')"
@@ -3140,7 +3140,7 @@
             style="padding:10px;">
             <img id="preview-image_fullbody" class="slot-preview slot-fullbody hidden" alt="Full body" />
             <div class="slot-placeholder" id="placeholder-image_fullbody">
-              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-rgb),0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-text-rgb),0.4);">Click or drop</div>
             </div>
           </div>
           <input type="file" id="input-image_fullbody" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_fullbody')" />
@@ -3149,7 +3149,7 @@
 
         <!-- Action Shot -->
         <div>
-          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Action Shot</div>
+          <div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Action Shot</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-image_action"
             onclick="document.getElementById('input-image_action').click()"
             ondragover="handleSlotDragOver(event,'image_action')"
@@ -3158,7 +3158,7 @@
             style="padding:10px;">
             <img id="preview-image_action" class="slot-preview slot-action hidden" alt="Action shot" />
             <div class="slot-placeholder" id="placeholder-image_action">
-              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-rgb),0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-text-rgb),0.4);">Click or drop</div>
             </div>
           </div>
           <input type="file" id="input-image_action" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_action')" />
@@ -3167,7 +3167,7 @@
 
         <!-- Other Reference -->
         <div>
-          <div style="font-size:11px;color:rgba(var(--accent-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Other Reference</div>
+          <div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.5);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Other Reference</div>
           <div class="image-upload-area image-slot slot-tall" id="drop-image_other"
             onclick="document.getElementById('input-image_other').click()"
             ondragover="handleSlotDragOver(event,'image_other')"
@@ -3176,7 +3176,7 @@
             style="padding:10px;">
             <img id="preview-image_other" class="slot-preview slot-other hidden" alt="Other reference" />
             <div class="slot-placeholder" id="placeholder-image_other">
-              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-rgb),0.4);">Click or drop</div>
+              <div style="font-size:10px;margin-top:3px;color:rgba(var(--accent-text-rgb),0.4);">Click or drop</div>
             </div>
           </div>
           <input type="file" id="input-image_other" accept="image/*,.heic,.heif" style="display:none;" onchange="handleSlotFileSelect(event,'image_other')" />
@@ -3188,7 +3188,7 @@
 
       <!-- Canonical Character Prompt -->
       <div id="char-modal-prompt-section" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(var(--accent-rgb),0.15);">
-        <div style="font-size:11px;color:rgba(var(--accent-rgb),0.6);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Character Prompt</div>
+        <div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.6);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Character Prompt</div>
         <div class="form-hint" style="margin-bottom:8px;">The look used to keep this character consistent across Story Panels. Built by analyzing the card info and uploaded images.</div>
         <div id="char-modal-prompt-body"></div>
       </div>
@@ -4008,7 +4008,7 @@
      classes for the same four controls -- it is one form rendered in two places. Scoping this to
      .novel-prep-panel would have given the same form two appearances, which is the fault this
      project keeps paying for. The modal now matches as well. */
-  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(var(--accent-rgb),0.9);font-family:inherit; }
+  .cl-field { display:flex;flex-direction:column;gap:4px;font-size:12px;color:rgba(var(--accent-text-rgb),0.9);font-family:inherit; }
   .cl-field select { background:rgba(var(--panel-rgb),0.85);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:var(--radius);padding:8px 10px;font-size:14px;font-family:inherit;width:100%;max-width:100%;box-sizing:border-box; }
   .cl-toggle { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold-dim);cursor:pointer; }
   .cl-toggle input { accent-color:var(--accent);width:15px;height:15px; }
