@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.81",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3481-brain-step9",
+        "kind": "fix",
+        "public": false,
+        "summary": "Help: the getting-started steps no longer say moments cannot be moved.",
+        "detail": "Brain section 1a step 9 still said moments cannot be moved or removed, from before free order (v3.4.32 to v3.4.44); the help chat repeated it to Ian. It now says they can be moved with the arrows or the gripper, and points to Move panels and bridges anywhere; a picture panel still cannot be removed.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.80",
     "staged_on": "2026-11-06",
     "entries": [

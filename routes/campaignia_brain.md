@@ -120,7 +120,8 @@ step. "Session/chapter": a game night or a chapter of a story — the same thing
 7. **Generate Story.** It pulls out the key moments.
 8. **Add the assets it suggests.** Places, items and recurring minor characters, each with a picture, so
    they look the same every time.
-9. **Review the outline.** The **Review** tab. Moments **cannot be moved or removed**, but the prompts can
+9. **Review the outline.** The **Review** tab. Moments **can be moved** with the arrows or dragged by the
+   gripper (see *Move panels and bridges anywhere*), though a picture panel cannot be removed; the prompts can
    be edited, characters added to a scene, and assets added or removed. Make sure it is right before
    spending tokens.
 10. **Generate Narrative & Images.** Writes the prose, draws every picture, builds the storyboard. Uses tokens.
