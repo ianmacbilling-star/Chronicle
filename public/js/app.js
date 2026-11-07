@@ -673,11 +673,11 @@ function renderTokenPacks() {
     return '' +
       '<div style="position:relative;background:rgba(var(--panel-rgb),0.85);' + highlightStyle + 'border-radius:10px;padding:22px 18px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;">' +
         badge +
-        '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--accent-rgb),0.7);">' + p.name + '</div>' +
+        '<div style="font-family:var(--font-display);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--accent-text-rgb),0.7);">' + p.name + '</div>' +
         '<div style="font-size:32px;font-weight:700;color:var(--accent);line-height:1;margin:4px 0 2px;">$' + p.price + '</div>' +
         '<div style="font-size:16px;color:var(--accent-pale);"><strong>' + p.tokens.toLocaleString() + '</strong> tokens</div>' +
         (_bonusPct > 0 ? '<div style="font-size:11px;font-weight:700;color:var(--good-text);margin-bottom:6px;">+' + _bonusPct + '% more tokens per $</div>' : '') +
-        (p.highlight ? '' : '<div style="font-size:11px;color:rgba(var(--accent-rgb),0.6);font-style:italic;">' + p.tagline + '</div>') +
+        (p.highlight ? '' : '<div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.6);font-style:italic;">' + p.tagline + '</div>') +
         (canBuy
           ? '<button class="btn btn-primary btn-sm" onclick="buyTokenPack(\'' + p.id + '\')" style="margin-top:auto;">Buy ' + p.name + '</button>'
           : '<button class="btn btn-sm" disabled style="margin-top:auto;opacity:0.5;cursor:not-allowed;">Buy ' + p.name + '</button>') +
@@ -1180,7 +1180,7 @@ function uiVersionPick(srcLabel, mine) {
       });
       var l2 = document.createElement('div');
       l2.textContent = 'or create a new version';
-      l2.style.cssText = 'color:rgba(var(--accent-rgb),0.7);font-size:12px;margin-bottom:6px;';
+      l2.style.cssText = 'color:rgba(var(--accent-text-rgb),0.7);font-size:12px;margin-bottom:6px;';
       box.appendChild(l1); box.appendChild(sel); box.appendChild(l2);
     }
 
@@ -1349,14 +1349,14 @@ function uiPublishPrompt(message, opts) {
     msg.style.cssText = 'color:var(--on-panel);font-size:15px;line-height:1.5;margin-bottom:14px;';
     var tlabel = document.createElement('div');
     tlabel.textContent = 'Title for this story';
-    tlabel.style.cssText = 'color:rgba(var(--accent-rgb),0.9);font-size:12px;margin-bottom:6px;';
+    tlabel.style.cssText = 'color:rgba(var(--accent-text-rgb),0.9);font-size:12px;margin-bottom:6px;';
     var ti = document.createElement('input');
     ti.type = 'text'; ti.maxLength = 200; ti.value = opts.defaultTitle || '';
     ti.placeholder = 'e.g. The Shattered Crown, or Summer at the Lake';   // v3.0.852 -- TD-711, and this is the twin of the one in app.html
     ti.style.cssText = 'width:100%;background:rgba(var(--panel-rgb),0.85);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;box-sizing:border-box;margin-bottom:14px;';
     var label = document.createElement('div');
     label.textContent = 'Add a short blurb for your Library page (optional)';
-    label.style.cssText = 'color:rgba(var(--accent-rgb),0.9);font-size:12px;margin-bottom:6px;';
+    label.style.cssText = 'color:rgba(var(--accent-text-rgb),0.9);font-size:12px;margin-bottom:6px;';
     var ta = document.createElement('textarea');
     ta.maxLength = 600;
     ta.placeholder = 'Leave blank to use your opening narrative as the teaser.';
@@ -1599,7 +1599,7 @@ function _impShowEnded(ended) {
   var wrap = document.createElement('div');
   wrap.id = 'imp-ended';
   wrap.setAttribute('role', 'alertdialog');
-  wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--glass-rgb),0.6);display:flex;align-items:center;justify-content:center;padding:16px;';
   var box = document.createElement('div');
   box.style.cssText = 'max-width:440px;width:100%;background:var(--panel);color:var(--light-panel-text);border:2px solid var(--support-orange);border-radius:10px;padding:18px 20px;font-family:Georgia,serif;font-size:14px;line-height:1.5;box-shadow:0 10px 34px rgba(0,0,0,0.5);';
   var h = document.createElement('div');
@@ -1781,7 +1781,7 @@ function renderUnusedPics(d) {
   _unusedPics = d;
   // v3.2.73 -- every folder: a line per folder, then the totals, then the oldest 200 with their folder.
   var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';
-  var th = 'position:sticky;top:0;background:var(--panel);text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-rgb),0.85);';
+  var th = 'position:sticky;top:0;background:var(--panel);text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-text-rgb),0.85);';
   var tdr = td + 'text-align:right;';
   var h = '<div style="line-height:1.6;">' +
     '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div></div>' +
@@ -2337,14 +2337,14 @@ function myStoryCard(it) {
       if (_fbCover && img.getAttribute('data-fell') !== '1' && img.src.indexOf(_fbCover) < 0) { img.setAttribute('data-fell', '1'); img.src = _fbCover; return; }
       img.onerror = null;
       var ph0 = document.createElement('div'); ph0.textContent = it.title || 'Untitled';
-      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+      ph0.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-text-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
       if (img.parentNode) img.parentNode.replaceChild(ph0, img);
     };
     img.src = it.cover_page_url || it.cover_url;
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
-    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-text-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
     a.appendChild(ph);
   }
   card.appendChild(a);
@@ -2412,7 +2412,7 @@ function myStoryCard(it) {
       ? 'Anyone with the link can read it. It is not in the Library and search engines are asked to skip it.'
       : 'Listed in the public Library and open to search engines.';
     visBadge.style.cssText = 'font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid ' +
-      (unlisted ? 'rgba(var(--accent-rgb),0.45);color:rgba(var(--accent-rgb),0.95);' : 'rgba(120,200,140,0.45);color:rgba(var(--success-light-rgb),0.95);');
+      (unlisted ? 'rgba(var(--accent-rgb),0.45);color:rgba(var(--accent-text-rgb),0.95);' : 'rgba(120,200,140,0.45);color:rgba(var(--success-light-rgb),0.95);');
     visBtn.textContent = unlisted ? 'Make public' : 'Make link only';
     // The card link follows the same rule, so it can never point at a url that 404s.
     a.href = storyShareUrl(it);
@@ -2487,7 +2487,7 @@ function myStoryCard(it) {
   var _dt = it.created_at ? new Date(it.created_at) : null;
   dateLine.className = 'ms-published';
   dateLine.textContent = _dt ? ('Published ' + _dt.toLocaleDateString()) : '';
-  dateLine.style.cssText = 'font-size:10px;color:rgba(var(--accent-rgb),0.5);padding:0 8px 8px;margin-top:-2px;';
+  dateLine.style.cssText = 'font-size:10px;color:rgba(var(--accent-text-rgb),0.5);padding:0 8px 8px;margin-top:-2px;';
   card.appendChild(dateLine);
   return card;
 }
@@ -2600,7 +2600,7 @@ function myStoriesPaint() {
       grp.style.cssText = 'margin:8px 0 4px;';
       var gh = document.createElement('div'); gh.className = 'ms-camp-head'; gh.draggable = true;
       gh.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 6px;border-radius:6px;background:rgba(var(--accent-rgb),0.08);cursor:grab;';
-      var grip = document.createElement('span'); grip.textContent = '\u2630'; grip.title = 'Drag to move this campaign'; grip.style.cssText = 'color:rgba(var(--accent-rgb),0.7);font-size:13px;';
+      var grip = document.createElement('span'); grip.textContent = '\u2630'; grip.title = 'Drag to move this campaign'; grip.style.cssText = 'color:rgba(var(--accent-text-rgb),0.7);font-size:13px;';
       var gn = document.createElement('span'); gn.textContent = g.name + ' (' + g.items.length + ')';
       gn.style.cssText = 'color:rgba(var(--on-panel-rgb),0.92);font-size:13px;font-weight:600;flex:1 1 auto;min-width:120px;';
       gh.appendChild(grip); gh.appendChild(gn);
@@ -2618,7 +2618,7 @@ function myStoriesPaint() {
         var card = myStoryCard(it);
         card.draggable = true; card.setAttribute('data-ms-story', String(it.id));
         var bar = document.createElement('div');
-        bar.style.cssText = 'display:flex;align-items:center;gap:4px;padding:5px 6px;background:rgba(0,0,0,0.35);cursor:grab;flex-wrap:wrap;';
+        bar.style.cssText = 'display:flex;align-items:center;gap:4px;padding:5px 6px;background:rgba(var(--glass-rgb),0.35);cursor:grab;flex-wrap:wrap;';
         bar.title = 'Drag to change the order';
         bar.appendChild(_msBtn('\u2190', 'Move earlier', function () { myStoriesMoveStory(pen.key, gi, si, si - 1); }, si === 0));
         bar.appendChild(_msBtn('\u2192', 'Move later', function () { myStoriesMoveStory(pen.key, gi, si, si + 1); }, si === g.items.length - 1));
@@ -2828,6 +2828,7 @@ function loadAccount() {
   // v3.2.04 -- TD-939. The password box starts hidden; the pending line shows a change waiting for its link.
   cmpEmailShowPassword(false);
   cmpEmailRenderPending();
+  loadBrandTheme();   // v3.4.75 -- TD-1105
   // Reconcile live billing state from Stripe first (self-healing: reflects a cancel,
   // plan change, or payment problem made in the portal OR the Stripe dashboard), then
   // render. The endpoint no-ops server-side for users with no subscription on file.
@@ -4967,7 +4968,7 @@ function openChangeReview(charId) {
         '<div class="sc-edit-fields">' +
           '<label class="sc-review-label"><span class="sc-tip" data-tip="How this character is drawn in this session\u2019s pictures. It carries forward from the session before.">Description (this session)</span></label>' +
           '<textarea class="char-prompt-editor" id="sc-editor-' + charId + '">' + (r.prompt || '') + '</textarea>' +
-          '<label class="sc-review-label"><span class="sc-tip" data-tip="Type a permanent change, such as a horn broken off, then press Retouch image to apply it to the picture. Approve change keeps it.">Amended appearance</span></label>' +
+          '<label class="sc-review-label"><span class="sc-tip" data-tip="Type a permanent change, such as a horn broken off, then press Retouch image to apply it to the picture. Save keeps it.">Amended appearance</span></label>' +
           '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
             'placeholder="e.g. left horn broken off to a jagged stump">' +
             detailText + '</textarea>' +
@@ -5752,7 +5753,7 @@ function renderHelpThread() {
 // The same steps are in the Brain (routes/campaignia_brain.md, "Getting started"), so a typed question gets the
 // same path. Keep the two in step.
 var GS_STEPS = [
-  { t: 'Create a campaign', d: 'Your campaign holds the whole story. On the home screen, press + New campaign and give it a name and a short description.', go: 'campaigns' },
+  { t: 'Create a campaign', d: 'Your campaign holds all of its sessions. On the home screen, press + New campaign and give it a name and a short description.', go: 'campaigns' },
   { t: 'Add your characters', d: 'Press the Characters button to open the Characters screen, and add your main cast with a description and reference pictures. Do it before you generate, so Campaignia knows who\u2019s who and keeps them looking the same. Once the first session exists and is Ready, you change a character as the story goes along on that session\u2019s Characters tab.', go: 'camp:characters' },
   { t: 'Invite your members (optional)', d: 'Open Members and invite people by email or with a link. They join free, and can follow along or make their own versions.', go: 'camp:members' },
   { t: 'Create a session/chapter', d: 'Add one for each game night, or for each chapter of your story.', go: 'camp:sessions' },
@@ -8061,7 +8062,7 @@ function setCampaignTitleImage(archiveId, cb) {
 
 function showErrorDialog(msg, title) {
   var ov = document.createElement('div');
-  ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--glass-rgb),0.6);display:flex;align-items:center;justify-content:center;padding:20px;';
   var box = document.createElement('div');
   box.style.cssText = 'background:var(--error-dialog-bg);border:1px solid var(--accent-bright,var(--accent));border-radius:10px;max-width:440px;width:100%;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,0.55);';
   var h = document.createElement('div');
@@ -11982,6 +11983,16 @@ function prepMaterializeBookMeta() {
   try {
     var c = state.currentCampaign; if (!c || !state.user) return;
     if (!(typeof prepUseMember === 'function' && prepUseMember())) return;
+    // v3.4.78 -- ONLY ON A VERSION THE SERVER WILL LET YOU WRITE. Ian, 2026-11-06: a member he had just invited opened
+    // Prep & Preview on the Story Master's Canonical and got "Something went wrong". prepUseMember() still counts a member
+    // with no version of their own as owning the Canonical (the TD-254 question, left open on purpose), but the server's
+    // ownership test does not, so this background save was refused every time and the refusal popped up over a screen
+    // they were only looking at. The snapshot is now written only where the server agrees: your own version, the
+    // Canonical when you are its Story Master, or a curating Story Master. An edit the member makes themselves still
+    // gets the server's "switch to your own version" message, which is right.
+    var _vOn = (typeof novelVersionOnScreen === 'function') ? novelVersionOnScreen() : null;
+    var _curate = (typeof smMayCurateBook === 'function') && smMayCurateBook();
+    if (_vOn && !_curate && !(_vOn.is_canonical ? (c.my_role === 'dm') : !!_vOn.is_mine)) return;
     var _key = String(c.id) + '|' + String((typeof bookMetaVersionId === 'function' ? bookMetaVersionId() : '') || '0');
     state._prepMaterialized = state._prepMaterialized || {};
     if (state._prepMaterialized[_key]) return;
@@ -14838,7 +14849,7 @@ function renderNovelSummary(sessions) {
     '</div>';
   }).join('') + '</div>';
 
-  container.innerHTML = '<div style="font-size:12px;color:rgba(var(--accent-rgb),0.5);margin-bottom:14px;">' +
+  container.innerHTML = '<div style="font-size:12px;color:rgba(var(--accent-text-rgb),0.5);margin-bottom:14px;">' +
     sessions.length + ' sessions in chronological order &middot; ' + totalMoments + ' total panels</div>' + html;
 }
 
@@ -15338,10 +15349,10 @@ function renderNarrativeEditor(data) {
       '<textarea class="narrative-textarea" id="narrative-before-' + i + '" placeholder="Prose leading into this panel...">' +
       (section.before || '') + '</textarea>' +
       (i < state.moments.length - 1
-        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-rgb),0.3);font-style:italic;">— panel image appears here —</div>' +
+        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-text-rgb),0.3);font-style:italic;">— panel image appears here —</div>' +
           '<textarea class="narrative-textarea" id="narrative-after-' + i + '" placeholder="Prose bridging from this panel to the next...">' +
           (section.after || '') + '</textarea>'
-        : '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-rgb),0.3);font-style:italic;">— final panel image appears here —</div>') +
+        : '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-text-rgb),0.3);font-style:italic;">— final panel image appears here —</div>') +
     '</div>';
   });
 
@@ -17875,7 +17886,7 @@ function adminLibCard(it) {
   if (it.who || it.campaign) {
     var by = document.createElement('div');
     by.textContent = (it.who ? 'by ' + it.who : '') + (it.who && it.campaign ? ' \u00b7 ' : '') + (it.campaign || '');
-    by.style.cssText = 'font-size:11px;color:rgba(var(--accent-rgb),0.75);padding:0 8px 2px;';
+    by.style.cssText = 'font-size:11px;color:rgba(var(--accent-text-rgb),0.75);padding:0 8px 2px;';
     card.appendChild(by);
   }
   var btn = document.createElement('button');
@@ -17971,7 +17982,7 @@ function adminStoryCard(it) {
     a.appendChild(img);
   } else {
     var ph = document.createElement('div'); ph.textContent = it.title || 'Untitled';
-    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
+    ph.style.cssText = 'width:100%;aspect-ratio:17/22;display:flex;align-items:center;justify-content:center;background:var(--panel);color:rgba(var(--accent-text-rgb),0.45);font-size:12px;text-align:center;padding:8px;';
     a.appendChild(ph);
   }
   card.appendChild(a);
@@ -18309,7 +18320,7 @@ function renderStoryboard() {
       ? '<div class="' + (needsWatermark ? 'watermarked' : '') + '"><img class="moment-img-generated" src="' + m.image + '" alt="' + m.title + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" /></div>'
       : '<div class="moment-img-placeholder">' +
           '<div style="font-size:32px;opacity:0.3;">&#128444;</div>' +
-          '<div style="font-size:11px;color:rgba(var(--accent-rgb),0.3);margin-top:6px;">No image yet</div>' +
+          '<div style="font-size:11px;color:rgba(var(--accent-text-rgb),0.3);margin-top:6px;">No image yet</div>' +
         '</div>';
     var _shapeVal = (['wide','tall','square','panoramic','tower','fullpage'].indexOf(m.shape) >= 0 ? m.shape : 'standard');
     var _canLock = canEditCurrentStatus();
@@ -20942,7 +20953,7 @@ function renderNovelSummary(sessions) {
     '</div>';
   }).join('') + '</div>';
 
-  container.innerHTML = '<div style="font-size:12px;color:rgba(var(--accent-rgb),0.5);margin-bottom:14px;">' +
+  container.innerHTML = '<div style="font-size:12px;color:rgba(var(--accent-text-rgb),0.5);margin-bottom:14px;">' +
     sessions.length + ' sessions in chronological order &middot; ' + totalMoments + ' total panels</div>' + html;
 }
 
@@ -21442,10 +21453,10 @@ function renderNarrativeEditor(data) {
       '<textarea class="narrative-textarea" id="narrative-before-' + i + '" placeholder="Prose leading into this panel...">' +
       (section.before || '') + '</textarea>' +
       (i < state.moments.length - 1
-        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-rgb),0.3);font-style:italic;">— panel image appears here —</div>' +
+        ? '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-text-rgb),0.3);font-style:italic;">— panel image appears here —</div>' +
           '<textarea class="narrative-textarea" id="narrative-after-' + i + '" placeholder="Prose bridging from this panel to the next...">' +
           (section.after || '') + '</textarea>'
-        : '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-rgb),0.3);font-style:italic;">— final panel image appears here —</div>') +
+        : '<div style="padding:4px 14px;font-size:10px;color:rgba(var(--accent-text-rgb),0.3);font-style:italic;">— final panel image appears here —</div>') +
     '</div>';
   });
 
@@ -22162,9 +22173,51 @@ function writeToClipboard(text, flashText) {
       if (flashText) showAlert(flashText);
     });
   } else {
-    // Fallback: prompt the user to copy manually
-    window.prompt('Copy this invite link:', text);
+    // v3.4.84 -- Fallback: our own window with the link, never the browser's prompt box
+    // (Ian, 2026-11-07: no browser boxes anywhere).
+    cmpCopyLinkWindow(text, flashText);
   }
+}
+
+// v3.4.84 -- The link in a read-only box with Copy and Close, drawn like uiConfirm. Only for a
+// browser that cannot write to the clipboard by itself. Copy selects the link and asks the browser
+// to copy it; if that fails too, the link stays selected and the line says how to copy it by hand.
+function cmpCopyLinkWindow(text, flashText) {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+  var msg = document.createElement('div');
+  msg.textContent = 'Copy this invite link:';
+  msg.style.cssText = 'color:var(--on-panel);font-size:15px;line-height:1.5;margin-bottom:12px;';
+  var input = document.createElement('input');
+  input.type = 'text'; input.readOnly = true; input.value = String(text == null ? '' : text);
+  input.setAttribute('data-no-words', '');
+  input.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 10px;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.4);background:rgba(var(--accent-rgb),0.08);color:var(--on-panel);font-size:14px;margin-bottom:16px;';
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+  var close = document.createElement('button'); close.className = 'btn btn-sm'; close.textContent = 'Close';
+  var copy = document.createElement('button'); copy.className = 'btn btn-sm btn-primary'; copy.textContent = 'Copy';
+  row.appendChild(close); row.appendChild(copy);
+  box.appendChild(msg); box.appendChild(input); box.appendChild(row); overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  function pick() { try { input.focus(); input.select(); input.setSelectionRange(0, input.value.length); } catch (e) {} }
+  function done() {
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape') done(); }
+  copy.onclick = function () {
+    pick();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    if (ok) { done(); if (flashText && typeof showAlert === 'function') showAlert(flashText); }
+    else msg.textContent = 'The link is selected: press Ctrl+C (or hold it on a phone) to copy it.';
+  };
+  close.onclick = done;
+  overlay.onclick = function (e) { if (e.target === overlay) done(); };
+  document.addEventListener('keydown', onKey);
+  setTimeout(pick, 30);
 }
 
 // --- Small format helpers ---
@@ -23890,9 +23943,14 @@ function renderTesters(list, env) {
   box.innerHTML = html;
 }
 
-function switchTester(id, on) {
+function switchTester(id, on, sure) {
   var rm = document.getElementById('tester-row-msg-' + id);
-  if (!on && !confirm('Turn this tester off? The account goes back to Copper unless it pays for a subscription.')) return;
+  // v3.4.84 -- our own window, not the browser's confirm box (Ian, 2026-11-07: no browser boxes).
+  if (!on && !sure) {
+    uiConfirm('Turn this tester off? The account goes back to Copper unless it pays for a subscription.', { okText: 'Turn off', danger: true })
+      .then(function (yes) { if (yes) switchTester(id, on, true); });
+    return;
+  }
   if (rm) rm.textContent = 'Saving...';
   fetch('/api/admin/testers/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: !!on }) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
@@ -24515,7 +24573,7 @@ function renderUserLastActive(d) {
   var _ord = _ulaOrder(cols);   // v3.4.52 -- Ian's order and names
   if (cnt) cnt.textContent = '(' + rows.length + (d.capped ? '+' : '') + ')';
   if (!rows.length) { out.textContent = 'No rows.'; return; }
-  var th = 'position:sticky;top:0;background:var(--panel);text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(var(--accent-rgb),0.85);white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.25);';
+  var th = 'position:sticky;top:0;background:var(--panel);text-align:left;padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:0.04em;color:rgba(var(--accent-text-rgb),0.85);white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.25);';
   var td = 'padding:5px 10px;font-size:12px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';   // v3.2.61 -- light text
   var h = '<table style="border-collapse:collapse;width:100%;"><thead><tr>' +
     _ord.map(function (o) { return '<th style="' + th + '">' + _ulaCell(o.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
@@ -27564,7 +27622,7 @@ function finalizeShowPrintingVersion(at) {
   // the container and rendered dark text on a dark panel -- present, and unreadable. The estimate
   // line it sits under is gold at 60 percent; this is the same gold, a little brighter, because it
   // is the more important of the two.
-  d.style.cssText = 'font-size:11px;color:rgba(var(--accent-rgb),0.75);margin-bottom:4px;';
+  d.style.cssText = 'font-size:11px;color:rgba(var(--accent-text-rgb),0.75);margin-bottom:4px;';
   d.textContent = 'Printing the version you saved at ' + when + '.';
   var old = document.getElementById('print-approved-at');
   if (old && old.parentNode) old.parentNode.removeChild(old);
@@ -31052,6 +31110,60 @@ function devClearTours() {
 // Account-facing: re-enable guided tours by clearing this account's seen-history
 // (same endpoint as the dev reset). Each screen's tour then auto-plays once on the
 // next visit and re-marks itself complete, so they settle down on their own.
+// v3.4.75 -- TD-1105. Brand Theme on the Account page. The section stays hidden unless the server offers
+// more than one brand. Choosing one saves it to the account, then reloads so the page draws in that brand.
+function brandThemeNote(d) {
+  if (!d || !d.override) return '';
+  if (d.override === 'switch') return 'A staging switch is showing a different brand in this browser. Visit any page with ?brand=clear to remove it.';
+  if (d.override === 'variable') return 'The BRAND variable on Railway is showing a different brand on this whole site.';
+  return 'This web address always shows its own brand.';
+}
+function loadBrandTheme() {
+  var sec = document.getElementById('account-brand-section');
+  var sel = document.getElementById('pref-brand');
+  if (!sec || !sel) return;
+  fetch('/api/auth/brand')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.show || !d.brands) { sec.style.display = 'none'; return; }
+      sel.innerHTML = d.brands.map(function (b) {
+        return '<option value="' + escapeHtml(b.key) + '"' + (b.key === d.current ? ' selected' : '') + '>' + escapeHtml(b.name) + '</option>';
+      }).join('');
+      sel.setAttribute('data-saved', d.current);
+      sec.style.display = '';
+      var msg = document.getElementById('brand-msg'); var note = brandThemeNote(d);
+      if (msg) { msg.style.display = note ? 'block' : 'none'; msg.style.color = 'var(--text-muted)'; msg.textContent = note; }
+    })
+    .catch(function () { sec.style.display = 'none'; });
+}
+function saveBrandTheme() {
+  var sel = document.getElementById('pref-brand');
+  var msg = document.getElementById('brand-msg');
+  if (!sel) return;
+  var key = sel.value;
+  if (key === sel.getAttribute('data-saved')) return;
+  sel.disabled = true;
+  if (msg) { msg.style.display = 'block'; msg.style.color = ''; msg.textContent = 'Saving...'; }
+  fetch('/api/auth/brand', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: key }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.success) {
+        sel.setAttribute('data-saved', key);
+        var note = brandThemeNote(d);
+        if (note) { sel.disabled = false; if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = 'Saved. ' + note; } return; }
+        if (msg) { msg.style.color = 'var(--accent-pale)'; msg.textContent = 'Saved. Switching now...'; }
+        setTimeout(function () { location.reload(); }, 400);
+      } else {
+        sel.disabled = false; sel.value = sel.getAttribute('data-saved');
+        if (msg) { msg.style.color = 'var(--error)'; msg.textContent = (d && d.error) ? d.error : 'Could not save your choice. Please try again.'; }
+      }
+    })
+    .catch(function () {
+      sel.disabled = false; sel.value = sel.getAttribute('data-saved');
+      if (msg) { msg.style.color = 'var(--error)'; msg.textContent = 'Could not save your choice. Please try again.'; }
+    });
+}
+
 function replayTours() {
   var msg = document.getElementById('tours-replay-msg');
   if (msg) { msg.style.display = 'block'; msg.style.color = ''; msg.textContent = 'Turning tours back on...'; }
@@ -33477,7 +33589,7 @@ function finalizeUpdateHeader() {
   // optLabel reads the option text out of the #cl-narr <select>, which no longer exists.
   var h = '<div style="margin-bottom:6px;"><span style="font-family:var(--font-display);color:var(--accent-bright);font-size:15px;letter-spacing:0.04em;">' + escapeHtml(layout) + '</span>' +
     (desc ? ' <span style="color:rgba(var(--on-panel-rgb),0.6);font-size:11px;font-style:italic;">&ldquo;' + escapeHtml(desc) + '&rdquo;</span>' : '') + '</div>';
-  h += '<div style="color:rgba(var(--on-panel-rgb),0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(var(--accent-rgb),0.6);">&middot;</span> ') + '</div>';
+  h += '<div style="color:rgba(var(--on-panel-rgb),0.75);font-size:11px;line-height:1.7;">' + parts.map(function (t) { return escapeHtml(t); }).join(' <span style="color:rgba(var(--accent-text-rgb),0.6);">&middot;</span> ') + '</div>';
   // SESSIONS INCLUDED. Sits under the layout attributes and above the Optimize button. Highlighted
   // only when some are left out -- that is the case worth catching before ordering a print.
   if (_finalizeSessInc != null && _finalizeSessTotal != null) {
@@ -34013,7 +34125,9 @@ function _runLayoutAiOptimize() {
     _befLbl.title = 'Double-click: reset AI image grows for this book (admin)';
     _befLbl.ondblclick = function () {
       if (!state.currentCampaign) return;
-      if (!confirm('Reset AI image grows for this book?\n\nThis clears the saved grow on every image so the next Optimize rebuilds from the natural sizes (with the current no-crop limits). Use this to recover images that were over-grown / cropped by earlier runs.')) return;
+      // v3.4.84 -- our own window, not the browser's confirm box (Ian, 2026-11-07: no browser boxes).
+      uiConfirm('Reset AI image grows for this book?\n\nThis clears the saved grow on every image so the next Optimize rebuilds from the natural sizes (with the current no-crop limits). Use this to recover images that were over-grown / cropped by earlier runs.', { preserveLines: true, okText: 'Reset' }).then(function (yes) {
+      if (!yes || !state.currentCampaign) return;
       var _cid = state.currentCampaign.id;
       var _txt0 = _befLbl.textContent;
       _befLbl.textContent = 'resetting...';
@@ -34025,6 +34139,7 @@ function _runLayoutAiOptimize() {
           alert('Reset ' + ((j && j.cleared) || 0) + ' image grow(s). Run Optimize again to rebuild the book from natural sizes.');
         })
         .catch(function (e) { _befLbl.textContent = _txt0; alert('Reset failed: ' + ((e && e.message) || e)); });
+      });
     };
   }
   // v3.0.355 -- THE LAYOUT PROCESS IS IDENTICAL FOR EVERY USER.
@@ -35887,9 +36002,9 @@ function openAssetSuggestModal(data) {
       h += '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;margin-bottom:6px;border:1px solid rgba(var(--accent-rgb),0.18);border-radius:8px;cursor:' + (canCreate ? 'pointer' : 'default') + ';">' +
         (canCreate ? '<input type="checkbox" class="asset-suggest-cb" data-key="' + escapeHtmlReview(it.key) + '" checked style="margin-top:3px;">' : '') +
         '<span style="flex:1;min-width:0;"><span style="font-weight:600;">' + escapeHtmlReview(it.name) + '</span>' +
-        ' <span style="font-size:12px;color:rgba(var(--accent-rgb),0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
+        ' <span style="font-size:12px;color:rgba(var(--accent-text-rgb),0.8);">' + escapeHtmlReview(ASSET_SUGGEST_CAT[it.category] || it.category) + ' &middot; in ' + Number(it.panels || 0) + ' panels</span>' +
         // v3.1.12 -- TD-908. Ian: "allow them to edit the descriptions of the items." What Yes draws from, and what No writes into the panels.
-        '<textarea class="asset-suggest-desc" data-key="' + escapeHtmlReview(it.key) + '" rows="2" maxlength="1200" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;font:inherit;font-size:13px;line-height:1.4;color:var(--on-panel);background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:6px 8px;resize:vertical;">' + escapeHtmlReview(it.description || '') + '</textarea>' +
+        '<textarea class="asset-suggest-desc" data-key="' + escapeHtmlReview(it.key) + '" rows="2" maxlength="1200" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;font:inherit;font-size:13px;line-height:1.4;color:var(--on-panel);background:rgba(var(--glass-rgb),0.35);border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:6px 8px;resize:vertical;">' + escapeHtmlReview(it.description || '') + '</textarea>' +
         '</span><span class="asset-suggest-status" data-key="' + escapeHtmlReview(it.key) + '" style="flex:0 0 auto;align-self:center;"></span></label>';   // v3.1.10 -- spinner, then the picture
     });
     h += '</div>';
@@ -36982,7 +37097,7 @@ function _ciGet(url, cb) {
     .catch(function () { _ciErr('Connection error. Please try again.'); });
 }
 
-var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;background:rgba(0,0,0,0.25);color:var(--on-panel);cursor:pointer;font:inherit;';
+var CI_TILE = 'display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;padding:10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;background:rgba(var(--glass-rgb),0.25);color:var(--on-panel);cursor:pointer;font:inherit;';
 
 function _ciCampaigns() {
   _ci.step = 'campaigns';
@@ -37712,7 +37827,7 @@ function _vpickCss() {
     '.vpick-choose{flex:1 1 auto;min-width:0;background:none;border:none;color:inherit;text-align:left;font:inherit;padding:9px 0;cursor:pointer;white-space:normal;overflow-wrap:anywhere;line-height:1.35;}' +
     '.vpick-choose:focus-visible,.vpick-pinbtn:focus-visible{outline:1px solid var(--accent);outline-offset:1px;}' +
     '.vpick-row.is-cur .vpick-choose{color:var(--highlight);font-weight:600;}' +
-    '.vpick-pinbtn{flex:0 0 auto;background:none;border:none;color:rgba(var(--accent-rgb),0.5);cursor:pointer;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:0;}' +
+    '.vpick-pinbtn{flex:0 0 auto;background:none;border:none;color:rgba(var(--accent-text-rgb),0.5);cursor:pointer;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:0;}' +
     '.vpick-pinbtn:hover{background:rgba(var(--accent-rgb),0.18);color:var(--accent);}' +
     '.vpick-pinbtn.on{color:var(--accent);}' +
     '.vpick-pinbtn.off svg{transform:rotate(45deg);}' +
@@ -38771,7 +38886,7 @@ function versionTierGate(msg) {
 // =====================================================================================
 function _pubAsEsc(s) { return (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function _pubAsImg(url, w, h, fallback) {
-  var st = 'flex:0 0 ' + w + 'px;width:' + w + 'px;height:' + h + 'px;border-radius:5px;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(var(--hover-fill-rgb),0.9) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(var(--accent-rgb),0.55);font-size:' + Math.round(h / 3) + 'px;';
+  var st = 'flex:0 0 ' + w + 'px;width:' + w + 'px;height:' + h + 'px;border-radius:5px;border:1px solid rgba(var(--accent-rgb),0.3);background:rgba(var(--hover-fill-rgb),0.9) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(var(--accent-text-rgb),0.55);font-size:' + Math.round(h / 3) + 'px;';
   if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
   return '<span style=\'' + st + '\'>' + (url ? '' : (fallback || '')) + '</span>';
 }
@@ -38784,14 +38899,14 @@ function _pubAsCard(o) {
     '<span style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
       '<span style="font-family:var(--font-display);color:var(--accent-bright);font-size:15px;line-height:1.25;">' + _pubAsEsc(o.title) + '</span>' +
       (o.subtitle ? '<span style="font-style:italic;color:rgba(var(--on-panel-rgb),0.9);font-size:13px;line-height:1.3;">' + _pubAsEsc(o.subtitle) + '</span>' : '') +
-      (o.meta ? '<span style="font-size:11px;color:rgba(var(--accent-rgb),0.8);margin-top:2px;line-height:1.35;">' + _pubAsEsc(o.meta) + '</span>' : '') +
+      (o.meta ? '<span style="font-size:11px;color:rgba(var(--accent-text-rgb),0.8);margin-top:2px;line-height:1.35;">' + _pubAsEsc(o.meta) + '</span>' : '') +
     '</span>';
   var st = 'display:flex;flex-direction:column;gap:8px;align-items:stretch;text-align:left;width:100%;height:100%;padding:8px;border-radius:8px;border:' + bd + ';background:rgba(var(--panel-rgb),0.7);font-family:inherit;box-sizing:border-box;';
   if (!o.clickable) return '<div style=\'' + st + '\'>' + inner + '</div>';
   return '<button type="button" class="pubas-card" data-id="' + _pubAsEsc(o.id) + '" style=\'' + st + 'cursor:pointer;\'>' + inner + '</button>';
 }
 function _pubAsCover(url, plus) {
-  var st = 'display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:71 / 96;border-radius:5px;background:rgba(var(--hover-fill-rgb),0.9) center/cover no-repeat;color:rgba(var(--accent-rgb),0.55);font-size:40px;';
+  var st = 'display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:71 / 96;border-radius:5px;background:rgba(var(--hover-fill-rgb),0.9) center/cover no-repeat;color:rgba(var(--accent-text-rgb),0.55);font-size:40px;';
   st += plus ? 'border:1px dashed rgba(var(--accent-rgb),0.5);color:var(--accent-bright);' : 'border:1px solid rgba(var(--accent-rgb),0.3);';
   if (url) st += 'background-image:url("' + encodeURI(String(url)).replace(/'/g, '%27') + '");';
   return '<span style=\'' + st + '\'>' + (plus ? '+' : (url ? '' : '&#128214;')) + '</span>';
@@ -39162,11 +39277,11 @@ function ibCss() {
     '.ib-tab{background:none;border:none;border-bottom:2px solid transparent;color:rgba(var(--on-panel-rgb),0.6);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;}' +
     '.ib-tab.on{border-bottom-color:var(--accent);color:var(--label);}' +
     '.ib-make{display:grid;grid-template-columns:minmax(300px,460px) minmax(0,1fr);gap:20px;align-items:start;}' +
-    '.ib-card{background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:14px;}' +
+    '.ib-card{background:rgba(var(--glass-rgb),0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:14px;}' +
     '.ib-sec{margin-bottom:14px;}' +
     '.ib-lbl{font-family:var(--font-display);font-size:15px;color:var(--accent-bright);letter-spacing:0.04em;margin-bottom:6px;}' +
     '.ib-lbl .ib-req{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:11px;color:var(--error-light);margin-left:6px;letter-spacing:0;font-weight:400;}' +
-    '.ib-in{width:100%;box-sizing:border-box;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;color:var(--on-panel);padding:8px 10px;font:inherit;font-size:14px;}' +
+    '.ib-in{width:100%;box-sizing:border-box;background:rgba(var(--glass-rgb),0.35);border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;color:var(--on-panel);padding:8px 10px;font:inherit;font-size:14px;}' +
     '.ib-in.ib-bad{border-color:var(--change-pending-line);}' +
     '#ib-style-btn.ib-bad,#ib-shapes.ib-bad{outline:2px solid var(--change-pending-line);outline-offset:2px;border-radius:8px;}' +
     '.ib-acc-title{display:flex;align-items:baseline;gap:8px;min-width:0;overflow:hidden;}' +
@@ -39208,7 +39323,7 @@ function ibCss() {
     '.ib-empty{font-size:14px;opacity:0.6;padding:16px;text-align:center;}' +
     '.ib-caption{width:100%;max-width:100%;display:flex;flex-direction:column;gap:4px;}' +
     '.ib-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}' +
-    '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:8px;}' +
+    '.ib-img{display:flex;flex-direction:column;gap:6px;background:rgba(var(--glass-rgb),0.25);border:1px solid rgba(var(--accent-rgb),0.22);border-radius:10px;padding:8px;}' +
     '.ib-pic{position:relative;width:100%;aspect-ratio:4/3;border-radius:6px;background:#0a0604;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}' +
     '.ib-pic img{width:100%;height:100%;object-fit:contain;display:block;}' +
     '.ib-meta{font-size:12px;color:rgba(var(--on-panel-rgb),0.7);}' +
@@ -40370,7 +40485,7 @@ function ibEditPrompt(id) {
         '<div class="ib-meta" style="margin-bottom:6px;">What the picture shows. Campaignia adds its house rules, the art style and the reference pictures around these words when it draws.</div>' +
         '<textarea class="ib-in" id="ib-words" rows="10" maxlength="6000">' + escapeHtml(im.words || im.description || '') + '</textarea>' +
         '<details style="margin-top:12px;"><summary style="cursor:pointer;font-size:13px;color:var(--label);">The whole prompt last sent</summary>' +
-          '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(0,0,0,0.35);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
+          '<pre style="white-space:pre-wrap;font-size:12px;line-height:1.45;background:rgba(var(--glass-rgb),0.35);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:10px;max-height:40vh;overflow:auto;">' + escapeHtml(im.prompt || '(not recorded)') + '</pre></details>' +
         '<div id="ib-words-msg" class="ib-err" style="margin-top:8px;"></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +

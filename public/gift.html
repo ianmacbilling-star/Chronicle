@@ -9,14 +9,15 @@
 <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
 <link rel="stylesheet" href="/css/fonts.css">
 <link rel="stylesheet" href="/css/style.css">
+<script>/* v3.4.69 -- the page's brand (services/brands.js). The server names it in the cmp_brand cookie, and never for Campaignia; any other brand's theme sheet is laid over Campaignia's here, before the first paint, and the toolbar takes its page color. */(function(){var m=document.cookie.match(/(?:^|;\s*)cmp_brand=([a-z0-9-]+)/);if(!m||m[1]==='campaignia')return;document.write('<link rel="stylesheet" href="/css/themes/'+m[1]+'.css">');document.documentElement.setAttribute('data-brand',m[1]);document.addEventListener('DOMContentLoaded',function(){var t=document.querySelector('meta[name="theme-color"]'),c=getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim();if(t&&c)t.setAttribute('content',c);});})();</script>
 <!-- v3.1.46 -- TD-934 step 2. THE GIFT PAGE. Spec: claude/GIFT_CERTIFICATES_SPEC.md section 3.
      Every price and every rule is the server's: this page reads /api/gifts/catalog and posts to
      /api/gifts/checkout, which re-reads the catalog by id and refuses anything it does not like. -->
 <style>
   body { margin: 0; }
   .page { min-height: 100vh; display: flex; justify-content: center; padding: 28px 16px; box-sizing: border-box;
-    background: var(--page-bg); background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; background-attachment: fixed; position: relative; }
-  .page::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.68); }
+    background: var(--page-bg); background-image: var(--page-picture); background-size: cover; background-position: center; background-attachment: fixed; position: relative; }
+  .page::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,calc(0.68 * var(--picture-dim))); }
   .box { position: relative; z-index: 1; background: rgba(var(--panel-rgb),0.94); border: 1px solid rgba(var(--accent-rgb),0.25); border-radius: 16px;
     padding: 30px; width: 100%; max-width: 620px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: var(--accent-pale); align-self: flex-start; }
   .logo { display: block; height: 64px; margin: 0 auto 14px; }

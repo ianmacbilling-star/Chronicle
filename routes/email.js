@@ -29,11 +29,24 @@ async function sendEmail(to, subject, html, opts) {
 
   const fromEmail = process.env.FROM_EMAIL || 'noreply@campaignia.com';
 
+  // v3.4.79 -- TD-1105. Brand words: an email to an account on Story says story/chapter where the template says
+  // campaign/session (services/brands.js emailBrand, swapText, swapHtml). The sender stays Campaignia. People's
+  // own words are wrapped by keep() where they are put in, and every marker is stripped here on every brand.
+  // opts.noWords: messages written by people (the Guild) and reports to support are sent exactly as given.
+  var _subject = subject, _html = html;
+  try {
+    var _B = require('../services/brands');
+    var _bk = (opts && opts.noWords) ? null : await _B.emailBrand(getDb, to);
+    if (_bk) { _subject = _B.swapText(_bk, _subject); _html = _B.swapHtml(_bk, _html); _html = _B.emailLook(_bk, _html); }   // v3.4.82: and the brand's colors
+  } catch (_be) { console.error('[brand words] email: ' + (_be && _be.message || _be)); }
+  if (_subject != null) _subject = String(_subject).replace(/[\u0001\u0002]/g, '');
+  if (_html != null) _html = String(_html).replace(/[\u0001\u0002]/g, '');
+
   const payload = {
     from: 'Campaignia <' + fromEmail + '>',
     to: to,
-    subject: subject,
-    html: html
+    subject: _subject,
+    html: _html
   };
   if (opts && opts.bcc) payload.bcc = opts.bcc;
   if (opts && opts.replyTo) payload.replyTo = opts.replyTo;   // v3.3.06: the Resend SDK reads replyTo and drops reply_to, so every reply went to FROM_EMAIL
@@ -427,6 +440,7 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
 async function sendInviteEmail(opts) {
   // opts: { to_email, dm_name, campaign_name, character_name, character_class, invite_url, expires_at }
   try {
+    opts = Object.assign({}, opts, { campaign_name: require('../services/brands').keep(opts.campaign_name), character_name: require('../services/brands').keep(opts.character_name), character_class: require('../services/brands').keep(opts.character_class) });   // v3.4.79 -- people's words are not swapped
     const subject = `${opts.dm_name} invited you to ${opts.campaign_name}`;
     const html = inviteEmailHTML(opts.to_email, opts.dm_name, opts.campaign_name, opts.character_name, opts.character_class, opts.invite_url, opts.expires_at);
     await sendEmail(opts.to_email, subject, html);
@@ -439,6 +453,7 @@ async function sendInviteEmail(opts) {
 async function sendJoinNotificationEmail(opts) {
   // opts: { dm_email, dm_name, player_name, player_email, campaign_name, character_name, character_class, campaign_url }
   try {
+    opts = Object.assign({}, opts, { campaign_name: require('../services/brands').keep(opts.campaign_name), character_name: require('../services/brands').keep(opts.character_name), character_class: require('../services/brands').keep(opts.character_class) });   // v3.4.79 -- people's words are not swapped
     const subject = `${opts.player_name} joined ${opts.campaign_name}`;
     const html = joinNotificationHTML(opts.dm_name, opts.player_name, opts.player_email, opts.campaign_name, opts.character_name, opts.character_class, opts.campaign_url, opts.bonus_tokens);
     await sendEmail(opts.dm_email, subject, html);
@@ -451,6 +466,7 @@ async function sendJoinNotificationEmail(opts) {
 async function sendPlayerJoinedWelcomeEmail(opts) {
   // opts: { player_email, player_name, dm_name, campaign_name, character_name, character_class, campaign_url }
   try {
+    opts = Object.assign({}, opts, { campaign_name: require('../services/brands').keep(opts.campaign_name), character_name: require('../services/brands').keep(opts.character_name), character_class: require('../services/brands').keep(opts.character_class) });   // v3.4.79 -- people's words are not swapped
     const subject = `Welcome to ${opts.campaign_name}`;
     const html = playerJoinedWelcomeHTML(opts.player_name, opts.dm_name, opts.campaign_name, opts.character_name, opts.character_class, opts.campaign_url);
     await sendEmail(opts.player_email, subject, html);
@@ -812,6 +828,7 @@ async function sendOrderConfirmationEmail(opts) {
   // opts: { to_email, name, order }
   try {
     var order = opts.order || {};
+    order = Object.assign({}, order, { bookTitle: require('../services/brands').keep(order.bookTitle), orderName: require('../services/brands').keep(order.orderName), campaignName: require('../services/brands').keep(order.campaignName) });   // v3.4.79 -- people's words are not swapped
     var subject = 'Your Campaignia order is confirmed' + (order.orderNo ? ' (' + order.orderNo + ')' : '');
     var html = orderConfirmationHTML(opts.name, order);
     await sendEmail(opts.to_email, subject, html);
@@ -957,12 +974,13 @@ async function sendOrderFailureReport(o) {
     (order.externalId ? ' (' + order.externalId + ')' : '') +
     (order.customerEmail ? ' -- ' + order.customerEmail : '');
   await sendEmail(to, subject, orderFailureReportHTML(order),
-    { replyTo: order.customerEmail || undefined });
+    { replyTo: order.customerEmail || undefined, noWords: true });   // v3.4.79 -- a report to support, sent as written
 }
 async function sendOrderProblemEmail(opts) {
   // opts: { to_email, name, order }. Sends to the customer and BCCs support.
   try {
     var order = opts.order || {};
+    order = Object.assign({}, order, { bookTitle: require('../services/brands').keep(order.bookTitle), orderName: require('../services/brands').keep(order.orderName), campaignName: require('../services/brands').keep(order.campaignName) });   // v3.4.79 -- people's words are not swapped
     var subject = 'There was a problem with your Campaignia order' + (order.orderNo ? ' (' + order.orderNo + ')' : '');
     var html = orderProblemHTML(opts.name, order);
     // v3.0.783 -- TD-582. The BCC is gone: support receives sendOrderFailureReport instead, which
@@ -1278,6 +1296,7 @@ function giftEmail(row, code) {
 }
 
 async function sendGiftEmail(row, code) {
+  if (row) row = Object.assign({}, row, { message: require('../services/brands').keep(row.message) });   // v3.4.79 -- the buyer's message is not swapped
   var built = giftEmail(row, code);
   await sendEmail(row.recipient_email, built.subject, built.html);
   // v3.1.46 -- THE BUYER'S COPY, for a paid gift, once the recipient's has gone. Best-effort: the gift
@@ -1618,5 +1637,5 @@ module.exports = { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, disp
 // the one sendEmail above, with the sender's address as reply-to so the two members talk directly.
 // Added to the exports here rather than by editing the long list above.
 module.exports.sendMarketplaceEmail = function (to, subject, html, replyTo) {
-  return sendEmail(to, subject, html, replyTo ? { replyTo: replyTo } : undefined);
+  return sendEmail(to, subject, html, replyTo ? { replyTo: replyTo, noWords: true } : { noWords: true });   // v3.4.79 -- members' own messages, sent as written
 };

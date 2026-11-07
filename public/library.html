@@ -3,6 +3,7 @@
 <head>
   <link rel="stylesheet" href="/css/fonts.css">
   <link rel="stylesheet" href="/css/themes/campaignia.css">
+  <script>/* v3.4.69 -- the page's brand (services/brands.js). The server names it in the cmp_brand cookie, and never for Campaignia; any other brand's theme sheet is laid over Campaignia's here, before the first paint, and the toolbar takes its page color. */(function(){var m=document.cookie.match(/(?:^|;\s*)cmp_brand=([a-z0-9-]+)/);if(!m||m[1]==='campaignia')return;document.write('<link rel="stylesheet" href="/css/themes/'+m[1]+'.css">');document.documentElement.setAttribute('data-brand',m[1]);document.addEventListener('DOMContentLoaded',function(){var t=document.querySelector('meta[name="theme-color"]'),c=getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim();if(t&&c)t.setAttribute('content',c);});})();</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- v3.0.857 -- TD-716. The title, the three descriptions and the subtitle below are
@@ -29,7 +30,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     /* v3.4.61 -- colors come from the brand theme sheet, /css/themes/campaignia.css */
     html { scroll-behavior: smooth; }
-    body { font-family:'Crimson Text',Georgia,serif; background:var(--page-bg); background-image:url('/images/Campaignia_background.png'); background-size:cover; background-position:center; background-attachment:fixed; color:var(--on-panel); min-height:100vh; }
+    body { font-family:'Crimson Text',Georgia,serif; background:var(--page-bg); background-image:var(--page-picture); background-size:cover; background-position:center; background-attachment:fixed; color:var(--on-panel); min-height:100vh; }
 
     nav {
       position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between;
@@ -40,7 +41,7 @@
     .nav-logo img { height:30px; }
     .nav-logo-text { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--accent); letter-spacing:3px; }
     .nav-actions { display:flex; align-items:center; gap:14px; }
-    .nav-link { font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; color:rgba(var(--accent-rgb),0.6); text-decoration:none; transition:color .2s; }
+    .nav-link { font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; color:rgba(var(--accent-text-rgb),0.6); text-decoration:none; transition:color .2s; }
     .nav-link:hover { color:var(--accent); }
     .btn-nav {
       font-family:'Bangers',cursive; font-size:15px; letter-spacing:2px; padding:7px 18px;
@@ -58,7 +59,7 @@
     .lib-filter { display:flex; justify-content:center; gap:10px; padding:6px 14px 22px; }
     .filter-btn {
       font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer;
-      background:transparent; color:rgba(var(--accent-rgb),0.7); border:2px solid rgba(var(--accent-rgb),0.35); border-radius:3px; transition:all .15s;
+      background:transparent; color:rgba(var(--accent-text-rgb),0.7); border:2px solid rgba(var(--accent-rgb),0.35); border-radius:3px; transition:all .15s;
     }
     .filter-btn:hover { border-color:var(--accent); color:var(--accent); }
     .filter-btn.active { background:var(--accent); color:var(--page-bg); border-color:var(--accent); }
@@ -78,7 +79,7 @@
     .card img { display:block; width:100%; height:auto; background:var(--panel); }
     .card figcaption { display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:13px; padding:9px 12px; border-top:2px solid rgba(var(--accent-rgb),0.12); }
     .card .cap-title { font-style:italic; color:rgba(var(--on-panel-rgb),0.75); min-width:0; overflow:hidden; text-overflow:ellipsis; }
-    .card .cap-author { font-style:normal; font-size:12px; color:rgba(var(--accent-rgb),0.9); white-space:nowrap; flex:0 0 auto; }
+    .card .cap-author { font-style:normal; font-size:12px; color:rgba(var(--accent-text-rgb),0.9); white-space:nowrap; flex:0 0 auto; }
 
     .lib-status { text-align:center; padding:30px 18px 60px; color:rgba(var(--on-panel-rgb),0.55); font-style:italic; }
     .lib-status .btn-nav { display:inline-block; margin-top:14px; }
@@ -86,8 +87,8 @@
     @keyframes spin { to { transform:rotate(360deg); } }
     #sentinel { height:1px; }
 
-    footer { border-top:3px solid var(--page-bg); background:var(--page-bg); padding:22px; text-align:center; color:rgba(var(--accent-rgb),0.4); font-size:12px; font-family:'Cinzel',serif; letter-spacing:1px; }
-    footer a { color:rgba(var(--accent-rgb),0.6); text-decoration:none; }
+    footer { border-top:3px solid var(--page-bg); background:var(--page-bg); padding:22px; text-align:center; color:rgba(var(--accent-text-rgb),0.4); font-size:12px; font-family:'Cinzel',serif; letter-spacing:1px; }
+    footer a { color:rgba(var(--accent-text-rgb),0.6); text-decoration:none; }
     footer a:hover { color:var(--accent); }
 
     .card img { cursor: zoom-in; }
@@ -104,7 +105,7 @@
       .gallery { padding:0 14px 30px; }
     }
     .lib-tabs { display:flex; gap:8px; justify-content:center; margin:0 auto 6px; }
-    .tab-btn { background:transparent; border:2px solid var(--page-bg); color:var(--accent); font-family:'Cinzel',serif; font-size:12px; letter-spacing:2px; text-transform:uppercase; padding:8px 20px; border-radius:3px; cursor:pointer; }
+    .tab-btn { background:transparent; border:2px solid var(--page-bg); color:var(--accent-text); font-family:'Cinzel',serif; font-size:12px; letter-spacing:2px; text-transform:uppercase; padding:8px 20px; border-radius:3px; cursor:pointer; }
     .tab-btn.active { background:var(--accent); color:var(--surface-ink-text); }
     .lib-search { display:flex; justify-content:center; padding:0 14px 10px; }
     .lib-search input { width:100%; max-width:440px; background:var(--panel-deep); border:2px solid var(--page-bg); color:var(--on-panel); font-family:'Crimson Text',serif; font-size:15px; padding:10px 14px; border-radius:3px; }
@@ -196,7 +197,7 @@
     .sc-shelf[disabled] { cursor:default; color:var(--on-panel); background:rgba(var(--added-fill-rgb),0.92); border-color:var(--added-line); }
     .story-card .sc-title { font-family:'Cinzel',serif; font-size:13px; color:var(--on-panel); padding:0 0 6px; line-height:1.3; }
     .story-card .sc-sub { font-family:'Crimson Text',serif; font-size:12px; font-style:italic; color:rgba(var(--on-panel-rgb),0.72); margin:-3px 0 6px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }   /* v3.3.32 */
-    .story-card .sc-date { font-family:'Crimson Text',serif; font-size:11px; color:rgba(var(--accent-rgb),0.6); padding:0 0 7px; }
+    .story-card .sc-date { font-family:'Crimson Text',serif; font-size:11px; color:rgba(var(--accent-text-rgb),0.6); padding:0 0 7px; }
     /* v3.0.487 -- genre. Pills are display-only in v1; clickable chips that re-filter are a separate item. */
     .story-card .sc-genres { display:flex; flex-wrap:wrap; gap:4px; padding:0 0 8px; }
     .story-card .sc-genre { font-family:'Crimson Text',serif; font-size:10px; letter-spacing:0.02em; color:var(--on-panel); background:var(--gold-dim-label-fill); border:1px solid var(--gold-dim-label-line); border-radius:9px; padding:1px 7px; }
@@ -238,7 +239,7 @@
        -- or the three sit at different heights and the row reads as an accident. It keeps a
        thinner, dimmer border because it is an ACTION beside two MODE buttons, and only the
        modes should ever look selected. */
-    .facet-clear { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer; background:transparent; color:rgba(var(--accent-rgb),0.7); border:2px solid rgba(var(--accent-rgb),0.2); border-radius:3px; transition:all .15s; }
+    .facet-clear { font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:8px 18px; cursor:pointer; background:transparent; color:rgba(var(--accent-text-rgb),0.7); border:2px solid rgba(var(--accent-rgb),0.2); border-radius:3px; transition:all .15s; }
     .facet-clear:hover { color:var(--accent); border-color:var(--accent); }
     #lib-actions { gap:10px; margin-top:2px; }
     #lib-actions .lib-search { padding:0; flex:0 1 380px; min-width:220px; }   /* v3.3.45 -- on the Show everything row */
@@ -360,7 +361,7 @@
 
   <footer>
     &copy; <span id="yr"></span> So It Begins, LLC &middot; Campaignia &middot; <a href="/" onclick="goHome(event)">Home</a> &middot; <a href="/login">Sign In</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a>
-    <div style="margin-top:8px;font-size:11px;color:rgba(var(--accent-rgb),0.3);letter-spacing:0;line-height:1.5;">Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher.</div>
+    <div style="margin-top:8px;font-size:11px;color:rgba(var(--accent-text-rgb),0.3);letter-spacing:0;line-height:1.5;">Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher.</div>
   </footer>
 
   <script>

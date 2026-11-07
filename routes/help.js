@@ -347,6 +347,9 @@ router.post('/ask', requireAuth, async function(req, res) {
   // here is per-user (accountFacts, lifecycle) or read live from settings.
   const extras = [accountFacts.join('\n'), lifecycleBlock, generationCostBlock].filter(function (b) { return b; }).join('\n\n');
   let system = header.join('\n') + '\n\n' + tierBlock + '\n\n' + extras;
+  // v3.4.79 -- TD-1105. On Story the screen says story/chapter (public/js/brand-words.js); the assistant is told to say
+  // the same. Per request and after the cached prefix, so the cache is untouched. '' on Campaignia.
+  try { const _bw = require('../services/brands').helpWordsLine(req); if (_bw) system += '\n\n' + _bw; } catch (_bwe) {}
   let _aiDoneOn = false;
   try { _aiDoneOn = (await getAppSettingInt('help_ai_done_email', 0)) === 1; } catch (e) {}
   const _aiDoneAlready = !!(req.body && req.body.ai_done_sent === true);

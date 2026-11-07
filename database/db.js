@@ -434,6 +434,8 @@ async function initPostgres() {
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_promo_code TEXT',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_features BOOLEAN DEFAULT true',
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_activity BOOLEAN DEFAULT true',
+    // v3.4.69 -- TD-1105: the brand an account belongs to (services/brands.js keys; every existing account is Campaignia)
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS home_brand TEXT NOT NULL DEFAULT 'campaignia'",
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS character_id INTEGER',
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS asset_id INTEGER',
     // v3.2.66 -- TD-1006: a Retouch's working files (marker copy, tile), deleted when the job ends

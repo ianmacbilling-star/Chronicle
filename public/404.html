@@ -3,6 +3,7 @@
 <head>
   <link rel="stylesheet" href="/css/fonts.css">
   <link rel="stylesheet" href="/css/themes/campaignia.css">
+  <script>/* v3.4.69 -- the page's brand (services/brands.js). The server names it in the cmp_brand cookie, and never for Campaignia; any other brand's theme sheet is laid over Campaignia's here, before the first paint, and the toolbar takes its page color. */(function(){var m=document.cookie.match(/(?:^|;\s*)cmp_brand=([a-z0-9-]+)/);if(!m||m[1]==='campaignia')return;document.write('<link rel="stylesheet" href="/css/themes/'+m[1]+'.css">');document.documentElement.setAttribute('data-brand',m[1]);document.addEventListener('DOMContentLoaded',function(){var t=document.querySelector('meta[name="theme-color"]'),c=getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim();if(t&&c)t.setAttribute('content',c);});})();</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>404 — This page isn't here</title>
@@ -12,7 +13,7 @@
     body {
       font-family: 'Crimson Text', Georgia, serif;
       background: var(--page-bg);
-      background-image: url('/images/Campaignia_background.png');
+      background-image: var(--page-picture);
       background-size: cover;
       background-position: center;
       color: var(--accent-pale);

@@ -1,5 +1,263 @@
 [
   {
+    "version": "3.4.84",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3484-no-browser-boxes",
+        "kind": "fix",
+        "public": false,
+        "summary": "The last three browser pop-up boxes are now the app's own windows.",
+        "detail": "Ian, 2026-11-07: no browser boxes anywhere. Copying an invite link on a browser that cannot write to the clipboard now opens our own window with the link and a Copy button (was the browser prompt). Admin only: Dashboard Testers Turn off, and the double-click Reset AI image grows on the Optimize tab, now ask in our own window (were browser confirm boxes). Nothing else changed.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.83",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3483-brand-email-logo",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story emails show the Campaignia logo beside the Campaignia heading.",
+        "detail": "Ian: the logo can still go on Story emails. The heading that replaces the dark banner picture now has the chest logo beside the word Campaignia, as in the app header, using the small picture the emails already send (Campaignia_Favicon.png). Campaignia emails unchanged.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.82",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3482-brand-email-look",
+        "kind": "feature",
+        "public": false,
+        "summary": "Story: emails to Story accounts use Story's colors, with Campaignia as a text heading instead of the banner picture.",
+        "detail": "Ian chose option B: on Story the dark Campaignia banner picture would sit as a dark block on a light email. For an account whose home brand is Story, each email color (the eleven theme names emails use) is swapped for Story's value from its theme sheet, and the banner picture becomes the word Campaignia as text in Story's heading color and font. The product is still Campaignia; the logo stays for now. Campaignia accounts and production are unchanged.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.81",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3481-brain-step9",
+        "kind": "fix",
+        "public": false,
+        "summary": "Help: the getting-started steps no longer say moments cannot be moved.",
+        "detail": "Brain section 1a step 9 still said moments cannot be moved or removed, from before free order (v3.4.32 to v3.4.44); the help chat repeated it to Ian. It now says they can be moved with the arrows or the gripper, and points to Move panels and bridges anywhere; a picture panel still cannot be removed.",
+        "td": [
+          "TD-1107"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.80",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3480-guide-words",
+        "kind": "fix",
+        "public": false,
+        "summary": "Getting started guide reads properly on Story; step 1 reworded.",
+        "detail": "Ian on Story: step 1 said Create a story / Your campaign holds the whole story, and step 4 Create a chapter/chapter. The guide's step text was wrongly on the page swap's keep list; it now swaps too. A swap that doubles one of the brand's words (chapter/chapter, story story) folds back to one word, on screen and in emails. Step 1 (and Brain section 1a) now say Your campaign holds all of its sessions, which reads as Your story holds all of its chapters on Story.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.79",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3479-brand-words-server",
+        "kind": "feature",
+        "public": false,
+        "summary": "Story: emails and the help assistant say story and chapter too.",
+        "detail": "Ian: swap campaign for story and session for chapter in the emails and the Brain; the product stays Campaignia and the logo stays. Emails to an account whose home brand is Story get the words swapped in the subject and the email's own wording (never inside links, tags or styles), while names people typed (campaign and character names, book titles, gift messages) are kept as written; reports to support and Guild messages are sent unchanged. The help assistant is told the person's brand words on each question (from the brand on screen). Production does nothing while only Campaignia is live.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.78",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3478-prep-member-canonical",
+        "kind": "fix",
+        "public": false,
+        "summary": "A member opening Publish on the Story Master's version no longer sees \"Something went wrong\".",
+        "detail": "Ian, with a newly invited member viewing the Canonical on Prep & Preview. The first-open snapshot save (title, title color, cover) ran because the page counts a member with no version of their own as owning the Canonical (TD-254, still open), while the server refuses it; the refusal popped up. The background save now runs only where the server agrees: your own version, the Canonical for its Story Master, or a curating Story Master. A change the member makes themselves still gets the switch-to-your-own-version message. Also: the Publish subtitle now reads Your complete campaign (Your complete story on Story, where the word swap had made it story story).",
+        "td": [
+          "TD-1105",
+          "TD-254"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.77",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3477-brand-words",
+        "kind": "feature",
+        "public": false,
+        "summary": "Story: campaigns are called stories and sessions chapters.",
+        "detail": "Ian chose option A for now: a small script, public/js/brand-words.js, swaps whole words on screen for brands with a word list (Story: campaign to story, session to chapter, keeping plural and case). It never touches form fields or the places that show people's own words (names, descriptions, panel titles, narrative, captions), and it stops at once on Campaignia. Option B, each place asking the brand for its word, comes later with the full word list.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.76",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3476-story-faint-labels",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: faint labels across the app (panel style lines, Moment and Bridge headers and the like) are darker.",
+        "detail": "Ian on staging, Story brand: the style line under a panel title (Watercolor, Discovery, Fullpage) and the 6 - MOMENT header were too faint. Every text color written as see-through accent in the app (89 in style.css, 26 in app.html, 28 in app.js) now uses --accent-text-rgb from v3.4.74: the same gold on Campaignia, dark periwinkle on Story, so the faint labels keep their lightness but read. Also from Ian: the Edit prompt / Regen / Retouch / Replace / Lock / Archive buttons over a picture had turned light in v3.4.73 and were hard to read on the dark frame; they are back to dark glass with accent text on every brand.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.75",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3475-brand-theme",
+        "kind": "feature",
+        "public": false,
+        "summary": "Account page: a Brand Theme choice, so anyone can switch between Campaignia and Story.",
+        "detail": "Ian: everyone may switch, and customers switch themselves. A Brand Theme dropdown on the Account page lists the brands this person may pick and saves the pick to users.home_brand (GET and PUT /api/auth/brand, own account only). The save also updates the brand cached in the session, so the page reloads in the new brand at once. The section only shows when there is more than one brand to pick, so it stays hidden on production while only Campaignia is live. When a staging switch or the BRAND variable outranks the account, the page says so.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.74",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3474-story-text",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: faint labels in the library, the Guild and the Retouch panel are readable.",
+        "detail": "Ian on staging, Story brand. Small text in the accent color (library header link, Gallery/Books/The Guild tabs, filter and Guild role buttons, footers, form placeholders) now uses a new theme name, --accent-text: the same gold on Campaignia, dark periwinkle on Story. Story's --gold-dim (Retouch panel subtitle, Marker size, the Optional: click lines, many app hints) and --warn-text are now dark too. The impersonation banner's Add tokens button and the small x over marketplace pictures go back to dark glass, since they sit on orange or on a picture.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.73",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3473-glass",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: buttons, chips and the account menu on a light page are light, not grey or brown.",
+        "detail": "Ian on staging: the grey buttons on Review (Edit Image Prompt, Add character and the like) could not be read on Story. They, and every other plain see-through black background in the app (56 of them; the Details button on the dark books keeps its dark glass), now use the theme's --glass-rgb: black on Campaignia, so nothing changes there; white on Story. Shadows and the dark gradients over pictures stay as they were. Also from Ian: the account menu was dark brown with dark text on Story. The solid dark surfaces (app header, account menu, corner menu, selected chips, novel cover and chapter headers) now use a new theme name, --ink-bg: the same dark brown on Campaignia, pale lavender on Story. And the description and fork lines on the dark campaign and session books use a new --on-book-rgb, parchment on every brand, since the books stay dark.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.72",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3472-story-stand-in-palette",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: a stand-in light palette for the inside of the app (proof of concept).",
+        "detail": "brand2.css gets light values for 104 more theme names, worked out from the Sky and Lavender palette by how each name is used, so the app is readable as Story for the marketing demo (Ian: \"this is to prove the concept\"). Rough by design; the designer's palette replaces it. Also: the app's darkening of the background picture, the dark halo behind page titles and the page title gold now follow the theme (--picture-dim and the new --page-title), so Story's app is not greyed over; Campaignia's values are unchanged. Story is not live on production.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.71",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3471-page-picture-story-name",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: the background picture is a theme setting (Story gets its watercolor wash); brand 2 is named Story.",
+        "detail": "The tavern picture behind the app, the campaigns screen, sign-in, invite, gift, redeem, 404 and the Library is now the theme's --page-picture: Campaignia's sheet holds the same picture, so Campaignia looks the same; brand 2's holds its watercolor wash in place of a picture. Brand 2's name in the brand list is Story (Ian; the internal key stays brand2). Also the hover on Amended appearance (session Characters tab) now says Save keeps it (was Approve change).",
+        "td": [
+          "TD-1105",
+          "TD-1111"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.70",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3470-brain-characters-tab",
+        "kind": "fix",
+        "public": false,
+        "summary": "Help assistant: the Characters tab answers match the redesigned Edit window.",
+        "detail": "Brain section 10.2 and the troubleshooting answer for a character whose look changes: the red Change Detected band (was a review badge), Save keeps a retouch (was Approve change), Revert and Cancel, Ignore suggested change, and the Change Starts at Moment dropdown (was Change first appears at this Moment Panel). Text only.",
+        "td": [
+          "TD-1111"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.69",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3469-brand-groundwork",
+        "kind": "feature",
+        "public": false,
+        "summary": "Two brands groundwork: each page is given its brand; accounts remember theirs; a staging switch.",
+        "detail": "New services/brands.js: the brand list (Campaignia, live; brand 2, not live yet) and the rule that picks each page's brand: the staging switch (?brand=brand2 on any page, remembered by that browser; ?brand=clear), the BRAND Railway variable (staging only), a brand's own web address (none yet), the signed-in person's brand, the landing page they came through (/story is brand 2's), else Campaignia. A brand that is not live is never chosen on production. New column users.home_brand (text, every existing account 'campaignia'); a new account takes the brand it signed up through. Every page (app, sign-in, gift, redeem, invite, reset, landing pages, Library, legal pages, 404, offline) reads the brand and lays brand 2's theme over Campaignia's when it applies; /story's own address check from v3.4.68 is replaced by this. On production nothing changes while brand 2 is not live.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.68",
     "staged_on": "2026-11-06",
     "entries": [
