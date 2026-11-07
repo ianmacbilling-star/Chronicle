@@ -27,9 +27,45 @@
 // ============================================================
 const express = require('express');
 const router = express.Router();
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, isAdminEmail, getCampaignRole } = require('../middleware/auth');
 const { getDb } = require('../database/db');
 const storage = require('../storage/storage');
+
+// v3.4.94 -- THE VIDEO SWITCH (Ian, 2026-11-07: "Make it always work for admins... but the on and off would be for
+// everyone else"). The Dashboard sets app_settings.video_lab_on ('1' on, anything else off). Admins always pass;
+// everyone else passes only while it is on. Read on every call, so switching it off stops the next request.
+// No tokens are charged yet: while it is on, every clip anyone makes is billed to Campaignia by fal.
+async function videoSwitchOn(db) {
+  const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_lab_on');
+  return !!(r && String(r.value) === '1');
+}
+async function requireVideo(req, res, next) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = await getDb();
+    const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+    if (!u) return res.status(403).json({ error: 'Video is not available.' });
+    if (isAdminEmail(u.email)) { req.vlAdmin = true; return next(); }
+    if (await videoSwitchOn(db)) { req.vlAdmin = false; return next(); }
+    return res.status(403).json({ error: 'Video is not available.' });
+  } catch (e) {
+    return res.status(500).json({ error: 'Could not check video access.' });
+  }
+}
+// Who may do what, for everyone but admins (admins may do anything, as before):
+//   see a video   -- any member of its campaign;
+//   change it     -- (rename, redo, join again, delete) the member who made it, or the campaign Story Master.
+async function canSee(req, p) {
+  if (req.vlAdmin) return true;
+  return !!(p && await getCampaignRole(req.session.userId, p.campaign_id));
+}
+async function canChange(req, p) {
+  if (req.vlAdmin) return true;
+  if (!p) return false;
+  const role = await getCampaignRole(req.session.userId, p.campaign_id);
+  if (!role) return false;
+  return role === 'dm' || Number(p.user_id) === Number(req.session.userId);
+}
 
 // Model table. Endpoint ids, input names, durations and prices from fal's own model pages,
 // 2026-11-07. Prices are USD per second of video at 720p; "sound" is the model's own audio.
@@ -174,7 +210,7 @@ function cleanName(s) {
 }
 
 // ---- reading -------------------------------------------------------------------------------
-router.get('/models', requireAuth, requireAdmin, function (req, res) {
+router.get('/models', requireAuth, requireVideo, function (req, res) {
   const out = Object.keys(MODELS).map(function (k) {
     const m = MODELS[k];
     return { key: k, label: m.label, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired };
@@ -191,12 +227,13 @@ async function projectsWithShots(db, where, params) {
   return projects;
 }
 
-router.get('/projects', requireAuth, requireAdmin, async function (req, res) {
+router.get('/projects', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
     const cid = parseInt(req.query.campaign_id, 10);
     if (!cid) return res.status(400).json({ error: 'campaign_id is required' });
+    if (!req.vlAdmin && !(await getCampaignRole(req.session.userId, cid))) return res.status(403).json({ error: 'You are not in that campaign.' });   // v3.4.94
     res.json({ projects: await projectsWithShots(db, 'campaign_id = ?', [cid]) });
   } catch (e) {
     console.error('[video-lab] list error:', e && e.message);
@@ -205,7 +242,7 @@ router.get('/projects', requireAuth, requireAdmin, async function (req, res) {
 });
 
 // ---- making a run --------------------------------------------------------------------------
-router.post('/projects', requireAuth, requireAdmin, async function (req, res) {
+router.post('/projects', requireAuth, requireVideo, async function (req, res) {
   const b = req.body || {};
   const m = MODELS[b.model];
   if (!m) return res.status(400).json({ error: 'Pick a model.' });
@@ -237,8 +274,16 @@ router.post('/projects', requireAuth, requireAdmin, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
+    // v3.4.94 -- with the switch on, a member makes videos only in their own campaign, only from its Archive.
+    if (!req.vlAdmin) {
+      if (!(await getCampaignRole(req.session.userId, cid))) return res.status(403).json({ error: 'You are not in that campaign.' });
+      const got = await db.prepare('SELECT DISTINCT image_url FROM campaign_archives WHERE campaign_id = ? AND image_url = ANY(?)').all(cid, [pics.map(function (p) { return p.url; })]);
+      const inArchive = {}; (got || []).forEach(function (r) { inArchive[r.image_url] = true; });
+      if (pics.some(function (p) { return !inArchive[p.url]; })) return res.status(400).json({ error: 'Every picture must come from this campaign Archive.' });
+    }
     const name = cleanName(b.name) || ('Video Lab ' + new Date().toISOString().slice(0, 16).replace('T', ' '));
-    const sid = parseInt(b.session_id, 10) || null;
+    let sid = parseInt(b.session_id, 10) || null;
+    if (sid && !(await db.prepare('SELECT id FROM sessions WHERE id = ? AND campaign_id = ?').get(sid, cid))) sid = null;   // v3.4.94: only a session of this campaign
     const total = Math.round(shots.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
     const settings = JSON.stringify({ overall_prompt: overall, pictures: pics, model: b.model, sound: sound });
     const p = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, name, kind, status, total_cost_usd, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
@@ -276,7 +321,7 @@ router.post('/projects', requireAuth, requireAdmin, async function (req, res) {
 
 // v3.4.90 -- Redo one shot: the same pictures, prompt and settings sent again. Its old clip and the joined video are
 // removed (the join is made again once every shot is back).
-router.post('/shots/:id/redo', requireAuth, requireAdmin, async function (req, res) {
+router.post('/shots/:id/redo', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
@@ -284,6 +329,7 @@ router.post('/shots/:id/redo', requireAuth, requireAdmin, async function (req, r
     if (!shot) return res.status(404).json({ error: 'Not found.' });
     if (['queued', 'running', 'saving'].indexOf(shot.status) >= 0) return res.status(409).json({ error: 'That clip is still being made.' });
     const p = await db.prepare('SELECT * FROM video_projects WHERE id = ?').get(shot.project_id);
+    if (!(await canChange(req, p))) return res.status(404).json({ error: 'Not found.' });   // v3.4.94
     if (p && p.merge_status === 'running') return res.status(409).json({ error: 'The clips are being joined right now; try again in a minute.' });
     const m = MODELS[shot.model];
     if (!m) return res.status(400).json({ error: 'That model is no longer offered.' });
@@ -316,12 +362,14 @@ function falErrorText(e) {
   return ((e.status ? e.status + ' ' : '') + (e.message || '') + (detail ? ' ' + detail : '')).trim().slice(0, 1000) || 'unknown error';
 }
 
-router.patch('/projects/:id', requireAuth, requireAdmin, async function (req, res) {
+router.patch('/projects/:id', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
     const name = cleanName(req.body && req.body.name);
     if (!name) return res.status(400).json({ error: 'A name is needed.' });
     const db = await getDb();
+    const _p = await db.prepare('SELECT id, user_id, campaign_id FROM video_projects WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!(await canChange(req, _p))) return res.status(404).json({ error: 'Not found.' });   // v3.4.94
     const r = await db.prepare('UPDATE video_projects SET name = ?, updated_at = NOW() WHERE id = ?').run(name, parseInt(req.params.id, 10));
     if (!r.changes) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true, name: name });
@@ -347,11 +395,12 @@ async function sendVideo(res, url, fname) {
   res.end(buf);
 }
 // v3.4.90 -- the joined video as one file.
-router.get('/projects/:id/download', requireAuth, requireAdmin, async function (req, res) {
+router.get('/projects/:id/download', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
-    const p = await db.prepare('SELECT id, name, final_video_url FROM video_projects WHERE id = ?').get(parseInt(req.params.id, 10));
+    const p = await db.prepare('SELECT id, name, final_video_url, user_id, campaign_id FROM video_projects WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (p && !(await canSee(req, p))) return res.status(404).json({ error: 'That video is not finished.' });   // v3.4.94
     if (!p || !p.final_video_url) return res.status(404).json({ error: 'That video is not finished.' });
     const base = String(p.name || 'video').replace(/[^A-Za-z0-9 ._-]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'video';
     await sendVideo(res, p.final_video_url, base + '.mp4');
@@ -360,11 +409,12 @@ router.get('/projects/:id/download', requireAuth, requireAdmin, async function (
     res.status(500).json({ error: 'Could not read the video.' });
   }
 });
-router.get('/shots/:id/download', requireAuth, requireAdmin, async function (req, res) {
+router.get('/shots/:id/download', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
-    const shot = await db.prepare('SELECT s.id, s.video_url, p.name FROM video_shots s JOIN video_projects p ON p.id = s.project_id WHERE s.id = ?').get(parseInt(req.params.id, 10));
+    const shot = await db.prepare('SELECT s.id, s.video_url, p.name, p.user_id, p.campaign_id FROM video_shots s JOIN video_projects p ON p.id = s.project_id WHERE s.id = ?').get(parseInt(req.params.id, 10));
+    if (shot && !(await canSee(req, shot))) return res.status(404).json({ error: 'No video for that shot.' });   // v3.4.94
     if (!shot || !shot.video_url) return res.status(404).json({ error: 'No video for that shot.' });
     await sendVideo(res, shot.video_url, fileNameFor(shot.name, shot.id));
   } catch (e) {
@@ -373,13 +423,14 @@ router.get('/shots/:id/download', requireAuth, requireAdmin, async function (req
   }
 });
 
-router.delete('/projects/:id', requireAuth, requireAdmin, async function (req, res) {
+router.delete('/projects/:id', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
     const id = parseInt(req.params.id, 10);
     const p = await db.prepare('SELECT * FROM video_projects WHERE id = ?').get(id);
     if (!p) return res.status(404).json({ error: 'Not found.' });
+    if (!(await canChange(req, p))) return res.status(404).json({ error: 'Not found.' });   // v3.4.94
     const shots = await db.prepare('SELECT id, video_url FROM video_shots WHERE project_id = ?').all(id);
     const files = shots.map(function (s) { return s.video_url; }).concat([p.final_video_url]).filter(function (f, i, all) { return f && all.indexOf(f) === i; });   // v3.4.90: a one-shot video's file is its shot's
     // deleteFile logs and swallows its own failures, so this counts files asked for, not proven gone.
@@ -463,11 +514,13 @@ async function fetchVideo(url) {
 }
 
 // Join again after a failed join (the clips are all there).
-router.post('/projects/:id/join', requireAuth, requireAdmin, async function (req, res) {
+router.post('/projects/:id/join', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
     const id = parseInt(req.params.id, 10);
+    const _p = await db.prepare('SELECT id, user_id, campaign_id FROM video_projects WHERE id = ?').get(id);
+    if (!(await canChange(req, _p))) return res.status(404).json({ error: 'Not found.' });   // v3.4.94
     const r = await db.prepare("UPDATE video_projects SET merge_status = NULL, merge_error = NULL, merge_request_id = NULL, updated_at = NOW() WHERE id = ? AND merge_status = 'error'").run(id);
     if (!r.changes) return res.status(409).json({ error: 'Nothing to join again.' });
     await projectStatus(db, id);

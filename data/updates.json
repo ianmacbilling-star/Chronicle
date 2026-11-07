@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.94",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3494-video-switch",
+        "kind": "feature",
+        "public": false,
+        "summary": "Dashboard: a Video switch beside The Guild and Brands, all three on one row. Admins always have the Video Lab; the switch gives it to everyone else.",
+        "detail": "TD-090. Ian: make it always work for admins, the on and off for everyone else. app_settings.video_lab_on, read on every Video Lab call, so switching off stops the next request. With it on, a member sees and makes videos only in their own campaigns and only from that campaign Archive; renaming, redoing, joining again and deleting are for the member who made the video or the Story Master. No tokens are charged for video yet, and the switch says so.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.93",
     "staged_on": "2026-11-07",
     "entries": [

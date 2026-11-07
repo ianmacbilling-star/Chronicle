@@ -2207,8 +2207,9 @@ function checkAuth() {
       // v3.0.672 -- TD-475. STILL ADMIN ONLY. Ian: "You can let the badge itself be the way in. No
       // Dashboard." A menu entry appearing for a non-admin is a door they did not ask for.
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
-      var _vlTab = document.getElementById('stab-videolab'); if (_vlTab) _vlTab.style.display = data.is_admin ? '' : 'none';   // v3.4.87 -- TD-090 Video Lab, admins only
+      var _vlTab = document.getElementById('stab-videolab'); if (_vlTab) _vlTab.style.display = (data.is_admin || data.videoOn) ? '' : 'none';   // v3.4.87 -- TD-090 Video Lab; v3.4.94: or the video switch is on
       var _brSec = document.getElementById('admin-brands-section'); if (_brSec) { _brSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminBrandsLoad(); } catch (e) {} } }   // v3.4.85 -- TD-1105 Brands on this site
+      var _vdSec = document.getElementById('admin-video-section'); if (_vdSec) { _vdSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminVideoLoad(); } catch (e) {} } }   // v3.4.94 -- the video switch
       if (typeof renderTierBadge === 'function') renderTierBadge(data);
       // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
       if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
@@ -18644,8 +18645,9 @@ function checkAuth() {
       // v3.0.672 -- TD-475. STILL ADMIN ONLY. Ian: "You can let the badge itself be the way in. No
       // Dashboard." A menu entry appearing for a non-admin is a door they did not ask for.
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
-      var _vlTab = document.getElementById('stab-videolab'); if (_vlTab) _vlTab.style.display = data.is_admin ? '' : 'none';   // v3.4.87 -- TD-090 Video Lab, admins only
+      var _vlTab = document.getElementById('stab-videolab'); if (_vlTab) _vlTab.style.display = (data.is_admin || data.videoOn) ? '' : 'none';   // v3.4.87 -- TD-090 Video Lab; v3.4.94: or the video switch is on
       var _brSec = document.getElementById('admin-brands-section'); if (_brSec) { _brSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminBrandsLoad(); } catch (e) {} } }   // v3.4.85 -- TD-1105 Brands on this site
+      var _vdSec = document.getElementById('admin-video-section'); if (_vdSec) { _vdSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminVideoLoad(); } catch (e) {} } }   // v3.4.94 -- the video switch
       if (typeof renderTierBadge === 'function') renderTierBadge(data);
       // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
       if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
@@ -41777,12 +41779,12 @@ function adminBrandsSave(changed) {
 // ============================================================
 var VL = { models: null, seq: [], pairs: [], overall: '', projects: [], open: {}, timer: null, cid: null, busy: false };
 
-function vlIsAdmin() { return !!(state.user && state.user.is_admin); }
+function vlIsAdmin() { return !!(state.user && (state.user.is_admin || state.user.videoOn)); }   // v3.4.94: or the video switch is on
 
 function vlOpen() {
   var host = document.getElementById('session-tab-videolab');
   if (!host) return;
-  if (!vlIsAdmin()) { host.innerHTML = '<p style="padding:16px;">The Video Lab is for admins only.</p>'; return; }
+  if (!vlIsAdmin()) { host.innerHTML = '<p style="padding:16px;">The Video Lab is not available yet.</p>'; return; }
   var cid = state.currentCampaign && state.currentCampaign.id;
   if (VL.cid !== cid) { VL.cid = cid; VL.seq = []; VL.pairs = []; VL.overall = ''; VL.projects = []; VL.open = {}; }
   host.innerHTML = '<div style="padding:14px;background:var(--panel);color:var(--on-panel);border-radius:10px;">' +
@@ -42251,3 +42253,30 @@ try {
   });
   document.addEventListener('dragend', function () { _sessDrag = null; _sessPaint(null); _sessUndrag(); });
 } catch (e) {}
+
+// ============================================================
+// v3.4.94 -- THE VIDEO SWITCH (admin; the Dashboard, on one row with The Guild and Brands). Ian, 2026-11-07: "Make it
+// always work for admins... but the on and off would be for everyone else." Server: GET/PUT /api/admin/video-lab; the
+// Video Lab routes check it on every call; /api/auth/me sends videoOn for the tab.
+// ============================================================
+function adminVideoLoad() {
+  var box = document.getElementById('admin-video-switch');
+  if (!box) return;
+  fetch('/api/admin/video-lab', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d && typeof d.on === 'boolean') box.checked = d.on;
+  }).catch(function () {});
+}
+function adminVideoSave(box) {
+  var msg = document.getElementById('admin-video-msg');
+  function say(t) { if (msg) msg.textContent = t; }
+  var on = !!(box && box.checked);
+  say('Saving...');
+  fetch('/api/admin/video-lab', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: on }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || typeof res.j.on !== 'boolean') { if (box) box.checked = !on; say((res.j && res.j.error) || 'Could not save it.'); return; }
+      if (box) box.checked = res.j.on;
+      say(res.j.on ? 'Video is on for everyone.' : 'Video is off: admins only.');
+    })
+    .catch(function () { if (box) box.checked = !on; say('Could not reach the server.'); });
+}

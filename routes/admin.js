@@ -1313,4 +1313,29 @@ router.put('/brands', requireAuth, requireAdmin, async function (req, res) {
   }
 });
 
+// v3.4.94 -- THE VIDEO SWITCH (Ian, 2026-11-07). Admins always have the Video Lab; this turns it on or off for everyone
+// else. app_settings.video_lab_on: '1' on, '0' off (never set reads as off). routes/videoLab.js reads it on every call.
+router.get('/video-lab', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const db = await getDb();
+    const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_lab_on');
+    res.json({ on: !!(r && String(r.value) === '1') });
+  } catch (e) {
+    res.status(500).json({ error: friendlyError(e, 'Could not read the video setting.') });
+  }
+});
+router.put('/video-lab', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const on = !!(req.body && req.body.on === true);
+    const db = await getDb();
+    const ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get('video_lab_on');
+    if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(on ? '1' : '0', 'video_lab_on');
+    else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run('video_lab_on', on ? '1' : '0');
+    console.log('[video-lab] switch ' + (on ? 'ON for everyone' : 'OFF (admins only)') + ' (admin user ' + req.session.userId + ')');
+    res.json({ on: on });
+  } catch (e) {
+    res.status(500).json({ error: friendlyError(e, 'Could not save the video setting.') });
+  }
+});
+
 module.exports = router;
