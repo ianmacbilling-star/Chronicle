@@ -11983,6 +11983,16 @@ function prepMaterializeBookMeta() {
   try {
     var c = state.currentCampaign; if (!c || !state.user) return;
     if (!(typeof prepUseMember === 'function' && prepUseMember())) return;
+    // v3.4.78 -- ONLY ON A VERSION THE SERVER WILL LET YOU WRITE. Ian, 2026-11-06: a member he had just invited opened
+    // Prep & Preview on the Story Master's Canonical and got "Something went wrong". prepUseMember() still counts a member
+    // with no version of their own as owning the Canonical (the TD-254 question, left open on purpose), but the server's
+    // ownership test does not, so this background save was refused every time and the refusal popped up over a screen
+    // they were only looking at. The snapshot is now written only where the server agrees: your own version, the
+    // Canonical when you are its Story Master, or a curating Story Master. An edit the member makes themselves still
+    // gets the server's "switch to your own version" message, which is right.
+    var _vOn = (typeof novelVersionOnScreen === 'function') ? novelVersionOnScreen() : null;
+    var _curate = (typeof smMayCurateBook === 'function') && smMayCurateBook();
+    if (_vOn && !_curate && !(_vOn.is_canonical ? (c.my_role === 'dm') : !!_vOn.is_mine)) return;
     var _key = String(c.id) + '|' + String((typeof bookMetaVersionId === 'function' ? bookMetaVersionId() : '') || '0');
     state._prepMaterialized = state._prepMaterialized || {};
     if (state._prepMaterialized[_key]) return;

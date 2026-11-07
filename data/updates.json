@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.4.78",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3478-prep-member-canonical",
+        "kind": "fix",
+        "public": false,
+        "summary": "A member opening Publish on the Story Master's version no longer sees \"Something went wrong\".",
+        "detail": "Ian, with a newly invited member viewing the Canonical on Prep & Preview. The first-open snapshot save (title, title color, cover) ran because the page counts a member with no version of their own as owning the Canonical (TD-254, still open), while the server refuses it; the refusal popped up. The background save now runs only where the server agrees: your own version, the Canonical for its Story Master, or a curating Story Master. A change the member makes themselves still gets the switch-to-your-own-version message. Also: the Publish subtitle now reads Your complete campaign (Your complete story on Story, where the word swap had made it story story).",
+        "td": [
+          "TD-1105",
+          "TD-254"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.77",
     "staged_on": "2026-11-06",
     "entries": [
