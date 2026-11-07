@@ -22173,9 +22173,51 @@ function writeToClipboard(text, flashText) {
       if (flashText) showAlert(flashText);
     });
   } else {
-    // Fallback: prompt the user to copy manually
-    window.prompt('Copy this invite link:', text);
+    // v3.4.84 -- Fallback: our own window with the link, never the browser's prompt box
+    // (Ian, 2026-11-07: no browser boxes anywhere).
+    cmpCopyLinkWindow(text, flashText);
   }
+}
+
+// v3.4.84 -- The link in a read-only box with Copy and Close, drawn like uiConfirm. Only for a
+// browser that cannot write to the clipboard by itself. Copy selects the link and asks the browser
+// to copy it; if that fails too, the link stays selected and the line says how to copy it by hand.
+function cmpCopyLinkWindow(text, flashText) {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,0.5);max-width:440px;width:100%;padding:22px 22px 18px;';
+  var msg = document.createElement('div');
+  msg.textContent = 'Copy this invite link:';
+  msg.style.cssText = 'color:var(--on-panel);font-size:15px;line-height:1.5;margin-bottom:12px;';
+  var input = document.createElement('input');
+  input.type = 'text'; input.readOnly = true; input.value = String(text == null ? '' : text);
+  input.setAttribute('data-no-words', '');
+  input.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 10px;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.4);background:rgba(var(--accent-rgb),0.08);color:var(--on-panel);font-size:14px;margin-bottom:16px;';
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+  var close = document.createElement('button'); close.className = 'btn btn-sm'; close.textContent = 'Close';
+  var copy = document.createElement('button'); copy.className = 'btn btn-sm btn-primary'; copy.textContent = 'Copy';
+  row.appendChild(close); row.appendChild(copy);
+  box.appendChild(msg); box.appendChild(input); box.appendChild(row); overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  function pick() { try { input.focus(); input.select(); input.setSelectionRange(0, input.value.length); } catch (e) {} }
+  function done() {
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape') done(); }
+  copy.onclick = function () {
+    pick();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    if (ok) { done(); if (flashText && typeof showAlert === 'function') showAlert(flashText); }
+    else msg.textContent = 'The link is selected: press Ctrl+C (or hold it on a phone) to copy it.';
+  };
+  close.onclick = done;
+  overlay.onclick = function (e) { if (e.target === overlay) done(); };
+  document.addEventListener('keydown', onKey);
+  setTimeout(pick, 30);
 }
 
 // --- Small format helpers ---
@@ -23901,9 +23943,14 @@ function renderTesters(list, env) {
   box.innerHTML = html;
 }
 
-function switchTester(id, on) {
+function switchTester(id, on, sure) {
   var rm = document.getElementById('tester-row-msg-' + id);
-  if (!on && !confirm('Turn this tester off? The account goes back to Copper unless it pays for a subscription.')) return;
+  // v3.4.84 -- our own window, not the browser's confirm box (Ian, 2026-11-07: no browser boxes).
+  if (!on && !sure) {
+    uiConfirm('Turn this tester off? The account goes back to Copper unless it pays for a subscription.', { okText: 'Turn off', danger: true })
+      .then(function (yes) { if (yes) switchTester(id, on, true); });
+    return;
+  }
   if (rm) rm.textContent = 'Saving...';
   fetch('/api/admin/testers/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: !!on }) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
@@ -34078,7 +34125,9 @@ function _runLayoutAiOptimize() {
     _befLbl.title = 'Double-click: reset AI image grows for this book (admin)';
     _befLbl.ondblclick = function () {
       if (!state.currentCampaign) return;
-      if (!confirm('Reset AI image grows for this book?\n\nThis clears the saved grow on every image so the next Optimize rebuilds from the natural sizes (with the current no-crop limits). Use this to recover images that were over-grown / cropped by earlier runs.')) return;
+      // v3.4.84 -- our own window, not the browser's confirm box (Ian, 2026-11-07: no browser boxes).
+      uiConfirm('Reset AI image grows for this book?\n\nThis clears the saved grow on every image so the next Optimize rebuilds from the natural sizes (with the current no-crop limits). Use this to recover images that were over-grown / cropped by earlier runs.', { preserveLines: true, okText: 'Reset' }).then(function (yes) {
+      if (!yes || !state.currentCampaign) return;
       var _cid = state.currentCampaign.id;
       var _txt0 = _befLbl.textContent;
       _befLbl.textContent = 'resetting...';
@@ -34090,6 +34139,7 @@ function _runLayoutAiOptimize() {
           alert('Reset ' + ((j && j.cleared) || 0) + ' image grow(s). Run Optimize again to rebuild the book from natural sizes.');
         })
         .catch(function (e) { _befLbl.textContent = _txt0; alert('Reset failed: ' + ((e && e.message) || e)); });
+      });
     };
   }
   // v3.0.355 -- THE LAYOUT PROCESS IS IDENTICAL FOR EVERY USER.

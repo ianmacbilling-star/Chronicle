@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.84",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3484-no-browser-boxes",
+        "kind": "fix",
+        "public": false,
+        "summary": "The last three browser pop-up boxes are now the app's own windows.",
+        "detail": "Ian, 2026-11-07: no browser boxes anywhere. Copying an invite link on a browser that cannot write to the clipboard now opens our own window with the link and a Copy button (was the browser prompt). Admin only: Dashboard Testers Turn off, and the double-click Reset AI image grows on the Optimize tab, now ask in our own window (were browser confirm boxes). Nothing else changed.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.83",
     "staged_on": "2026-11-06",
     "entries": [
