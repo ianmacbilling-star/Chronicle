@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.91",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3491-session-order-place",
+        "kind": "fix",
+        "public": false,
+        "summary": "Sessions now keep a place in their campaign list; every list and book reads it. Nothing looks different yet.",
+        "detail": "TD-933 build 1. Ian: ordering sessions by date is a little hit and miss, so each session now has a place (sessions.sort_order, 1, 2, 3 within a campaign). The first start numbers every campaign exactly as its list read before: date, then the order made, then id. The Sessions page, the session arrows, Publish, the printed book, the campaign tile picture, the bookshelf, Import Looks and every earlier-session rule (a character look carried forward, the version style, the previous session summary) read the place first, with the old order behind it. A new session goes to the end of the list. One accepted change: two sessions on the same date now count as one before the other for character looks. The arrows to move a session come in the next build.",
+        "td": [
+          "TD-933"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.90",
     "staged_on": "2026-11-07",
     "entries": [

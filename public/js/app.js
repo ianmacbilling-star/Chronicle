@@ -3976,6 +3976,7 @@ function renderSessions() {
 
   // Newest first — sort by session date descending
   var ordered = state.sessions.slice().sort(function(a, b) {
+    var _p = _sessPosCmp(a, b); if (_p) return -_p;   // v3.4.91 -- TD-933: the set order, last first
     var da = (a.session_date || '').toString().split('T')[0];
     var db = (b.session_date || '').toString().split('T')[0];
     if (da < db) return 1;
@@ -14787,7 +14788,7 @@ function loadNovelSummary(cb) {
         catch (e) { return String(s.session_date); }
       }
       sessions.sort(function(a, b) {
-        return sessionDateKey(a).localeCompare(sessionDateKey(b));
+        return _sessPosCmp(a, b) || sessionDateKey(a).localeCompare(sessionDateKey(b));   // v3.4.91 -- TD-933: the set order
       });
       renderNovelSummary(sessions);
       if (typeof cb === 'function') cb();
@@ -19042,6 +19043,7 @@ function renderSessions() {
 
   // Newest first — sort by session date descending
   var ordered = state.sessions.slice().sort(function(a, b) {
+    var _p = _sessPosCmp(a, b); if (_p) return -_p;   // v3.4.91 -- TD-933: the set order, last first
     var da = (a.session_date || '').toString().split('T')[0];
     var db = (b.session_date || '').toString().split('T')[0];
     if (da < db) return 1;
@@ -20896,7 +20898,7 @@ function loadNovelSummary(cb) {
         catch (e) { return String(s.session_date); }
       }
       sessions.sort(function(a, b) {
-        return sessionDateKey(a).localeCompare(sessionDateKey(b));
+        return _sessPosCmp(a, b) || sessionDateKey(a).localeCompare(sessionDateKey(b));   // v3.4.91 -- TD-933: the set order
       });
       renderNovelSummary(sessions);
       if (typeof cb === 'function') cb();
@@ -22775,6 +22777,7 @@ function forkQ() {
 function sessNavOrdered() {
   var list = (typeof state !== 'undefined' && Array.isArray(state.sessions)) ? state.sessions.slice() : [];
   return list.sort(function (x, y) {
+    var _p = _sessPosCmp(x, y); if (_p) return -_p;   // v3.4.91 -- TD-933: the arrows follow the cards
     var dx = (x.session_date || '').toString().split('T')[0];
     var dy = (y.session_date || '').toString().split('T')[0];
     if (dx < dy) return 1;
@@ -38249,6 +38252,18 @@ function _sessionOutlineWarn() {
       'Replace them with your own words on the Storyboard before you Optimize.';
     box.style.display = 'block';
   } catch (e) {}
+}
+
+// v3.4.91 -- TD-933. THE ORDER THE STORY MASTER SET. Sessions carry sort_order, their place in the story (1 is first). This
+// answers in story order, oldest first; the Sessions page and its arrows read it backwards (newest first). Zero when neither
+// has a place or both share one, so the old date rule still decides there; a session with no place goes after those with one.
+function _sessPosCmp(a, b) {
+  var pa = a ? a.sort_order : null, pb = b ? b.sort_order : null;
+  var na = (pa === null || pa === undefined || pa === ''), nb = (pb === null || pb === undefined || pb === '');
+  if (na && nb) return 0;
+  if (na) return 1;
+  if (nb) return -1;
+  return (Number(pa) || 0) - (Number(pb) || 0);
 }
 
 function _sessTieNewestFirst(a, b) {

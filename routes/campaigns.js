@@ -56,7 +56,7 @@ const TILE_PICTURE_SQL =
   "WHERE s.campaign_id = ? AND m.image IS NOT NULL AND m.image <> '' " +
   "AND NOT EXISTS (SELECT 1 FROM image_rights ir WHERE ir.image_url = m.image AND ir.verdict = 'reject') ";
 const TILE_PICTURE_ORDER =
-  "ORDER BY s.session_date ASC, s.created_at ASC, s.id ASC, f.id ASC, " +
+  "ORDER BY s.sort_order ASC, s.session_date ASC, s.created_at ASC, s.id ASC, f.id ASC, " +   // v3.4.91 -- TD-933
   "CASE WHEN m.kind = 'establishing' THEN 0 ELSE 1 END ASC, m.panel_order ASC LIMIT 1";
 async function campaignTilePicture(db, c, userId) {
   try {

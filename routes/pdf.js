@@ -32,6 +32,16 @@ const catalog = require('../services/printing/catalog');
 const { logDebug } = require('./debug');
 const rightsCheck = require('../services/rightsCheck');   // v3.1.92 -- TD-979, a rejected picture is never drawn
 const storyOrder = require('../services/storyOrder');   // v3.3.36 -- the order authors set for their stories
+// v3.4.91 -- TD-933. Sessions in the order the Story Master set (sessions.sort_order), the date only behind it. Zero when
+// neither has a place or both share one, so the old date order decides; a session with no place goes after those with one.
+function sessionPosCmp(a, b) {
+  var pa = a ? a.sort_order : null, pb = b ? b.sort_order : null;
+  var na = (pa === null || pa === undefined), nb = (pb === null || pb === undefined);
+  if (na && nb) return 0;
+  if (na) return 1;
+  if (nb) return -1;
+  return Number(pa) - Number(pb);
+}
 
 // Count pages in a rendered PDF buffer. Prefers pdf-lib (exact); if that module
 // is unavailable or throws, falls back to a structural scan of the PDF bytes
@@ -4675,7 +4685,7 @@ function bookStateDiff(since, now) {
 async function savedSessionNumbers(db, campaignId, inc) {
   try {
     if (inc == null || inc === '') return null;
-    var rows = await db.prepare('SELECT id FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaignId);
+    var rows = await db.prepare('SELECT id FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(campaignId);
     var pos = {}; (rows || []).forEach(function (r, i) { pos[String(r.id)] = i + 1; });
     return String(inc).split(',').map(function (s) { return pos[String(s).trim()]; }).filter(function (n) { return n > 0; }).sort(function (x, y) { return x - y; });
   } catch (e) { return null; }
@@ -5910,7 +5920,7 @@ async function attachBookCast(db, characters, incMap, asUser, versionId) {
   var rows = await db.prepare(
     'SELECT sc.character_id, sc.reference_url FROM session_characters sc JOIN sessions s ON s.id = sc.session_id ' +
     'WHERE sc.fork_id IN (' + forks.map(function () { return '?'; }).join(',') + ') ' +
-    'ORDER BY s.session_date ASC, s.created_at ASC, s.id ASC, sc.id ASC'
+    'ORDER BY s.sort_order ASC, s.session_date ASC, s.created_at ASC, s.id ASC, sc.id ASC'
   ).all(...forks);
   if (!rows || !rows.length) return;
   var first = {}, last = {}, inb = {};
@@ -5937,7 +5947,7 @@ async function attachVersionReferences(db, characters, campaignId, versionId, in
       'SELECT COALESCE(sf.art_style_override, s.art_style) AS style ' +
       'FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
       'WHERE sf.version_id = ? AND s.campaign_id = ? ' +
-      'ORDER BY s.session_date ASC, sf.id ASC LIMIT 1'
+      'ORDER BY s.sort_order ASC, s.session_date ASC, sf.id ASC LIMIT 1'
     ).get(versionId, campaignId);
     var bookStyle = (st && st.style) ? st.style : null;
     var verRows = await db.prepare(
@@ -5945,7 +5955,7 @@ async function attachVersionReferences(db, characters, campaignId, versionId, in
       'JOIN session_forks sf ON sf.id = sc.fork_id ' +
       'JOIN sessions s ON s.id = sf.session_id ' +
       'WHERE sf.version_id = ? AND sc.reference_url IS NOT NULL ' +
-      'ORDER BY s.session_date ASC, sf.id ASC'
+      'ORDER BY s.sort_order ASC, s.session_date ASC, sf.id ASC'
     ).all(versionId);
     var styledRows = [];
     if (bookStyle) {
@@ -5958,7 +5968,7 @@ async function attachVersionReferences(db, characters, campaignId, versionId, in
         'JOIN session_forks sf ON sf.id = sc.fork_id ' +
         'JOIN sessions s ON s.id = sf.session_id ' +
         'WHERE s.campaign_id = ? AND sc.styled_art_style = ? AND sc.reference_url IS NOT NULL ' +
-        'ORDER BY s.session_date ASC, sf.id ASC'
+        'ORDER BY s.sort_order ASC, s.session_date ASC, sf.id ASC'
       ).all(campaignId, bookStyle);
     }
     pickVersionRefs(characters, verRows, styledRows);
@@ -7065,7 +7075,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   // Sort sessions ascending (oldest first) using a normalized YYYY-MM-DD key.
@@ -7078,7 +7088,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
     catch (e) { return String(s.session_date); }
   }
   sessions.sort(function(a, b) {
-    return sessionDateKey(a).localeCompare(sessionDateKey(b));
+    return sessionPosCmp(a, b) || sessionDateKey(a).localeCompare(sessionDateKey(b));   // v3.4.91 -- TD-933
   });
 
   // Optional: assemble a specific player's book (?as_user=). For any session
@@ -7338,7 +7348,7 @@ async function printInteriorHandler(req, res) {
     return res.status(403).json({ error: 'The Story Master has not enabled the graphic novel for players in this campaign.' });
   }
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
 
   function sessionDateKey(s) {
@@ -7347,7 +7357,7 @@ async function printInteriorHandler(req, res) {
     try { return s.session_date.toISOString().split('T')[0]; }
     catch (e) { return String(s.session_date); }
   }
-  sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
+  sessions.sort(function(a, b) { return sessionPosCmp(a, b) || sessionDateKey(a).localeCompare(sessionDateKey(b)); });   // v3.4.91 -- TD-933
 
   // v3.0.454 -- a named version wins over as_user, and supplies the as_user this book is read
   // under. resolveBookVersion returns null for a CANONICAL version on purpose: null means "the
@@ -8367,7 +8377,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
   // caller's OWN book (the Story Master, or a version the caller owns), so who may publish what is unchanged.
   if (_bv && (campaign.my_role === 'dm' || Number(_bv.asUser) === Number(req.session.userId))) asUser = _bv.asUser;
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare(
     'SELECT ch.*, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?'
   ).all(campaign.id);
@@ -8377,7 +8387,7 @@ router.post('/publish-story/:campaignId', requireAuth, async function(req, res) 
     if (typeof s.session_date === 'string') return s.session_date.split('T')[0];
     try { return s.session_date.toISOString().split('T')[0]; } catch (e) { return String(s.session_date); }
   }
-  sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
+  sessions.sort(function(a, b) { return sessionPosCmp(a, b) || sessionDateKey(a).localeCompare(sessionDateKey(b)); });   // v3.4.91 -- TD-933
 
   // v3.0.823 -- TD-657. Attach this version's character portraits. Anchored here
   // because `characters` and `asVersion` are resolved in OPPOSITE ORDERS at the
@@ -9112,14 +9122,14 @@ async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta)
   if (!campaign) { const e = new Error('Access denied'); e.status = 403; throw e; }
   if (!campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
 
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
   const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
   function sessionDateKey(s) {
     if (!s.session_date) return '';
     if (typeof s.session_date === 'string') return s.session_date.split('T')[0];
     try { return s.session_date.toISOString().split('T')[0]; } catch (e) { return String(s.session_date); }
   }
-  sessions.sort(function(a, b) { return sessionDateKey(a).localeCompare(sessionDateKey(b)); });
+  sessions.sort(function(a, b) { return sessionPosCmp(a, b) || sessionDateKey(a).localeCompare(sessionDateKey(b)); });   // v3.4.91 -- TD-933
 
   // v3.0.454 -- a named version wins over as_user, and supplies the as_user this book is read
   // under. resolveBookVersion returns null for a CANONICAL version on purpose: null means "the

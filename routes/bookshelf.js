@@ -169,7 +169,7 @@ function makeHandlers(d) {
       return m;
     }
     var vmap = await forks(bookVersionId), cmap = await forks(canon && canon.id);
-    var sess = await db.prepare('SELECT id, art_style FROM sessions WHERE campaign_id = ? ORDER BY session_date, id').all(campaignId);
+    var sess = await db.prepare('SELECT id, art_style FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date, id').all(campaignId);
     // v3.1.30 -- TD-921. A self-illustrated session is listed as "Self Illustrated", whatever art style
     // it aims for. Never set on a session means its version's earlier session decides (the
     // forkSelfIllustrated rule), carried here in session order.

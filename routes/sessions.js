@@ -27,7 +27,7 @@ function requestedForkId(req) { return requestedForkIdOf(req); }
 router.get('/last-style', requireAuth, verifyCampaignMember, async function(req, res) {
   const db = await getDb();
   const session = await db.prepare(
-    'SELECT art_style, layout_style FROM sessions WHERE campaign_id=? AND (art_style IS NOT NULL OR layout_style IS NOT NULL) ORDER BY session_date DESC, created_at DESC LIMIT 1'
+    'SELECT art_style, layout_style FROM sessions WHERE campaign_id=? AND (art_style IS NOT NULL OR layout_style IS NOT NULL) ORDER BY sort_order DESC, session_date DESC, created_at DESC LIMIT 1'
   ).get(req.params.campaignId);
   res.json({
     art_style: session ? session.art_style : null,
@@ -69,7 +69,7 @@ router.get('/novel/all', requireAuth, verifyCampaignMember, async function(req, 
   const asVersion = _bv ? _bv.versionId : null;
   const asUser = _bv ? _bv.asUser : (req.query.as_user ? Number(req.query.as_user) : null);
   // v3.1.37 -- two sessions on one date come out in the order they were made (they had no order at all).
-  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY session_date ASC, created_at ASC, id ASC').all(req.params.campaignId);
+  const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id=? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(req.params.campaignId);
   const incMap = await effectiveIncludeMap(db, req.params.campaignId, asUser, prefsVersionId(_bv));
   const asUserRow = asUser ? await db.prepare('SELECT name FROM users WHERE id = ?').get(asUser) : null;
   const asUserName = asUserRow ? asUserRow.name : null;
@@ -299,7 +299,7 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
       "WHERE m.fork_id = (SELECT cdf.id FROM session_forks cdf WHERE cdf.session_id = s.id AND cdf.role = 'dm' LIMIT 1) AND m.image IS NOT NULL AND m.image <> '' " + _tileNotRejectedSql + " " +
       "ORDER BY CASE WHEN m.kind = 'establishing' THEN 0 ELSE 1 END ASC, m.panel_order ASC " +
       "LIMIT 1) cn ON TRUE " +
-    'WHERE s.campaign_id=?' + visFilter + ' ORDER BY s.session_date ASC, s.created_at ASC, s.id ASC'   // v3.1.37 -- same-date tie
+    'WHERE s.campaign_id=?' + visFilter + ' ORDER BY s.sort_order ASC, s.session_date ASC, s.created_at ASC, s.id ASC'   // v3.1.37 -- same-date tie
   ).all(...listParams);
   res.json(sessions);
 });
@@ -357,7 +357,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
         'SELECT sf.narrative_style FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
         'WHERE sf.version_id = ? AND sf.session_id <> ? ' +
         "AND sf.narrative_style IS NOT NULL AND sf.narrative_style <> '' " +
-        'ORDER BY s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
+        'ORDER BY s.sort_order DESC, s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
       ).get(_vid, session.id);
       _inhNarr = _rn ? _rn.narrative_style : null;
     }
@@ -366,7 +366,7 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
         'SELECT COALESCE(sf.art_style_override, s.art_style) AS art FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
         'WHERE sf.version_id = ? AND sf.session_id <> ? ' +
         "AND COALESCE(sf.art_style_override, s.art_style) IS NOT NULL AND COALESCE(sf.art_style_override, s.art_style) <> '' " +
-        'ORDER BY s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
+        'ORDER BY s.sort_order DESC, s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
       ).get(_vid, session.id);
       _inhArt = _ra ? _ra.art : null;
     }
@@ -463,8 +463,9 @@ router.post('/', requireAuth, verifyCampaignDM, checkSessionLimit, async functio
   const db = await getDb();
   const now = new Date().toISOString();
   const result = await db.prepare(
-    'INSERT INTO sessions (campaign_id, name, session_date, description, created_at, created_by) VALUES (?,?,?,?,?,?)'
-  ).run(req.params.campaignId, name.trim(), session_date, ((description||'').trim() || null), now, req.session.userId);
+    // v3.4.91 -- TD-933: a new session goes to the END of the list (Ian), whatever its date.
+    'INSERT INTO sessions (campaign_id, name, session_date, description, created_at, created_by, sort_order) VALUES (?,?,?,?,?,?,(SELECT COALESCE(MAX(sort_order), 0) + 1 FROM sessions WHERE campaign_id = ?))'
+  ).run(req.params.campaignId, name.trim(), session_date, ((description||'').trim() || null), now, req.session.userId, req.params.campaignId);
   // Deploy 4.0 — every session is born with a DM fork row. All its
   // moments / session_characters reference this fork_id.
   await getOrCreateDmFork(db, result.lastInsertRowid, req.session.userId);
