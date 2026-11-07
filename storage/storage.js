@@ -357,7 +357,8 @@ function keyFromUrl(fileUrl) {
   // set that uploadFile also validates against, so an unknown prefix cannot be written in the first
   // place -- filed as TD-469 rather than done here, because widening the regex is the whole of
   // tonight's bug and a shared constant touches every upload path in the product.
-  const m = fileUrl.match(/\/((?:uploads|archives|optimized|print|story)\/[^?#]+)$/);
+  // v3.4.86 -- video-lab added (TD-090, the Video Lab's clips), the fifth time this list has had to grow (TD-469).
+  const m = fileUrl.match(/\/((?:uploads|archives|optimized|print|story|video-lab)\/[^?#]+)$/);
   return m ? m[1] : null;
 }
 // Read an object back OUT of the bucket. The bucket is private -- uploads are AWS-signed PUTs -- so a

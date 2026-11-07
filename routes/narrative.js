@@ -391,9 +391,10 @@ async function inheritedSummary(db, session, userId, forkId) {
     if (!session || !session.session_date) return null;
     const prev = await db.prepare(
       'SELECT id, name FROM sessions WHERE campaign_id = ? ' +
-      'AND (session_date, created_at, id) < (?, ?, ?) ' +
-      'ORDER BY session_date DESC, created_at DESC, id DESC LIMIT 1'
-    ).get(session.campaign_id, session.session_date, session.created_at, session.id);
+      // v3.4.91 -- TD-933: the session before this one IN THE LIST, by its place; the old date order only for a session with none.
+      (session.sort_order != null ? 'AND sort_order < ? ' : 'AND (session_date, created_at, id) < (?, ?, ?) ') +
+      'ORDER BY sort_order DESC, session_date DESC, created_at DESC, id DESC LIMIT 1'
+    ).get([session.campaign_id].concat(session.sort_order != null ? [Number(session.sort_order)] : [session.session_date, session.created_at, session.id]));
     if (!prev) return null;
     // v3.1.35 -- TD-928. THE SAME VERSION'S COPY FIRST. "The caller's first fork by id" was a guess that
     // only held while a person had one version: with several it could hand version B the memory of

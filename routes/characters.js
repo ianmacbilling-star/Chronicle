@@ -191,7 +191,7 @@ async function importLooksForVersion(db, charId, versionId) {
     'SELECT sc.id, sc.reference_url, sc.styled_art_style, sc.change_flag, sc.change_note, sc.change_detail, s.name AS session_name, s.session_date ' +   // v3.4.05 -- TD-1086 styled_art_style
     'FROM session_characters sc JOIN session_forks sf ON sf.id = sc.fork_id JOIN sessions s ON s.id = sf.session_id ' +
     'WHERE sf.version_id = ? AND sc.character_id = ? AND sc.reference_url IS NOT NULL AND sc.reference_url <> \'\' ' +
-    'ORDER BY s.session_date ASC, s.id ASC, sc.id ASC'
+    'ORDER BY s.sort_order ASC, s.session_date ASC, s.id ASC, sc.id ASC'   // v3.4.91 -- TD-933: list order
   ).all(versionId, charId);
   const out = []; let last = null;
   (rows || []).forEach(function (r) {

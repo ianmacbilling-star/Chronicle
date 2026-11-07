@@ -736,14 +736,16 @@ async function resolveCarryForward(db, character, currentSession, forkId) {
     versionId = vr ? vr.version_id : null;
   }
   var prior = null;
+  // v3.4.91 -- TD-933: earlier means earlier in the list (sort_order); the date only for a session with no place.
+  var _pos = (currentSession && currentSession.sort_order != null) ? Number(currentSession.sort_order) : null;
   if (versionId) {
     prior = await db.prepare(
       'SELECT sc.prompt, sc.reference_url FROM session_characters sc ' +
       'JOIN session_forks sf ON sf.id = sc.fork_id ' +
       'JOIN sessions s ON s.id = sf.session_id ' +
-      'WHERE sc.character_id = ? AND sf.version_id = ? AND s.session_date < ? ' +
-      'ORDER BY s.session_date DESC, sf.id DESC LIMIT 1'
-    ).get(character.id, versionId, currentSession.session_date);
+      'WHERE sc.character_id = ? AND sf.version_id = ? AND ' + (_pos != null ? 's.sort_order < ? ' : 's.session_date < ? ') +
+      'ORDER BY s.sort_order DESC, s.session_date DESC, sf.id DESC LIMIT 1'
+    ).get(character.id, versionId, (_pos != null ? _pos : currentSession.session_date));
   }
   if (!prior) {
     // FALLTHROUGH to the canonical, the same rule the book uses for an unbranched session.
@@ -752,9 +754,9 @@ async function resolveCarryForward(db, character, currentSession, forkId) {
       'JOIN session_forks sf ON sf.id = sc.fork_id ' +
       'JOIN sessions s ON s.id = sf.session_id ' +
       "WHERE sc.character_id = ? AND sf.role = 'dm' AND s.campaign_id = ? " +
-      'AND s.session_date < ? ' +
-      'ORDER BY s.session_date DESC LIMIT 1'
-    ).get(character.id, currentSession.campaign_id, currentSession.session_date);
+      (_pos != null ? 'AND s.sort_order < ? ' : 'AND s.session_date < ? ') +
+      'ORDER BY s.sort_order DESC, s.session_date DESC LIMIT 1'
+    ).get(character.id, currentSession.campaign_id, (_pos != null ? _pos : currentSession.session_date));
   }
 
   var prompt = (prior && prior.prompt)

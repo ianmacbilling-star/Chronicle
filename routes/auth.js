@@ -580,6 +580,8 @@ router.get('/me', async function(req, res) {
       notifyFeatures: user.notify_features !== false,
       notifyActivity: user.notify_activity !== false,
       is_admin: isAdmin,
+      // v3.4.94 -- the Video Lab tab: admins always, everyone else while the Dashboard video switch is on.
+      videoOn: isAdmin ? true : await (async function () { try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_lab_on'); return !!(r && String(r.value) === '1'); } catch (e) { return false; } })(),
       // v3.0.973 -- TD-873. The footer stamp, from the one file that knows it. Read through
       // require(), which memoises, and defaulted to '' so a missing or malformed version-info
       // can only ever leave the footer reading 'Campaignia' -- never a number that is a lie.

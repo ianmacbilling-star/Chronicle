@@ -699,6 +699,14 @@ async function initPostgres() {
     // created wide + high-prominence so it renders as a title/chapter image.
     "ALTER TABLE moments ADD COLUMN IF NOT EXISTS kind TEXT DEFAULT 'normal'",
     'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS novel_include BOOLEAN DEFAULT true',
+    // v3.4.91 -- TD-933. THE ORDER OF A CAMPAIGN'S SESSIONS IS A POSITION, NOT A DATE (Ian, 2026-11-07: ordered by date
+    // "is a little hit and miss"). sort_order is 1, 2, 3... within a campaign. A session with no place yet (every session
+    // the first time this runs) is given one after the places already taken, in the order the list showed it until now:
+    // date, then the order it was made, then id. So the first run numbers every campaign exactly as it read before, and
+    // after that this finds nothing to do. Every story-order sort reads sort_order first, with the old keys behind it.
+    'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS sort_order INTEGER',
+    'UPDATE sessions s SET sort_order = r.base + r.rn FROM (SELECT x.id, ROW_NUMBER() OVER (PARTITION BY x.campaign_id ORDER BY x.session_date ASC, x.created_at ASC, x.id ASC) AS rn, (SELECT COALESCE(MAX(y.sort_order), 0) FROM sessions y WHERE y.campaign_id = x.campaign_id) AS base FROM sessions x WHERE x.sort_order IS NULL) r WHERE s.id = r.id',
+    'CREATE INDEX IF NOT EXISTS idx_sessions_campaign_sort ON sessions (campaign_id, sort_order)',
     // Account terms + age. Collected at sign-up: DOB (age verification),
     // which Terms version they accepted + when, and the upload/IP attestation.
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE',
@@ -2463,10 +2471,11 @@ async function versionStyleDefaults(db, versionId, sessionId) {
   // v3.1.30 -- illustrate_mode joins the version's style too (TD-921).
   const out = { art_style_override: null, narrative_style: null, narrative_verbosity: null, narrative_narrator: null, illustrate_mode: null };
   if (!versionId) return out;
-  let before = null;
+  let before = null, beforePos = null;
   if (sessionId) {
-    const here = await db.prepare('SELECT session_date FROM sessions WHERE id = ?').get(sessionId);
+    const here = await db.prepare('SELECT session_date, sort_order FROM sessions WHERE id = ?').get(sessionId);
     if (here) before = here.session_date;
+    if (here && here.sort_order != null) beforePos = Number(here.sort_order);   // v3.4.91 -- TD-933: earlier means earlier in the list
   }
   const keys = Object.keys(out);
   for (let i = 0; i < keys.length; i++) {
@@ -2475,9 +2484,9 @@ async function versionStyleDefaults(db, versionId, sessionId) {
       'SELECT sf.' + k + ' AS v FROM session_forks sf JOIN sessions s ON s.id = sf.session_id ' +
       'WHERE sf.version_id = ? AND sf.' + k + " IS NOT NULL AND sf." + k + " <> '' " +
       (sessionId ? 'AND sf.session_id <> ? ' : '') +
-      (before ? 'AND s.session_date < ? ' : '') +
-      'ORDER BY s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
-    ).get([versionId].concat(sessionId ? [sessionId] : []).concat(before ? [before] : []));   // array form: the wrapper flattens (args.flat()); .apply(null,...) works only by accident of get() not reading `this`
+      (beforePos != null ? 'AND s.sort_order < ? ' : (before ? 'AND s.session_date < ? ' : '')) +
+      'ORDER BY s.sort_order DESC, s.session_date DESC, s.created_at DESC, sf.id DESC LIMIT 1'
+    ).get([versionId].concat(sessionId ? [sessionId] : []).concat(beforePos != null ? [beforePos] : (before ? [before] : [])));   // array form: the wrapper flattens (args.flat()); .apply(null,...) works only by accident of get() not reading `this`
     if (r && r.v) out[k] = r.v;
   }
   return out;
@@ -2506,17 +2515,18 @@ async function versionStyleDefaults(db, versionId, sessionId) {
 async function versionPriorCharacterLooks(db, versionId, sessionId) {
   const out = {};
   if (!versionId || !sessionId) return out;
-  const here = await db.prepare('SELECT session_date FROM sessions WHERE id = ?').get(sessionId);
+  const here = await db.prepare('SELECT session_date, sort_order FROM sessions WHERE id = ?').get(sessionId);
   if (!here) return out;
+  const herePos = (here.sort_order != null) ? Number(here.sort_order) : null;   // v3.4.91 -- TD-933: earlier means earlier in the list
   const rows = await db.prepare(
     'SELECT sc.character_id, sc.prompt, sc.reference_url, sc.change_note, sc.change_detail, ' +
     '       sc.change_flag, sc.change_status, sc.change_moment_index ' +
     'FROM session_characters sc ' +
     'JOIN session_forks sf ON sf.id = sc.fork_id ' +
     'JOIN sessions s ON s.id = sf.session_id ' +
-    'WHERE sf.version_id = ? AND s.session_date < ? AND sc.session_id <> ? ' +
-    'ORDER BY s.session_date ASC, sf.id ASC'
-  ).all(versionId, here.session_date, sessionId);
+    'WHERE sf.version_id = ? AND ' + (herePos != null ? 's.sort_order < ?' : 's.session_date < ?') + ' AND sc.session_id <> ? ' +
+    'ORDER BY s.sort_order ASC, s.session_date ASC, sf.id ASC'
+  ).all(versionId, (herePos != null ? herePos : here.session_date), sessionId);
   // Ascending, then overwrite: the LAST row for a character is the most recent, and this needs no
   // per-character sub-select.
   for (let i = 0; i < rows.length; i++) {

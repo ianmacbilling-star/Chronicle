@@ -1140,6 +1140,7 @@
         <div class="sess-tab" id="stab-review" onclick="switchSessionTab('review')">Review</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">Storyboard</div>
         <div class="sess-tab dm-only" id="stab-export" onclick="switchSessionTab('export')">Preview</div>
+        <div class="sess-tab" id="stab-videolab" onclick="switchSessionTab('videolab')" style="display:none;">Video Lab</div>
         <button class="btn btn-sm" id="sess-nav-next" type="button" onclick="sessNavGo(1)"
                 style="margin-left:auto;align-self:center;padding:2px 10px;line-height:1.2;"
                 title="Next session">&#8250;</button>
@@ -1383,6 +1384,9 @@
           <iframe id="session-preview-iframe" src="" style="width:100%;height:75vh;border:none;background:#fff;display:none;"></iframe>
         </div>
       </div>
+
+      <!-- v3.4.87 -- TD-090. VIDEO LAB (admin only). Drawn by vlOpen() in app.js; its tab is shown to admins only. -->
+      <div id="session-tab-videolab" style="display:none;"></div>
 
     </div>
 
@@ -1925,8 +1929,10 @@
         <button class="btn btn-primary btn-sm" onclick="openAdminStories()" style="margin-left:8px;">&#128214; Open Stories</button>
       </div>
 
+      <!-- v3.4.94 -- The Guild, Brands and Video switches side by side on one row (Ian). -->
+      <div id="admin-switch-row" style="display:flex;flex-wrap:wrap;gap:12px;align-items:stretch;margin-bottom:16px;">
       <!-- v3.3.01 -- TD-1037. ADMIN: the Artist Marketplace switch and the review window (public/js/marketplace.js shows this to admins). -->
-      <div id="admin-mkt-section" class="settings-section" style="display:none;">
+      <div id="admin-mkt-section" class="settings-section" style="display:none;flex:1 1 260px;margin:0;">
         <div class="settings-section-title">The Guild</div>
         <div class="settings-section-desc">The Guild: artists, writers and Campaignia Specialists people can hire. While it is off only admins see it: the Library tab, the links in the app and the listing section in My Account are hidden from everyone else. Listings appear only after you approve them.</div>
         <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;"><input type="checkbox" id="mkt-admin-switch" onchange="if (window.Mkt) Mkt.setSwitch(this.checked)"> The Guild is on for everyone</label>
@@ -1934,11 +1940,20 @@
       </div>
 
       <!-- v3.4.85 -- TD-1105. ADMIN: which brands are on (app_settings.brands_enabled). Shown to admins by app.js. -->
-      <div id="admin-brands-section" class="settings-section" style="display:none;">
+      <div id="admin-brands-section" class="settings-section" style="display:none;flex:1 1 260px;margin:0;">
         <div class="settings-section-title">Brands on this site</div>
         <div class="settings-section-desc">Tick the brands people can use here. With two or more on, everyone picks their own under Brand Theme on My Account. With one on, everyone sees that one. Accounts keep their own pick, so switching a brand back on brings it back for the people who chose it. Takes effect within a minute, no deploy.</div>
         <div id="admin-brands-list">Loading...</div>
         <div id="admin-brands-msg" style="font-size:13px;margin-top:6px;"></div>
+      </div>
+      <!-- v3.4.94 -- ADMIN: the video switch (app_settings.video_lab_on). Shown to admins by app.js. -->
+      <div id="admin-video-section" class="settings-section" style="display:none;flex:1 1 260px;margin:0;">
+        <div class="settings-section-title">Video</div>
+        <div class="settings-section-desc">The Video Lab tab on each session. Admins always have it. Switch it on to give it to everyone else; off, only admins see it. Takes effect on the next page load.</div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;"><input type="checkbox" id="admin-video-switch" onchange="adminVideoSave(this)"> Video is on for everyone</label>
+        <div style="font-size:12px;margin-top:8px;color:var(--warning, #e8a33c);">No tokens are charged for video yet: while this is on, every clip anyone makes is billed to Campaignia by fal (about $0.30 to $3 a clip).</div>
+        <div id="admin-video-msg" style="font-size:13px;margin-top:6px;"></div>
+      </div>
       </div>
 
       <!-- ==================== ADMIN TESTING WIDGET ====================

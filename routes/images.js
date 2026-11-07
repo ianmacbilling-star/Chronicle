@@ -783,8 +783,9 @@ function campaignSeed(campaignId) {
 // the canonical rather than guessing across versions.
 async function attachPriorReferences(db, chars, sessionId, campaignId, forkId) {
   try {
-    var sess = await db.prepare('SELECT session_date FROM sessions WHERE id = ?').get(sessionId);
+    var sess = await db.prepare('SELECT session_date, sort_order FROM sessions WHERE id = ?').get(sessionId);
     if (!sess) return;
+    var _pos = (sess.sort_order != null) ? Number(sess.sort_order) : null;   // v3.4.91 -- TD-933: earlier means earlier in the list
     var vRow = forkId ? await db.prepare('SELECT version_id FROM session_forks WHERE id = ?').get(forkId) : null;
     var versionId = vRow ? vRow.version_id : null;
     for (var i = 0; i < chars.length; i++) {
@@ -797,10 +798,10 @@ async function attachPriorReferences(db, chars, sessionId, campaignId, forkId) {
           'SELECT sc.reference_url FROM session_characters sc ' +
           'JOIN session_forks sf ON sf.id = sc.fork_id ' +
           'JOIN sessions s ON s.id = sf.session_id ' +
-          'WHERE sc.character_id = ? AND sf.version_id = ? AND s.session_date < ? ' +
+          'WHERE sc.character_id = ? AND sf.version_id = ? AND ' + (_pos != null ? 's.sort_order < ? ' : 's.session_date < ? ') +
           'AND sc.reference_url IS NOT NULL ' +
-          'ORDER BY s.session_date DESC, sf.id DESC LIMIT 1'
-        ).get(c.character_id, versionId, sess.session_date);
+          'ORDER BY s.sort_order DESC, s.session_date DESC, sf.id DESC LIMIT 1'
+        ).get(c.character_id, versionId, (_pos != null ? _pos : sess.session_date));
       }
       if (!prior) {
         // FALLTHROUGH to the canonical, the same rule the book itself uses for a session this
@@ -809,10 +810,10 @@ async function attachPriorReferences(db, chars, sessionId, campaignId, forkId) {
           'SELECT sc.reference_url FROM session_characters sc ' +
           'JOIN session_forks sf ON sf.id = sc.fork_id ' +
           'JOIN sessions s ON s.id = sf.session_id ' +
-          "WHERE sc.character_id = ? AND sf.role = 'dm' AND s.campaign_id = ? AND s.session_date < ? " +
+          "WHERE sc.character_id = ? AND sf.role = 'dm' AND s.campaign_id = ? AND " + (_pos != null ? 's.sort_order < ? ' : 's.session_date < ? ') +
           'AND sc.reference_url IS NOT NULL ' +
-          'ORDER BY s.session_date DESC LIMIT 1'
-        ).get(c.character_id, campaignId, sess.session_date);
+          'ORDER BY s.sort_order DESC, s.session_date DESC LIMIT 1'
+        ).get(c.character_id, campaignId, (_pos != null ? _pos : sess.session_date));
       }
       c.prior_reference_url = (prior && prior.reference_url) ? prior.reference_url : null;
     }
@@ -4367,6 +4368,7 @@ module.exports.attachPriorReferences = attachPriorReferences;
 module.exports.retouchImage = retouchImage;
 module.exports.webhookRouter = webhookRouter;
 module.exports.falWebhookUrl = falWebhookUrl;
+module.exports.falSetup = falSetup;   // v3.4.86 -- TD-090: the Video Lab sets fal up through the same function, so its calls carry the same privacy headers
 module.exports.submitReference = submitReference;
 module.exports.submitAssetReference = submitAssetReference;
 module.exports.submitEditReference = submitEditReference;

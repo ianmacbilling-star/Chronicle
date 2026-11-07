@@ -2207,7 +2207,9 @@ function checkAuth() {
       // v3.0.672 -- TD-475. STILL ADMIN ONLY. Ian: "You can let the badge itself be the way in. No
       // Dashboard." A menu entry appearing for a non-admin is a door they did not ask for.
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
+      var _vlTab = document.getElementById('stab-videolab'); if (_vlTab) _vlTab.style.display = (data.is_admin || data.videoOn) ? '' : 'none';   // v3.4.87 -- TD-090 Video Lab; v3.4.94: or the video switch is on
       var _brSec = document.getElementById('admin-brands-section'); if (_brSec) { _brSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminBrandsLoad(); } catch (e) {} } }   // v3.4.85 -- TD-1105 Brands on this site
+      var _vdSec = document.getElementById('admin-video-section'); if (_vdSec) { _vdSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminVideoLoad(); } catch (e) {} } }   // v3.4.94 -- the video switch
       if (typeof renderTierBadge === 'function') renderTierBadge(data);
       // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
       if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
@@ -3975,6 +3977,7 @@ function renderSessions() {
 
   // Newest first — sort by session date descending
   var ordered = state.sessions.slice().sort(function(a, b) {
+    var _p = _sessPosCmp(a, b); if (_p) return -_p;   // v3.4.91 -- TD-933: the set order, last first
     var da = (a.session_date || '').toString().split('T')[0];
     var db = (b.session_date || '').toString().split('T')[0];
     if (da < db) return 1;
@@ -3983,7 +3986,7 @@ function renderSessions() {
   });
 
   // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
-  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s) {
+  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s, _si) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
     // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
@@ -4005,7 +4008,7 @@ function renderSessions() {
           '<button class="row-menu-item row-menu-item-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete session</button>' +
         '</div>' +
       '</div>';
-    return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+    return '<div class="session-card" data-sess-id="' + Number(s.id) + '" onclick="selectSession(' + s.id + ')">' +
       sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
@@ -4015,6 +4018,7 @@ function renderSessions() {
           readyChip +
           transcriptChip +
           deleteMenu +
+          sessOrderControls(s, _si, ordered.length) +   // v3.4.92 -- TD-933: the arrows and the gripper, Story Master only
         '</div>' +
       '</div>' +
     '</div>';
@@ -8088,7 +8092,7 @@ function showErrorDialog(msg, title) {
 
 function switchSessionTab(tab) {
   try { state.currentSessionTab = tab; } catch (e) {}   // v3.0.594 -- so prev/next can land on the same tab (BOTH copies patched)
-  var tabs = ['notes', 'characters', 'review', 'storyboard', 'export'];
+  var tabs = ['notes', 'characters', 'review', 'storyboard', 'export', 'videolab'];   // v3.4.87 -- TD-090 Video Lab (both copies)
   tabs.forEach(function(t) {
     var pane = document.getElementById('session-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
@@ -8111,6 +8115,7 @@ function switchSessionTab(tab) {
   if (tab === 'review') {
     loadReview();
   }
+  if (tab === 'videolab') { try { vlOpen(); } catch (e) {} }   // v3.4.87 -- TD-090 (dead copy, kept in step)
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   // v3.0.727 -- TD-525(2). THE HEADER TOUR RUNS FIRST, FROM HERE, BECAUSE THIS IS THE REAL TRIGGER.
   // A reader who has not seen session-detail gets it now; _tourFinish then hands off to the tab.
@@ -14785,7 +14790,7 @@ function loadNovelSummary(cb) {
         catch (e) { return String(s.session_date); }
       }
       sessions.sort(function(a, b) {
-        return sessionDateKey(a).localeCompare(sessionDateKey(b));
+        return _sessPosCmp(a, b) || sessionDateKey(a).localeCompare(sessionDateKey(b));   // v3.4.91 -- TD-933: the set order
       });
       renderNovelSummary(sessions);
       if (typeof cb === 'function') cb();
@@ -17405,6 +17410,8 @@ function applyArchiveToTarget(archiveId) {
   if (!cid && !ctx.prepKind) { appNotice('No campaign is open.',
     'That image cannot be applied because no campaign is on screen.',
     'Open the campaign and try again.'); return; }
+  // v3.4.88 -- TD-090. A Video Lab pick goes into the start or end box on the Video Lab tab; nothing is written anywhere.
+  if (ctx.mode === 'videolab') { closeReplacePicker(); vlPick(ctx.vlWhich, archiveId); return; }
 
   // v3.0.622 -- the two title modes leave before the /apply call below. /apply replaces an image on a
   // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
@@ -18638,7 +18645,9 @@ function checkAuth() {
       // v3.0.672 -- TD-475. STILL ADMIN ONLY. Ian: "You can let the badge itself be the way in. No
       // Dashboard." A menu entry appearing for a non-admin is a door they did not ask for.
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
+      var _vlTab = document.getElementById('stab-videolab'); if (_vlTab) _vlTab.style.display = (data.is_admin || data.videoOn) ? '' : 'none';   // v3.4.87 -- TD-090 Video Lab; v3.4.94: or the video switch is on
       var _brSec = document.getElementById('admin-brands-section'); if (_brSec) { _brSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminBrandsLoad(); } catch (e) {} } }   // v3.4.85 -- TD-1105 Brands on this site
+      var _vdSec = document.getElementById('admin-video-section'); if (_vdSec) { _vdSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminVideoLoad(); } catch (e) {} } }   // v3.4.94 -- the video switch
       if (typeof renderTierBadge === 'function') renderTierBadge(data);
       // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
       if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
@@ -19037,6 +19046,7 @@ function renderSessions() {
 
   // Newest first — sort by session date descending
   var ordered = state.sessions.slice().sort(function(a, b) {
+    var _p = _sessPosCmp(a, b); if (_p) return -_p;   // v3.4.91 -- TD-933: the set order, last first
     var da = (a.session_date || '').toString().split('T')[0];
     var db = (b.session_date || '').toString().split('T')[0];
     if (da < db) return 1;
@@ -19045,7 +19055,7 @@ function renderSessions() {
   });
 
   // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
-  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s) {
+  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s, _si) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
     // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
@@ -19067,7 +19077,7 @@ function renderSessions() {
           '<button class="row-menu-item row-menu-item-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete session</button>' +
         '</div>' +
       '</div>';
-    return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+    return '<div class="session-card" data-sess-id="' + Number(s.id) + '" onclick="selectSession(' + s.id + ')">' +
       sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
@@ -19077,6 +19087,7 @@ function renderSessions() {
           readyChip +
           transcriptChip +
           deleteMenu +
+          sessOrderControls(s, _si, ordered.length) +   // v3.4.92 -- TD-933: the arrows and the gripper, Story Master only
         '</div>' +
       '</div>' +
     '</div>';
@@ -19284,7 +19295,7 @@ function saveNotes() {
 
 function switchSessionTab(tab) {
   try { state.currentSessionTab = tab; } catch (e) {}   // v3.0.594 -- so prev/next can land on the same tab (BOTH copies patched)
-  var tabs = ['notes', 'characters', 'review', 'storyboard', 'export'];
+  var tabs = ['notes', 'characters', 'review', 'storyboard', 'export', 'videolab'];   // v3.4.87 -- TD-090 Video Lab (both copies)
   tabs.forEach(function(t) {
     var pane = document.getElementById('session-tab-' + t);
     if (pane) pane.style.display = t === tab ? 'block' : 'none';
@@ -19310,6 +19321,7 @@ function switchSessionTab(tab) {
   // v3.0.967 -- TD-852. Injected into the LAST of the two switchSessionTab declarations, because
   // this file declares 90 functions twice and the later one is the one that runs (TD-853).
   if (tab === 'storyboard') { try { sbSummaryLoad(); } catch (e) {} }
+  if (tab === 'videolab') { try { vlOpen(); } catch (e) {} }   // v3.4.87 -- TD-090 (the live copy)
   if (_tourActive) { try { _tourTeardown(); } catch (e) {} }
   // v3.0.727 -- TD-525(2). THE HEADER TOUR RUNS FIRST, FROM HERE, BECAUSE THIS IS THE REAL TRIGGER.
   // A reader who has not seen session-detail gets it now; _tourFinish then hands off to the tab.
@@ -20890,7 +20902,7 @@ function loadNovelSummary(cb) {
         catch (e) { return String(s.session_date); }
       }
       sessions.sort(function(a, b) {
-        return sessionDateKey(a).localeCompare(sessionDateKey(b));
+        return _sessPosCmp(a, b) || sessionDateKey(a).localeCompare(sessionDateKey(b));   // v3.4.91 -- TD-933: the set order
       });
       renderNovelSummary(sessions);
       if (typeof cb === 'function') cb();
@@ -22769,6 +22781,7 @@ function forkQ() {
 function sessNavOrdered() {
   var list = (typeof state !== 'undefined' && Array.isArray(state.sessions)) ? state.sessions.slice() : [];
   return list.sort(function (x, y) {
+    var _p = _sessPosCmp(x, y); if (_p) return -_p;   // v3.4.91 -- TD-933: the arrows follow the cards
     var dx = (x.session_date || '').toString().split('T')[0];
     var dy = (y.session_date || '').toString().split('T')[0];
     if (dx < dy) return 1;
@@ -30865,7 +30878,7 @@ function showTour(viewId) {
 }
 
 function _activeSessionTab() {
-  var ids = ['notes', 'characters', 'review', 'storyboard', 'export'];
+  var ids = ['notes', 'characters', 'review', 'storyboard', 'export', 'videolab'];   // v3.4.87
   for (var i = 0; i < ids.length; i++) {
     var e = document.getElementById('stab-' + ids[i]);
     if (e && e.classList.contains('active')) return ids[i];
@@ -38245,6 +38258,18 @@ function _sessionOutlineWarn() {
   } catch (e) {}
 }
 
+// v3.4.91 -- TD-933. THE ORDER THE STORY MASTER SET. Sessions carry sort_order, their place in the story (1 is first). This
+// answers in story order, oldest first; the Sessions page and its arrows read it backwards (newest first). Zero when neither
+// has a place or both share one, so the old date rule still decides there; a session with no place goes after those with one.
+function _sessPosCmp(a, b) {
+  var pa = a ? a.sort_order : null, pb = b ? b.sort_order : null;
+  var na = (pa === null || pa === undefined || pa === ''), nb = (pb === null || pb === undefined || pb === '');
+  if (na && nb) return 0;
+  if (na) return 1;
+  if (nb) return -1;
+  return (Number(pa) || 0) - (Number(pb) || 0);
+}
+
 function _sessTieNewestFirst(a, b) {
   // v3.1.38 -- two sessions on one date: the one made LAST comes first on the session page (Ian: "The one
   // made last is first"), the reverse of Publish and the book, which read oldest first. created_at, then id.
@@ -41200,7 +41225,7 @@ function spaceControls(src, t, id) {
   if (k < 0) return '';
   var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
   var what = t === 'p' ? 'panel' : 'bridge';
-  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
+  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:5px;padding:0 5px;font-size:8px;line-height:13px;cursor:pointer;';   // v3.4.93 -- 30% smaller (Ian)
   var off = 'opacity:0.35;cursor:default;';
   var can = function (j) {
     if (j < 0 || j >= flat.length) return false;
@@ -41213,11 +41238,11 @@ function spaceControls(src, t, id) {
       : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
   };
   var del = t === 'p' ? ('panelDelete(' + Number(id) + ')') : ('bridgeDelete(' + q + ',\'' + src + '\')');
-  return '<span class="sp-ctl" data-sp-src="' + src + '" data-sp-t="' + t + '" data-sp-id="' + escapeHtml(String(id)) + '" style="display:inline-flex;gap:4px;margin-left:auto;align-items:center;">' +
+  return '<span class="sp-ctl" data-sp-src="' + src + '" data-sp-t="' + t + '" data-sp-id="' + escapeHtml(String(id)) + '" style="display:inline-flex;gap:3px;margin-left:auto;align-items:center;">' +
     btn(k - 1, back, 'Move this ' + what + ' one place ' + (src === 'review' ? 'up' : 'earlier')) +
     '<button type="button" style="' + bs + '" title="Delete this ' + what + '" onclick="event.stopPropagation();' + del + '">&times;</button>' +
     btn(k + 1, fwd, 'Move this ' + what + ' one place ' + (src === 'review' ? 'down' : 'later')) +
-    '<span class="sp-grip" title="Drag to move this ' + what + '" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:var(--accent);cursor:grab;user-select:none;">⠿</span></span>';
+    '<span class="sp-grip" title="Drag to move this ' + what + '" style="display:inline-block;padding:0 2px;font-size:11px;line-height:13px;color:var(--accent);cursor:grab;user-select:none;">⠿</span></span>';
 }
 // Send a new page order (or a bridge to delete) for the version on screen, then reload both views.
 async function fxSend(src, body) {
@@ -41740,4 +41765,518 @@ function adminBrandsSave(changed) {
       adminBrandsLoad();
     })
     .catch(function () { if (changed) changed.checked = !changed.checked; say('Could not reach the server.'); });
+}
+
+// ============================================================
+// v3.4.87 -- TD-090. THE VIDEO LAB TAB (admin only). Spec: claude/VIDEO_SPEC.md; server: routes/videoLab.js.
+// v3.4.90 -- A SEQUENCE OF PICTURES (Ian: "N number of pictures... that would go in order", "a prompt between each
+// image... just like our storyboard", "with an overall prompt too"). Each picture is chosen in the Archive window;
+// between each pair is what happens from one to the next and how long that clip runs; the overall prompt goes into
+// every clip. fal makes the clips side by side and joins them into one video. Past runs are short rows; a click
+// opens one to the full player, with each clip underneath and Redo on any of them.
+// Plain on purpose (Ian: "This does not have to look pretty because only admins see it").
+// Every name here starts vl / VL; checked unused before v3.4.86.
+// ============================================================
+var VL = { models: null, seq: [], pairs: [], overall: '', projects: [], open: {}, timer: null, cid: null, busy: false };
+
+function vlIsAdmin() { return !!(state.user && (state.user.is_admin || state.user.videoOn)); }   // v3.4.94: or the video switch is on
+
+function vlOpen() {
+  var host = document.getElementById('session-tab-videolab');
+  if (!host) return;
+  if (!vlIsAdmin()) { host.innerHTML = '<p style="padding:16px;">The Video Lab is not available yet.</p>'; return; }
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (VL.cid !== cid) { VL.cid = cid; VL.seq = []; VL.pairs = []; VL.overall = ''; VL.projects = []; VL.open = {}; }
+  host.innerHTML = '<div style="padding:14px;background:var(--panel);color:var(--on-panel);border-radius:10px;">' +
+    '<h3 style="margin:0 0 4px;">Video Lab <span style="font-size:12px;font-weight:normal;">(admin only, test bench)</span></h3>' +
+    '<div style="font-size:13px;margin-bottom:12px;">Add pictures in the order they happen, say what happens between each pair, then Generate. ' +
+      'fal makes each clip on its own servers and joins them into one video (a few minutes); you can leave and come back. No tokens are charged.</div>' +
+    '<div id="vl-form">Loading...</div>' +
+    '<h3 style="margin:22px 0 6px;">Runs</h3>' +
+    '<div id="vl-runs">Loading...</div>' +
+  '</div>';
+  var pending = 2;
+  function both() { if (--pending === 0) vlRenderForm(); }
+  if (VL.models) both(); else {
+    fetch('/api/video-lab/models', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+      VL.models = (d && d.models) || []; VL.webhook = !!(d && d.webhook); both();
+    }).catch(function () { VL.models = []; both(); });
+  }
+  ensureArchivesLoaded(both, cid);
+  vlLoadRuns();
+}
+
+function vlModel(key) {
+  var ms = VL.models || [];
+  for (var i = 0; i < ms.length; i++) if (ms[i].key === key) return ms[i];
+  return ms[0] || null;
+}
+
+function vlDefaultName() {
+  var d = new Date();
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  return 'Video Lab ' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+// What is typed on the form goes back into VL before anything changes the sequence, so nothing typed is lost.
+// noPairs: the redraw itself, which must not read the clip boxes back (after a remove or a move they are stale).
+function vlReadForm(noPairs) {
+  function v(id) { var e = document.getElementById(id); return e ? e.value : null; }
+  var s = document.getElementById('vl-sound');
+  var out = { name: v('vl-name'), overall: v('vl-overall'), model: v('vl-model'), sound: !!(s && s.checked) };
+  if (out.overall != null) VL.overall = out.overall; else out.overall = VL.overall;
+  for (var i = 0; !noPairs && i < VL.pairs.length; i++) {
+    var pp = v('vl-pp-' + i), pd = v('vl-pd-' + i);
+    if (pp != null) VL.pairs[i].prompt = pp;
+    if (pd) VL.pairs[i].duration = pd;
+  }
+  return out;
+}
+
+function vlFitPairs(m) {
+  while (VL.pairs.length < Math.max(0, VL.seq.length - 1)) VL.pairs.push({ prompt: '', duration: m ? m.defDuration : '' });
+  VL.pairs.length = Math.max(0, VL.seq.length - 1);
+  if (m) VL.pairs.forEach(function (p) { if (m.durations.indexOf(String(p.duration)) < 0) p.duration = m.defDuration; });
+}
+
+function vlPicHTML(i) {
+  var a = VL.seq[i];
+  return '<div style="display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:6px;">' +
+    '<div style="font-weight:bold;width:24px;text-align:center;">' + (i + 1) + '</div>' +
+    '<img src="' + escapeHtml(a.image_url) + '" style="width:150px;height:100px;object-fit:cover;border-radius:4px;cursor:pointer;" alt="" title="Change this picture" onclick="vlChoose(' + i + ')">' +
+    '<div style="font-size:12px;flex:1;" data-no-words>' + escapeHtml(archiveMomentLabel(a) || archiveTypeLabel(a.image_type) || ('Archive #' + a.id)) + '</div>' +
+    '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
+      '<button class="btn btn-sm" title="Earlier" onclick="vlMove(' + i + ', -1)"' + (i === 0 ? ' disabled' : '') + '>&#8593;</button>' +
+      '<button class="btn btn-sm" title="Later" onclick="vlMove(' + i + ', 1)"' + (i === VL.seq.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
+      '<button class="btn btn-sm" onclick="vlChoose(' + i + ')">Change</button>' +
+      '<button class="btn btn-sm" title="Take it out" onclick="vlRemove(' + i + ')">&#215;</button>' +
+    '</div></div>';
+}
+
+function vlPairHTML(i, m) {
+  var p = VL.pairs[i];
+  return '<div style="margin:6px 0 6px 34px;padding:8px;border-left:3px solid rgba(var(--accent-rgb),0.5);">' +
+    '<div style="font-size:12px;margin-bottom:4px;">Clip ' + (i + 1) + ': what happens from picture ' + (i + 1) + ' to picture ' + (i + 2) + '</div>' +
+    '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">' +
+      '<textarea id="vl-pp-' + i + '" rows="2" maxlength="1500" style="flex:1;min-width:240px;" oninput="vlShowCost()">' + escapeHtml(p.prompt || '') + '</textarea>' +
+      '<select id="vl-pd-' + i + '" onchange="vlShowCost()">' + m.durations.map(function (d) {
+        return '<option value="' + d + '"' + (String(p.duration) === d ? ' selected' : '') + '>' + d + ' s</option>';
+      }).join('') + '</select>' +
+    '</div></div>';
+}
+
+function vlRenderForm() {
+  var host = document.getElementById('vl-form');
+  if (!host) return;
+  var ms = VL.models || [];
+  if (!ms.length) { host.innerHTML = '<p>Could not load the model list.</p>'; return; }
+  var keep = vlReadForm(true);
+  var m = vlModel(keep.model || ms[0].key);
+  vlFitPairs(m);
+  var seqHtml = '';
+  for (var i = 0; i < VL.seq.length; i++) { seqHtml += vlPicHTML(i); if (i < VL.seq.length - 1) seqHtml += vlPairHTML(i, m); }
+  host.innerHTML =
+    (VL.webhook ? '' : '<div style="color:#b00;margin-bottom:8px;">PUBLIC_BASE_URL is not set on this server, so fal cannot report back.</div>') +
+    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">' +
+      '<label style="flex:1;min-width:220px;max-width:520px;">Name<br><input id="vl-name" type="text" maxlength="120" style="width:100%;" value="' + escapeHtml(keep.name || vlDefaultName()) + '" autocomplete="off" data-1p-ignore data-lpignore="true"></label>' +
+      '<button class="btn btn-sm" onclick="vlNew()" title="Clear the form and start a new video; the videos already made stay in Runs below">New video</button>' +
+    '</div>' +
+    '<div style="margin-bottom:10px;"><label>Overall prompt (goes into every clip: who, where, the mood)<br>' +
+      '<textarea id="vl-overall" rows="3" maxlength="2000" style="width:100%;max-width:720px;" oninput="vlShowCost()">' + escapeHtml(VL.overall || '') + '</textarea></label></div>' +
+    '<div style="font-weight:bold;margin-bottom:6px;">Pictures, in order</div>' +
+    '<div id="vl-seq">' + seqHtml + '</div>' +
+    '<div style="margin:8px 0 12px;"><button class="btn btn-sm" onclick="vlChoose(\'add\')">+ Add picture</button>' +
+      (VL.seq.length < 2 ? ' <span style="font-size:12px;">Two pictures at least.</span>' : '') + '</div>' +
+    '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;">' +
+      '<label>Model<br><select id="vl-model" onchange="vlReadForm(); vlRenderForm()">' + ms.map(function (x) {
+        return '<option value="' + x.key + '"' + (x.key === m.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
+      }).join('') + '</select></label>' +
+      '<label><input id="vl-sound" type="checkbox" onchange="vlShowCost()"' + (keep.sound ? ' checked' : '') + '> Model\'s own sound</label>' +
+      '<span id="vl-cost" style="font-size:13px;"></span>' +
+      '<button class="btn btn-primary" id="vl-go" onclick="vlGenerate()">Generate</button>' +
+      '<span id="vl-msg" style="font-size:13px;"></span>' +
+    '</div>';
+  vlShowCost();
+}
+
+function vlShowCost() {
+  var f = vlReadForm(), m = vlModel(f.model), el = document.getElementById('vl-cost');
+  if (!m || !el) return;
+  var per = f.sound ? m.priceSound : m.price;
+  var secs = VL.pairs.reduce(function (t, p) { return t + Number(p.duration || m.defDuration); }, 0);
+  el.textContent = VL.pairs.length
+    ? (VL.pairs.length + ' clip' + (VL.pairs.length === 1 ? '' : 's') + ', ' + secs + ' s, about $' + (per * secs).toFixed(2) + ' at fal')
+    : 'Add two pictures or more';
+}
+
+// The Archive window (openReplacePicker's modal) in a mode of its own; applyArchiveToTarget hands the pick to vlPick.
+// which: a picture's index to change it, or 'add' to put a new one on the end.
+function vlChoose(which) {
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) return;
+  vlReadForm();
+  state.pickerCtx = { mode: 'videolab', vlWhich: (which === 'add' ? 'add' : Number(which)), pinArea: 'videolab', campaignId: cid };
+  try { _rpReset(); } catch (e) {}
+  var tEl = document.getElementById('replace-picker-title');
+  if (tEl) tEl.textContent = which === 'add' ? 'Video Lab: add picture ' + (VL.seq.length + 1) : 'Video Lab: change picture ' + (Number(which) + 1);
+  state.pickerFilters = fpApply('videolab', cid, emptyArchiveFilters());
+  var modal = document.getElementById('replace-picker-modal');
+  if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); renderPicker(); }, cid);
+}
+
+function vlPick(which, id) {
+  var rows = state.archives || [], a = null;
+  for (var i = 0; i < rows.length; i++) if (String(rows[i].id) === String(id)) { a = rows[i]; break; }
+  if (!a) return;
+  if (which === 'add' || which == null || Number(which) >= VL.seq.length) VL.seq.push(a);
+  else VL.seq[Number(which)] = a;
+  vlRenderForm();
+}
+
+// v3.4.90 -- New video (Ian: "a new button to clear what's there and make a new one, pushing the last video you made down
+// to the list"): empties the form, keeps the model and sound choice, and folds every run in the list closed.
+function vlNew() {
+  var f = vlReadForm();
+  var typed = VL.seq.length || String(f.overall || '').trim() || VL.pairs.some(function (p) { return String(p.prompt || '').trim(); });
+  function go() {
+    VL.seq = []; VL.pairs = []; VL.overall = ''; VL.open = {};
+    var n = document.getElementById('vl-name'); if (n) n.value = '';
+    var o = document.getElementById('vl-overall'); if (o) o.value = '';
+    var msg = document.getElementById('vl-msg'); if (msg) msg.textContent = '';
+    vlRenderForm();
+    vlRenderRuns();
+  }
+  if (!typed) { go(); return; }
+  uiConfirm('Clear the form and start a new video? Videos already made stay in Runs below.', { okText: 'New video' }).then(function (yes) { if (yes) go(); });
+}
+
+function vlMove(i, dir) {
+  vlReadForm();
+  var j = i + dir;
+  if (j < 0 || j >= VL.seq.length) return;
+  var t = VL.seq[i]; VL.seq[i] = VL.seq[j]; VL.seq[j] = t;
+  vlRenderForm();
+}
+
+function vlRemove(i) {
+  vlReadForm();
+  VL.seq.splice(i, 1);
+  if (VL.pairs.length) VL.pairs.splice(Math.min(i, VL.pairs.length - 1), 1);
+  vlRenderForm();
+}
+
+function vlGenerate() {
+  if (VL.busy) return;
+  var f = vlReadForm(), m = vlModel(f.model), msg = document.getElementById('vl-msg');
+  function say(t) { if (msg) msg.textContent = t; }
+  if (VL.seq.length < 2) { say('Add two pictures at least.'); return; }
+  if (m && m.promptRequired && !String(f.overall || '').trim()) {
+    for (var i = 0; i < VL.pairs.length; i++) if (!String(VL.pairs[i].prompt || '').trim()) { say('This model needs a prompt for clip ' + (i + 1) + ', or an overall prompt.'); return; }
+  }
+  VL.busy = true; if (msg) msg.innerHTML = vlSpin(16) + ' Sending to fal...';
+  var go = document.getElementById('vl-go'); if (go) go.disabled = true;
+  fetch('/api/video-lab/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+    campaign_id: state.currentCampaign && state.currentCampaign.id,
+    session_id: state.currentSession && state.currentSession.id,
+    name: f.name || vlDefaultName(), model: f.model, sound: f.sound, overall_prompt: f.overall || '',
+    pictures: VL.seq.map(function (a) { return { url: a.image_url, archive_id: a.id }; }),
+    pairs: VL.pairs.map(function (p) { return { prompt: p.prompt || '', duration: String(p.duration) }; })
+  }) }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    VL.busy = false; if (go) go.disabled = false;
+    if (!res.ok) { say((res.j && res.j.error) || 'Could not start it.'); vlLoadRuns(); return; }
+    say('Started. It shows below; it takes a few minutes.');
+    if (res.j && res.j.project) VL.open[res.j.project.id] = true;
+    var n = document.getElementById('vl-name'); if (n) n.value = vlDefaultName();
+    vlLoadRuns();
+  }).catch(function () { VL.busy = false; if (go) go.disabled = false; say('Could not reach the server.'); });
+}
+
+function vlLoadRuns() {
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) return;
+  fetch('/api/video-lab/projects?campaign_id=' + encodeURIComponent(cid), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    VL.projects = (d && d.projects) || [];
+    vlRenderRuns();
+  }).catch(function () { var h = document.getElementById('vl-runs'); if (h) h.textContent = 'Could not load the runs.'; });
+}
+
+function vlStatusText(s) {
+  return { queued: 'Waiting to send', running: 'Being made at fal', saving: 'Saving the clip', done: 'Done', error: 'Failed', making: 'Being made' }[s] || s;
+}
+
+// A spinning ring (the storyboard's momentBusySpin keyframes) and how long a run has been going.
+function vlSpin(px) {
+  px = px || 18;
+  return '<span style="display:inline-block;width:' + px + 'px;height:' + px + 'px;border:' + Math.max(2, Math.round(px / 9)) + 'px solid rgba(var(--accent-rgb),0.25);' +
+    'border-top-color:var(--accent);border-radius:50%;animation:momentBusySpin 0.9s linear infinite;vertical-align:middle;"></span>';
+}
+function vlElapsed(from) {
+  var secs = Math.max(0, Math.round((Date.now() - new Date(from).getTime()) / 1000));
+  return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+}
+function vlBusy(s) { return ['queued', 'running', 'saving'].indexOf(s) >= 0; }
+
+// Where a video is: its clips, then the join.
+function vlProgress(p) {
+  var shots = p.shots || [];
+  var done = shots.filter(function (s) { return s.status === 'done'; }).length, bad = shots.filter(function (s) { return s.status === 'error'; }).length;
+  if (p.final_video_url) return 'Done';
+  if (bad && done + bad === shots.length) return 'Failed: ' + bad + ' of ' + shots.length + ' clip' + (shots.length === 1 ? '' : 's');
+  if (p.merge_status === 'error') return 'The join failed';
+  if (p.merge_status === 'running' || p.merge_status === 'saving') return 'Joining ' + shots.length + ' clips';
+  return 'Making clips: ' + done + ' of ' + shots.length + ' done';
+}
+
+function vlRenderRuns() {
+  var host = document.getElementById('vl-runs');
+  if (!host) { vlStopTimer(); return; }
+  var ps = VL.projects || [];
+  if (!ps.length) host.innerHTML = '<p style="font-size:13px;">No runs yet in this campaign.</p>';
+  else host.innerHTML = ps.map(vlRunHTML).join('');
+  var open = ps.some(function (p) { return p.status === 'making' || (p.shots || []).some(function (s) { return vlBusy(s.status); }); });
+  if (open) vlStartTimer(); else vlStopTimer();
+}
+
+function vlRunHTML(p) {
+  var shots = p.shots || [];
+  var m = null; (VL.models || []).forEach(function (x) { if (shots[0] && x.key === shots[0].model) m = x; });
+  var pics = shots.map(function (s) { return s.start_url; }).concat(shots.length ? [shots[shots.length - 1].end_url] : []).filter(Boolean);
+  var secs = shots.reduce(function (t, s) { return t + Number(s.duration || 0); }, 0);
+  var making = p.status === 'making';
+  var isOpen = !!VL.open[p.id];
+  // The short row: click anywhere but its buttons to open or close it.
+  var row = '<div style="display:flex;gap:10px;align-items:center;cursor:pointer;flex-wrap:wrap;" onclick="vlToggle(' + p.id + ')" title="' + (isOpen ? 'Close' : 'Open') + '">' +
+    '<span style="width:14px;">' + (isOpen ? '&#9662;' : '&#9656;') + '</span>' +
+    '<div style="display:flex;gap:3px;">' + pics.slice(0, 8).map(function (u) { return '<img src="' + escapeHtml(u) + '" style="width:44px;height:30px;object-fit:cover;border-radius:3px;" alt="">'; }).join('') +
+      (pics.length > 8 ? '<span style="font-size:11px;align-self:center;">+' + (pics.length - 8) + '</span>' : '') + '</div>' +
+    '<div style="flex:1;min-width:160px;"><div style="font-weight:bold;" data-no-words>' + escapeHtml(p.name || '') + '</div>' +
+      '<div style="font-size:12px;">' + (making ? vlSpin(12) + ' ' : '') + escapeHtml(vlProgress(p)) +
+        ' &middot; ' + shots.length + ' clip' + (shots.length === 1 ? '' : 's') + ', ' + secs + ' s &middot; about $' + Number(p.total_cost_usd || 0).toFixed(2) +
+        ' &middot; ' + escapeHtml(m ? m.label : (shots[0] && shots[0].model) || '') + ' &middot; ' + escapeHtml(new Date(p.created_at).toLocaleString()) + '</div></div>' +
+    (p.final_video_url ? '<a class="btn btn-sm" href="/api/video-lab/projects/' + p.id + '/download" onclick="event.stopPropagation();">Download</a>' : '') +
+    '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); vlDelete(' + p.id + ')">Delete</button>' +
+  '</div>';
+  if (!isOpen) return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' + row + '</div>';
+  var settings = {}; try { settings = JSON.parse(p.settings || '{}') || {}; } catch (e) { settings = {}; }
+  var big = p.final_video_url
+    ? '<video src="' + escapeHtml(p.final_video_url) + '" controls preload="metadata" style="display:block;width:100%;max-width:1100px;max-height:78vh;background:#000;border-radius:6px;"></video>'
+    : '<div style="width:100%;max-width:1100px;aspect-ratio:16/9;max-height:60vh;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;border:1px dashed var(--border);border-radius:6px;font-size:14px;">' +
+        (making ? vlSpin(44) + '<div>' + escapeHtml(vlProgress(p)) + ' &middot; ' + vlElapsed(p.created_at) + ' so far</div><div style="font-size:12px;">Usually a few minutes. You can leave and come back.</div>'
+                : '<div>' + escapeHtml(vlProgress(p)) + '</div>' +
+                  (p.merge_error ? '<div style="color:#b00;font-size:12px;max-width:90%;" data-no-words>' + escapeHtml(p.merge_error) + '</div>' : '') +
+                  (p.merge_status === 'error' ? '<button class="btn btn-sm" onclick="vlJoinAgain(' + p.id + ')">Join again</button>' : '')) +
+      '</div>';
+  var clips = shots.map(function (s, i) {
+    var own = ''; try { own = (JSON.parse(s.settings || '{}') || {}).own_prompt || ''; } catch (e) {}
+    return '<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;border-top:1px solid var(--border);padding:8px 0;">' +
+      (s.status === 'done' && s.video_url
+        ? '<video src="' + escapeHtml(s.video_url) + '" controls preload="metadata" style="width:260px;max-width:100%;background:#000;border-radius:4px;"></video>'
+        : '<div style="width:260px;max-width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;gap:8px;border:1px dashed var(--border);border-radius:4px;font-size:12px;">' +
+            (vlBusy(s.status) ? vlSpin(20) + ' ' : '') + escapeHtml(vlStatusText(s.status)) + '</div>') +
+      '<div style="flex:1;min-width:200px;font-size:12px;">' +
+        '<div><b>Clip ' + (i + 1) + '</b>: pictures ' + (i + 1) + ' to ' + (i + 2) + ' &middot; ' + escapeHtml(String(s.duration || '')) + ' s &middot; ' + escapeHtml(vlStatusText(s.status)) +
+          (s.attempt > 1 ? ' &middot; try ' + s.attempt : '') + '</div>' +
+        (own ? '<div style="white-space:pre-wrap;margin-top:4px;" data-no-words>' + escapeHtml(own) + '</div>' : '') +
+        (s.status === 'error' ? '<div style="color:#b00;margin-top:4px;" data-no-words>' + escapeHtml(s.error || '') + '</div>' : '') +
+        '<div style="margin-top:6px;display:flex;gap:6px;">' +
+          ((s.status === 'done' || s.status === 'error') && p.merge_status !== 'running' ? '<button class="btn btn-sm" onclick="vlRedo(' + s.id + ')">Redo</button>' : '') +
+          (s.status === 'done' && s.video_url ? '<a class="btn btn-sm" href="/api/video-lab/shots/' + s.id + '/download">Download clip</a>' : '') +
+        '</div></div></div>';
+  }).join('');
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:12px;">' + row +
+    '<div style="margin-top:10px;">' +
+      '<input type="text" value="' + escapeHtml(p.name || '') + '" maxlength="120" style="width:100%;max-width:520px;font-weight:bold;margin-bottom:8px;" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true" onchange="vlRename(' + p.id + ', this.value)">' +
+      big +
+      (settings.overall_prompt ? '<div style="font-size:12px;margin-top:8px;white-space:pre-wrap;" data-no-words><b>Overall:</b> ' + escapeHtml(settings.overall_prompt) + '</div>' : '') +
+      '<div style="margin-top:8px;">' + clips + '</div>' +
+    '</div></div>';
+}
+
+function vlToggle(id) { VL.open[id] = !VL.open[id]; vlRenderRuns(); }
+
+function vlStartTimer() {
+  if (VL.timer) return;
+  VL.timer = setInterval(function () {
+    var pane = document.getElementById('session-tab-videolab');
+    if (!pane || pane.style.display === 'none') { vlStopTimer(); return; }
+    vlLoadRuns();
+  }, 10000);
+}
+function vlStopTimer() { if (VL.timer) clearInterval(VL.timer); VL.timer = null; }
+
+function vlRename(id, name) {
+  name = String(name || '').trim();
+  if (!name) { vlLoadRuns(); return; }
+  fetch('/api/video-lab/projects/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
+    .then(function (r) { return r.json(); }).then(function (j) { if (j && j.error) showError(j.error); else vlLoadRuns(); })
+    .catch(function () { showError('Could not rename it.'); });
+}
+
+function vlPost(url, failText) {
+  fetch(url, { method: 'POST' }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.error) showError(j.error);
+    vlLoadRuns();
+  }).catch(function () { showError(failText); });
+}
+function vlRedo(shotId) { vlPost('/api/video-lab/shots/' + shotId + '/redo', 'Could not redo it.'); }
+function vlJoinAgain(pid) { vlPost('/api/video-lab/projects/' + pid + '/join', 'Could not join it again.'); }
+
+function vlDelete(id) {
+  uiConfirm('Delete this video? Its clips and the joined video are removed from storage. This cannot be undone.', { okText: 'Delete', danger: true }).then(function (yes) {
+    if (!yes) return;
+    fetch('/api/video-lab/projects/' + id, { method: 'DELETE' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && j.error) showError(j.error);
+      delete VL.open[id];
+      vlLoadRuns();
+    }).catch(function () { showError('Could not delete it.'); });
+  });
+}
+
+// =================================================================================================
+// v3.4.92 -- TD-933 build 2. MOVING A SESSION ON THE SESSIONS PAGE (Ian, 2026-11-07: ordered by date "is a
+// little hit and miss"). The Story Master gets two arrows and a gripper at the bottom right of each session
+// card, beside the Draft/Ready chip and the ... menu. The arrows FOLLOW THE PAGE (Ian: "Follow the session
+// page"): the page is newest first, so the left arrow moves a card toward the front, which is LATER in the
+// story, and the right arrow moves it toward the back, EARLIER in the story. The gripper drags a card to any
+// spot. Publish and the book read the same order oldest first. The whole order is sent (ids, story order) and
+// the server refuses it unless it names every session of the campaign exactly once. APPENDED (TD-853).
+// =================================================================================================
+var _sessOrderBusy = false, _sessDrag = null, _sessMark = null;
+function sessIsStoryMaster() {
+  return !!(state && state.currentCampaign && state.currentCampaign.my_role === 'dm');
+}
+function sessOrderControls(s, i, n) {
+  if (!sessIsStoryMaster() || n < 2) return '';
+  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:5px;padding:0 5px;font-size:8px;line-height:15px;height:17px;cursor:pointer;';   // v3.4.93 -- 30% smaller (Ian)
+  var off = 'opacity:0.35;cursor:default;';
+  var btn = function (ok, d, sym, tip) {
+    return ok ? '<button type="button" class="sess-move" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();sessMove(' + Number(s.id) + ',' + d + ')">' + sym + '</button>'
+      : '<button type="button" class="sess-move" disabled style="' + bs + off + '" onclick="event.stopPropagation();">' + sym + '</button>';
+  };
+  return '<span class="sess-order-ctl" style="display:inline-flex;gap:3px;margin-left:auto;align-items:center;">' +
+    btn(i > 0, -1, '&#9664;', 'Later in the story (moves toward the front)') +
+    btn(i < n - 1, 1, '&#9654;', 'Earlier in the story (moves toward the back)') +
+    '<span class="sess-grip" title="Drag to move this session" onclick="event.stopPropagation();" style="display:inline-block;padding:0 2px;font-size:11px;line-height:13px;color:var(--accent);cursor:grab;user-select:none;">&#10303;</span></span>';
+}
+// The cards as the page shows them, newest first: the same order the session arrows on the Storyboard walk.
+function sessPageIds() {
+  return sessNavOrdered().map(function (s) { return Number(s.id); });
+}
+function sessMove(id, d) {
+  var page = sessPageIds(), k = page.indexOf(Number(id)), j = k + Number(d);
+  if (k < 0 || j < 0 || j >= page.length) return;
+  var x = page[k]; page[k] = page[j]; page[j] = x;
+  sessSaveOrder(page);
+}
+function sessMoveTo(id, targetId, after) {
+  var page = sessPageIds(), k = page.indexOf(Number(id));
+  if (k < 0 || Number(id) === Number(targetId)) return;
+  page.splice(k, 1);
+  var j = page.indexOf(Number(targetId)); if (j < 0) return;
+  page.splice(after ? j + 1 : j, 0, Number(id));
+  sessSaveOrder(page);
+}
+// page: ids newest first. Story order is the reverse. Shown at once; put back from the server if refused.
+function sessSaveOrder(page) {
+  if (_sessOrderBusy || !state.currentCampaign) return;
+  var before = sessPageIds();
+  if (before.join() === page.join()) return;
+  var story = page.slice().reverse(), pos = {};
+  story.forEach(function (sid, i) { pos[String(sid)] = i + 1; });
+  (state.sessions || []).forEach(function (s) { if (pos[String(s.id)]) s.sort_order = pos[String(s.id)]; });
+  renderSessions();
+  _sessOrderBusy = true;
+  var cid = state.currentCampaign.id;
+  fetch('/api/campaigns/' + cid + '/sessions/order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: story }) })
+    .then(function (r) { return r.json().catch(function () { return { error: 'The order could not be saved.' }; }); })
+    .then(function (data) {
+      _sessOrderBusy = false;
+      if (!data || data.error) {
+        try { billingToast((data && data.error) || 'The order could not be saved.', 'error'); } catch (e) {}
+        if (state.currentCampaign && String(state.currentCampaign.id) === String(cid)) loadSessions();
+      }
+    })
+    .catch(function () {
+      _sessOrderBusy = false;
+      try { billingToast('The order could not be saved. Check your connection and try again.', 'error'); } catch (e) {}
+      if (state.currentCampaign && String(state.currentCampaign.id) === String(cid)) loadSessions();
+    });
+}
+// --- Drag and drop: from the gripper only, as on the Storyboard, so a card is never dragged by accident. ---
+function _sessCardOf(el) {
+  if (!el || typeof el.closest !== 'function') return null;
+  return el.closest('.session-card[data-sess-id]');
+}
+function _sessPaint(el, side) {
+  if (_sessMark && _sessMark !== el) _sessMark.style.boxShadow = '';
+  _sessMark = el || null;
+  if (el) el.style.boxShadow = side;
+}
+function _sessPlace(e) {
+  var c = _sessCardOf(e.target);
+  if (_sessDrag === null || !c) return null;
+  var tid = Number(c.getAttribute('data-sess-id'));
+  if (tid === _sessDrag) return null;
+  var r = c.getBoundingClientRect(), after = e.clientX > r.left + r.width / 2;
+  return { id: tid, after: after, el: c, side: after ? 'inset -4px 0 0 #e8c766' : 'inset 4px 0 0 #e8c766' };
+}
+function _sessUndrag() {
+  var all = document.querySelectorAll('.session-card[data-sess-drag]');
+  for (var n = 0; n < all.length; n++) { all[n].removeAttribute('draggable'); all[n].removeAttribute('data-sess-drag'); all[n].style.cursor = ''; }
+}
+try {
+  document.addEventListener('mousedown', function (e) {
+    var t = e.target; if (!t || typeof t.closest !== 'function' || !t.closest('.sess-grip')) return;
+    var card = _sessCardOf(t); if (!card || !sessIsStoryMaster()) return;
+    card.setAttribute('draggable', 'true'); card.setAttribute('data-sess-drag', '1'); card.style.cursor = 'grabbing';
+  }, true);
+  document.addEventListener('mouseup', function () { if (_sessDrag === null) _sessUndrag(); }, true);
+  document.addEventListener('dragstart', function (e) {
+    var card = e.target && e.target.closest ? e.target.closest('.session-card[data-sess-drag]') : null; if (!card) return;
+    _sessDrag = Number(card.getAttribute('data-sess-id'));
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'session'); } catch (x) {}
+  });
+  document.addEventListener('dragover', function (e) {
+    if (_sessDrag === null) return;
+    var p = _sessPlace(e);
+    if (!p) { _sessPaint(null); return; }
+    e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
+    _sessPaint(p.el, p.side);
+  });
+  document.addEventListener('drop', function (e) {
+    if (_sessDrag === null) return;
+    var p = _sessPlace(e), id = _sessDrag; _sessDrag = null; _sessPaint(null); _sessUndrag();
+    if (!p) return;
+    e.preventDefault();
+    sessMoveTo(id, p.id, p.after);
+  });
+  document.addEventListener('dragend', function () { _sessDrag = null; _sessPaint(null); _sessUndrag(); });
+} catch (e) {}
+
+// ============================================================
+// v3.4.94 -- THE VIDEO SWITCH (admin; the Dashboard, on one row with The Guild and Brands). Ian, 2026-11-07: "Make it
+// always work for admins... but the on and off would be for everyone else." Server: GET/PUT /api/admin/video-lab; the
+// Video Lab routes check it on every call; /api/auth/me sends videoOn for the tab.
+// ============================================================
+function adminVideoLoad() {
+  var box = document.getElementById('admin-video-switch');
+  if (!box) return;
+  fetch('/api/admin/video-lab', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (d && typeof d.on === 'boolean') box.checked = d.on;
+  }).catch(function () {});
+}
+function adminVideoSave(box) {
+  var msg = document.getElementById('admin-video-msg');
+  function say(t) { if (msg) msg.textContent = t; }
+  var on = !!(box && box.checked);
+  say('Saving...');
+  fetch('/api/admin/video-lab', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: on }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || typeof res.j.on !== 'boolean') { if (box) box.checked = !on; say((res.j && res.j.error) || 'Could not save it.'); return; }
+      if (box) box.checked = res.j.on;
+      say(res.j.on ? 'Video is on for everyone.' : 'Video is off: admins only.');
+    })
+    .catch(function () { if (box) box.checked = !on; say('Could not reach the server.'); });
 }

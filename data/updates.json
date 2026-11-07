@@ -1,5 +1,149 @@
 [
   {
+    "version": "3.4.94",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3494-video-switch",
+        "kind": "feature",
+        "public": false,
+        "summary": "Dashboard: a Video switch beside The Guild and Brands, all three on one row. Admins always have the Video Lab; the switch gives it to everyone else.",
+        "detail": "TD-090. Ian: make it always work for admins, the on and off for everyone else. app_settings.video_lab_on, read on every Video Lab call, so switching off stops the next request. With it on, a member sees and makes videos only in their own campaigns and only from that campaign Archive; renaming, redoing, joining again and deleting are for the member who made the video or the Story Master. No tokens are charged for video yet, and the switch says so.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.93",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3493-smaller-arrows",
+        "kind": "fix",
+        "public": false,
+        "summary": "The move arrows, x and gripper on the Storyboard, Review and session cards are 30% smaller.",
+        "detail": "Ian: shrink them by 30%. Text 11px to 8px, height 18px to 13px (session cards 24px to 17px), gripper 16px to 11px, gaps 4px to 3px. Nothing else changes.",
+        "td": [
+          "TD-933"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.92",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3492-session-order-arrows",
+        "kind": "feature",
+        "public": true,
+        "summary": "Story Masters can now put sessions in any order: arrows and a drag handle on each session card.",
+        "detail": "TD-933 build 2. Bottom right of each session card, beside the Draft or Ready chip and the menu: a left arrow, a right arrow and a drag handle, for the Story Master only. The arrows follow the page, which shows the newest session first: left moves a card toward the front (later in the story), right moves it toward the back (earlier in the story). The drag handle drops a card anywhere. Publish, the book and the session arrows on the Storyboard follow the new order. The order is saved whole and refused if the list changed in the meantime, in which case the page reloads it.",
+        "td": [
+          "TD-933"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.91",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3491-session-order-place",
+        "kind": "fix",
+        "public": false,
+        "summary": "Sessions now keep a place in their campaign list; every list and book reads it. Nothing looks different yet.",
+        "detail": "TD-933 build 1. Ian: ordering sessions by date is a little hit and miss, so each session now has a place (sessions.sort_order, 1, 2, 3 within a campaign). The first start numbers every campaign exactly as its list read before: date, then the order made, then id. The Sessions page, the session arrows, Publish, the printed book, the campaign tile picture, the bookshelf, Import Looks and every earlier-session rule (a character look carried forward, the version style, the previous session summary) read the place first, with the old order behind it. A new session goes to the end of the list. One accepted change: two sessions on the same date now count as one before the other for character looks. The arrows to move a session come in the next build.",
+        "td": [
+          "TD-933"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.90",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3490-video-lab-sequence",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video Lab: any number of pictures in order, a prompt between each, joined into one video.",
+        "detail": "TD-090. Ian: N pictures in order with a prompt between each image, like the storyboard, and an overall prompt too. Pictures are added and changed in the Archive window, moved up or down and taken out; between each pair is what happens and how long that clip runs; the overall prompt goes into every clip. Generate sends every clip to fal at once; when the last is saved, fal joins them (fal-ai/ffmpeg-api/merge-videos) and the joined video is stored. Redo remakes one clip and joins again; Join again retries a failed join. Past runs are short rows; a click opens one to the full player with each clip underneath. Runs from v3.4.86 to v3.4.89 show as two-picture videos.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.89",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3489-video-lab-spinner",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video Lab: a spinner while a video is being made, and a much bigger player.",
+        "detail": "TD-090. Ian: a progress spinner, and the video viewer much bigger. A run still being made shows a large spinner with how long it has been going (refreshed every 10 seconds) and a note that it usually takes a few minutes; Generate shows a small spinner while sending. A finished video plays as wide as the panel allows (up to 1100px, and no taller than most of the screen), with the start and end pictures underneath.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.88",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3488-video-lab-archive-window",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video Lab: click the start or end picture to choose it in the Archive window.",
+        "detail": "TD-090. Ian: click the start or end picture to open the Archive window, and no Archive grid on the page. Each picture box now opens the same Archive window Replace uses (filters, Clear filters, the pin), titled for the start or the end picture; choosing a picture puts it in that box. Change and Clear sit under a chosen picture. The grid and filter bar below the form are gone.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.87",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3487-video-lab-tab",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video Lab tab (admin only) after Preview on each session.",
+        "detail": "TD-090. Pick a start and an end picture from the campaign Archive (same filters as the Archive screen), type what happens between them, choose the model and the duration (the choices follow the model), give it a name (defaults to Video Lab and the date and time), and Generate. The cost fal is expected to charge shows before sending. Runs list below, newest first: player, Download, rename, Delete (asks first), status, time taken, the two pictures and the prompt; the list refreshes every 10 seconds while anything is being made. Hidden from everyone but admins.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.86",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3486-video-lab-server",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video Lab (admin only), server side: make a test video from two Archive pictures with fal.",
+        "detail": "TD-090, spec claude/VIDEO_SPEC.md. New routes/videoLab.js at /api/video-lab, admin only: model list (Seedance 2.0 and 2.0 Fast, Kling 3.0 Standard, Veo 3.1 Fast, all on fal), make a run, rename, delete (clip removed from storage), download a clip as a file. Runs are rows in two new tables, video_projects and video_shots (shaped for many shots per video later), so they survive a closed browser or a deploy. fal reports back on its webhook; a sweep every 30 seconds catches any it missed. Clips are copied to R2 under video-lab. No tokens are charged; the expected fal cost is recorded. The tab comes in v3.4.87.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.85",
     "staged_on": "2026-11-07",
     "entries": [
