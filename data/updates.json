@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.88",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3488-video-lab-archive-window",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video Lab: click the start or end picture to choose it in the Archive window.",
+        "detail": "TD-090. Ian: click the start or end picture to open the Archive window, and no Archive grid on the page. Each picture box now opens the same Archive window Replace uses (filters, Clear filters, the pin), titled for the start or the end picture; choosing a picture puts it in that box. Change and Clear sit under a chosen picture. The grid and filter bar below the form are gone.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.87",
     "staged_on": "2026-11-07",
     "entries": [

@@ -17407,6 +17407,8 @@ function applyArchiveToTarget(archiveId) {
   if (!cid && !ctx.prepKind) { appNotice('No campaign is open.',
     'That image cannot be applied because no campaign is on screen.',
     'Open the campaign and try again.'); return; }
+  // v3.4.88 -- TD-090. A Video Lab pick goes into the start or end box on the Video Lab tab; nothing is written anywhere.
+  if (ctx.mode === 'videolab') { closeReplacePicker(); vlPick(ctx.vlWhich, archiveId); return; }
 
   // v3.0.622 -- the two title modes leave before the /apply call below. /apply replaces an image on a
   // row that already exists (a panel, a character, an asset); a built title is a field in a prefs
@@ -41747,15 +41749,15 @@ function adminBrandsSave(changed) {
 }
 
 // ============================================================
-// v3.4.87 -- TD-090. THE VIDEO LAB TAB (admin only). Spec: claude/VIDEO_SPEC.md; server: routes/videoLab.js.
-// Pick a start and an end picture from the campaign's Archive (the same filter bar as the Archive
-// screen), say what happens between them, choose a model and a duration, and Generate. fal makes
+// v3.4.87 -- TD-090. THE VIDEO LAB TAB (v3.4.88: pictures picked in the Archive window) (admin only). Spec: claude/VIDEO_SPEC.md; server: routes/videoLab.js.
+// Pick a start and an end picture from the campaign's Archive (v3.4.88: each box opens the Archive window,
+// the same one Replace uses), say what happens between them, choose a model and a duration, and Generate. fal makes
 // the clip on its own servers; the run is a database row, so the list below survives a closed
 // browser or a deploy, and refreshes itself every 10 s while anything is still being made.
 // Plain on purpose (Ian: "This does not have to look pretty because only admins see it").
 // Every name here starts vl / VL; checked unused before v3.4.87.
 // ============================================================
-var VL = { models: null, picks: { start: null, end: null }, filters: null, projects: [], timer: null, cid: null, busy: false };
+var VL = { models: null, picks: { start: null, end: null }, projects: [], timer: null, cid: null, busy: false };
 
 function vlIsAdmin() { return !!(state.user && state.user.is_admin); }
 
@@ -41764,8 +41766,7 @@ function vlOpen() {
   if (!host) return;
   if (!vlIsAdmin()) { host.innerHTML = '<p style="padding:16px;">The Video Lab is for admins only.</p>'; return; }
   var cid = state.currentCampaign && state.currentCampaign.id;
-  if (VL.cid !== cid) { VL.cid = cid; VL.picks = { start: null, end: null }; VL.filters = emptyArchiveFilters(); VL.projects = []; }
-  if (!VL.filters) VL.filters = emptyArchiveFilters();
+  if (VL.cid !== cid) { VL.cid = cid; VL.picks = { start: null, end: null }; VL.projects = []; }
   host.innerHTML = '<div style="padding:14px;background:var(--panel);color:var(--on-panel);border-radius:10px;">' +
     '<h3 style="margin:0 0 4px;">Video Lab <span style="font-size:12px;font-weight:normal;">(admin only, test bench)</span></h3>' +
     '<div style="font-size:13px;margin-bottom:12px;">Pick a start and an end picture, say what happens between them, then Generate. ' +
@@ -41800,12 +41801,15 @@ function vlDefaultName() {
 function vlPickHTML(which) {
   var a = VL.picks[which];
   var label = which === 'start' ? 'Start picture' : 'End picture';
-  return '<div style="flex:1;min-width:200px;border:1px solid var(--border);border-radius:8px;padding:8px;">' +
+  // v3.4.88 -- the whole box is the button: it opens the Archive window (Ian: "if you hit the start picture or the
+  // end picture it shows the archive modal").
+  return '<div style="flex:1;min-width:200px;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;" title="Pick from the Archive" onclick="vlChoose(\'' + which + '\')">' +
     '<div style="font-weight:bold;margin-bottom:6px;">' + label + '</div>' +
     (a ? '<img src="' + escapeHtml(a.image_url) + '" style="max-width:100%;max-height:220px;display:block;" alt="">' +
          '<div style="font-size:12px;margin-top:4px;" data-no-words>' + escapeHtml(archiveMomentLabel(a) || archiveTypeLabel(a.image_type) || ('Archive #' + a.id)) + '</div>' +
-         '<button class="btn btn-sm" style="margin-top:6px;" onclick="vlClearPick(\'' + which + '\')">Clear</button>'
-       : '<div style="font-size:13px;padding:30px 0;text-align:center;">None yet: use the ' + (which === 'start' ? 'Start' : 'End') + ' buttons below.</div>') +
+         '<button class="btn btn-sm" style="margin-top:6px;" onclick="event.stopPropagation(); vlChoose(\'' + which + '\')">Change</button> ' +
+         '<button class="btn btn-sm" style="margin-top:6px;" onclick="event.stopPropagation(); vlClearPick(\'' + which + '\')">Clear</button>'
+       : '<div style="font-size:13px;padding:30px 0;text-align:center;border:1px dashed var(--border);border-radius:6px;">Click to pick from the Archive</div>') +
   '</div>';
 }
 
@@ -41835,12 +41839,8 @@ function vlRenderForm() {
       '<span id="vl-cost" style="font-size:13px;"></span>' +
       '<button class="btn btn-primary" id="vl-go" onclick="vlGenerate()">Generate</button>' +
       '<span id="vl-msg" style="font-size:13px;"></span>' +
-    '</div>' +
-    '<h4 style="margin:16px 0 6px;">Archive pictures</h4>' +
-    '<div class="archive-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">' + archiveFilterBarHTML(VL.filters, 'vlSetFilter') + '</div>' +
-    '<div id="vl-grid"></div>';
+    '</div>';
   vlShowCost();
-  vlRenderGrid();
 }
 
 function vlReadForm() {
@@ -41856,31 +41856,25 @@ function vlShowCost() {
   el.textContent = 'About $' + (per * Number(f.duration || m.defDuration)).toFixed(2) + ' at fal ($' + per + ' a second)';
 }
 
-function vlSetFilter(key, val) {
-  if (!VL.filters) VL.filters = emptyArchiveFilters();
-  VL.filters[key] = val;
-  vlRenderGrid();
-}
-
-function vlRenderGrid() {
-  var host = document.getElementById('vl-grid');
-  if (!host) return;
-  var rows = getFilteredArchives(VL.filters).filter(function (a) { return !!a.image_url; });
-  if (!rows.length) { host.innerHTML = '<p style="font-size:13px;">No Archive pictures match.</p>'; return; }
-  host.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + rows.slice(0, 300).map(function (a) {
-    var on = (VL.picks.start && VL.picks.start.id === a.id) ? 'start' : (VL.picks.end && VL.picks.end.id === a.id) ? 'end' : '';
-    return '<div style="width:130px;border:2px solid ' + (on ? 'var(--accent)' : 'transparent') + ';border-radius:6px;padding:3px;">' +
-      '<img src="' + escapeHtml(a.image_url) + '" loading="lazy" style="width:100%;height:96px;object-fit:cover;display:block;" alt="" title="' + escapeHtml(archiveMomentLabel(a) || '') + '">' +
-      '<div style="display:flex;gap:4px;margin-top:3px;">' +
-        '<button class="btn btn-sm" style="flex:1;padding:2px 4px;" onclick="vlPick(\'start\',' + a.id + ')">Start</button>' +
-        '<button class="btn btn-sm" style="flex:1;padding:2px 4px;" onclick="vlPick(\'end\',' + a.id + ')">End</button>' +
-      '</div></div>';
-  }).join('') + '</div>' + (rows.length > 300 ? '<p style="font-size:12px;">Showing the first 300; filter to narrow.</p>' : '');
+// v3.4.88 -- the Archive window (openReplacePicker's modal) in a mode of its own. Open to the whole Archive for now
+// (Ian: "Eventually we will limit this to pictures on the storyboard"); its filters and pin work as everywhere else.
+// The pick comes back through applyArchiveToTarget, which hands a 'videolab' pick to vlPick.
+function vlChoose(which) {
+  var cid = state.currentCampaign && state.currentCampaign.id;
+  if (!cid) return;
+  state.pickerCtx = { mode: 'videolab', vlWhich: which === 'end' ? 'end' : 'start', pinArea: 'videolab', campaignId: cid };
+  try { _rpReset(); } catch (e) {}
+  var tEl = document.getElementById('replace-picker-title');
+  if (tEl) tEl.textContent = which === 'end' ? 'Video Lab: pick the end picture' : 'Video Lab: pick the start picture';
+  state.pickerFilters = fpApply('videolab', cid, emptyArchiveFilters());
+  var modal = document.getElementById('replace-picker-modal');
+  if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
+  ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); renderPicker(); }, cid);
 }
 
 function vlPick(which, id) {
   var rows = state.archives || [];
-  for (var i = 0; i < rows.length; i++) if (rows[i].id === id) { VL.picks[which] = rows[i]; break; }
+  for (var i = 0; i < rows.length; i++) if (String(rows[i].id) === String(id)) { VL.picks[which] = rows[i]; break; }   // v3.4.88: the picker may pass the id as text
   vlRenderForm();
 }
 function vlClearPick(which) { VL.picks[which] = null; vlRenderForm(); }
