@@ -41223,7 +41223,7 @@ function spaceControls(src, t, id) {
   if (k < 0) return '';
   var back = src === 'review' ? '&#9650;' : '&#9664;', fwd = src === 'review' ? '&#9660;' : '&#9654;';
   var what = t === 'p' ? 'panel' : 'bridge';
-  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:6px;padding:0 7px;font-size:11px;line-height:18px;cursor:pointer;';
+  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:5px;padding:0 5px;font-size:8px;line-height:13px;cursor:pointer;';   // v3.4.93 -- 30% smaller (Ian)
   var off = 'opacity:0.35;cursor:default;';
   var can = function (j) {
     if (j < 0 || j >= flat.length) return false;
@@ -41236,11 +41236,11 @@ function spaceControls(src, t, id) {
       : '<button type="button" disabled style="' + bs + off + '">' + sym + '</button>';
   };
   var del = t === 'p' ? ('panelDelete(' + Number(id) + ')') : ('bridgeDelete(' + q + ',\'' + src + '\')');
-  return '<span class="sp-ctl" data-sp-src="' + src + '" data-sp-t="' + t + '" data-sp-id="' + escapeHtml(String(id)) + '" style="display:inline-flex;gap:4px;margin-left:auto;align-items:center;">' +
+  return '<span class="sp-ctl" data-sp-src="' + src + '" data-sp-t="' + t + '" data-sp-id="' + escapeHtml(String(id)) + '" style="display:inline-flex;gap:3px;margin-left:auto;align-items:center;">' +
     btn(k - 1, back, 'Move this ' + what + ' one place ' + (src === 'review' ? 'up' : 'earlier')) +
     '<button type="button" style="' + bs + '" title="Delete this ' + what + '" onclick="event.stopPropagation();' + del + '">&times;</button>' +
     btn(k + 1, fwd, 'Move this ' + what + ' one place ' + (src === 'review' ? 'down' : 'later')) +
-    '<span class="sp-grip" title="Drag to move this ' + what + '" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:var(--accent);cursor:grab;user-select:none;">⠿</span></span>';
+    '<span class="sp-grip" title="Drag to move this ' + what + '" style="display:inline-block;padding:0 2px;font-size:11px;line-height:13px;color:var(--accent);cursor:grab;user-select:none;">⠿</span></span>';
 }
 // Send a new page order (or a bridge to delete) for the version on screen, then reload both views.
 async function fxSend(src, body) {
@@ -42146,16 +42146,16 @@ function sessIsStoryMaster() {
 }
 function sessOrderControls(s, i, n) {
   if (!sessIsStoryMaster() || n < 2) return '';
-  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:6px;padding:0 7px;font-size:11px;line-height:22px;height:24px;cursor:pointer;';
+  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:5px;padding:0 5px;font-size:8px;line-height:15px;height:17px;cursor:pointer;';   // v3.4.93 -- 30% smaller (Ian)
   var off = 'opacity:0.35;cursor:default;';
   var btn = function (ok, d, sym, tip) {
     return ok ? '<button type="button" class="sess-move" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();sessMove(' + Number(s.id) + ',' + d + ')">' + sym + '</button>'
       : '<button type="button" class="sess-move" disabled style="' + bs + off + '" onclick="event.stopPropagation();">' + sym + '</button>';
   };
-  return '<span class="sess-order-ctl" style="display:inline-flex;gap:4px;margin-left:auto;align-items:center;">' +
+  return '<span class="sess-order-ctl" style="display:inline-flex;gap:3px;margin-left:auto;align-items:center;">' +
     btn(i > 0, -1, '&#9664;', 'Later in the story (moves toward the front)') +
     btn(i < n - 1, 1, '&#9654;', 'Earlier in the story (moves toward the back)') +
-    '<span class="sess-grip" title="Drag to move this session" onclick="event.stopPropagation();" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:var(--accent);cursor:grab;user-select:none;">&#10303;</span></span>';
+    '<span class="sess-grip" title="Drag to move this session" onclick="event.stopPropagation();" style="display:inline-block;padding:0 2px;font-size:11px;line-height:13px;color:var(--accent);cursor:grab;user-select:none;">&#10303;</span></span>';
 }
 // The cards as the page shows them, newest first: the same order the session arrows on the Storyboard walk.
 function sessPageIds() {

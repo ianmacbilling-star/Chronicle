@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.93",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3493-smaller-arrows",
+        "kind": "fix",
+        "public": false,
+        "summary": "The move arrows, x and gripper on the Storyboard, Review and session cards are 30% smaller.",
+        "detail": "Ian: shrink them by 30%. Text 11px to 8px, height 18px to 13px (session cards 24px to 17px), gripper 16px to 11px, gaps 4px to 3px. Nothing else changes.",
+        "td": [
+          "TD-933"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.92",
     "staged_on": "2026-11-07",
     "entries": [
