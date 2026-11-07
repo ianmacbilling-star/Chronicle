@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.80",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3480-guide-words",
+        "kind": "fix",
+        "public": false,
+        "summary": "Getting started guide reads properly on Story; step 1 reworded.",
+        "detail": "Ian on Story: step 1 said Create a story / Your campaign holds the whole story, and step 4 Create a chapter/chapter. The guide's step text was wrongly on the page swap's keep list; it now swaps too. A swap that doubles one of the brand's words (chapter/chapter, story story) folds back to one word, on screen and in emails. Step 1 (and Brain section 1a) now say Your campaign holds all of its sessions, which reads as Your story holds all of its chapters on Story.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.79",
     "staged_on": "2026-11-06",
     "entries": [

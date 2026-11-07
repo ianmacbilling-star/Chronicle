@@ -29,13 +29,17 @@
   list.forEach(function (w) { MAP[w[0]] = w[2]; MAP[w[1]] = w[3]; keys.push(w[1], w[0]); });
   var RX = new RegExp('\\b(' + keys.join('|') + ')\\b', 'gi');
   var TEST = new RegExp('\\b(' + keys.join('|') + ')\\b', 'i');
+  // v3.4.80 -- a swap can double a word where the text already named both ("session/chapter" -> "chapter/chapter",
+  // "campaign story" -> "story story"); DUP folds such a pair of the brand's own words back into one.
+  var TO = []; list.forEach(function (w) { TO.push(w[3], w[2]); });
+  var DUP = new RegExp('\\b(' + TO.join('|') + ')(?:\\s*/\\s*|\\s+)\\1\\b', 'gi');
   function swap(s) {
     return s.replace(RX, function (hit) {
       var to = MAP[hit.toLowerCase()];
       if (hit === hit.toUpperCase()) return to.toUpperCase();
       if (hit.charAt(0) === hit.charAt(0).toUpperCase()) return to.charAt(0).toUpperCase() + to.slice(1);
       return to;
-    });
+    }).replace(DUP, '$1');
   }
 
   var SKIP_TAGS = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, INPUT: 1, CODE: 1, PRE: 1, NOSCRIPT: 1, SELECT: 1, OPTION: 1 };
@@ -45,7 +49,7 @@
     '#sidebar-campaign-name', '#sessions-camp-name', '#sessions-camp-desc', '#novel-cover-title', '#novel-cover-sub',
     '.char-name', '.char-desc', '.moment-title', '.review-panel-title', '.review-nar-text', '.archive-title',
     '.member-row-name', '.review-chip', '.style-card-name', '.style-card-desc',
-    '.wc-ba-text', '.wc-opt-text', '.gs-text',
+    '.wc-ba-text', '.wc-opt-text',   // v3.4.80: '.gs-text' (the Getting started guide's own words) no longer kept
     '.novel-caption', '.novel-panel-inner', '.novel-chapter-header',
     '.breadcrumb-link', '.breadcrumb-current'
   ].join(',');

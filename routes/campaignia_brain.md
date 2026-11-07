@@ -105,7 +105,7 @@ shows one step at a time, opens at the first step they have not done, and has **
 step. "Session/chapter": a game night or a chapter of a story — the same thing in the app.
 
 1. **Create a campaign.** On the home screen, press **+ New campaign** and give it a name and a short
-   description. The campaign holds the whole story.
+   description. The campaign holds all of its sessions.
 2. **Add your characters.** Press the **Characters** button to open the **Characters screen** and add the main
    cast, with a description and reference pictures. These are the canonical characters, the starting point. Once
    the first session exists and is **Ready**, you change a character as the story goes along on that session's

@@ -123,7 +123,7 @@ function swapPlain(key, s) {
       if (hit.charAt(0) === hit.charAt(0).toUpperCase()) return to.charAt(0).toUpperCase() + to.slice(1);
       return to;
     });
-  }).join('');
+  }).join('').replace(new RegExp('\\b(' + list.map(function (w) { return w[3] + '|' + w[2]; }).join('|') + ')(?:\\s*/\\s*|\\s+)\\1\\b', 'gi'), '$1');   // v3.4.80 -- "chapter/chapter" -> "chapter"
 }
 // A subject line or other plain text: swap everything outside the kept parts.
 function swapText(key, s) {

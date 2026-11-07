@@ -5753,7 +5753,7 @@ function renderHelpThread() {
 // The same steps are in the Brain (routes/campaignia_brain.md, "Getting started"), so a typed question gets the
 // same path. Keep the two in step.
 var GS_STEPS = [
-  { t: 'Create a campaign', d: 'Your campaign holds the whole story. On the home screen, press + New campaign and give it a name and a short description.', go: 'campaigns' },
+  { t: 'Create a campaign', d: 'Your campaign holds all of its sessions. On the home screen, press + New campaign and give it a name and a short description.', go: 'campaigns' },
   { t: 'Add your characters', d: 'Press the Characters button to open the Characters screen, and add your main cast with a description and reference pictures. Do it before you generate, so Campaignia knows who\u2019s who and keeps them looking the same. Once the first session exists and is Ready, you change a character as the story goes along on that session\u2019s Characters tab.', go: 'camp:characters' },
   { t: 'Invite your members (optional)', d: 'Open Members and invite people by email or with a link. They join free, and can follow along or make their own versions.', go: 'camp:members' },
   { t: 'Create a session/chapter', d: 'Add one for each game night, or for each chapter of your story.', go: 'camp:sessions' },
