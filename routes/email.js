@@ -37,7 +37,7 @@ async function sendEmail(to, subject, html, opts) {
   try {
     var _B = require('../services/brands');
     var _bk = (opts && opts.noWords) ? null : await _B.emailBrand(getDb, to);
-    if (_bk) { _subject = _B.swapText(_bk, _subject); _html = _B.swapHtml(_bk, _html); }
+    if (_bk) { _subject = _B.swapText(_bk, _subject); _html = _B.swapHtml(_bk, _html); _html = _B.emailLook(_bk, _html); }   // v3.4.82: and the brand's colors
   } catch (_be) { console.error('[brand words] email: ' + (_be && _be.message || _be)); }
   if (_subject != null) _subject = String(_subject).replace(/[\u0001\u0002]/g, '');
   if (_html != null) _html = String(_html).replace(/[\u0001\u0002]/g, '');

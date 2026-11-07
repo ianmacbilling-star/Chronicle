@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.82",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3482-brand-email-look",
+        "kind": "feature",
+        "public": false,
+        "summary": "Story: emails to Story accounts use Story's colors, with Campaignia as a text heading instead of the banner picture.",
+        "detail": "Ian chose option B: on Story the dark Campaignia banner picture would sit as a dark block on a light email. For an account whose home brand is Story, each email color (the eleven theme names emails use) is swapped for Story's value from its theme sheet, and the banner picture becomes the word Campaignia as text in Story's heading color and font. The product is still Campaignia; the logo stays for now. Campaignia accounts and production are unchanged.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.81",
     "staged_on": "2026-11-06",
     "entries": [

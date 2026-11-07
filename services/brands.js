@@ -148,8 +148,64 @@ async function emailBrand(getDb, to) {
   var db = await getDb();
   var u = await db.prepare('SELECT home_brand FROM users WHERE LOWER(email) = LOWER(?)').get(to.trim());
   var k = u && u.home_brand;
-  return (allowed(k, prod) && wordsOn(k)) ? k : null;
+  return (allowed(k, prod) && k !== DEFAULT_BRAND) ? k : null;   // v3.4.82: words (if the brand has them) and look
 }
+// v3.4.82 -- TD-1105. THE LOOK OF AN EMAIL for an account on another brand (Ian, 2026-11-06: option B). Emails are
+// built with Campaignia's colors (routes/email.js reads them through services/themeColors.js); for another brand
+// each of those colors is swapped for the same name's value in that brand's theme sheet, and the banner picture
+// (the Campaignia logo drawn on dark) becomes the word Campaignia as text in the brand's heading color. The product
+// is still Campaignia; a brand's own banner picture can replace the text once its logo exists.
+const EMAIL_NAMES = ['accent-rgb', 'accent-pale-rgb', 'accent-pale', 'accent', 'page-bg', 'on-panel', 'panel', 'button-cta', 'gold-dim-label', 'success', 'page-title'];
+function readSheet(file) {
+  const css = require('fs').readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const raw = {}; let m; const re = /--([\w-]+)\s*:\s*([^;]+);/g;
+  while ((m = re.exec(css))) if (!(m[1] in raw)) raw[m[1]] = m[2].trim();
+  const out = {};
+  Object.keys(raw).forEach(function (k) {
+    let v = raw[k], n = 0, p;
+    while ((p = /^var\(--([\w-]+)\)$/.exec(v)) && n++ < 8) v = raw[p[1]];
+    if (v !== undefined) out[k] = v;
+  });
+  return out;
+}
+const _looks = {};
+function emailLookFor(key) {
+  if (!isKnown(key) || key === DEFAULT_BRAND) return null;
+  if (_looks[key] !== undefined) return _looks[key];
+  var look = null;
+  try {
+    var path = require('path'), dir = path.join(__dirname, '..', 'public');
+    var from = readSheet(path.join(dir, BRANDS[DEFAULT_BRAND].sheet)), to = readSheet(path.join(dir, BRANDS[key].sheet));
+    var pairs = [];
+    // On a light email the see-through gold carries small text as well as lines, so it takes the brand's darker
+    // small-text color (--accent-text-rgb, as in the app since v3.4.74).
+    var TARGET = { 'accent-rgb': 'accent-text-rgb' };
+    EMAIL_NAMES.forEach(function (n) { var tn = TARGET[n] || n; if (n !== 'page-title' && from[n] && to[tn] && from[n] !== to[tn]) pairs.push([from[n], to[tn]]); });
+    // Every Campaignia value must be its own (no two names share one), or a swap could pick the wrong partner.
+    var seen = {}; pairs.forEach(function (p) { var k = p[0].toLowerCase(); if (seen[k] && seen[k] !== p[1]) throw new Error('two email colors share ' + p[0]); seen[k] = p[1]; });
+    look = { pairs: pairs, title: to['page-title'] || to['on-panel'] || '#222222', font: to['font-heading'] || "Georgia,'Times New Roman',serif",
+      tint: to['accent-rgb'] || '0,0,0', light: (to['glass-rgb'] === '255,255,255') };
+  } catch (e) { console.error('[brand look] ' + (e && e.message || e)); look = null; }
+  _looks[key] = look;
+  return look;
+}
+function emailLook(key, html) {
+  var look = (html == null) ? null : emailLookFor(key);
+  if (!look) return html;
+  var map = {}, alts = [];
+  look.pairs.forEach(function (p) { map[p[0].toLowerCase()] = p[1]; alts.push(p[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); });
+  var s = String(html);
+  // A light brand: the black frame and the dark see-through boxes become a soft tint of the brand's accent.
+  if (look.light) {
+    s = s.replace(/2px solid #000000/gi, '2px solid rgba(' + look.tint + ',0.45)')
+         .replace(/rgba\(0,0,0,(0?\.\d+)\)/g, function (m, a) { return 'rgba(' + look.tint + ',' + (Math.round(parseFloat(a) * 40) / 100) + ')'; });
+  }
+  // One pass, so a swapped value is never swapped again; a hex value only where it ends (#c9a84c, not #c9a84c99).
+  if (alts.length) s = s.replace(new RegExp('(' + alts.join('|') + ')(?![0-9a-fA-F])', 'gi'), function (hit) { return map[hit.toLowerCase()] || hit; });
+  var heading = '<div style="font-family:' + look.font.replace(/"/g, "'") + ';font-size:30px;line-height:1.2;font-weight:600;letter-spacing:1px;color:' + look.title + ';text-align:center;padding:24px 12px 14px;">Campaignia</div>';
+  return s.replace(/<img\b[^>]*Campaignia_Email_Banner\.png[^>]*>/gi, heading);
+}
+
 // The help assistant: the brand the person is looking at right now (the page's cmp_brand cookie, checked
 // against this host), so its answers match the screen. Returns the instruction line, or '' for Campaignia.
 function helpWordsLine(req) {
@@ -221,4 +277,4 @@ function middleware(getDb) {
 }
 
 module.exports = { BRANDS: BRANDS, DEFAULT_BRAND: DEFAULT_BRAND, isKnown: isKnown, isProdHost: isProdHost, pick: pick, forSignup: forSignup, isPagePath: isPagePath, landingBrand: landingBrand, middleware: middleware, choicesFor: choicesFor, canChoose: canChoose,
-  WORDS: WORDS, wordsOn: wordsOn, keep: keep, stripKeep: stripKeep, swapText: swapText, swapHtml: swapHtml, emailBrand: emailBrand, helpWordsLine: helpWordsLine };
+  WORDS: WORDS, wordsOn: wordsOn, keep: keep, stripKeep: stripKeep, swapText: swapText, swapHtml: swapHtml, emailBrand: emailBrand, helpWordsLine: helpWordsLine, emailLook: emailLook };
