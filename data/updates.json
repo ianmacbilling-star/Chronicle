@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.87",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3487-video-lab-tab",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video Lab tab (admin only) after Preview on each session.",
+        "detail": "TD-090. Pick a start and an end picture from the campaign Archive (same filters as the Archive screen), type what happens between them, choose the model and the duration (the choices follow the model), give it a name (defaults to Video Lab and the date and time), and Generate. The cost fal is expected to charge shows before sending. Runs list below, newest first: player, Download, rename, Delete (asks first), status, time taken, the two pictures and the prompt; the list refreshes every 10 seconds while anything is being made. Hidden from everyone but admins.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.86",
     "staged_on": "2026-11-07",
     "entries": [
