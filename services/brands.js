@@ -202,8 +202,13 @@ function emailLook(key, html) {
   }
   // One pass, so a swapped value is never swapped again; a hex value only where it ends (#c9a84c, not #c9a84c99).
   if (alts.length) s = s.replace(new RegExp('(' + alts.join('|') + ')(?![0-9a-fA-F])', 'gi'), function (hit) { return map[hit.toLowerCase()] || hit; });
-  var heading = '<div style="font-family:' + look.font.replace(/"/g, "'") + ';font-size:30px;line-height:1.2;font-weight:600;letter-spacing:1px;color:' + look.title + ';text-align:center;padding:24px 12px 14px;">Campaignia</div>';
-  return s.replace(/<img\b[^>]*Campaignia_Email_Banner\.png[^>]*>/gi, heading);
+  // v3.4.83 -- with the logo beside it (Ian: "You can still put the logo on these emails"): the small chest picture the
+  // emails already send (Campaignia_Favicon.png, 64px, 5 KB), from the same address as the banner it replaces.
+  return s.replace(/<img\b[^>]*?src="([^"]*?)Campaignia_Email_Banner\.png"[^>]*>/gi, function (m, base) {
+    return '<div style="text-align:center;padding:22px 12px 12px;line-height:1.2;">' +
+      '<img src="' + base + 'Campaignia_Favicon.png" width="52" height="52" alt="" style="display:inline-block;vertical-align:middle;border:0;margin-right:10px;" />' +
+      '<span style="display:inline-block;vertical-align:middle;font-family:' + look.font.replace(/"/g, "'") + ';font-size:30px;line-height:1.2;font-weight:600;letter-spacing:1px;color:' + look.title + ';">Campaignia</span></div>';
+  });
 }
 
 // The help assistant: the brand the person is looking at right now (the page's cmp_brand cookie, checked

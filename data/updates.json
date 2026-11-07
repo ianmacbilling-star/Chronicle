@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.83",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3483-brand-email-logo",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story emails show the Campaignia logo beside the Campaignia heading.",
+        "detail": "Ian: the logo can still go on Story emails. The heading that replaces the dark banner picture now has the chest logo beside the word Campaignia, as in the app header, using the small picture the emails already send (Campaignia_Favicon.png). Campaignia emails unchanged.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.82",
     "staged_on": "2026-11-06",
     "entries": [
