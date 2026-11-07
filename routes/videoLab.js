@@ -22,13 +22,20 @@
 // (final_video_url). A one-shot video needs no join. Redo remakes one shot and joins again. Created here, lazily, so database/db.js
 // is untouched; id SERIAL because the db wrapper appends RETURNING id to every INSERT.
 //
+// v3.4.95 -- CUTS (Video Phase 2, build 2; claude/VIDEO_PHASE2_SPEC.md). A cut is one video for one version of one session:
+// its own list of pictures (video_cut_pictures), made from the version's storyboard (title picture first), moved, removed,
+// added from the Archive, named, and one pinned per version. While a cut is a DRAFT its pictures and the prompts between
+// them are edited and saved; Generate turns it into shots exactly as the Lab did (planShots / sendShots, shared with the
+// Lab route so the two cannot drift). The Lab's runs are folded in as cuts the first time this starts (foldLabRuns).
+// Additive only (spec section 0): new columns and one new table; nothing outside the Video tab reads them.
+//
 // NO TOKENS ARE CHARGED (Ian: "Don't worry about deducting tokens on this test run, but we'll need
 // that"). est_cost_usd records what fal is expected to bill, from the price table below.
 // ============================================================
 const express = require('express');
 const router = express.Router();
 const { requireAuth, isAdminEmail, getCampaignRole } = require('../middleware/auth');
-const { getDb } = require('../database/db');
+const { getDb, getViewableForkId } = require('../database/db');
 const storage = require('../storage/storage');
 
 // v3.4.94 -- THE VIDEO SWITCH (Ian, 2026-11-07: "Make it always work for admins... but the on and off would be for
@@ -181,9 +188,97 @@ function ensureTables() {
     await db.exec('CREATE INDEX IF NOT EXISTS idx_video_projects_merge ON video_projects(merge_request_id)');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_video_shots_project ON video_shots(project_id, position)');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_video_projects_campaign ON video_projects(campaign_id, created_at)');
+    // v3.4.95 -- cuts: the version, the pin, and (for later builds) the style, the shot list and where it came from.
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS fork_id INTEGER');
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS pinned BOOLEAN DEFAULT FALSE');
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS style TEXT');
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS shot_list TEXT');
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS source TEXT');
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS video_cut_pictures (
+        id SERIAL PRIMARY KEY,
+        cut_id INTEGER NOT NULL REFERENCES video_projects(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL DEFAULT 1,
+        image_url TEXT,
+        source TEXT,
+        moment_id INTEGER,
+        archive_id INTEGER,
+        label TEXT,
+        prev_image_url TEXT,
+        retouched_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+    await db.exec('CREATE INDEX IF NOT EXISTS idx_video_cut_pictures_cut ON video_cut_pictures(cut_id, position)');
+    await db.exec('CREATE INDEX IF NOT EXISTS idx_video_projects_version ON video_projects(session_id, fork_id)');
+    await foldLabRuns(db);
   })();
   _tablesReady.catch(function () { _tablesReady = null; });
   return _tablesReady;
+}
+
+// v3.4.95 -- THE LAB'S RUNS BECOME CUTS (Ian: "if you can keep the two videos I've made"). A Lab run made on a session
+// takes that session's Canonical as its version (the Lab did not record one) and its pictures from its shots: each shot's
+// start, then the last shot's end. Pictures first, then the kind, so a restart half way through finishes the job.
+// A run with no session (none were made that way from the tab) stays a Lab run and is not shown.
+async function foldLabRuns(db) {
+  const labs = await db.prepare("SELECT id, session_id FROM video_projects WHERE kind = 'lab' AND session_id IS NOT NULL ORDER BY id").all();
+  for (const p of labs) {
+    const fork = await db.prepare("SELECT id FROM session_forks WHERE session_id = ? AND role = 'dm' ORDER BY id ASC LIMIT 1").get(p.session_id);
+    const has = await db.prepare('SELECT id FROM video_cut_pictures WHERE cut_id = ? LIMIT 1').get(p.id);
+    if (!has) {
+      const shots = await db.prepare('SELECT position, start_url, end_url, start_archive_id, end_archive_id FROM video_shots WHERE project_id = ? ORDER BY position, id').all(p.id);
+      const pics = shots.map(function (s) { return { url: s.start_url, archive_id: s.start_archive_id }; });
+      if (shots.length) pics.push({ url: shots[shots.length - 1].end_url, archive_id: shots[shots.length - 1].end_archive_id });
+      for (let i = 0; i < pics.length; i++) {
+        await db.prepare('INSERT INTO video_cut_pictures (cut_id, position, image_url, source, archive_id) VALUES (?, ?, ?, ?, ?)').run(p.id, i + 1, pics[i].url, 'archive', pics[i].archive_id || null);
+      }
+    }
+    await db.prepare("UPDATE video_projects SET kind = 'cut', source = 'lab', fork_id = COALESCE(fork_id, ?), updated_at = NOW() WHERE id = ? AND kind = 'lab'").run(fork ? fork.id : null, p.id);
+  }
+  if (labs.length) console.log('[video-lab] folded ' + labs.length + ' Lab run(s) into cuts');
+}
+
+// v3.4.95 -- a version's storyboard pictures, in story order: the title picture first (the version's own, else the
+// Canonical's, as the session tile reads it), then every panel with a picture, by panel order. A picture rejected by the
+// rights check (TD-979) is left out, as everywhere else.
+const NOT_REJECTED = " AND NOT EXISTS (SELECT 1 FROM image_rights ir WHERE ir.image_url = m.image AND ir.verdict = 'reject')";
+async function storyboardPictures(db, sessionId, forkId) {
+  const rows = await db.prepare(
+    "SELECT m.id, m.kind, m.title, m.image FROM moments m WHERE m.fork_id = ? AND m.image IS NOT NULL AND m.image <> ''" + NOT_REJECTED +
+    " ORDER BY CASE WHEN m.kind = 'establishing' THEN 0 ELSE 1 END ASC, m.panel_order ASC, m.id ASC").all(forkId);
+  const out = rows.map(function (r) {
+    return { url: r.image, source: r.kind === 'establishing' ? 'title' : 'moment', moment_id: r.id, label: r.kind === 'establishing' ? 'Title picture' : String(r.title || '') };
+  });
+  if (!out.some(function (x) { return x.source === 'title'; })) {
+    const t = await db.prepare(
+      "SELECT m.id, m.image FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = ? AND f.role = 'dm' AND m.kind = 'establishing' AND m.image IS NOT NULL AND m.image <> ''" + NOT_REJECTED +
+      ' ORDER BY m.panel_order ASC, m.id ASC LIMIT 1').get(sessionId);
+    if (t) out.unshift({ url: t.image, source: 'title', moment_id: t.id, label: 'Title picture' });
+  }
+  return out;
+}
+
+// v3.4.95 -- may this person work on this version of this session? Admins: any version of any session. Everyone else:
+// a member of its campaign, and a version they may view (the same rule the storyboard uses, getViewableForkId).
+async function versionAccess(req, db, sessionId, forkId) {
+  const s = await db.prepare('SELECT id, campaign_id FROM sessions WHERE id = ?').get(sessionId);
+  if (!s) return null;
+  const f = await db.prepare('SELECT id FROM session_forks WHERE id = ? AND session_id = ?').get(forkId, sessionId);
+  if (!f) return null;
+  if (req.vlAdmin) return s;
+  if (!(await getCampaignRole(req.session.userId, s.campaign_id))) return null;
+  const v = await getViewableForkId(db, sessionId, req.session.userId, forkId);
+  return (v && String(v) === String(forkId)) ? s : null;
+}
+
+// v3.4.95 -- a picture may go into a cut if it is this campaign's: a picture on any storyboard of the session (the
+// version's own or the title picture borrowed from the Canonical) or one in the campaign's Archive. Admins as before.
+async function picturesAllowed(req, db, cut, urls) {
+  if (req.vlAdmin || !urls.length) return true;
+  const a = await db.prepare('SELECT DISTINCT image_url FROM campaign_archives WHERE campaign_id = ? AND image_url = ANY(?)').all(cut.campaign_id, [urls]);
+  const b = await db.prepare('SELECT DISTINCT m.image AS image_url FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = ? AND m.image = ANY(?)').all(cut.session_id, [urls]);
+  const ok = {}; (a || []).concat(b || []).forEach(function (r) { ok[r.image_url] = true; });
+  return urls.every(function (u) { return ok[u]; });
 }
 
 // What one shot sends to fal: each model names its start and end pictures and its duration its own way.
@@ -224,6 +319,8 @@ async function projectsWithShots(db, where, params) {
   const ids = projects.map(function (p) { return p.id; });
   const shots = await db.prepare('SELECT * FROM video_shots WHERE project_id = ANY(?) ORDER BY project_id, position, id').all([ids]);
   projects.forEach(function (p) { p.shots = shots.filter(function (s) { return s.project_id === p.id; }); });
+  const pics = await db.prepare('SELECT * FROM video_cut_pictures WHERE cut_id = ANY(?) ORDER BY cut_id, position, id').all([ids]);   // v3.4.95
+  projects.forEach(function (p) { p.pictures = pics.filter(function (x) { return x.cut_id === p.id; }); });
   return projects;
 }
 
@@ -242,6 +339,44 @@ router.get('/projects', requireAuth, requireVideo, async function (req, res) {
 });
 
 // ---- making a run --------------------------------------------------------------------------
+// v3.4.95 -- ONE PLACE that turns pictures and the prompts between them into shots, and one that sends them, for the
+// Lab route and for Generate on a cut alike (rule 5c: make the twin impossible). pics: [{url, archive_id}].
+function planShots(m, pics, pairsIn, overall, fallbackDuration) {
+  const shots = [];
+  for (let i = 0; i < pics.length - 1; i++) {
+    const pr = pairsIn[i] || {};
+    const d = String(pr.duration || fallbackDuration || m.defDuration);
+    if (m.durations.indexOf(d) < 0) return { error: 'Clip ' + (i + 1) + ': ' + d + ' seconds is not offered for ' + m.label + '.' };
+    const own = String(pr.prompt || '').trim().slice(0, 1500);
+    const full = shotPrompt(overall, own);
+    if (m.promptRequired && !full) return { error: m.label + ' needs a prompt for clip ' + (i + 1) + ' (pictures ' + (i + 1) + ' to ' + (i + 2) + '), or an overall prompt.' };
+    shots.push({ position: i + 1, start: pics[i], end: pics[i + 1], own: own, full: full, duration: d });
+  }
+  return { shots: shots };
+}
+// Save the shots, then send every one to fal; they are made side by side. A refusal fails that shot only.
+async function sendShots(db, projectId, modelKey, m, shots, sound, hook) {
+  for (const x of shots) {
+    const r = await db.prepare('INSERT INTO video_shots (project_id, position, start_url, end_url, start_archive_id, end_archive_id, prompt, model, endpoint, duration, sound, status, est_cost_usd, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(projectId, x.position, x.start.url, x.end.url, x.start.archive_id || null, x.end.archive_id || null, x.full, modelKey, m.endpoint, x.duration, sound, 'queued', estCost(m, x.duration, sound), JSON.stringify({ own_prompt: x.own }));
+    x.id = r.lastInsertRowid;
+  }
+  const fal = falClient();
+  let sent = 0;
+  for (const x of shots) {
+    try {
+      const sub = await fal.queue.submit(m.endpoint, { input: buildInput(m, x.full, x.start.url, x.end.url, x.duration, sound), webhookUrl: hook });
+      await db.prepare("UPDATE video_shots SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, x.id);
+      sent++;
+    } catch (e) {
+      const msg = falErrorText(e);
+      await db.prepare("UPDATE video_shots SET status = 'error', error = ?, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(('fal refused it: ' + msg).slice(0, 1000), x.id);
+    }
+  }
+  console.log('[video-lab] project ' + projectId + ': ' + sent + ' of ' + shots.length + ' shot(s) sent to ' + m.endpoint);
+  return sent;
+}
+
 router.post('/projects', requireAuth, requireVideo, async function (req, res) {
   const b = req.body || {};
   const m = MODELS[b.model];
@@ -257,16 +392,9 @@ router.post('/projects', requireAuth, requireVideo, async function (req, res) {
   if (pics.some(function (p) { return !storage.isOurPublicUrl(p.url); })) return res.status(400).json({ error: 'Every picture must be a Campaignia picture.' });
   const overall = String(b.overall_prompt || '').trim().slice(0, 2000);
   const pairsIn = Array.isArray(b.pairs) ? b.pairs : [{ prompt: b.prompt, duration: b.duration }];
-  const shots = [];
-  for (let i = 0; i < pics.length - 1; i++) {
-    const pr = pairsIn[i] || {};
-    const d = String(pr.duration || b.duration || m.defDuration);
-    if (m.durations.indexOf(d) < 0) return res.status(400).json({ error: 'Clip ' + (i + 1) + ': ' + d + ' seconds is not offered for ' + m.label + '.' });
-    const own = String(pr.prompt || '').trim().slice(0, 1500);
-    const full = shotPrompt(overall, own);
-    if (m.promptRequired && !full) return res.status(400).json({ error: m.label + ' needs a prompt for clip ' + (i + 1) + ' (pictures ' + (i + 1) + ' to ' + (i + 2) + '), or an overall prompt.' });
-    shots.push({ position: i + 1, start: pics[i], end: pics[i + 1], own: own, full: full, duration: d });
-  }
+  const plan = planShots(m, pics, pairsIn, overall, b.duration);
+  if (plan.error) return res.status(400).json({ error: plan.error });
+  const shots = plan.shots;
   const sound = !!b.sound;
   const hook = webhookUrl();
   if (!hook) return res.status(500).json({ error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' });
@@ -289,25 +417,7 @@ router.post('/projects', requireAuth, requireVideo, async function (req, res) {
     const p = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, name, kind, status, total_cost_usd, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .run(req.session.userId, cid, sid, name, 'lab', 'making', total, settings);
     projectId = p.lastInsertRowid;
-    for (const x of shots) {
-      const r = await db.prepare('INSERT INTO video_shots (project_id, position, start_url, end_url, start_archive_id, end_archive_id, prompt, model, endpoint, duration, sound, status, est_cost_usd, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(projectId, x.position, x.start.url, x.end.url, x.start.archive_id, x.end.archive_id, x.full, b.model, m.endpoint, x.duration, sound, 'queued', estCost(m, x.duration, sound), JSON.stringify({ own_prompt: x.own }));
-      x.id = r.lastInsertRowid;
-    }
-    // Send every shot to fal; they are made side by side. A refusal fails that shot only.
-    const fal = falClient();
-    let sent = 0;
-    for (const x of shots) {
-      try {
-        const sub = await fal.queue.submit(m.endpoint, { input: buildInput(m, x.full, x.start.url, x.end.url, x.duration, sound), webhookUrl: hook });
-        await db.prepare("UPDATE video_shots SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, x.id);
-        sent++;
-      } catch (e) {
-        const msg = falErrorText(e);
-        await db.prepare("UPDATE video_shots SET status = 'error', error = ?, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(('fal refused it: ' + msg).slice(0, 1000), x.id);
-      }
-    }
-    console.log('[video-lab] project ' + projectId + ': ' + sent + ' of ' + shots.length + ' shot(s) sent to ' + m.endpoint);
+    const sent = await sendShots(db, projectId, b.model, m, shots, sound, hook);
     await projectStatus(db, projectId);
     const out = await projectsWithShots(db, 'id = ?', [projectId]);
     if (!sent) return res.status(502).json({ error: 'fal refused the run: ' + ((out[0] && out[0].shots[0] && out[0].shots[0].error) || 'unknown'), project: out[0] || null, project_id: projectId });
@@ -439,12 +549,189 @@ router.delete('/projects/:id', requireAuth, requireVideo, async function (req, r
       try { await storage.deleteFile(f); asked++; } catch (e) { console.error('[video-lab] could not delete ' + f + ': ' + (e && e.message)); }
     }
     await db.prepare('DELETE FROM video_shots WHERE project_id = ?').run(id);
+    await db.prepare('DELETE FROM video_cut_pictures WHERE cut_id = ?').run(id);   // v3.4.95
     await db.prepare('DELETE FROM video_projects WHERE id = ?').run(id);
     console.log('[video-lab] deleted project ' + id + ' (' + shots.length + ' shot(s), ' + asked + '/' + files.length + ' file(s) sent for deletion)');
     res.json({ ok: true, files: files.length });
   } catch (e) {
     console.error('[video-lab] delete error:', e && e.message);
     res.status(500).json({ error: 'Could not delete it.' });
+  }
+});
+
+// ---- cuts (v3.4.95) ------------------------------------------------------------------------
+// A cut's draft: its settings JSON holds the overall prompt, the model, the sound choice and the prompts between pictures
+// (pairs: [{prompt, duration}]); its pictures are rows in video_cut_pictures. Generate turns the draft into shots.
+function cutSettings(p) { try { return JSON.parse(p.settings || '{}') || {}; } catch (e) { return {}; } }
+function defaultCutName() { return 'Cut ' + new Date().toISOString().slice(0, 16).replace('T', ' '); }
+async function loadCut(db, id) { const out = await projectsWithShots(db, "id = ? AND kind = 'cut'", [id]); return out[0] || null; }
+async function writePictures(db, cutId, pics) {
+  await db.prepare('DELETE FROM video_cut_pictures WHERE cut_id = ?').run(cutId);
+  for (let i = 0; i < pics.length; i++) {
+    const x = pics[i];
+    await db.prepare('INSERT INTO video_cut_pictures (cut_id, position, image_url, source, moment_id, archive_id, label) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(cutId, i + 1, x.url, x.source || 'archive', x.moment_id || null, x.archive_id || null, x.label ? String(x.label).slice(0, 200) : null);
+  }
+}
+function cleanPictures(list) {
+  return (Array.isArray(list) ? list : []).slice(0, MAX_PICTURES).map(function (p) {
+    p = p || {};
+    const src = ['title', 'moment', 'archive'].indexOf(p.source) >= 0 ? p.source : 'archive';
+    return { url: String(p.url || p.image_url || ''), source: src, moment_id: parseInt(p.moment_id, 10) || null, archive_id: parseInt(p.archive_id, 10) || null, label: p.label ? String(p.label) : null };
+  }).filter(function (p) { return p.url; });
+}
+function cleanPairs(list) {
+  return (Array.isArray(list) ? list : []).slice(0, MAX_PICTURES).map(function (p) {
+    p = p || {};
+    return { prompt: String(p.prompt || '').slice(0, 1500), duration: String(p.duration || '') };
+  });
+}
+
+// The cuts of one version of one session, newest first, the pinned one first.
+router.get('/cuts', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const sid = parseInt(req.query.session_id, 10), fid = parseInt(req.query.fork_id, 10);
+    if (!sid || !fid) return res.status(400).json({ error: 'session_id and fork_id are required' });
+    if (!(await versionAccess(req, db, sid, fid))) return res.status(403).json({ error: 'You cannot see that version.' });
+    const cuts = await projectsWithShots(db, "kind = 'cut' AND session_id = ? AND fork_id = ?", [sid, fid]);
+    cuts.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0); });
+    res.json({ cuts: cuts });
+  } catch (e) {
+    console.error('[video-lab] cuts list error:', e && e.message);
+    res.status(500).json({ error: 'Could not load the cuts.' });
+  }
+});
+
+// New cut: the version's storyboard pictures, title picture first. A draft until Generate.
+router.post('/cuts', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const b = req.body || {};
+    const sid = parseInt(b.session_id, 10), fid = parseInt(b.fork_id, 10);
+    if (!sid || !fid) return res.status(400).json({ error: 'session_id and fork_id are required' });
+    const s = await versionAccess(req, db, sid, fid);
+    if (!s) return res.status(403).json({ error: 'You cannot make a cut of that version.' });
+    const pics = await storyboardPictures(db, sid, fid);
+    const model = MODELS[b.model] ? b.model : Object.keys(MODELS)[0];
+    const settings = JSON.stringify({ overall_prompt: '', model: model, sound: false, pairs: [] });
+    const r = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, fork_id, name, kind, status, total_cost_usd, settings, source, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(req.session.userId, s.campaign_id, sid, fid, cleanName(b.name) || defaultCutName(), 'cut', 'draft', 0, settings, 'storyboard', false);
+    await writePictures(db, r.lastInsertRowid, pics);
+    console.log('[video-lab] cut ' + r.lastInsertRowid + ' made from version ' + fid + ' of session ' + sid + ': ' + pics.length + ' picture(s)');
+    res.json({ cut: await loadCut(db, r.lastInsertRowid) });
+  } catch (e) {
+    console.error('[video-lab] new cut error:', e && e.message);
+    res.status(500).json({ error: 'Could not make the cut.' });
+  }
+});
+
+// Save a draft: name, overall prompt, model, sound, pictures in order and the prompts between them.
+router.put('/cuts/:id', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
+    if (!(await canChange(req, cut))) return res.status(404).json({ error: 'Not found.' });
+    if (cut.status !== 'draft') return res.status(409).json({ error: 'This cut has been made; copy it to change its pictures.' });
+    const b = req.body || {};
+    const st = cutSettings(cut);
+    if (b.overall_prompt != null) st.overall_prompt = String(b.overall_prompt).slice(0, 2000);
+    if (b.model != null && MODELS[b.model]) st.model = b.model;
+    if (b.sound != null) st.sound = !!b.sound;
+    if (b.pairs != null) st.pairs = cleanPairs(b.pairs);
+    if (b.pictures != null) {
+      const pics = cleanPictures(b.pictures);
+      if (pics.some(function (p) { return !storage.isOurPublicUrl(p.url); })) return res.status(400).json({ error: 'Every picture must be a Campaignia picture.' });
+      if (!(await picturesAllowed(req, db, cut, pics.map(function (p) { return p.url; })))) return res.status(400).json({ error: 'Every picture must come from this campaign.' });
+      await writePictures(db, cut.id, pics);
+    }
+    const name = b.name != null ? (cleanName(b.name) || cut.name) : cut.name;
+    await db.prepare('UPDATE video_projects SET name = ?, settings = ?, updated_at = NOW() WHERE id = ?').run(name, JSON.stringify(st), cut.id);
+    res.json({ cut: await loadCut(db, cut.id) });
+  } catch (e) {
+    console.error('[video-lab] save cut error:', e && e.message);
+    res.status(500).json({ error: 'Could not save the cut.' });
+  }
+});
+
+// Generate: the draft's pictures and prompts become shots, sent to fal; the cut then finishes like a Lab run.
+router.post('/cuts/:id/generate', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
+    if (!(await canChange(req, cut))) return res.status(404).json({ error: 'Not found.' });
+    const st = cutSettings(cut);
+    const m = MODELS[st.model];
+    if (!m) return res.status(400).json({ error: 'Pick a model.' });
+    const hook = webhookUrl();
+    if (!hook) return res.status(500).json({ error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' });
+    const rows = await db.prepare('SELECT * FROM video_cut_pictures WHERE cut_id = ? ORDER BY position, id').all(cut.id);
+    const pics = rows.map(function (r) { return { url: r.image_url, archive_id: r.archive_id }; });
+    if (pics.length < 2) return res.status(400).json({ error: 'A cut needs two pictures at least.' });
+    const plan = planShots(m, pics, st.pairs || [], String(st.overall_prompt || '').trim(), null);
+    if (plan.error) return res.status(400).json({ error: plan.error });
+    // Claim the draft (one Generate wins, even with two clicks or two tabs).
+    const claim = await db.prepare("UPDATE video_projects SET status = 'making', updated_at = NOW() WHERE id = ? AND status = 'draft'").run(cut.id);
+    if (!claim.changes) return res.status(409).json({ error: 'This cut has already been made.' });
+    const sound = !!st.sound;
+    const total = Math.round(plan.shots.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
+    await db.prepare('UPDATE video_projects SET total_cost_usd = ?, updated_at = NOW() WHERE id = ?').run(total, cut.id);
+    const sent = await sendShots(db, cut.id, st.model, m, plan.shots, sound, hook);
+    await projectStatus(db, cut.id);
+    const out = await loadCut(db, cut.id);
+    if (!sent) return res.status(502).json({ error: 'fal refused the cut: ' + ((out && out.shots[0] && out.shots[0].error) || 'unknown'), cut: out });
+    res.json({ cut: out });
+  } catch (e) {
+    console.error('[video-lab] generate cut error:', falErrorText(e));
+    res.status(500).json({ error: 'Could not start it: ' + falErrorText(e) });
+  }
+});
+
+// Copy a cut into a new draft of the same version: its pictures, prompts, model and sound (from its shots once made).
+router.post('/cuts/:id/copy', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const src = await loadCut(db, parseInt(req.params.id, 10));
+    if (!src || !(await canSee(req, src))) return res.status(404).json({ error: 'Not found.' });
+    if (!(await versionAccess(req, db, src.session_id, src.fork_id))) return res.status(403).json({ error: 'You cannot make a cut of that version.' });
+    const st = cutSettings(src);
+    const shots = src.shots || [];
+    const pairs = (st.pairs && st.pairs.length && !shots.length) ? st.pairs : shots.map(function (s) {
+      let own = ''; try { own = (JSON.parse(s.settings || '{}') || {}).own_prompt || ''; } catch (e) {}
+      return { prompt: own, duration: String(s.duration || '') };
+    });
+    const model = MODELS[st.model] ? st.model : (shots[0] && MODELS[shots[0].model] ? shots[0].model : Object.keys(MODELS)[0]);
+    const settings = JSON.stringify({ overall_prompt: st.overall_prompt || '', model: model, sound: !!st.sound, pairs: cleanPairs(pairs) });
+    const name = cleanName(String(src.name || 'Cut') + ' (copy)');
+    const r = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, fork_id, name, kind, status, total_cost_usd, settings, source, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(req.session.userId, src.campaign_id, src.session_id, src.fork_id, name, 'cut', 'draft', 0, settings, 'copy', false);
+    await writePictures(db, r.lastInsertRowid, (src.pictures || []).map(function (p) { return { url: p.image_url, source: p.source, moment_id: p.moment_id, archive_id: p.archive_id, label: p.label }; }));
+    res.json({ cut: await loadCut(db, r.lastInsertRowid) });
+  } catch (e) {
+    console.error('[video-lab] copy cut error:', e && e.message);
+    res.status(500).json({ error: 'Could not copy the cut.' });
+  }
+});
+
+// Pin: the one cut of this version of this session that Final Cut will use. Pinning one unpins the others.
+router.post('/cuts/:id/pin', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
+    if (!(await canChange(req, cut))) return res.status(404).json({ error: 'Not found.' });
+    const on = !(req.body && req.body.pinned === false);
+    if (on) await db.prepare("UPDATE video_projects SET pinned = FALSE, updated_at = NOW() WHERE kind = 'cut' AND session_id = ? AND fork_id = ? AND id <> ? AND pinned = TRUE").run(cut.session_id, cut.fork_id, cut.id);
+    await db.prepare('UPDATE video_projects SET pinned = ?, updated_at = NOW() WHERE id = ?').run(on, cut.id);
+    res.json({ cut: await loadCut(db, cut.id) });
+  } catch (e) {
+    console.error('[video-lab] pin error:', e && e.message);
+    res.status(500).json({ error: 'Could not pin it.' });
   }
 });
 

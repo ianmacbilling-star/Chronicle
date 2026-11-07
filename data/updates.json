@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.95",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3495-video-cuts",
+        "kind": "feature",
+        "public": false,
+        "summary": "The Video Lab is now the Video tab: cuts made from the storyboard, laid out like the Storyboard, one pinned per version.",
+        "detail": "TD-090, Video Phase 2 build 2. New cut takes the version on screen and its storyboard pictures, title picture first (the Canonical one when the version has none). The open cut looks like the Storyboard: picture cards with a shot card between each pair, the overall direction above, theme colours only so it follows the brand. Move, Replace and Remove pictures, add any from the Archive, name it; a draft saves itself as you type. Generate makes the shots and joins them as the Lab did; a made cut plays full width with its shots underneath (Redo, Download), and Copy to a new cut starts a new draft from it. The star pins one cut per version. The Lab runs made on a session become cuts of its Canonical. Behind the video switch, admins always.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.94",
     "staged_on": "2026-11-07",
     "entries": [

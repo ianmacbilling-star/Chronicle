@@ -41768,42 +41768,64 @@ function adminBrandsSave(changed) {
 }
 
 // ============================================================
-// v3.4.87 -- TD-090. THE VIDEO LAB TAB (admin only). Spec: claude/VIDEO_SPEC.md; server: routes/videoLab.js.
-// v3.4.90 -- A SEQUENCE OF PICTURES (Ian: "N number of pictures... that would go in order", "a prompt between each
-// image... just like our storyboard", "with an overall prompt too"). Each picture is chosen in the Archive window;
-// between each pair is what happens from one to the next and how long that clip runs; the overall prompt goes into
-// every clip. fal makes the clips side by side and joins them into one video. Past runs are short rows; a click
-// opens one to the full player, with each clip underneath and Redo on any of them.
-// Plain on purpose (Ian: "This does not have to look pretty because only admins see it").
-// Every name here starts vl / VL; checked unused before v3.4.86.
+// v3.4.87 -- TD-090. THE VIDEO TAB (was the Video Lab). Spec: claude/VIDEO_PHASE2_SPEC.md; server: routes/videoLab.js.
+// v3.4.95 -- CUTS (Phase 2, build 2). Ian, 2026-11-07: a New cut button that pulls in the version's storyboard pictures
+// (title picture first); move, remove or add pictures from the Archive; name it; pin one per version; and "make it look
+// more like our style sheet... bring in the look from the Storyboard". So the open cut is laid out like the Storyboard:
+// picture cards (storyboard-panel) with a shot card (narrative-panel) between each pair, in the same panels-grid, and
+// every colour is a theme name, so it follows the brand. A draft saves itself as you type; Generate makes the shots
+// and joins them; a made cut is played full width with its shots underneath (Redo per shot, Join again). The video
+// style and the written shot list come in a later build; until then the shot boxes are typed by hand.
+// Every name here starts vl / VL; checked unused before v3.4.86 and again for v3.4.95.
 // ============================================================
-var VL = { models: null, seq: [], pairs: [], overall: '', projects: [], open: {}, timer: null, cid: null, busy: false };
+// The tab's boxes use the Storyboard panel's surface (.storyboard-panel), so they sit on the session page the same way.
+var VL_BOX = 'background:rgba(var(--panel-rgb),0.7);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);';
+var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
+var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
+var VL = { models: null, cuts: [], openId: null, openSig: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, busy: false, saving: false };
 
 function vlIsAdmin() { return !!(state.user && (state.user.is_admin || state.user.videoOn)); }   // v3.4.94: or the video switch is on
+
+// The version on screen: the one picked in the version menu, else the Canonical (the Story Master fork).
+function vlFork() {
+  var forks = (state && state.sessionForks) || [];
+  var want = state.currentForkId;
+  var f = null;
+  forks.forEach(function (x) { if (!f && want && String(x.fork_id) === String(want)) f = x; });
+  if (!f) forks.forEach(function (x) { if (!f && x.role === 'dm') f = x; });
+  return f;
+}
+function vlForkName(f) {
+  if (!f) return '';
+  if (f.role === 'dm' || f.is_canonical) return 'the Canonical';
+  return f.name || 'this version';
+}
 
 function vlOpen() {
   var host = document.getElementById('session-tab-videolab');
   if (!host) return;
-  if (!vlIsAdmin()) { host.innerHTML = '<p style="padding:16px;">The Video Lab is not available yet.</p>'; return; }
-  var cid = state.currentCampaign && state.currentCampaign.id;
-  if (VL.cid !== cid) { VL.cid = cid; VL.seq = []; VL.pairs = []; VL.overall = ''; VL.projects = []; VL.open = {}; }
-  host.innerHTML = '<div style="padding:14px;background:var(--panel);color:var(--on-panel);border-radius:10px;">' +
-    '<h3 style="margin:0 0 4px;">Video Lab <span style="font-size:12px;font-weight:normal;">(admin only, test bench)</span></h3>' +
-    '<div style="font-size:13px;margin-bottom:12px;">Add pictures in the order they happen, say what happens between each pair, then Generate. ' +
-      'fal makes each clip on its own servers and joins them into one video (a few minutes); you can leave and come back. No tokens are charged.</div>' +
-    '<div id="vl-form">Loading...</div>' +
-    '<h3 style="margin:22px 0 6px;">Runs</h3>' +
-    '<div id="vl-runs">Loading...</div>' +
-  '</div>';
-  var pending = 2;
-  function both() { if (--pending === 0) vlRenderForm(); }
-  if (VL.models) both(); else {
-    fetch('/api/video-lab/models', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
-      VL.models = (d && d.models) || []; VL.webhook = !!(d && d.webhook); both();
-    }).catch(function () { VL.models = []; both(); });
-  }
-  ensureArchivesLoaded(both, cid);
-  vlLoadRuns();
+  if (!vlIsAdmin()) { host.innerHTML = '<div class="empty-state"><h3>Video</h3><p>Video is not available yet.</p></div>'; return; }
+  var sid = state.currentSession && state.currentSession.id;
+  var f = vlFork();
+  var fid = f ? f.fork_id : null;
+  if (String(VL.sid) !== String(sid) || String(VL.fid) !== String(fid)) { VL.sid = sid; VL.fid = fid; VL.cuts = []; VL.openId = null; VL.draft = null; }
+  if (!sid || !fid) { host.innerHTML = '<div class="empty-state"><h3>Video</h3><p>Loading the versions of this session...</p></div>'; setTimeout(function () { if (vlFork()) vlOpen(); }, 800); return; }
+  host.innerHTML =
+    '<div class="storyboard-header" style="flex-wrap:wrap;gap:10px;">' +
+      '<div style="min-width:220px;flex:1;">' +
+        '<div style="' + VL_TITLE + '">Video</div>' +
+        '<div style="' + VL_DESC + 'margin-top:2px;">Cuts of <b style="color:var(--accent-pale);" data-no-words>' + escapeHtml(vlForkName(f)) + '</b>. A cut is one video of this session: ' +
+          'its pictures in order, with a shot between each pair. Pin the one you like best. No tokens are charged yet.</div>' +
+      '</div>' +
+      '<button class="btn btn-primary btn-sm" id="vl-new-btn" onclick="vlNewCut()">+ New cut</button>' +
+    '</div>' +
+    '<div id="vl-cuts"><div style="' + VL_DESC + '">' + vlSpin(14) + ' Loading the cuts...</div></div>' +
+    '<div id="vl-open" style="margin-top:18px;"></div>';
+  if (VL.models) vlLoadCuts();
+  else fetch('/api/video-lab/models', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    VL.models = (d && d.models) || []; VL.webhook = !!(d && d.webhook); vlLoadCuts();
+  }).catch(function () { VL.models = []; vlLoadCuts(); });
+  ensureArchivesLoaded(function () {}, state.currentCampaign && state.currentCampaign.id);
 }
 
 function vlModel(key) {
@@ -41811,201 +41833,371 @@ function vlModel(key) {
   for (var i = 0; i < ms.length; i++) if (ms[i].key === key) return ms[i];
   return ms[0] || null;
 }
+function vlFindCut(id) {
+  for (var i = 0; i < VL.cuts.length; i++) if (String(VL.cuts[i].id) === String(id)) return VL.cuts[i];
+  return null;
+}
+function vlSettings(c) { try { return JSON.parse((c && c.settings) || '{}') || {}; } catch (e) { return {}; } }
 
-function vlDefaultName() {
-  var d = new Date();
-  function p(n) { return (n < 10 ? '0' : '') + n; }
-  return 'Video Lab ' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+function vlLoadCuts() {
+  var sid = VL.sid, fid = VL.fid;
+  if (!sid || !fid) return;
+  fetch('/api/video-lab/cuts?session_id=' + encodeURIComponent(sid) + '&fork_id=' + encodeURIComponent(fid), { cache: 'no-store' })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (String(VL.sid) !== String(sid) || String(VL.fid) !== String(fid)) return;   // the session or version changed meanwhile
+      if (!res.ok) { var h = document.getElementById('vl-cuts'); if (h) h.innerHTML = '<div style="' + VL_DESC + '">' + escapeHtml((res.j && res.j.error) || 'Could not load the cuts.') + '</div>'; return; }
+      VL.cuts = (res.j && res.j.cuts) || [];
+      if (VL.openId && !vlFindCut(VL.openId)) { VL.openId = null; VL.draft = null; }
+      vlRenderCuts();
+      vlRenderOpen(false);
+    })
+    .catch(function () { var h = document.getElementById('vl-cuts'); if (h) h.innerHTML = '<div style="' + VL_DESC + '">Could not load the cuts.</div>'; });
 }
 
-// What is typed on the form goes back into VL before anything changes the sequence, so nothing typed is lost.
-// noPairs: the redraw itself, which must not read the clip boxes back (after a remove or a move they are stale).
-function vlReadForm(noPairs) {
-  function v(id) { var e = document.getElementById(id); return e ? e.value : null; }
-  var s = document.getElementById('vl-sound');
-  var out = { name: v('vl-name'), overall: v('vl-overall'), model: v('vl-model'), sound: !!(s && s.checked) };
-  if (out.overall != null) VL.overall = out.overall; else out.overall = VL.overall;
-  for (var i = 0; !noPairs && i < VL.pairs.length; i++) {
-    var pp = v('vl-pp-' + i), pd = v('vl-pd-' + i);
-    if (pp != null) VL.pairs[i].prompt = pp;
-    if (pd) VL.pairs[i].duration = pd;
+// ---- the list of cuts ------------------------------------------------------------------------
+function vlStatusChip(c) {
+  var t = c.status === 'draft' ? 'Draft' : (c.final_video_url ? 'Done' : (c.status === 'error' ? 'Failed' : 'Being made'));
+  var cls = c.status === 'draft' ? 'session-badge session-badge-draft' : 'session-badge';
+  var style = c.status === 'error' ? ' style="background:rgba(var(--danger-rgb),0.2);color:var(--danger);"' : '';
+  return '<span class="' + cls + '"' + style + '>' + (c.status === 'making' ? vlSpin(9) + ' ' : '') + t + '</span>';
+}
+function vlCutSeconds(c) {
+  var shots = c.shots || [];
+  if (shots.length) return shots.reduce(function (t, s) { return t + Number(s.duration || 0); }, 0);
+  return (vlSettings(c).pairs || []).reduce(function (t, p) { return t + Number(p.duration || 0); }, 0);
+}
+function vlRenderCuts() {
+  var host = document.getElementById('vl-cuts');
+  if (!host) { vlStopTimer(); return; }
+  var cs = VL.cuts || [];
+  if (!cs.length) {
+    host.innerHTML = '<div class="empty-state" style="padding:2rem 1rem;"><h3>No cuts yet</h3><p>New cut takes this version\'s storyboard pictures, title picture first. You can change them before you make the video.</p></div>';
+  } else {
+    host.innerHTML = cs.map(vlCutRowHTML).join('');
   }
-  return out;
+  var busy = cs.some(function (c) { return c.status === 'making'; });
+  if (busy) vlStartTimer(); else vlStopTimer();
 }
-
-function vlFitPairs(m) {
-  while (VL.pairs.length < Math.max(0, VL.seq.length - 1)) VL.pairs.push({ prompt: '', duration: m ? m.defDuration : '' });
-  VL.pairs.length = Math.max(0, VL.seq.length - 1);
-  if (m) VL.pairs.forEach(function (p) { if (m.durations.indexOf(String(p.duration)) < 0) p.duration = m.defDuration; });
-}
-
-function vlPicHTML(i) {
-  var a = VL.seq[i];
-  return '<div style="display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:6px;">' +
-    '<div style="font-weight:bold;width:24px;text-align:center;">' + (i + 1) + '</div>' +
-    '<img src="' + escapeHtml(a.image_url) + '" style="width:150px;height:100px;object-fit:cover;border-radius:4px;cursor:pointer;" alt="" title="Change this picture" onclick="vlChoose(' + i + ')">' +
-    '<div style="font-size:12px;flex:1;" data-no-words>' + escapeHtml(archiveMomentLabel(a) || archiveTypeLabel(a.image_type) || ('Archive #' + a.id)) + '</div>' +
-    '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
-      '<button class="btn btn-sm" title="Earlier" onclick="vlMove(' + i + ', -1)"' + (i === 0 ? ' disabled' : '') + '>&#8593;</button>' +
-      '<button class="btn btn-sm" title="Later" onclick="vlMove(' + i + ', 1)"' + (i === VL.seq.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
-      '<button class="btn btn-sm" onclick="vlChoose(' + i + ')">Change</button>' +
-      '<button class="btn btn-sm" title="Take it out" onclick="vlRemove(' + i + ')">&#215;</button>' +
+function vlCutRowHTML(c) {
+  var pics = (c.pictures || []).map(function (p) { return p.image_url; });
+  var shots = c.shots || [];
+  var isOpen = String(VL.openId) === String(c.id);
+  var m = vlModel(vlSettings(c).model || (shots[0] && shots[0].model));
+  var secs = vlCutSeconds(c);
+  var meta = pics.length + ' picture' + (pics.length === 1 ? '' : 's') +
+    (shots.length ? ' &middot; ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') : '') +
+    (secs ? ' &middot; ' + secs + ' s' : '') +
+    (c.status !== 'draft' ? ' &middot; about $' + Number(c.total_cost_usd || 0).toFixed(2) : '') +
+    (m ? ' &middot; ' + escapeHtml(m.label) : '');
+  return '<div class="vl-cut-row" style="' + VL_BOX + 'padding:10px 12px;margin-bottom:10px;cursor:pointer;' +
+      (isOpen ? 'border-color:rgba(var(--accent-rgb),0.6);box-shadow:0 0 0 1px rgba(var(--accent-rgb),0.35);' : '') + '" onclick="vlOpenCut(' + c.id + ')">' +
+    '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
+      '<button type="button" class="vl-pin" title="' + (c.pinned ? 'Pinned: the cut Final Cut will use for this version. Click to unpin.' : 'Pin this cut: the one Final Cut will use for this version') + '" ' +
+        'onclick="event.stopPropagation(); vlPin(' + c.id + ', ' + (c.pinned ? 'false' : 'true') + ')" ' +
+        'style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;padding:0 2px;color:' + (c.pinned ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.35)') + ';">' + (c.pinned ? '&#9733;' : '&#9734;') + '</button>' +
+      '<div style="display:flex;gap:3px;">' + pics.slice(0, 6).map(function (u) {
+        return '<img src="' + escapeHtml(u) + '" alt="" loading="lazy" style="width:52px;height:36px;object-fit:cover;border-radius:4px;border:1px solid rgba(var(--accent-rgb),0.15);">';
+      }).join('') + (pics.length > 6 ? '<span style="' + VL_DESC + 'align-self:center;">+' + (pics.length - 6) + '</span>' : '') + '</div>' +
+      '<div style="flex:1;min-width:180px;">' +
+        '<div class="moment-title" style="color:var(--accent-pale);margin-bottom:2px;" data-no-words>' + escapeHtml(c.name || 'Cut') + (c.pinned ? ' <span class="session-badge" style="margin-left:4px;">Pinned</span>' : '') + '</div>' +
+        '<div style="' + VL_DESC + '">' + vlStatusChip(c) + ' &nbsp;' + meta + '</div>' +
+      '</div>' +
+      (c.final_video_url ? '<a class="btn btn-sm" href="/api/video-lab/projects/' + c.id + '/download" onclick="event.stopPropagation();">Download</a>' : '') +
+      '<button class="btn btn-sm" title="Delete this cut" onclick="event.stopPropagation(); vlDelete(' + c.id + ')">Delete</button>' +
     '</div></div>';
 }
 
-function vlPairHTML(i, m) {
-  var p = VL.pairs[i];
-  return '<div style="margin:6px 0 6px 34px;padding:8px;border-left:3px solid rgba(var(--accent-rgb),0.5);">' +
-    '<div style="font-size:12px;margin-bottom:4px;">Clip ' + (i + 1) + ': what happens from picture ' + (i + 1) + ' to picture ' + (i + 2) + '</div>' +
-    '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">' +
-      '<textarea id="vl-pp-' + i + '" rows="2" maxlength="1500" style="flex:1;min-width:240px;" oninput="vlShowCost()">' + escapeHtml(p.prompt || '') + '</textarea>' +
-      '<select id="vl-pd-' + i + '" onchange="vlShowCost()">' + m.durations.map(function (d) {
-        return '<option value="' + d + '"' + (String(p.duration) === d ? ' selected' : '') + '>' + d + ' s</option>';
-      }).join('') + '</select>' +
-    '</div></div>';
+function vlOpenCut(id) {
+  if (String(VL.openId) === String(id)) { vlFlushSave(); VL.openId = null; VL.draft = null; vlRenderCuts(); vlRenderOpen(true); return; }
+  vlFlushSave();
+  VL.openId = id; VL.draft = null;
+  vlRenderCuts();
+  vlRenderOpen(true);
+  var o = document.getElementById('vl-open'); if (o && o.scrollIntoView) { try { o.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
 }
 
-function vlRenderForm() {
-  var host = document.getElementById('vl-form');
+function vlNewCut() {
+  if (VL.busy || !VL.sid || !VL.fid) return;
+  VL.busy = true;
+  var b = document.getElementById('vl-new-btn'); if (b) { b.disabled = true; b.innerHTML = vlSpin(12) + ' Making...'; }
+  vlFlushSave();
+  fetch('/api/video-lab/cuts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: VL.sid, fork_id: VL.fid }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      VL.busy = false; if (b) { b.disabled = false; b.textContent = '+ New cut'; }
+      if (!res.ok || !res.j || !res.j.cut) { showError((res.j && res.j.error) || 'Could not make the cut.'); return; }
+      VL.cuts.unshift(res.j.cut);
+      VL.cuts.sort(function (x, y) { return (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0); });
+      VL.openId = res.j.cut.id; VL.draft = null;
+      vlRenderCuts(); vlRenderOpen(true);
+    })
+    .catch(function () { VL.busy = false; if (b) { b.disabled = false; b.textContent = '+ New cut'; } showError('Could not reach the server.'); });
+}
+
+// ---- the open cut ----------------------------------------------------------------------------
+// force: redraw the editor even if it is a draft being typed in (after a structural change). A list refresh passes false,
+// so a timer never wipes what someone is typing.
+function vlRenderOpen(force) {
+  var host = document.getElementById('vl-open');
   if (!host) return;
-  var ms = VL.models || [];
-  if (!ms.length) { host.innerHTML = '<p>Could not load the model list.</p>'; return; }
-  var keep = vlReadForm(true);
-  var m = vlModel(keep.model || ms[0].key);
-  vlFitPairs(m);
-  var seqHtml = '';
-  for (var i = 0; i < VL.seq.length; i++) { seqHtml += vlPicHTML(i); if (i < VL.seq.length - 1) seqHtml += vlPairHTML(i, m); }
-  host.innerHTML =
-    (VL.webhook ? '' : '<div style="color:#b00;margin-bottom:8px;">PUBLIC_BASE_URL is not set on this server, so fal cannot report back.</div>') +
-    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">' +
-      '<label style="flex:1;min-width:220px;max-width:520px;">Name<br><input id="vl-name" type="text" maxlength="120" style="width:100%;" value="' + escapeHtml(keep.name || vlDefaultName()) + '" autocomplete="off" data-1p-ignore data-lpignore="true"></label>' +
-      '<button class="btn btn-sm" onclick="vlNew()" title="Clear the form and start a new video; the videos already made stay in Runs below">New video</button>' +
+  var c = VL.openId ? vlFindCut(VL.openId) : null;
+  if (!c) { host.innerHTML = ''; return; }
+  if (c.status === 'draft') {
+    if (!force && VL.draft && String(VL.draft.id) === String(c.id) && host.querySelector('#vl-draft-' + c.id)) return;
+    if (!VL.draft || String(VL.draft.id) !== String(c.id)) VL.draft = vlDraftFrom(c);
+    host.innerHTML = vlDraftHTML(c);
+    vlShowCost();
+  } else {
+    VL.draft = null;
+    // A refresh redraws a made cut only when something about it changed, so a video being watched is not restarted.
+    var sig = [c.id, c.status, c.final_video_url, c.merge_status, c.name, c.pinned].concat((c.shots || []).map(function (s) { return s.status + ':' + s.video_url + ':' + s.attempt; })).join('|');
+    if (!force && VL.openSig === sig && host.querySelector('#vl-made-' + c.id)) return;
+    VL.openSig = sig;
+    host.innerHTML = vlMadeHTML(c);
+  }
+}
+
+function vlDraftFrom(c) {
+  var st = vlSettings(c);
+  var m = vlModel(st.model);
+  var d = { id: c.id, name: c.name || '', overall: st.overall_prompt || '', model: m ? m.key : st.model, sound: !!st.sound,
+    pics: (c.pictures || []).map(function (p) { return { url: p.image_url, source: p.source, moment_id: p.moment_id, archive_id: p.archive_id, label: p.label || '' }; }),
+    pairs: (st.pairs || []).map(function (p) { return { prompt: p.prompt || '', duration: String(p.duration || '') }; }) };
+  vlFitPairs(d, m);
+  return d;
+}
+function vlFitPairs(d, m) {
+  while (d.pairs.length < Math.max(0, d.pics.length - 1)) d.pairs.push({ prompt: '', duration: m ? m.defDuration : '' });
+  d.pairs.length = Math.max(0, d.pics.length - 1);
+  if (m) d.pairs.forEach(function (p) { if (m.durations.indexOf(String(p.duration)) < 0) p.duration = m.defDuration; });
+}
+
+// The small move buttons, the same look as the Storyboard's (spaceControls).
+function vlBtn(on, sym, tip, call) {
+  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:5px;padding:0 5px;font-size:8px;line-height:13px;cursor:pointer;';
+  return on ? '<button type="button" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();' + call + '">' + sym + '</button>'
+    : '<button type="button" disabled style="' + bs + 'opacity:0.35;cursor:default;">' + sym + '</button>';
+}
+
+function vlPicCardHTML(d, i) {
+  var p = d.pics[i];
+  var label = p.source === 'title' ? 'Title picture' : (p.label || (p.source === 'archive' ? 'From the Archive' : ''));
+  return '<div class="storyboard-panel">' +
+    '<div class="storyboard-panel-img">' +
+      '<img class="moment-img-generated" src="' + escapeHtml(p.url) + '" alt="" loading="lazy" style="cursor:default;">' +
+      '<div class="panel-img-actions">' +
+        '<button type="button" class="panel-pill" onclick="vlChoose(' + i + ')" title="Put a different picture from the Archive here">Replace</button>' +
+        '<button type="button" class="panel-pill" onclick="vlRemove(' + i + ')" title="Take this picture out of the cut (the storyboard is not changed)">Remove</button>' +
+      '</div>' +
     '</div>' +
-    '<div style="margin-bottom:10px;"><label>Overall prompt (goes into every clip: who, where, the mood)<br>' +
-      '<textarea id="vl-overall" rows="3" maxlength="2000" style="width:100%;max-width:720px;" oninput="vlShowCost()">' + escapeHtml(VL.overall || '') + '</textarea></label></div>' +
-    '<div style="font-weight:bold;margin-bottom:6px;">Pictures, in order</div>' +
-    '<div id="vl-seq">' + seqHtml + '</div>' +
-    '<div style="margin:8px 0 12px;"><button class="btn btn-sm" onclick="vlChoose(\'add\')">+ Add picture</button>' +
-      (VL.seq.length < 2 ? ' <span style="font-size:12px;">Two pictures at least.</span>' : '') + '</div>' +
-    '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;">' +
-      '<label>Model<br><select id="vl-model" onchange="vlReadForm(); vlRenderForm()">' + ms.map(function (x) {
-        return '<option value="' + x.key + '"' + (x.key === m.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
-      }).join('') + '</select></label>' +
-      '<label><input id="vl-sound" type="checkbox" onchange="vlShowCost()"' + (keep.sound ? ' checked' : '') + '> Model\'s own sound</label>' +
-      '<span id="vl-cost" style="font-size:13px;"></span>' +
+    '<div class="storyboard-panel-meta">' +
+      '<span class="moment-num">' + (i + 1) + '</span>' +
+      '<span class="moment-title" style="flex:1;min-width:0;" data-no-words>' + escapeHtml(label) + '</span>' +
+      '<span style="display:inline-flex;gap:3px;margin-left:auto;">' +
+        vlBtn(i > 0, '&#9664;', 'One place earlier', 'vlMove(' + i + ',-1)') +
+        vlBtn(i < d.pics.length - 1, '&#9654;', 'One place later', 'vlMove(' + i + ',1)') +
+      '</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function vlShotCardHTML(d, i, m) {
+  var p = d.pairs[i];
+  return '<div class="narrative-panel">' +
+    '<div class="narrative-block-header">' +
+      '<span>&#127916; Shot ' + (i + 1) + ': picture ' + (i + 1) + ' &rarr; ' + (i + 2) + '</span>' +
+      '<select id="vl-pd-' + i + '" class="narrative-regen-btn" style="cursor:pointer;" title="How long this shot runs" onchange="vlEdit()">' +
+        m.durations.map(function (x) { return '<option value="' + x + '"' + (String(p.duration) === x ? ' selected' : '') + '>' + x + ' s</option>'; }).join('') +
+      '</select>' +
+    '</div>' +
+    '<textarea class="narrative-inline-box" id="vl-pp-' + i + '" maxlength="1500" placeholder="What happens from picture ' + (i + 1) + ' to picture ' + (i + 2) + ': who moves and how, what the camera does, who speaks..." oninput="vlEdit()">' + escapeHtml(p.prompt || '') + '</textarea>' +
+  '</div>';
+}
+
+function vlDraftHTML(c) {
+  var d = VL.draft, ms = VL.models || [];
+  var m = vlModel(d.model);
+  if (!m) return '<div style="' + VL_DESC + '">Could not load the model list.</div>';
+  vlFitPairs(d, m);
+  var cells = [];
+  for (var i = 0; i < d.pics.length; i++) { cells.push(vlPicCardHTML(d, i)); if (i < d.pics.length - 1) cells.push(vlShotCardHTML(d, i, m)); }
+  cells.push('<div class="storyboard-panel" style="cursor:pointer;" onclick="vlChoose(\'add\')" title="Add a picture from the Archive at the end">' +
+    '<div class="storyboard-panel-img"><div class="moment-img-placeholder" style="min-height:160px;">' +
+      '<div style="font-size:28px;color:var(--accent-bright);">+</div><div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.6);">Add a picture from the Archive</div>' +
+    '</div></div></div>');
+  return '<div id="vl-draft-' + c.id + '">' +
+    (VL.webhook === false ? '<div style="' + VL_DESC + 'color:var(--danger);margin-bottom:8px;">PUBLIC_BASE_URL is not set on this server, so fal cannot report back.</div>' : '') +
+    '<div style="' + VL_BOX + 'padding:14px 16px;margin-bottom:14px;">' +
+      '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">' +
+        '<div style="flex:2;min-width:220px;"><label class="form-label" for="vl-name">Name</label>' +
+          '<input id="vl-name" class="form-input" type="text" maxlength="120" value="' + escapeHtml(d.name) + '" oninput="vlEdit()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true"></div>' +
+        '<div style="flex:1;min-width:200px;"><label class="form-label" for="vl-model">Video model</label>' +
+          '<select id="vl-model" class="form-input" onchange="vlEdit(true)">' + ms.map(function (x) {
+            return '<option value="' + x.key + '"' + (x.key === m.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
+          }).join('') + '</select></div>' +
+        '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);padding-bottom:9px;cursor:pointer;">' +
+          '<input id="vl-sound" type="checkbox" onchange="vlEdit()"' + (d.sound ? ' checked' : '') + '> The model\'s own sound</label>' +
+      '</div>' +
+    '</div>' +
+    '<div class="narrative-panel" style="margin-bottom:14px;">' +
+      '<div class="narrative-block-header"><span>&#9998; Overall direction: who, where, the mood. It goes into every shot.</span></div>' +
+      '<textarea class="narrative-inline-box" id="vl-overall" maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()">' + escapeHtml(d.overall) + '</textarea>' +
+    '</div>' +
+    '<div class="panels-grid">' + cells.join('') + '</div>' +
+    '<div style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
+      '<span id="vl-cost" style="' + VL_DESC + 'flex:1;min-width:200px;"></span>' +
+      '<span id="vl-saved" style="' + VL_DESC + '"></span>' +
       '<button class="btn btn-primary" id="vl-go" onclick="vlGenerate()">Generate</button>' +
-      '<span id="vl-msg" style="font-size:13px;"></span>' +
-    '</div>';
+    '</div>' +
+    '<div id="vl-msg" style="' + VL_DESC + 'margin-top:6px;"></div>' +
+  '</div>';
+}
+
+// Read what is typed back into the draft. structural: the model changed, so the durations offered change too.
+function vlReadForm() {
+  var d = VL.draft;
+  if (!d) return null;
+  function v(id) { var e = document.getElementById(id); return e ? e.value : null; }
+  var n = v('vl-name'); if (n != null) d.name = n;
+  var o = v('vl-overall'); if (o != null) d.overall = o;
+  var mo = v('vl-model'); if (mo) d.model = mo;
+  var s = document.getElementById('vl-sound'); if (s) d.sound = !!s.checked;
+  for (var i = 0; i < d.pairs.length; i++) {
+    var pp = v('vl-pp-' + i), pd = v('vl-pd-' + i);
+    if (pp != null) d.pairs[i].prompt = pp;
+    if (pd) d.pairs[i].duration = pd;
+  }
+  return d;
+}
+function vlEdit(structural) {
+  vlReadForm();
+  if (structural) { vlFitPairs(VL.draft, vlModel(VL.draft.model)); vlRenderOpen(true); }
   vlShowCost();
+  vlQueueSave();
 }
 
 function vlShowCost() {
-  var f = vlReadForm(), m = vlModel(f.model), el = document.getElementById('vl-cost');
-  if (!m || !el) return;
-  var per = f.sound ? m.priceSound : m.price;
-  var secs = VL.pairs.reduce(function (t, p) { return t + Number(p.duration || m.defDuration); }, 0);
-  el.textContent = VL.pairs.length
-    ? (VL.pairs.length + ' clip' + (VL.pairs.length === 1 ? '' : 's') + ', ' + secs + ' s, about $' + (per * secs).toFixed(2) + ' at fal')
-    : 'Add two pictures or more';
+  var d = VL.draft, el = document.getElementById('vl-cost');
+  if (!d || !el) return;
+  var m = vlModel(d.model);
+  if (!m) return;
+  if (d.pics.length < 2) { el.textContent = 'A cut needs two pictures at least.'; return; }
+  var per = d.sound ? m.priceSound : m.price;
+  var secs = d.pairs.reduce(function (t, p) { return t + Number(p.duration || m.defDuration); }, 0);
+  el.textContent = d.pairs.length + ' shot' + (d.pairs.length === 1 ? '' : 's') + ', ' + secs + ' seconds, about $' + (per * secs).toFixed(2) + ' at fal';
 }
 
+// ---- saving a draft --------------------------------------------------------------------------
+function vlQueueSave() {
+  if (VL.saveTimer) clearTimeout(VL.saveTimer);
+  var el = document.getElementById('vl-saved'); if (el) el.textContent = 'Saving...';
+  VL.saveTimer = setTimeout(function () { VL.saveTimer = null; vlSave(); }, 700);
+}
+function vlFlushSave() {
+  if (!VL.saveTimer) return;
+  clearTimeout(VL.saveTimer); VL.saveTimer = null;
+  vlReadForm(); vlSave();
+}
+function vlSave(then) {
+  var d = VL.draft;
+  if (!d) { if (then) then(true); return; }
+  var body = { name: d.name, overall_prompt: d.overall, model: d.model, sound: d.sound,
+    pictures: d.pics.map(function (p) { return { url: p.url, source: p.source, moment_id: p.moment_id, archive_id: p.archive_id, label: p.label }; }),
+    pairs: d.pairs.map(function (p) { return { prompt: p.prompt || '', duration: String(p.duration || '') }; }) };
+  var id = d.id;
+  fetch('/api/video-lab/cuts/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      var el = document.getElementById('vl-saved');
+      if (!res.ok || !res.j || !res.j.cut) { if (el) el.textContent = (res.j && res.j.error) || 'Not saved.'; if (then) then(false); return; }
+      for (var i = 0; i < VL.cuts.length; i++) if (String(VL.cuts[i].id) === String(id)) VL.cuts[i] = res.j.cut;
+      if (el && VL.draft && String(VL.draft.id) === String(id)) el.textContent = 'Saved';
+      vlRenderCuts();
+      if (then) then(true);
+    })
+    .catch(function () { var el = document.getElementById('vl-saved'); if (el) el.textContent = 'Not saved: could not reach the server.'; if (then) then(false); });
+}
+
+// ---- changing the pictures -------------------------------------------------------------------
 // The Archive window (openReplacePicker's modal) in a mode of its own; applyArchiveToTarget hands the pick to vlPick.
-// which: a picture's index to change it, or 'add' to put a new one on the end.
+// which: a picture's index to replace it, or 'add' to put a new one on the end.
 function vlChoose(which) {
   var cid = state.currentCampaign && state.currentCampaign.id;
-  if (!cid) return;
+  if (!cid || !VL.draft) return;
   vlReadForm();
   state.pickerCtx = { mode: 'videolab', vlWhich: (which === 'add' ? 'add' : Number(which)), pinArea: 'videolab', campaignId: cid };
   try { _rpReset(); } catch (e) {}
   var tEl = document.getElementById('replace-picker-title');
-  if (tEl) tEl.textContent = which === 'add' ? 'Video Lab: add picture ' + (VL.seq.length + 1) : 'Video Lab: change picture ' + (Number(which) + 1);
+  if (tEl) tEl.textContent = which === 'add' ? 'Add picture ' + (VL.draft.pics.length + 1) + ' to the cut' : 'Replace picture ' + (Number(which) + 1) + ' of the cut';
   state.pickerFilters = fpApply('videolab', cid, emptyArchiveFilters());
   var modal = document.getElementById('replace-picker-modal');
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
   ensureArchivesLoaded(function () { _pickerSettle(state.pickerFilters); renderPicker(); }, cid);
 }
-
 function vlPick(which, id) {
   var rows = state.archives || [], a = null;
   for (var i = 0; i < rows.length; i++) if (String(rows[i].id) === String(id)) { a = rows[i]; break; }
-  if (!a) return;
-  if (which === 'add' || which == null || Number(which) >= VL.seq.length) VL.seq.push(a);
-  else VL.seq[Number(which)] = a;
-  vlRenderForm();
+  if (!a || !VL.draft) return;
+  var label = '';
+  try { label = archiveMomentLabel(a) || archiveTypeLabel(a.image_type) || ''; } catch (e) {}
+  var pic = { url: a.image_url, source: 'archive', moment_id: null, archive_id: a.id, label: label };
+  var d = VL.draft;
+  if (which === 'add' || which == null || Number(which) >= d.pics.length) d.pics.push(pic);
+  else d.pics[Number(which)] = pic;
+  vlFitPairs(d, vlModel(d.model));
+  vlRenderOpen(true); vlQueueSave();
 }
-
-// v3.4.90 -- New video (Ian: "a new button to clear what's there and make a new one, pushing the last video you made down
-// to the list"): empties the form, keeps the model and sound choice, and folds every run in the list closed.
-function vlNew() {
-  var f = vlReadForm();
-  var typed = VL.seq.length || String(f.overall || '').trim() || VL.pairs.some(function (p) { return String(p.prompt || '').trim(); });
-  function go() {
-    VL.seq = []; VL.pairs = []; VL.overall = ''; VL.open = {};
-    var n = document.getElementById('vl-name'); if (n) n.value = '';
-    var o = document.getElementById('vl-overall'); if (o) o.value = '';
-    var msg = document.getElementById('vl-msg'); if (msg) msg.textContent = '';
-    vlRenderForm();
-    vlRenderRuns();
-  }
-  if (!typed) { go(); return; }
-  uiConfirm('Clear the form and start a new video? Videos already made stay in Runs below.', { okText: 'New video' }).then(function (yes) { if (yes) go(); });
-}
-
 function vlMove(i, dir) {
   vlReadForm();
-  var j = i + dir;
-  if (j < 0 || j >= VL.seq.length) return;
-  var t = VL.seq[i]; VL.seq[i] = VL.seq[j]; VL.seq[j] = t;
-  vlRenderForm();
+  var d = VL.draft, j = i + dir;
+  if (!d || j < 0 || j >= d.pics.length) return;
+  var t = d.pics[i]; d.pics[i] = d.pics[j]; d.pics[j] = t;
+  vlRenderOpen(true); vlQueueSave();
 }
-
 function vlRemove(i) {
   vlReadForm();
-  VL.seq.splice(i, 1);
-  if (VL.pairs.length) VL.pairs.splice(Math.min(i, VL.pairs.length - 1), 1);
-  vlRenderForm();
+  var d = VL.draft;
+  if (!d) return;
+  d.pics.splice(i, 1);
+  if (d.pairs.length) d.pairs.splice(Math.min(i, d.pairs.length - 1), 1);
+  vlFitPairs(d, vlModel(d.model));
+  vlRenderOpen(true); vlQueueSave();
 }
 
 function vlGenerate() {
-  if (VL.busy) return;
-  var f = vlReadForm(), m = vlModel(f.model), msg = document.getElementById('vl-msg');
+  if (VL.busy || !VL.draft) return;
+  var d = vlReadForm(), m = vlModel(d.model), msg = document.getElementById('vl-msg');
   function say(t) { if (msg) msg.textContent = t; }
-  if (VL.seq.length < 2) { say('Add two pictures at least.'); return; }
-  if (m && m.promptRequired && !String(f.overall || '').trim()) {
-    for (var i = 0; i < VL.pairs.length; i++) if (!String(VL.pairs[i].prompt || '').trim()) { say('This model needs a prompt for clip ' + (i + 1) + ', or an overall prompt.'); return; }
+  if (d.pics.length < 2) { say('A cut needs two pictures at least.'); return; }
+  if (m && m.promptRequired && !String(d.overall || '').trim()) {
+    for (var i = 0; i < d.pairs.length; i++) if (!String(d.pairs[i].prompt || '').trim()) { say(m.label + ' needs words for shot ' + (i + 1) + ', or an overall direction.'); return; }
   }
-  VL.busy = true; if (msg) msg.innerHTML = vlSpin(16) + ' Sending to fal...';
+  VL.busy = true;
   var go = document.getElementById('vl-go'); if (go) go.disabled = true;
-  fetch('/api/video-lab/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-    campaign_id: state.currentCampaign && state.currentCampaign.id,
-    session_id: state.currentSession && state.currentSession.id,
-    name: f.name || vlDefaultName(), model: f.model, sound: f.sound, overall_prompt: f.overall || '',
-    pictures: VL.seq.map(function (a) { return { url: a.image_url, archive_id: a.id }; }),
-    pairs: VL.pairs.map(function (p) { return { prompt: p.prompt || '', duration: String(p.duration) }; })
-  }) }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
-    VL.busy = false; if (go) go.disabled = false;
-    if (!res.ok) { say((res.j && res.j.error) || 'Could not start it.'); vlLoadRuns(); return; }
-    say('Started. It shows below; it takes a few minutes.');
-    if (res.j && res.j.project) VL.open[res.j.project.id] = true;
-    var n = document.getElementById('vl-name'); if (n) n.value = vlDefaultName();
-    vlLoadRuns();
-  }).catch(function () { VL.busy = false; if (go) go.disabled = false; say('Could not reach the server.'); });
+  if (msg) msg.innerHTML = vlSpin(14) + ' Saving and sending to fal...';
+  if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
+  var id = d.id;
+  vlSave(function (saved) {
+    if (!saved) { VL.busy = false; if (go) go.disabled = false; say('Could not save the cut, so nothing was sent.'); return; }
+    fetch('/api/video-lab/cuts/' + id + '/generate', { method: 'POST' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        VL.busy = false; if (go) go.disabled = false;
+        if (res.j && res.j.cut) for (var k = 0; k < VL.cuts.length; k++) if (String(VL.cuts[k].id) === String(id)) VL.cuts[k] = res.j.cut;
+        if (!res.ok) { say((res.j && res.j.error) || 'Could not start it.'); vlRenderCuts(); if (res.j && res.j.cut) vlRenderOpen(true); return; }
+        VL.draft = null;
+        vlRenderCuts(); vlRenderOpen(true);
+      })
+      .catch(function () { VL.busy = false; if (go) go.disabled = false; say('Could not reach the server.'); });
+  });
 }
 
-function vlLoadRuns() {
-  var cid = state.currentCampaign && state.currentCampaign.id;
-  if (!cid) return;
-  fetch('/api/video-lab/projects?campaign_id=' + encodeURIComponent(cid), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
-    VL.projects = (d && d.projects) || [];
-    vlRenderRuns();
-  }).catch(function () { var h = document.getElementById('vl-runs'); if (h) h.textContent = 'Could not load the runs.'; });
-}
-
+// ---- a made cut ------------------------------------------------------------------------------
 function vlStatusText(s) {
   return { queued: 'Waiting to send', running: 'Being made at fal', saving: 'Saving the clip', done: 'Done', error: 'Failed', making: 'Being made' }[s] || s;
 }
-
-// A spinning ring (the storyboard's momentBusySpin keyframes) and how long a run has been going.
+// A spinning ring (the storyboard's momentBusySpin keyframes) and how long a cut has been going.
 function vlSpin(px) {
   px = px || 18;
   return '<span style="display:inline-block;width:' + px + 'px;height:' + px + 'px;border:' + Math.max(2, Math.round(px / 9)) + 'px solid rgba(var(--accent-rgb),0.25);' +
@@ -42016,119 +42208,104 @@ function vlElapsed(from) {
   return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
 }
 function vlBusy(s) { return ['queued', 'running', 'saving'].indexOf(s) >= 0; }
-
-// Where a video is: its clips, then the join.
 function vlProgress(p) {
   var shots = p.shots || [];
   var done = shots.filter(function (s) { return s.status === 'done'; }).length, bad = shots.filter(function (s) { return s.status === 'error'; }).length;
   if (p.final_video_url) return 'Done';
-  if (bad && done + bad === shots.length) return 'Failed: ' + bad + ' of ' + shots.length + ' clip' + (shots.length === 1 ? '' : 's');
-  if (p.merge_status === 'error') return 'The join failed';
-  if (p.merge_status === 'running' || p.merge_status === 'saving') return 'Joining ' + shots.length + ' clips';
-  return 'Making clips: ' + done + ' of ' + shots.length + ' done';
+  if (bad && done + bad === shots.length) return 'Failed: ' + bad + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's');
+  if (p.merge_status === 'error') return 'Joining the shots failed';
+  if (p.merge_status === 'running' || p.merge_status === 'saving') return 'Joining ' + shots.length + ' shots';
+  return 'Making shots: ' + done + ' of ' + shots.length + ' done';
 }
 
-function vlRenderRuns() {
-  var host = document.getElementById('vl-runs');
-  if (!host) { vlStopTimer(); return; }
-  var ps = VL.projects || [];
-  if (!ps.length) host.innerHTML = '<p style="font-size:13px;">No runs yet in this campaign.</p>';
-  else host.innerHTML = ps.map(vlRunHTML).join('');
-  var open = ps.some(function (p) { return p.status === 'making' || (p.shots || []).some(function (s) { return vlBusy(s.status); }); });
-  if (open) vlStartTimer(); else vlStopTimer();
-}
-
-function vlRunHTML(p) {
-  var shots = p.shots || [];
-  var m = null; (VL.models || []).forEach(function (x) { if (shots[0] && x.key === shots[0].model) m = x; });
-  var pics = shots.map(function (s) { return s.start_url; }).concat(shots.length ? [shots[shots.length - 1].end_url] : []).filter(Boolean);
-  var secs = shots.reduce(function (t, s) { return t + Number(s.duration || 0); }, 0);
-  var making = p.status === 'making';
-  var isOpen = !!VL.open[p.id];
-  // The short row: click anywhere but its buttons to open or close it.
-  var row = '<div style="display:flex;gap:10px;align-items:center;cursor:pointer;flex-wrap:wrap;" onclick="vlToggle(' + p.id + ')" title="' + (isOpen ? 'Close' : 'Open') + '">' +
-    '<span style="width:14px;">' + (isOpen ? '&#9662;' : '&#9656;') + '</span>' +
-    '<div style="display:flex;gap:3px;">' + pics.slice(0, 8).map(function (u) { return '<img src="' + escapeHtml(u) + '" style="width:44px;height:30px;object-fit:cover;border-radius:3px;" alt="">'; }).join('') +
-      (pics.length > 8 ? '<span style="font-size:11px;align-self:center;">+' + (pics.length - 8) + '</span>' : '') + '</div>' +
-    '<div style="flex:1;min-width:160px;"><div style="font-weight:bold;" data-no-words>' + escapeHtml(p.name || '') + '</div>' +
-      '<div style="font-size:12px;">' + (making ? vlSpin(12) + ' ' : '') + escapeHtml(vlProgress(p)) +
-        ' &middot; ' + shots.length + ' clip' + (shots.length === 1 ? '' : 's') + ', ' + secs + ' s &middot; about $' + Number(p.total_cost_usd || 0).toFixed(2) +
-        ' &middot; ' + escapeHtml(m ? m.label : (shots[0] && shots[0].model) || '') + ' &middot; ' + escapeHtml(new Date(p.created_at).toLocaleString()) + '</div></div>' +
-    (p.final_video_url ? '<a class="btn btn-sm" href="/api/video-lab/projects/' + p.id + '/download" onclick="event.stopPropagation();">Download</a>' : '') +
-    '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); vlDelete(' + p.id + ')">Delete</button>' +
-  '</div>';
-  if (!isOpen) return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' + row + '</div>';
-  var settings = {}; try { settings = JSON.parse(p.settings || '{}') || {}; } catch (e) { settings = {}; }
-  var big = p.final_video_url
-    ? '<video src="' + escapeHtml(p.final_video_url) + '" controls preload="metadata" style="display:block;width:100%;max-width:1100px;max-height:78vh;background:#000;border-radius:6px;"></video>'
-    : '<div style="width:100%;max-width:1100px;aspect-ratio:16/9;max-height:60vh;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;border:1px dashed var(--border);border-radius:6px;font-size:14px;">' +
-        (making ? vlSpin(44) + '<div>' + escapeHtml(vlProgress(p)) + ' &middot; ' + vlElapsed(p.created_at) + ' so far</div><div style="font-size:12px;">Usually a few minutes. You can leave and come back.</div>'
-                : '<div>' + escapeHtml(vlProgress(p)) + '</div>' +
-                  (p.merge_error ? '<div style="color:#b00;font-size:12px;max-width:90%;" data-no-words>' + escapeHtml(p.merge_error) + '</div>' : '') +
-                  (p.merge_status === 'error' ? '<button class="btn btn-sm" onclick="vlJoinAgain(' + p.id + ')">Join again</button>' : '')) +
+function vlMadeHTML(c) {
+  var shots = c.shots || [];
+  var making = c.status === 'making';
+  var st = vlSettings(c);
+  var big = c.final_video_url
+    ? '<video src="' + escapeHtml(c.final_video_url) + '" controls preload="metadata" style="display:block;width:100%;max-height:78vh;background:#000;border-radius:var(--radius-lg);"></video>'
+    : '<div class="storyboard-panel" style="aspect-ratio:16/9;max-height:60vh;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;">' +
+        (making ? vlSpin(44) + '<div class="moment-title" style="color:var(--accent-pale);">' + escapeHtml(vlProgress(c)) + ' &middot; ' + vlElapsed(c.updated_at || c.created_at) + ' so far</div>' +
+                  '<div style="' + VL_DESC + '">Usually a few minutes. You can leave and come back.</div>'
+                : '<div class="moment-title" style="color:var(--accent-pale);">' + escapeHtml(vlProgress(c)) + '</div>' +
+                  (c.merge_error ? '<div style="' + VL_DESC + 'color:var(--danger);max-width:90%;" data-no-words>' + escapeHtml(c.merge_error) + '</div>' : '') +
+                  (c.merge_status === 'error' ? '<button class="btn btn-sm" onclick="vlJoinAgain(' + c.id + ')">Join again</button>' : '')) +
       '</div>';
-  var clips = shots.map(function (s, i) {
+  var cells = shots.map(function (s, i) {
     var own = ''; try { own = (JSON.parse(s.settings || '{}') || {}).own_prompt || ''; } catch (e) {}
-    return '<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;border-top:1px solid var(--border);padding:8px 0;">' +
+    var canRedo = (s.status === 'done' || s.status === 'error') && c.merge_status !== 'running';
+    return '<div class="narrative-panel">' +
+      '<div class="narrative-block-header">' +
+        '<span>&#127916; Shot ' + (i + 1) + ': picture ' + (i + 1) + ' &rarr; ' + (i + 2) + ' &middot; ' + escapeHtml(String(s.duration || '')) + ' s' + (s.attempt > 1 ? ' &middot; take ' + s.attempt : '') + '</span>' +
+        '<span style="display:inline-flex;gap:4px;">' +
+          (canRedo ? '<button class="narrative-regen-btn" onclick="vlRedo(' + s.id + ')" title="Make this shot again with the same pictures and words">Redo</button>' : '') +
+          (s.status === 'done' && s.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/shots/' + s.id + '/download">Download</a>' : '') +
+        '</span>' +
+      '</div>' +
       (s.status === 'done' && s.video_url
-        ? '<video src="' + escapeHtml(s.video_url) + '" controls preload="metadata" style="width:260px;max-width:100%;background:#000;border-radius:4px;"></video>'
-        : '<div style="width:260px;max-width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;gap:8px;border:1px dashed var(--border);border-radius:4px;font-size:12px;">' +
-            (vlBusy(s.status) ? vlSpin(20) + ' ' : '') + escapeHtml(vlStatusText(s.status)) + '</div>') +
-      '<div style="flex:1;min-width:200px;font-size:12px;">' +
-        '<div><b>Clip ' + (i + 1) + '</b>: pictures ' + (i + 1) + ' to ' + (i + 2) + ' &middot; ' + escapeHtml(String(s.duration || '')) + ' s &middot; ' + escapeHtml(vlStatusText(s.status)) +
-          (s.attempt > 1 ? ' &middot; try ' + s.attempt : '') + '</div>' +
-        (own ? '<div style="white-space:pre-wrap;margin-top:4px;" data-no-words>' + escapeHtml(own) + '</div>' : '') +
-        (s.status === 'error' ? '<div style="color:#b00;margin-top:4px;" data-no-words>' + escapeHtml(s.error || '') + '</div>' : '') +
-        '<div style="margin-top:6px;display:flex;gap:6px;">' +
-          ((s.status === 'done' || s.status === 'error') && p.merge_status !== 'running' ? '<button class="btn btn-sm" onclick="vlRedo(' + s.id + ')">Redo</button>' : '') +
-          (s.status === 'done' && s.video_url ? '<a class="btn btn-sm" href="/api/video-lab/shots/' + s.id + '/download">Download clip</a>' : '') +
-        '</div></div></div>';
+        ? '<video src="' + escapeHtml(s.video_url) + '" controls preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;"></video>'
+        : '<div class="moment-img-placeholder" style="min-height:140px;gap:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;">' + (vlBusy(s.status) ? vlSpin(22) : '') +
+            '<div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.6);">' + escapeHtml(vlStatusText(s.status)) + '</div>' +
+            (s.status === 'error' ? '<div class="moment-img-inner" style="color:var(--danger);" data-no-words>' + escapeHtml(s.error || '') + '</div>' : '') + '</div>') +
+      (own ? '<div class="moment-prompt-text" style="padding:8px 12px;white-space:pre-wrap;font-size:11px;" data-no-words>' + escapeHtml(own) + '</div>' : '') +
+    '</div>';
   }).join('');
-  return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:12px;">' + row +
-    '<div style="margin-top:10px;">' +
-      '<input type="text" value="' + escapeHtml(p.name || '') + '" maxlength="120" style="width:100%;max-width:520px;font-weight:bold;margin-bottom:8px;" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true" onchange="vlRename(' + p.id + ', this.value)">' +
+  return '<div id="vl-made-' + c.id + '">' +
+    '<div style="' + VL_BOX + 'padding:14px 16px;">' +
+      '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">' +
+        '<div style="flex:1;min-width:220px;"><label class="form-label" for="vl-made-name">Name</label>' +
+          '<input id="vl-made-name" class="form-input" type="text" maxlength="120" value="' + escapeHtml(c.name || '') + '" onchange="vlRename(' + c.id + ', this.value)" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true"></div>' +
+        '<button class="btn btn-sm" onclick="vlPin(' + c.id + ', ' + (c.pinned ? 'false' : 'true') + ')">' + (c.pinned ? '&#9733; Pinned' : '&#9734; Pin this cut') + '</button>' +
+        '<button class="btn btn-sm" onclick="vlCopy(' + c.id + ')" title="A new draft with the same pictures and words, to change and make again">Copy to a new cut</button>' +
+        (c.final_video_url ? '<a class="btn btn-sm" href="/api/video-lab/projects/' + c.id + '/download">Download</a>' : '') +
+      '</div>' +
       big +
-      (settings.overall_prompt ? '<div style="font-size:12px;margin-top:8px;white-space:pre-wrap;" data-no-words><b>Overall:</b> ' + escapeHtml(settings.overall_prompt) + '</div>' : '') +
-      '<div style="margin-top:8px;">' + clips + '</div>' +
-    '</div></div>';
+      (st.overall_prompt ? '<div class="moment-prompt-text" style="margin-top:10px;white-space:pre-wrap;" data-no-words><b>Overall direction:</b> ' + escapeHtml(st.overall_prompt) + '</div>' : '') +
+    '</div>' +
+    '<div class="panels-grid" style="margin-top:14px;">' + cells + '</div>' +
+  '</div>';
 }
-
-function vlToggle(id) { VL.open[id] = !VL.open[id]; vlRenderRuns(); }
 
 function vlStartTimer() {
   if (VL.timer) return;
   VL.timer = setInterval(function () {
     var pane = document.getElementById('session-tab-videolab');
     if (!pane || pane.style.display === 'none') { vlStopTimer(); return; }
-    vlLoadRuns();
+    vlLoadCuts();
   }, 10000);
 }
 function vlStopTimer() { if (VL.timer) clearInterval(VL.timer); VL.timer = null; }
 
+function vlAfter(res, failText) {
+  if (!res.ok || (res.j && res.j.error)) { showError((res.j && res.j.error) || failText); }
+  vlLoadCuts();
+}
+function vlJson(url, method, body, failText) {
+  fetch(url, { method: method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { vlAfter(res, failText); if (res.ok && res.j && res.j.cut && method === 'POST' && /\/copy$/.test(url)) { VL.openId = res.j.cut.id; VL.draft = null; } })
+    .catch(function () { showError(failText); });
+}
 function vlRename(id, name) {
   name = String(name || '').trim();
-  if (!name) { vlLoadRuns(); return; }
-  fetch('/api/video-lab/projects/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
-    .then(function (r) { return r.json(); }).then(function (j) { if (j && j.error) showError(j.error); else vlLoadRuns(); })
-    .catch(function () { showError('Could not rename it.'); });
+  if (!name) { vlLoadCuts(); return; }
+  vlJson('/api/video-lab/projects/' + id, 'PATCH', { name: name }, 'Could not rename it.');
 }
-
-function vlPost(url, failText) {
-  fetch(url, { method: 'POST' }).then(function (r) { return r.json(); }).then(function (j) {
-    if (j && j.error) showError(j.error);
-    vlLoadRuns();
-  }).catch(function () { showError(failText); });
-}
-function vlRedo(shotId) { vlPost('/api/video-lab/shots/' + shotId + '/redo', 'Could not redo it.'); }
-function vlJoinAgain(pid) { vlPost('/api/video-lab/projects/' + pid + '/join', 'Could not join it again.'); }
+function vlPin(id, on) { vlFlushSave(); vlJson('/api/video-lab/cuts/' + id + '/pin', 'POST', { pinned: !!on }, 'Could not pin it.'); }
+function vlCopy(id) { vlJson('/api/video-lab/cuts/' + id + '/copy', 'POST', null, 'Could not copy it.'); }
+function vlRedo(shotId) { vlJson('/api/video-lab/shots/' + shotId + '/redo', 'POST', null, 'Could not redo it.'); }
+function vlJoinAgain(pid) { vlJson('/api/video-lab/projects/' + pid + '/join', 'POST', null, 'Could not join it again.'); }
 
 function vlDelete(id) {
-  uiConfirm('Delete this video? Its clips and the joined video are removed from storage. This cannot be undone.', { okText: 'Delete', danger: true }).then(function (yes) {
+  var c = vlFindCut(id);
+  var made = c && c.status !== 'draft';
+  uiConfirm(made ? 'Delete this cut? Its shots and the joined video are removed from storage. This cannot be undone.' : 'Delete this draft cut? The storyboard is not changed.', { okText: 'Delete', danger: true }).then(function (yes) {
     if (!yes) return;
+    if (VL.draft && String(VL.draft.id) === String(id) && VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
     fetch('/api/video-lab/projects/' + id, { method: 'DELETE' }).then(function (r) { return r.json(); }).then(function (j) {
       if (j && j.error) showError(j.error);
-      delete VL.open[id];
-      vlLoadRuns();
+      if (String(VL.openId) === String(id)) { VL.openId = null; VL.draft = null; }
+      vlLoadCuts();
     }).catch(function () { showError('Could not delete it.'); });
   });
 }
