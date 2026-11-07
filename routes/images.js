@@ -4367,6 +4367,7 @@ module.exports.attachPriorReferences = attachPriorReferences;
 module.exports.retouchImage = retouchImage;
 module.exports.webhookRouter = webhookRouter;
 module.exports.falWebhookUrl = falWebhookUrl;
+module.exports.falSetup = falSetup;   // v3.4.86 -- TD-090: the Video Lab sets fal up through the same function, so its calls carry the same privacy headers
 module.exports.submitReference = submitReference;
 module.exports.submitAssetReference = submitAssetReference;
 module.exports.submitEditReference = submitEditReference;

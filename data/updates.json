@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.86",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3486-video-lab-server",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video Lab (admin only), server side: make a test video from two Archive pictures with fal.",
+        "detail": "TD-090, spec claude/VIDEO_SPEC.md. New routes/videoLab.js at /api/video-lab, admin only: model list (Seedance 2.0 and 2.0 Fast, Kling 3.0 Standard, Veo 3.1 Fast, all on fal), make a run, rename, delete (clip removed from storage), download a clip as a file. Runs are rows in two new tables, video_projects and video_shots (shaped for many shots per video later), so they survive a closed browser or a deploy. fal reports back on its webhook; a sweep every 30 seconds catches any it missed. Clips are copied to R2 under video-lab. No tokens are charged; the expected fal cost is recorded. The tab comes in v3.4.87.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.85",
     "staged_on": "2026-11-07",
     "entries": [

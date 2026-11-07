@@ -436,6 +436,7 @@ app.use('/api/order-covers', require('./routes/orderCovers'));   // v3.0.989 -- 
 // both /api/campaigns/:campaignId/invites and /api/invites/:token.
 app.use('/api', require('./routes/invites'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/video-lab', require('./routes/videoLab'));   // v3.4.86 -- TD-090 Video Lab (admin only; its webhook is open to fal and accepts only our own tickets)
 app.use('/api/gifts', require('./routes/gifts'));   // v3.1.43 -- TD-934 gift certificates
 app.use('/api/marketplace', require('./routes/marketplace'));   // v3.3.01 -- TD-1037 Artist Marketplace (switched off until launch: app_settings.marketplace_enabled)
 app.use('/', require('./routes/marketplace').pages);   // v3.3.08 -- TD-1037 /marketplace, /marketplace/<name>-<id>, /sitemap-marketplace.xml (404 while switched off)
