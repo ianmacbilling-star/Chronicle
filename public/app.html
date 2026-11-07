@@ -176,7 +176,7 @@
            as it was, 1 = black); the way back is 0, or taking bg-dimmed off the body tag. The picture stays
            fixed, exactly as style.css sets it; only a black layer is laid over it. */
         :root { --bg-dim: 0.7; }
-        body.bg-dimmed { background-image:linear-gradient(rgba(0,0,0,var(--bg-dim)), rgba(0,0,0,var(--bg-dim))), url('/images/Campaignia_background.png'); }
+        body.bg-dimmed { background-image:linear-gradient(rgba(0,0,0,var(--bg-dim)), rgba(0,0,0,var(--bg-dim))), var(--page-picture); }
         /* v3.1.6 -- A DARK HALO on the words that sit straight on the background (titles, subtitles,
            dates, tab names, field labels), so none of them is lost where it crosses a flame. Not on
            panels' contents, buttons or inputs. The way back: take text-halo off the body tag.

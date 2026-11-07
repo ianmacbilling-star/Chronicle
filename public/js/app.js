@@ -4967,7 +4967,7 @@ function openChangeReview(charId) {
         '<div class="sc-edit-fields">' +
           '<label class="sc-review-label"><span class="sc-tip" data-tip="How this character is drawn in this session\u2019s pictures. It carries forward from the session before.">Description (this session)</span></label>' +
           '<textarea class="char-prompt-editor" id="sc-editor-' + charId + '">' + (r.prompt || '') + '</textarea>' +
-          '<label class="sc-review-label"><span class="sc-tip" data-tip="Type a permanent change, such as a horn broken off, then press Retouch image to apply it to the picture. Approve change keeps it.">Amended appearance</span></label>' +
+          '<label class="sc-review-label"><span class="sc-tip" data-tip="Type a permanent change, such as a horn broken off, then press Retouch image to apply it to the picture. Save keeps it.">Amended appearance</span></label>' +
           '<textarea class="char-prompt-editor" id="sc-review-text-' + charId + '" ' +
             'placeholder="e.g. left horn broken off to a jagged stump">' +
             detailText + '</textarea>' +

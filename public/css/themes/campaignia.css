@@ -198,6 +198,9 @@
   --font-body:'Crimson Text', Georgia, serif;
   --font-label:'Cinzel', serif;
   --font-comic:'Bangers', cursive;
+  /* v3.4.71 -- the picture behind the app and the sign-in, gift and Library pages. Campaignia's is the tavern picture, which set its whole palette. */
+  --page-picture:url('/images/Campaignia_background.png');
+  --picture-dim:1;   /* v3.4.71 -- the dark veil over the picture at full strength (multiplies each page's veil: login, redeem, gift, My Campaigns) */
 }
 :root{
   --ink:#2c1810;

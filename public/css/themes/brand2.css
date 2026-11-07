@@ -203,6 +203,9 @@
   --font-body:'Lora', Georgia, serif;
   --font-label:'Quicksand', sans-serif;
   --font-comic:'Patrick Hand', cursive;
+  /* v3.4.71 -- the picture behind the app and the sign-in, gift and Library pages. Story has no picture yet: the same soft watercolor wash as its landing page. */
+  --page-picture:radial-gradient(ellipse 60% 40% at 80% 8%, rgba(190,200,245,.40), transparent 70%), radial-gradient(ellipse 55% 35% at 10% 40%, rgba(240,200,225,.32), transparent 70%), radial-gradient(ellipse 70% 40% at 60% 90%, rgba(200,230,240,.35), transparent 70%);
+  --picture-dim:0;   /* v3.4.71 -- no dark veil: the wash is light (multiplies each page's veil: login, redeem, gift, My Campaigns) */
 }
 :root{
   --ink:#2c1810;

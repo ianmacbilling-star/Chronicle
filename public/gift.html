@@ -16,8 +16,8 @@
 <style>
   body { margin: 0; }
   .page { min-height: 100vh; display: flex; justify-content: center; padding: 28px 16px; box-sizing: border-box;
-    background: var(--page-bg); background-image: url('/images/Campaignia_background.png'); background-size: cover; background-position: center; background-attachment: fixed; position: relative; }
-  .page::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,0.68); }
+    background: var(--page-bg); background-image: var(--page-picture); background-size: cover; background-position: center; background-attachment: fixed; position: relative; }
+  .page::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,calc(0.68 * var(--picture-dim))); }
   .box { position: relative; z-index: 1; background: rgba(var(--panel-rgb),0.94); border: 1px solid rgba(var(--accent-rgb),0.25); border-radius: 16px;
     padding: 30px; width: 100%; max-width: 620px; box-sizing: border-box; box-shadow: 0 8px 40px rgba(0,0,0,0.6); color: var(--accent-pale); align-self: flex-start; }
   .logo { display: block; height: 64px; margin: 0 auto 14px; }

@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.4.71",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3471-page-picture-story-name",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Two brands: the background picture is a theme setting (Story gets its watercolor wash); brand 2 is named Story.",
+        "detail": "The tavern picture behind the app, the campaigns screen, sign-in, invite, gift, redeem, 404 and the Library is now the theme's --page-picture: Campaignia's sheet holds the same picture, so Campaignia looks the same; brand 2's holds its watercolor wash in place of a picture. Brand 2's name in the brand list is Story (Ian; the internal key stays brand2). Also the hover on Amended appearance (session Characters tab) now says Save keeps it (was Approve change).",
+        "td": [
+          "TD-1105",
+          "TD-1111"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.70",
     "staged_on": "2026-11-06",
     "entries": [

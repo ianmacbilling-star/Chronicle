@@ -1,7 +1,7 @@
 'use strict';
 // v3.4.69 -- TWO BRANDS: the brand list, and how each page's brand is chosen (TD-1105; Ian, 2026-11-06).
 //
-// One code base, one database, one domain for now. A brand is presentation only: its theme sheet today,
+// One code base, one database, one domain for now. Brand 2 is named Story (Ian, 2026-11-06); its key stays brand2. A brand is presentation only: its theme sheet today,
 // later its name, words, emails and genre line-up. Each brand has a fixed internal KEY that customers never
 // see; accounts remember the key (users.home_brand), so renaming a brand never touches stored data.
 //
@@ -23,7 +23,7 @@
 
 const BRANDS = {
   campaignia: { key: 'campaignia', name: 'Campaignia', live: true, hosts: ['campaignia.com', 'www.campaignia.com'], landing: ['/game-masters'], sheet: '/css/themes/campaignia.css' },
-  brand2:     { key: 'brand2',     name: 'Brand 2',    live: false, hosts: [],                                       landing: ['/story'],        sheet: '/css/themes/brand2.css' }
+  brand2:     { key: 'brand2',     name: 'Story',      live: false, hosts: [],                                       landing: ['/story'],        sheet: '/css/themes/brand2.css' }
 };
 const DEFAULT_BRAND = 'campaignia';
 const PROD_HOSTS = ['campaignia.com', 'www.campaignia.com'];   // the same list as server.js PROD_HOSTS
