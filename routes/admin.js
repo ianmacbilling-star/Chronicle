@@ -1289,4 +1289,28 @@ router.get('/impersonate/log', requireAuth, requireAdmin, async function (req, r
 });
 
 
+// v3.4.85 -- TD-1105. BRANDS ON THIS SITE (Dashboard, beside The Guild switch). Which brands people can use here
+// (app_settings.brands_enabled); services/brands.js applies it. GET: every brand, ticked or not, for this site.
+// PUT { brands: [keys] }: saves the ticked ones; at least one must stay on.
+router.get('/brands', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const brands = require('../services/brands');
+    await brands.loadEnabled(getDb);
+    res.json(brands.adminView(req));
+  } catch (e) {
+    res.status(500).json({ error: friendlyError(e, 'Could not read the brands.') });
+  }
+});
+router.put('/brands', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const brands = require('../services/brands');
+    const keys = await brands.saveEnabled(getDb, req.body && req.body.brands);
+    console.log('[brand] brands on: ' + keys.join(', ') + ' (admin user ' + req.session.userId + ')');
+    res.json(brands.adminView(req));
+  } catch (e) {
+    const known = e && e.message === 'Keep at least one brand on.';
+    res.status(known ? 400 : 500).json({ error: known ? e.message : friendlyError(e, 'Could not save the brands.') });
+  }
+});
+
 module.exports = router;

@@ -2207,6 +2207,7 @@ function checkAuth() {
       // v3.0.672 -- TD-475. STILL ADMIN ONLY. Ian: "You can let the badge itself be the way in. No
       // Dashboard." A menu entry appearing for a non-admin is a door they did not ask for.
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
+      var _brSec = document.getElementById('admin-brands-section'); if (_brSec) { _brSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminBrandsLoad(); } catch (e) {} } }   // v3.4.85 -- TD-1105 Brands on this site
       if (typeof renderTierBadge === 'function') renderTierBadge(data);
       // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
       if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
@@ -18637,6 +18638,7 @@ function checkAuth() {
       // v3.0.672 -- TD-475. STILL ADMIN ONLY. Ian: "You can let the badge itself be the way in. No
       // Dashboard." A menu entry appearing for a non-admin is a door they did not ask for.
       if (navSettingsItem) navSettingsItem.style.display = data.is_admin ? 'block' : 'none';
+      var _brSec = document.getElementById('admin-brands-section'); if (_brSec) { _brSec.style.display = data.is_admin ? 'block' : 'none'; if (data.is_admin) { try { adminBrandsLoad(); } catch (e) {} } }   // v3.4.85 -- TD-1105 Brands on this site
       if (typeof renderTierBadge === 'function') renderTierBadge(data);
       // v3.0.358 -- keep the live cents-per-loop so the estimate divides by what the server charges.
       if (data.layoutLoopCostCents) window._layoutLoopCostCents = data.layoutLoopCostCents;
@@ -41700,4 +41702,42 @@ function scSaveEdit(charId) {
     });
   }
   next();
+}
+
+// ============================================================
+// v3.4.85 -- TD-1105. BRANDS ON THIS SITE (admin; the Dashboard section next to The Guild switch). Ian, 2026-11-07:
+// tick the brands people can use; two or more on puts the Brand Theme choice on My Account, one on means everyone
+// sees that one. Server: GET/PUT /api/admin/brands, services/brands.js.
+// ============================================================
+function adminBrandsLoad() {
+  var box = document.getElementById('admin-brands-list');
+  if (!box) return;
+  fetch('/api/admin/brands', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || !d.brands) { box.textContent = (d && d.error) || 'Could not load the brands.'; return; }
+    box.innerHTML = d.brands.map(function (b) {
+      return '<label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">' +
+        '<input type="checkbox" class="admin-brand-tick" value="' + escapeHtml(b.key) + '"' + (b.on ? ' checked' : '') + ' onchange="adminBrandsSave(this)"> ' +
+        '<span data-no-words>' + escapeHtml(b.name) + '</span></label>';
+    }).join('') +
+    '<div style="font-size:12px;margin-top:6px;">This site: ' + escapeHtml(d.site) +
+      (d.set ? '' : ' (never set, so ' + (d.site === 'production' ? 'Campaignia only' : 'every brand') + ')') + '</div>';
+  }).catch(function () { box.textContent = 'Could not load the brands.'; });
+}
+
+function adminBrandsSave(changed) {
+  var ticks = Array.prototype.slice.call(document.querySelectorAll('.admin-brand-tick'));
+  var on = ticks.filter(function (t) { return t.checked; }).map(function (t) { return t.value; });
+  var msg = document.getElementById('admin-brands-msg');
+  function say(t) { if (msg) msg.textContent = t; }
+  if (!on.length) { if (changed) changed.checked = true; say('Keep at least one brand on.'); return; }
+  say('Saving...');
+  fetch('/api/admin/brands', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brands: on }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.brands) { if (changed) changed.checked = !changed.checked; say((res.j && res.j.error) || 'Could not save it.'); return; }
+      var names = res.j.brands.filter(function (b) { return b.on; }).map(function (b) { return b.name; });
+      say(names.length > 1 ? ('On: ' + names.join(' and ') + '. People pick their own on My Account.') : ('Only ' + names[0] + ' is on: everyone sees ' + names[0] + '.'));
+      adminBrandsLoad();
+    })
+    .catch(function () { if (changed) changed.checked = !changed.checked; say('Could not reach the server.'); });
 }

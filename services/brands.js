@@ -13,8 +13,12 @@
 //   4. the signed-in person's brand (users.home_brand, cached in the session).
 //   5. the landing page the visitor last came through (cmp_entry; /story is brand 2's).
 //   6. Campaignia.
-// A brand that is not LIVE is never chosen on production, whatever the rest says. Brand 2 starts not live,
-// so production keeps Campaignia everywhere until Ian switches it on here.
+// v3.4.85 -- WHICH BRANDS ARE ON is a Dashboard setting (app_settings.brands_enabled, a list of keys), next to The
+// Guild switch (Ian, 2026-11-07). A brand that is not ON is never chosen, whatever the rest says. Not set: production
+// has Campaignia only and staging has every brand, exactly as before. With two or more on, people pick on My Account;
+// with one on, everyone sees that one (accounts keep their own pick underneath, so it comes back when the brand does).
+// The staging switch and the BRAND variable (staging only) still show any known brand, for testing.
+// (Before v3.4.85 the rule was the `live` flag below; `live` now only records that a brand has its own address.)
 //
 // THE PAGE DOES THE DRAWING. The server only names the brand, in the cmp_brand cookie (readable by the page,
 // never set for Campaignia). Each page's head reads it and, for any brand but Campaignia, lays that brand's
@@ -35,8 +39,53 @@ const DAY = 24 * 60 * 60 * 1000;
 
 function isKnown(k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(BRANDS, k); }
 function isProdHost(host) { return PROD_HOSTS.indexOf(String(host || '').toLowerCase()) !== -1; }
-function allowed(k, prod) { return isKnown(k) && (BRANDS[k].live || !prod); }
-function anyOtherLive() { return Object.keys(BRANDS).some(function (k) { return k !== DEFAULT_BRAND && BRANDS[k].live; }); }
+
+// v3.4.85 -- the switch. Read from the database every minute (and at once after the Dashboard saves it), so the
+// sync rules below never wait on a query; until the first read lands, "not set" applies.
+const SETTING_KEY = 'brands_enabled';
+let _enabled = null;   // keys that are on, in BRANDS order; null = not set
+let _loadedAt = 0;
+function parseEnabled(v) {
+  if (v == null) return null;
+  var want = String(v).split(',').map(function (x) { return x.trim().toLowerCase(); });
+  var keys = Object.keys(BRANDS).filter(function (k) { return want.indexOf(k) !== -1; });
+  return keys.length ? keys : null;
+}
+function enabledList(prod) { return _enabled ? _enabled.slice() : (prod ? [DEFAULT_BRAND] : Object.keys(BRANDS)); }
+function defaultFor(prod) { var l = enabledList(prod); return l.indexOf(DEFAULT_BRAND) !== -1 ? DEFAULT_BRAND : l[0]; }
+function allowed(k, prod) { return isKnown(k) && enabledList(prod).indexOf(k) !== -1; }
+function onlyCampaignia(prod) { var l = enabledList(prod); return l.length === 1 && l[0] === DEFAULT_BRAND; }
+async function loadEnabled(getDb) {
+  try {
+    var db = await getDb();
+    var r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(SETTING_KEY);
+    _enabled = parseEnabled(r && r.value); _loadedAt = Date.now();
+  } catch (e) { _loadedAt = Date.now(); console.error('[brand] could not read ' + SETTING_KEY + ': ' + (e && e.message || e)); }   // retried by the minute timer
+}
+let _refresh = null;
+function startRefresh(getDb) {
+  if (_refresh) return;
+  // No read here: this runs while server.js is still loading, before its own first getDb(). The first request reads it.
+  _refresh = setInterval(function () { loadEnabled(getDb); }, 60000);
+  if (_refresh.unref) _refresh.unref();
+}
+// Save from the Dashboard: known keys only, at least one. Returns the saved list, or throws a message for the page.
+async function saveEnabled(getDb, list) {
+  var keys = parseEnabled((Array.isArray(list) ? list : []).join(','));
+  if (!keys) throw new Error('Keep at least one brand on.');
+  var db = await getDb(), v = keys.join(',');
+  var ex = await db.prepare('SELECT id FROM app_settings WHERE setting_key = ?').get(SETTING_KEY);
+  if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(v, SETTING_KEY);
+  else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run(SETTING_KEY, v);
+  _enabled = keys; _loadedAt = Date.now();
+  return keys;
+}
+// What the Dashboard shows: every brand, ticked or not, for the site the admin is on.
+function adminView(req) {
+  var prod = isProdHost(req && req.hostname); var on = enabledList(prod);
+  return { site: prod ? 'production' : 'staging', set: !!_enabled,
+    brands: Object.keys(BRANDS).map(function (k) { return { key: k, name: BRANDS[k].name, on: on.indexOf(k) !== -1 }; }) };
+}
 
 function readCookie(req, name) {
   var raw = (req && req.headers && req.headers.cookie) || '';
@@ -64,14 +113,16 @@ function hostBrand(host) {
 // The rule above, as a pure function: { brand, why }.
 function pick(o) {
   var prod = !!o.prod;
-  if (!prod && allowed(o.sw, prod)) return { brand: o.sw, why: 'switch' };
+  if (!prod && isKnown(o.sw)) return { brand: o.sw, why: 'switch' };   // v3.4.85: any known brand, for testing
   var env = o.env ? String(o.env).trim().toLowerCase() : '';
-  if (!prod && allowed(env, prod)) return { brand: env, why: 'variable' };
+  if (!prod && isKnown(env)) return { brand: env, why: 'variable' };
   var hb = hostBrand(o.host);
-  if (allowed(hb, prod)) return { brand: hb, why: 'address' };
+  // v3.4.85: only another brand's OWN address forces it. Campaignia's address is everyone's address today, so on
+  // campaignia.com the account's pick decides (before v3.4.85 Story could not be picked on production, so this never mattered).
+  if (hb && hb !== DEFAULT_BRAND && allowed(hb, prod)) return { brand: hb, why: 'address' };
   if (allowed(o.userBrand, prod)) return { brand: o.userBrand, why: 'account' };
   if (allowed(o.entry, prod)) return { brand: o.entry, why: 'landing' };
-  return { brand: DEFAULT_BRAND, why: 'default' };
+  return { brand: defaultFor(prod), why: 'default' };   // v3.4.85: the only brand on, when Campaignia is off
 }
 
 // The brand a new account is given at sign-up: the same rule without step 4 (nobody is signed in yet).
@@ -89,7 +140,7 @@ function forSignup(req) {
 function choicesFor(req, userBrand) {
   var host = req.hostname; var prod = isProdHost(host);
   var list = Object.keys(BRANDS).filter(function (k) { return allowed(k, prod); }).map(function (k) { return { key: k, name: BRANDS[k].name }; });
-  var current = allowed(userBrand, prod) ? userBrand : DEFAULT_BRAND;
+  var current = allowed(userBrand, prod) ? userBrand : defaultFor(prod);
   var r = pick({ prod: prod, host: host, sw: readCookie(req, COOKIE_SWITCH), env: process.env.BRAND, userBrand: current, entry: readCookie(req, COOKIE_ENTRY) });
   var override = ((r.why === 'switch' || r.why === 'variable' || r.why === 'address') && r.brand !== current) ? r.why : null;
   return { show: list.length > 1, current: current, brands: list, override: override, showing: r.brand };
@@ -144,11 +195,12 @@ function appHost() { try { return new URL(process.env.APP_URL || 'https://campai
 async function emailBrand(getDb, to) {
   if (typeof to !== 'string' || !to.trim() || to.indexOf(',') !== -1) return null;
   var prod = isProdHost(appHost());
-  if (prod && !anyOtherLive()) return null;
+  if (!_loadedAt) await loadEnabled(getDb);   // v3.4.85: a scheduled email may go before any page has loaded the switch
+  if (prod && onlyCampaignia(prod)) return null;
   var db = await getDb();
   var u = await db.prepare('SELECT home_brand FROM users WHERE LOWER(email) = LOWER(?)').get(to.trim());
-  var k = u && u.home_brand;
-  return (allowed(k, prod) && k !== DEFAULT_BRAND) ? k : null;   // v3.4.82: words (if the brand has them) and look
+  var k = (u && allowed(u.home_brand, prod)) ? u.home_brand : defaultFor(prod);   // v3.4.85: a brand switched off falls back to the default
+  return (k !== DEFAULT_BRAND) ? k : null;   // v3.4.82: words (if the brand has them) and look
 }
 // v3.4.82 -- TD-1105. THE LOOK OF AN EMAIL for an account on another brand (Ian, 2026-11-06: option B). Emails are
 // built with Campaignia's colors (routes/email.js reads them through services/themeColors.js); for another brand
@@ -215,7 +267,7 @@ function emailLook(key, html) {
 // against this host), so its answers match the screen. Returns the instruction line, or '' for Campaignia.
 function helpWordsLine(req) {
   var host = req && req.hostname; var prod = isProdHost(host);
-  if (prod && !anyOtherLive()) return '';
+  if (prod && onlyCampaignia(prod)) return '';
   var k = readCookie(req, COOKIE_BRAND);
   var list = (allowed(k, prod) && wordsOn(k)) ? WORDS[k] : null;
   if (!list) return '';
@@ -241,12 +293,14 @@ function clearCookie(res, req, name) { res.clearCookie(name, { path: '/', sameSi
 
 // Express middleware for page requests. Mounted after the session, before the static files and page routes.
 function middleware(getDb) {
+  startRefresh(getDb);   // v3.4.85: keep the Dashboard's brand switch fresh in this process
   return async function brandForPage(req, res, next) {
     try {
+      if (!_loadedAt) await loadEnabled(getDb);   // v3.4.85: once, on the first request after start
       if (req.method !== 'GET' || !isPagePath(req.path)) return next();
       var host = req.hostname; var prod = isProdHost(host);
-      // Production with only Campaignia live: there is nothing to decide. No database read, no cookie.
-      if (prod && !anyOtherLive()) {
+      // Production with only Campaignia on: there is nothing to decide. No database read, no cookie.
+      if (prod && onlyCampaignia(prod)) {
         if (readCookie(req, COOKIE_BRAND)) clearCookie(res, req, COOKIE_BRAND);
         return next();
       }
@@ -282,4 +336,5 @@ function middleware(getDb) {
 }
 
 module.exports = { BRANDS: BRANDS, DEFAULT_BRAND: DEFAULT_BRAND, isKnown: isKnown, isProdHost: isProdHost, pick: pick, forSignup: forSignup, isPagePath: isPagePath, landingBrand: landingBrand, middleware: middleware, choicesFor: choicesFor, canChoose: canChoose,
-  WORDS: WORDS, wordsOn: wordsOn, keep: keep, stripKeep: stripKeep, swapText: swapText, swapHtml: swapHtml, emailBrand: emailBrand, helpWordsLine: helpWordsLine, emailLook: emailLook };
+  WORDS: WORDS, wordsOn: wordsOn, keep: keep, stripKeep: stripKeep, swapText: swapText, swapHtml: swapHtml, emailBrand: emailBrand, helpWordsLine: helpWordsLine, emailLook: emailLook,
+  SETTING_KEY: SETTING_KEY, enabledList: enabledList, defaultFor: defaultFor, loadEnabled: loadEnabled, saveEnabled: saveEnabled, adminView: adminView };   // v3.4.85
