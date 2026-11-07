@@ -211,10 +211,12 @@
   --glass-rgb:255,255,255;   /* v3.4.73 -- white: on a light page the glass is light (every plain rgba(0,0,0,x) background in style.css, app.html, app.js, marketplace.css; not shadows, not gradients over pictures) */
   --ink-bg:#eef0fb;   /* v3.4.73 -- pale lavender: on a light page those menus and the header are light, so their periwinkle text reads */
   --on-book-rgb:240,232,208;   /* v3.4.73 -- parchment text on the dark leather books (campaign and session cards); the books stay dark on every brand */
+  --accent-text:#3d4785;   /* v3.4.74 -- small text in the accent color (tabs, filter buttons, nav links, footers, placeholders); on Campaignia the same gold as --accent */
+  --accent-text-rgb:43,49,92;   /* v3.4.74 -- the same, for see-through text */
 }
 :root{
   --ink:#2c1810;
-  --gold-dim:rgba(201,168,76,0.6);
+  --gold-dim:rgba(61,71,133,0.9);
   --crimson-light:#fcebeb;
   --bg:#f9f7f4;--surface:#ffffff;
   --border:#e2ddd5;--border-dark:#c4bfb5;
@@ -228,7 +230,7 @@
   --radius:8px;--radius-lg:12px;
   --font-display:'Cinzel',Georgia,serif;
 }
-:root{--warn-text:#e6be78;}
+:root{--warn-text:#7a5200;}
 :root{--warn-orange:#fb923c;--warn-orange-bg:rgba(194,65,12,0.12);--warn-orange-line:rgba(251,146,60,0.55);}
 
 /* Brand 2's background, in place of a picture: a soft watercolor wash over the page color. */

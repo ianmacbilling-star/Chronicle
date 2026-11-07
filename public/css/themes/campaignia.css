@@ -206,6 +206,8 @@
   --glass-rgb:0,0,0;   /* v3.4.73 -- black: the dark glass behind buttons, chips and panels (every plain rgba(0,0,0,x) background in style.css, app.html, app.js, marketplace.css; not shadows, not gradients over pictures) */
   --ink-bg:#2c1810;   /* v3.4.73 -- dark brown: the solid surface of the app header, the account menu, the corner menu and selected chips */
   --on-book-rgb:240,232,208;   /* v3.4.73 -- parchment text on the dark leather books (campaign and session cards); the books stay dark on every brand */
+  --accent-text:#c9a84c;   /* v3.4.74 -- small text in the accent color (tabs, filter buttons, nav links, footers, placeholders); on Campaignia the same gold as --accent */
+  --accent-text-rgb:201,168,76;   /* v3.4.74 -- the same, for see-through text */
 }
 :root{
   --ink:#2c1810;

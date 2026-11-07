@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.74",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3474-story-text",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: faint labels in the library, the Guild and the Retouch panel are readable.",
+        "detail": "Ian on staging, Story brand. Small text in the accent color (library header link, Gallery/Books/The Guild tabs, filter and Guild role buttons, footers, form placeholders) now uses a new theme name, --accent-text: the same gold on Campaignia, dark periwinkle on Story. Story's --gold-dim (Retouch panel subtitle, Marker size, the Optional: click lines, many app hints) and --warn-text are now dark too. The impersonation banner's Add tokens button and the small x over marketplace pictures go back to dark glass, since they sit on orange or on a picture.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.73",
     "staged_on": "2026-11-06",
     "entries": [
