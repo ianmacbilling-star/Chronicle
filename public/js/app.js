@@ -41885,7 +41885,7 @@ function vlGenerate() {
   function say(t) { if (msg) msg.textContent = t; }
   if (!VL.picks.start || !VL.picks.end) { say('Pick a start picture and an end picture first.'); return; }
   if (m && m.promptRequired && !String(f.prompt).trim()) { say('This model needs a prompt.'); return; }
-  VL.busy = true; say('Sending to fal...');
+  VL.busy = true; if (msg) msg.innerHTML = vlSpin(16) + ' Sending to fal...';
   var go = document.getElementById('vl-go'); if (go) go.disabled = true;
   fetch('/api/video-lab/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
     campaign_id: state.currentCampaign && state.currentCampaign.id,
@@ -41915,6 +41915,17 @@ function vlStatusText(s) {
   return { queued: 'Waiting to send', running: 'Being made at fal', saving: 'Saving the clip', done: 'Done', error: 'Failed' }[s] || s;
 }
 
+// v3.4.89 -- a spinning ring (the storyboard's momentBusySpin keyframes) and how long a run has been going.
+function vlSpin(px) {
+  px = px || 18;
+  return '<span style="display:inline-block;width:' + px + 'px;height:' + px + 'px;border:' + Math.max(2, Math.round(px / 9)) + 'px solid rgba(var(--accent-rgb),0.25);' +
+    'border-top-color:var(--accent);border-radius:50%;animation:momentBusySpin 0.9s linear infinite;vertical-align:middle;"></span>';
+}
+function vlElapsed(from) {
+  var secs = Math.max(0, Math.round((Date.now() - new Date(from).getTime()) / 1000));
+  return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+}
+
 function vlRenderRuns() {
   var host = document.getElementById('vl-runs');
   if (!host) { vlStopTimer(); return; }
@@ -41936,11 +41947,17 @@ function vlRenderRuns() {
         (secs != null ? ' &middot; took ' + Math.floor(secs / 60) + 'm ' + (secs % 60) + 's' : '') +
         ' &middot; ' + escapeHtml(new Date(p.created_at).toLocaleString()) + '</div>' +
       (s.status === 'error' ? '<div style="color:#b00;font-size:12px;margin-bottom:6px;" data-no-words>' + escapeHtml(s.error || '') + '</div>' : '') +
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;">' +
+      // v3.4.89 -- the player as wide as the panel allows (Ian: "much bigger"), and a spinner with the time so far while
+      // fal is still making it; the two pictures sit underneath.
+      '<div>' +
         (s.status === 'done' && s.video_url
-          ? '<video src="' + escapeHtml(s.video_url) + '" controls preload="metadata" style="max-width:100%;width:560px;background:#000;"></video>'
-          : '<div style="width:260px;height:150px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--border);font-size:13px;">' + escapeHtml(vlStatusText(s.status)) + '</div>') +
-        '<div style="display:flex;gap:6px;">' +
+          ? '<video src="' + escapeHtml(s.video_url) + '" controls preload="metadata" style="display:block;width:100%;max-width:1100px;max-height:78vh;background:#000;border-radius:6px;"></video>'
+          : '<div style="width:100%;max-width:1100px;aspect-ratio:16/9;max-height:60vh;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;border:1px dashed var(--border);border-radius:6px;font-size:14px;">' +
+              (['queued', 'running', 'saving'].indexOf(s.status) >= 0
+                ? vlSpin(44) + '<div>' + escapeHtml(vlStatusText(s.status)) + (s.created_at ? ' &middot; ' + vlElapsed(s.created_at) + ' so far' : '') + '</div><div style="font-size:12px;">Usually a few minutes. You can leave and come back.</div>'
+                : '<div>' + escapeHtml(vlStatusText(s.status)) + '</div>') +
+            '</div>') +
+        '<div style="display:flex;gap:6px;margin-top:8px;">' +
           (s.start_url ? '<img src="' + escapeHtml(s.start_url) + '" style="width:90px;height:68px;object-fit:cover;" alt="" title="Start">' : '') +
           (s.end_url ? '<img src="' + escapeHtml(s.end_url) + '" style="width:90px;height:68px;object-fit:cover;" alt="" title="End">' : '') +
         '</div>' +

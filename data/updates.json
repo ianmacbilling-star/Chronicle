@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.89",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3489-video-lab-spinner",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video Lab: a spinner while a video is being made, and a much bigger player.",
+        "detail": "TD-090. Ian: a progress spinner, and the video viewer much bigger. A run still being made shows a large spinner with how long it has been going (refreshed every 10 seconds) and a note that it usually takes a few minutes; Generate shows a small spinner while sending. A finished video plays as wide as the panel allows (up to 1100px, and no taller than most of the screen), with the start and end pictures underneath.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.88",
     "staged_on": "2026-11-07",
     "entries": [
