@@ -201,6 +201,8 @@
   /* v3.4.71 -- the picture behind the app and the sign-in, gift and Library pages. Campaignia's is the tavern picture, which set its whole palette. */
   --page-picture:url('/images/Campaignia_background.png');
   --picture-dim:1;   /* v3.4.71 -- the dark veil over the picture at full strength (multiplies each page's veil: login, redeem, gift, My Campaigns) */
+  --page-title:#e8cf7a;   /* v3.4.72 -- the big page titles over the picture (My Campaigns and the like); Campaignia's foil gold */
+  --page-title-rgb:232,207,122;
 }
 :root{
   --ink:#2c1810;

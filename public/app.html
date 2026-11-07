@@ -176,7 +176,7 @@
            as it was, 1 = black); the way back is 0, or taking bg-dimmed off the body tag. The picture stays
            fixed, exactly as style.css sets it; only a black layer is laid over it. */
         :root { --bg-dim: 0.7; }
-        body.bg-dimmed { background-image:linear-gradient(rgba(0,0,0,var(--bg-dim)), rgba(0,0,0,var(--bg-dim))), var(--page-picture); }
+        body.bg-dimmed { background-image:linear-gradient(rgba(0,0,0,calc(var(--bg-dim) * var(--picture-dim))), rgba(0,0,0,calc(var(--bg-dim) * var(--picture-dim)))), var(--page-picture); }
         /* v3.1.6 -- A DARK HALO on the words that sit straight on the background (titles, subtitles,
            dates, tab names, field labels), so none of them is lost where it crosses a flame. Not on
            panels' contents, buttons or inputs. The way back: take text-halo off the body tag.
@@ -187,12 +187,12 @@
            heading in the old dark ink (var(--text)), which vanished on the darkened background. The
            background behind a page heading is now always dark, so every heading is gold and every
            line under it cream. */
-        body.bg-dimmed .view .page-header .page-title { color:var(--foil); }
+        body.bg-dimmed .view .page-header .page-title { color:var(--page-title); }
         body.bg-dimmed .view .page-header .page-subtitle { color:rgba(var(--on-panel-rgb),0.78); }
         body.text-halo .view .page-title, body.text-halo .view .page-subtitle, body.text-halo .view .sdh-date-display,
         body.text-halo .view .sess-tab, body.text-halo #view-session-detail .form-label {
-          text-shadow:0 0 6px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.9); }
-        #view-campaigns.camp-plain-bg .page-subtitle { color:rgba(var(--foil-rgb),0.85); text-shadow:0 1px 3px rgba(0,0,0,0.9); }
+          text-shadow:0 0 6px rgba(0,0,0,calc(0.95 * var(--picture-dim))), 0 0 2px rgba(0,0,0,calc(0.9 * var(--picture-dim))), 0 1px 2px rgba(0,0,0,calc(0.9 * var(--picture-dim))); }
+        #view-campaigns.camp-plain-bg .page-subtitle { color:rgba(var(--page-title-rgb),0.85); text-shadow:0 1px 3px rgba(0,0,0,calc(0.9 * var(--picture-dim))); }
         .camp-books .campaign-book { position:relative; display:flex; flex-direction:column; aspect-ratio:17/22; padding:0; overflow:hidden; cursor:pointer;
           border:none; border-radius:3px 6px 6px 3px; backdrop-filter:none; -webkit-backdrop-filter:none;
           background:radial-gradient(ellipse at 55% 32%, var(--shelf-wood-dark) 0%, var(--shelf-deep) 55%, var(--shelf-deep) 100%);

@@ -1,7 +1,7 @@
 /* BRAND 2 (name to come) -- the theme sheet for the storyteller brand (v3.4.63, Ian 2026-11-06: "Sky and Lavender").
    A copy of campaignia.css with the same names; only the values below differ, chosen from the pastel/watercolor trial.
    Light page: cool paper, slate-blue ink, periwinkle accent, pink button. Used by /story only for now.
-   Changed from Campaignia: accent, accent-pale, accent-pale-rgb, accent-rgb, button-cta, danger, danger-rgb, hover-fill, hover-fill-rgb, light-panel-text, light-panel-text-rgb, on-panel, on-panel-rgb, page-bg, page-bg-rgb, panel, panel-deep, panel-deep-rgb, panel-rgb, surface-ink-text, surface-ink-text-rgb, tier-platinum, tier-platinum-rgb, tier-silver. Every other name keeps Campaignia's value until brand 2 needs its own.
+   Changed from Campaignia: accent, accent-pale, accent-pale-rgb, accent-rgb, button-cta, danger, danger-rgb, hover-fill, hover-fill-rgb, light-panel-text, light-panel-text-rgb, on-panel, on-panel-rgb, page-bg, page-bg-rgb, panel, panel-deep, panel-deep-rgb, panel-rgb, surface-ink-text, surface-ink-text-rgb, tier-platinum, tier-platinum-rgb, tier-silver. v3.4.72: a STAND-IN for the inside of the app (Ian, 2026-11-06, a proof of concept for marketing): 104 more names worked out automatically from the Sky and Lavender palette, by how each name is used (text darker, panels lighter, lines soft lavender, Campaignia's golds turned periwinkle; warning and status colors keep their hue). Rough by design; the designer's palette replaces it. Still Campaignia's: the bookshelf, tier metals, foil, scrims, and the second :root's light tokens.
    v3.4.64 (Ian: dots too dark, some text hard to read): halftone-dot barely there; on-panel and accent-pale (the text colors) deeper. */
 /* Campaignia -- the theme sheet (v3.4.54, two brands step 1).
    Every brand color style.css uses is named here, holding exactly the value it always had, so Campaignia
@@ -12,7 +12,7 @@
    v3.4.62 -- the folded names, which only pointed at their replacements, are gone, with every other name nothing used. */
 :root{
   --accent-rgb:125,142,212;   /* the Campaignia gold: borders, glows, faint fills, focus rings */
-  --accent-bright-rgb:216,184,92;   /* the bright gold, used in shimmer animations */
+  --accent-bright-rgb:128,144,216;   /* the bright gold, used in shimmer animations */
   --accent-pale-rgb:79,90,148;   /* the pale gold: hints and soft labels on dark */
   --on-panel-rgb:38,43,74;   /* parchment text on a dark panel */
   --panel-rgb:253,252,255;   /* the main dark-brown panel: inputs, review panel, pickers */
@@ -23,7 +23,7 @@
   --page-bg:#f6f6fc;   /* the page background */
   --panel:#fdfcff;   /* the main dark-brown panel as a solid color */
   --on-panel:#262b4a;   /* parchment text on a dark panel */
-  --accent-bright:#d8b85c;   /* the bright gold */
+  --accent-bright:#8090d8;   /* the bright gold */
   --accent-pale:#4f5a94;   /* the pale gold */
   /* v3.4.55 -- names the bookshelf look in app.html adds */
   --foil-rgb:232,207,122;   /* gold-foil lettering on the bookshelf books */
@@ -38,54 +38,54 @@
   --surface-ink-text-rgb:51,58,90;
   --hover-fill:#ebeefc;
   --hover-fill-rgb:235,238,252;
-  --hover-fill-text:#2a1d08;
+  --hover-fill-text:#101222;
   --support-banner-text:#7c2d12;
-  --gold-dim-label:#6b4f12;
-  --gold-dim-label-fill:#6b4f12;
-  --gold-dim-label-line:#6b4f12;
-  --gold-dim-label-line-rgb:107,79,18;
-  --gold-muted:#8a5a00;
-  --gold-muted-fill:#8a5a00;
-  --gold-muted-line:#8a5a00;
-  --gold-muted-line-rgb:138,90,0;
-  --quote-text:#6e6455;
-  --quote-text-rgb:110,100,85;
-  --hint-text:#7a6440;
+  --gold-dim-label:#262d57;
+  --gold-dim-label-fill:#d2d5eb;
+  --gold-dim-label-line:#b8bde0;
+  --gold-dim-label-line-rgb:184,189,224;
+  --gold-muted:#262e64;
+  --gold-muted-fill:#4e5cbc;
+  --gold-muted-line:#b5bbe3;
+  --gold-muted-line-rgb:181,187,227;
+  --quote-text:#7c7e8d;
+  --quote-text-rgb:124,126,141;
+  --hint-text:#4d516d;
   --support-orange:#c2410c;
   --support-orange-rgb:194,65,12;
-  --row-muted:#9a6a5a;
+  --row-muted:#906354;
   --copper:#b87333;
   --copper-rgb:184,115,51;
-  --gold-faint:#a08850;
-  --print-note:#c9784c;
-  --print-note-rgb:201,120,76;
-  --muted-text:#9b8e80;
-  --admin-orange:#ff8c00;
-  --admin-orange-rgb:255,140,0;
-  --warn-orange-rgb:251,146,60;
-  --amber-note:#e0a040;
+  --gold-faint:#62688e;
+  --print-note:#a55a32;
+  --print-note-rgb:165,90,50;
+  --muted-text:#7f7264;
+  --admin-orange:#ff910a;
+  --admin-orange-rgb:255,145,10;
+  --warn-orange-rgb:180,83,4;
+  --amber-note:#dd962c;
   --amber-note-line-rgb:224,160,64;
-  --soft-gold-note:#e0b070;
-  --soft-gold-note-rgb:224,176,112;
-  --peach-text:#ffb38a;
-  --peach-text-rgb:255,179,138;
-  --highlight:#e8c766;
-  --highlight-rgb:232,199,102;
-  --highlight-fill:#e8c766;
-  --label:#e8d49a;
-  --label-rgb:232,212,154;
-  --label-fill:#e8d49a;
-  --label-line:#e8d49a;
-  --soft-line:#e2d6b5;
-  --soft-line-rgb:226,214,181;
-  --soft-line-text:#e2d6b5;
-  --soft-line-text-rgb:226,214,181;
+  --soft-gold-note:#384076;
+  --soft-gold-note-rgb:56,64,118;
+  --peach-text:#752900;
+  --peach-text-rgb:117,41,0;
+  --highlight:#343e7c;
+  --highlight-rgb:52,62,124;
+  --highlight-fill:#838dcb;
+  --label:#292e53;
+  --label-rgb:41,46,83;
+  --label-fill:#acb1d6;
+  --label-line:#9fa5d0;
+  --soft-line:#a6abc9;
+  --soft-line-rgb:166,171,201;
+  --soft-line-text:#2b2e46;
+  --soft-line-text-rgb:43,46,70;
   /* pale panels (older light-style windows) */
-  --light-highlight:#ffebb4;
-  --light-highlight-rgb:255,235,180;
-  --light-panel:#faf8f3;
-  --light-panel-rgb:250,248,243;
-  --light-panel-line:#faf8f3;
+  --light-highlight:#4e5cbc;
+  --light-highlight-rgb:78,92,188;
+  --light-panel:#f5f5f8;
+  --light-panel-rgb:245,245,248;
+  --light-panel-line:#a7acc8;
   --light-panel-text:#fdfcff;
   --light-panel-text-rgb:253,252,255;
   /* the bookshelf and Library shelves */
@@ -111,64 +111,64 @@
   --shelf-remove-text:#f0c4c4;
   --shelf-page:#fff1c4;
   /* status colors: warnings, errors, success, notices */
-  --error-deep:#3a1010;
-  --error-deep-rgb:58,16,16;
-  --error-dialog-bg:#1c1b22;
+  --error-deep:#ca3f3f;
+  --error-deep-rgb:202,63,63;
+  --error-dialog-bg:#eae9ed;
   --help-ink:#1f2430;
   --help-ink-rgb:31,36,48;
   --success-deep:#0d2a20;
-  --danger-hover:#6f1414;
-  --danger-hover-rgb:111,20,20;
-  --npc-deep:#3c3489;
-  --npc-deep-rgb:60,52,137;
-  --info-rgb:31,80,102;
+  --danger-hover:#da3030;
+  --danger-hover-rgb:218,48,48;
+  --npc-deep:#584ebc;
+  --npc-deep-rgb:88,78,188;
+  --info-rgb:67,157,198;
   --error-rgb:163,45,45;
-  --success-rgb:15,110,86;
+  --success-rgb:40,226,179;
   --success-text:#0f6e56;
-  --warning-rgb:138,90,0;
-  --ok-text:#3c9142;
-  --ok-text-rgb:60,145,66;
+  --warning-rgb:255,230,184;
+  --ok-text:#52b759;
+  --ok-text-rgb:82,183,89;
   --alert-red:#f44336;
   --alert-red-rgb:244,67,54;
   --alert-red-line:#f44336;
   --player-badge-rgb:122,140,184;
   --rights-warn-line:#d97706;
-  --error-soft:#e57373;
-  --error-soft-line-rgb:229,115,115;
-  --change-pending-rgb:224,122,106;
-  --change-pending-line:#e07a6a;
-  --change-pending-line-rgb:224,122,106;
-  --change-pending-text:#e07a6a;
+  --error-soft:#8c1a1a;
+  --error-soft-line-rgb:233,135,135;
+  --change-pending-rgb:213,74,52;
+  --change-pending-line:#e69589;
+  --change-pending-line-rgb:230,149,137;
+  --change-pending-text:#952f1f;
   --change-applied:#7ab874;
   --change-applied-rgb:122,184,116;
   --change-applied-line-rgb:122,184,116;
-  --error-light:#f09595;
-  --error-light-line:#f09595;
-  --error-light-line-rgb:240,149,149;
-  --player-text:#9caedb;
-  --player-text-line-rgb:156,174,219;
-  --nag:#e8a85a;
-  --nag-rgb:232,168,90;
-  --good-text:#8fd18f;
-  --warn-text-rgb:230,190,120;
-  --npc-text:#c9bdf0;
-  --npc-text-rgb:201,189,240;
-  --success-light:#86d4ba;
-  --success-light-rgb:134,212,186;
-  --success-light-line:#86d4ba;
-  --success-light-line-rgb:134,212,186;
-  --rights-warn-text:#fcd34d;
-  --warn-strong-text:#f0d9a8;
-  --error-pale-text:#f5d8d0;
-  --error-pale-text-rgb:245,216,208;
-  --ok-pale-text:#c8ebb4;
-  --ok-pale-text-rgb:200,235,180;
+  --error-light:#6a0f0f;
+  --error-light-line:#ed8282;
+  --error-light-line-rgb:237,130,130;
+  --player-text:#243663;
+  --player-text-line-rgb:150,169,217;
+  --nag:#e18e28;
+  --nag-rgb:225,142,40;
+  --good-text:#2e702e;
+  --warn-text-rgb:135,95,25;
+  --npc-text:#5c38d2;
+  --npc-text-rgb:92,56,210;
+  --success-light:#2b795f;
+  --success-light-rgb:43,121,95;
+  --success-light-line:#96dac3;
+  --success-light-line-rgb:150,218,195;
+  --rights-warn-text:#856602;
+  --warn-strong-text:#604610;
+  --error-pale-text:#5d2314;
+  --error-pale-text-rgb:93,35,20;
+  --ok-pale-text:#2f5918;
+  --ok-pale-text-rgb:47,89,24;
   --error-bg-rgb:252,235,235;
-  --error-bg-line:#fcebeb;
+  --error-bg-line:#ec8383;
   /* v3.4.58 -- forms the kept names gained when near-duplicates were folded into them */
   --danger:#c4607a;
   /* v3.4.59 -- forms the sign-in and gift pages needed */
-  --amber-note-rgb:224,160,64;
+  --amber-note-rgb:221,150,44;
   --page-bg-rgb:246,246,252;
   /* v3.4.60 -- the call-to-action button in emails */
   --button-cta:#d8809f;
@@ -185,7 +185,7 @@
   --tooling:#d6b45a;
   --added-fill-rgb:40,70,40;
   --tier-platinum-rgb:138,132,184;
-  --change-pending:#e07a6a;
+  --change-pending:#d54a34;
   --rights-warn-line-rgb:217,119,6;
   --ai-tag-fill-rgb:59,90,160;
   /* v3.4.62 -- the tier badges and headers in the app (Account, Plans and Passes); Gold uses --accent */
@@ -206,6 +206,8 @@
   /* v3.4.71 -- the picture behind the app and the sign-in, gift and Library pages. Story has no picture yet: the same soft watercolor wash as its landing page. */
   --page-picture:radial-gradient(ellipse 60% 40% at 80% 8%, rgba(190,200,245,.40), transparent 70%), radial-gradient(ellipse 55% 35% at 10% 40%, rgba(240,200,225,.32), transparent 70%), radial-gradient(ellipse 70% 40% at 60% 90%, rgba(200,230,240,.35), transparent 70%);
   --picture-dim:0;   /* v3.4.71 -- no dark veil: the wash is light (multiplies each page's veil: login, redeem, gift, My Campaigns) */
+  --page-title:#2b3152;   /* v3.4.72 -- the big page titles over the picture (My Campaigns and the like); Campaignia's foil gold */
+  --page-title-rgb:43,49,82;
 }
 :root{
   --ink:#2c1810;

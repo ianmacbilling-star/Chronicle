@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.72",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3472-story-stand-in-palette",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: a stand-in light palette for the inside of the app (proof of concept).",
+        "detail": "brand2.css gets light values for 104 more theme names, worked out from the Sky and Lavender palette by how each name is used, so the app is readable as Story for the marketing demo (Ian: \"this is to prove the concept\"). Rough by design; the designer's palette replaces it. Also: the app's darkening of the background picture, the dark halo behind page titles and the page title gold now follow the theme (--picture-dim and the new --page-title), so Story's app is not greyed over; Campaignia's values are unchanged. Story is not live on production.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.71",
     "staged_on": "2026-11-06",
     "entries": [
