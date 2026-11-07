@@ -1822,6 +1822,14 @@
         <button class="btn btn-primary btn-sm" style="margin-top:16px;" onclick="savePreferences()">Save preferences</button>
       </div>
 
+      <!-- v3.4.75 -- TD-1105. Brand Theme. Hidden until /api/auth/brand says there is more than one brand to pick (never on production while only Campaignia is live). -->
+      <div class="settings-section" id="account-brand-section" style="display:none;">
+        <div class="settings-section-title">Brand Theme</div>
+        <div class="settings-section-desc">Choose the look you want. Your choice follows your account to any device you sign in on.</div>
+        <select id="pref-brand" class="form-input" style="margin-top:14px;max-width:280px;" onchange="saveBrandTheme()"></select>
+        <div id="brand-msg" style="display:none;margin-top:12px;font-size:12px;"></div>
+      </div>
+
       <div class="settings-section" id="account-tours-section">
         <div class="settings-section-title">Guided tours</div>
         <div class="settings-section-desc">Want a refresher? Turn the guided tours back on. Each screen's tour plays once as you visit it, then settles down again.</div>

@@ -82,6 +82,20 @@ function forSignup(req) {
   } catch (e) { return DEFAULT_BRAND; }
 }
 
+// v3.4.75 -- the Brand Theme choice on the Account page (Ian, 2026-11-06: everyone may switch; customers switch themselves).
+// The brands a person may pick here: every live brand, plus the not-yet-live ones off production. With only one
+// to pick from (production today), the Account page hides the choice. `override` names a staging switch or the
+// BRAND variable when one of them outranks the account, so the page can say why a change does not show.
+function choicesFor(req, userBrand) {
+  var host = req.hostname; var prod = isProdHost(host);
+  var list = Object.keys(BRANDS).filter(function (k) { return allowed(k, prod); }).map(function (k) { return { key: k, name: BRANDS[k].name }; });
+  var current = allowed(userBrand, prod) ? userBrand : DEFAULT_BRAND;
+  var r = pick({ prod: prod, host: host, sw: readCookie(req, COOKIE_SWITCH), env: process.env.BRAND, userBrand: current, entry: readCookie(req, COOKIE_ENTRY) });
+  var override = ((r.why === 'switch' || r.why === 'variable' || r.why === 'address') && r.brand !== current) ? r.why : null;
+  return { show: list.length > 1, current: current, brands: list, override: override, showing: r.brand };
+}
+function canChoose(req, key) { return allowed(key, isProdHost(req.hostname)); }
+
 function isPagePath(path) {
   var p = String(path || '');
   if (/^\/(api|css|js|images|fonts|uploads)\//i.test(p)) return false;
@@ -137,4 +151,4 @@ function middleware(getDb) {
   };
 }
 
-module.exports = { BRANDS: BRANDS, DEFAULT_BRAND: DEFAULT_BRAND, isKnown: isKnown, isProdHost: isProdHost, pick: pick, forSignup: forSignup, isPagePath: isPagePath, landingBrand: landingBrand, middleware: middleware };
+module.exports = { BRANDS: BRANDS, DEFAULT_BRAND: DEFAULT_BRAND, isKnown: isKnown, isProdHost: isProdHost, pick: pick, forSignup: forSignup, isPagePath: isPagePath, landingBrand: landingBrand, middleware: middleware, choicesFor: choicesFor, canChoose: canChoose };

@@ -1266,4 +1266,39 @@ router.post('/tour-reset', async function(req, res) {
   }
 });
 
+// v3.4.75 -- TD-1105. BRAND THEME on the Account page (Ian, 2026-11-06: everyone, and customers switch
+// themselves). GET says which brands this person may pick and which one the account is on; PUT saves a pick
+// to users.home_brand. Both bind req.session.userId only, so nobody can change another account.
+// The PUT also updates the brand cached in the session (services/brands.js reads home_brand once per
+// sign-in), so the next page load shows the new brand without signing out.
+router.get('/brand', async function (req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const brands = require('../services/brands');
+    const db = await getDb();
+    const u = await db.prepare('SELECT home_brand FROM users WHERE id = ?').get(req.session.userId);
+    res.json(brands.choicesFor(req, u && u.home_brand));
+  } catch (e) {
+    console.error('Brand read error:', e.message);
+    res.json({ show: false });
+  }
+});
+router.put('/brand', async function (req, res) {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const brands = require('../services/brands');
+    const key = String((req.body && req.body.brand) || '').trim().toLowerCase();
+    if (!brands.canChoose(req, key)) return res.status(400).json({ error: 'That look is not available.' });
+    const db = await getDb();
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE users SET home_brand=?, edited_at=?, edited_by=? WHERE id=?').run(key, now, req.session.userId, req.session.userId);
+    req.session.brand = key;
+    req.session.brandUid = req.session.userId;
+    res.json(Object.assign({ success: true }, brands.choicesFor(req, key)));
+  } catch (e) {
+    console.error('Brand save error:', e.message);
+    res.json({ error: 'Could not save your choice right now.' });
+  }
+});
+
 module.exports = router;

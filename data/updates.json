@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.75",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3475-brand-theme",
+        "kind": "feature",
+        "public": false,
+        "summary": "Account page: a Brand Theme choice, so anyone can switch between Campaignia and Story.",
+        "detail": "Ian: everyone may switch, and customers switch themselves. A Brand Theme dropdown on the Account page lists the brands this person may pick and saves the pick to users.home_brand (GET and PUT /api/auth/brand, own account only). The save also updates the brand cached in the session, so the page reloads in the new brand at once. The section only shows when there is more than one brand to pick, so it stays hidden on production while only Campaignia is live. When a staging switch or the BRAND variable outranks the account, the page says so.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.74",
     "staged_on": "2026-11-06",
     "entries": [

@@ -2828,6 +2828,7 @@ function loadAccount() {
   // v3.2.04 -- TD-939. The password box starts hidden; the pending line shows a change waiting for its link.
   cmpEmailShowPassword(false);
   cmpEmailRenderPending();
+  loadBrandTheme();   // v3.4.75 -- TD-1105
   // Reconcile live billing state from Stripe first (self-healing: reflects a cancel,
   // plan change, or payment problem made in the portal OR the Stripe dashboard), then
   // render. The endpoint no-ops server-side for users with no subscription on file.
@@ -31052,6 +31053,60 @@ function devClearTours() {
 // Account-facing: re-enable guided tours by clearing this account's seen-history
 // (same endpoint as the dev reset). Each screen's tour then auto-plays once on the
 // next visit and re-marks itself complete, so they settle down on their own.
+// v3.4.75 -- TD-1105. Brand Theme on the Account page. The section stays hidden unless the server offers
+// more than one brand. Choosing one saves it to the account, then reloads so the page draws in that brand.
+function brandThemeNote(d) {
+  if (!d || !d.override) return '';
+  if (d.override === 'switch') return 'A staging switch is showing a different brand in this browser. Visit any page with ?brand=clear to remove it.';
+  if (d.override === 'variable') return 'The BRAND variable on Railway is showing a different brand on this whole site.';
+  return 'This web address always shows its own brand.';
+}
+function loadBrandTheme() {
+  var sec = document.getElementById('account-brand-section');
+  var sel = document.getElementById('pref-brand');
+  if (!sec || !sel) return;
+  fetch('/api/auth/brand')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.show || !d.brands) { sec.style.display = 'none'; return; }
+      sel.innerHTML = d.brands.map(function (b) {
+        return '<option value="' + escapeHtml(b.key) + '"' + (b.key === d.current ? ' selected' : '') + '>' + escapeHtml(b.name) + '</option>';
+      }).join('');
+      sel.setAttribute('data-saved', d.current);
+      sec.style.display = '';
+      var msg = document.getElementById('brand-msg'); var note = brandThemeNote(d);
+      if (msg) { msg.style.display = note ? 'block' : 'none'; msg.style.color = 'var(--text-muted)'; msg.textContent = note; }
+    })
+    .catch(function () { sec.style.display = 'none'; });
+}
+function saveBrandTheme() {
+  var sel = document.getElementById('pref-brand');
+  var msg = document.getElementById('brand-msg');
+  if (!sel) return;
+  var key = sel.value;
+  if (key === sel.getAttribute('data-saved')) return;
+  sel.disabled = true;
+  if (msg) { msg.style.display = 'block'; msg.style.color = ''; msg.textContent = 'Saving...'; }
+  fetch('/api/auth/brand', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ brand: key }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.success) {
+        sel.setAttribute('data-saved', key);
+        var note = brandThemeNote(d);
+        if (note) { sel.disabled = false; if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = 'Saved. ' + note; } return; }
+        if (msg) { msg.style.color = 'var(--accent-pale)'; msg.textContent = 'Saved. Switching now...'; }
+        setTimeout(function () { location.reload(); }, 400);
+      } else {
+        sel.disabled = false; sel.value = sel.getAttribute('data-saved');
+        if (msg) { msg.style.color = 'var(--error)'; msg.textContent = (d && d.error) ? d.error : 'Could not save your choice. Please try again.'; }
+      }
+    })
+    .catch(function () {
+      sel.disabled = false; sel.value = sel.getAttribute('data-saved');
+      if (msg) { msg.style.color = 'var(--error)'; msg.textContent = 'Could not save your choice. Please try again.'; }
+    });
+}
+
 function replayTours() {
   var msg = document.getElementById('tours-replay-msg');
   if (msg) { msg.style.display = 'block'; msg.style.color = ''; msg.textContent = 'Turning tours back on...'; }
