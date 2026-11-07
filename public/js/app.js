@@ -41749,15 +41749,16 @@ function adminBrandsSave(changed) {
 }
 
 // ============================================================
-// v3.4.87 -- TD-090. THE VIDEO LAB TAB (v3.4.88: pictures picked in the Archive window) (admin only). Spec: claude/VIDEO_SPEC.md; server: routes/videoLab.js.
-// Pick a start and an end picture from the campaign's Archive (v3.4.88: each box opens the Archive window,
-// the same one Replace uses), say what happens between them, choose a model and a duration, and Generate. fal makes
-// the clip on its own servers; the run is a database row, so the list below survives a closed
-// browser or a deploy, and refreshes itself every 10 s while anything is still being made.
+// v3.4.87 -- TD-090. THE VIDEO LAB TAB (admin only). Spec: claude/VIDEO_SPEC.md; server: routes/videoLab.js.
+// v3.4.90 -- A SEQUENCE OF PICTURES (Ian: "N number of pictures... that would go in order", "a prompt between each
+// image... just like our storyboard", "with an overall prompt too"). Each picture is chosen in the Archive window;
+// between each pair is what happens from one to the next and how long that clip runs; the overall prompt goes into
+// every clip. fal makes the clips side by side and joins them into one video. Past runs are short rows; a click
+// opens one to the full player, with each clip underneath and Redo on any of them.
 // Plain on purpose (Ian: "This does not have to look pretty because only admins see it").
-// Every name here starts vl / VL; checked unused before v3.4.87.
+// Every name here starts vl / VL; checked unused before v3.4.86.
 // ============================================================
-var VL = { models: null, picks: { start: null, end: null }, projects: [], timer: null, cid: null, busy: false };
+var VL = { models: null, seq: [], pairs: [], overall: '', projects: [], open: {}, timer: null, cid: null, busy: false };
 
 function vlIsAdmin() { return !!(state.user && state.user.is_admin); }
 
@@ -41766,11 +41767,11 @@ function vlOpen() {
   if (!host) return;
   if (!vlIsAdmin()) { host.innerHTML = '<p style="padding:16px;">The Video Lab is for admins only.</p>'; return; }
   var cid = state.currentCampaign && state.currentCampaign.id;
-  if (VL.cid !== cid) { VL.cid = cid; VL.picks = { start: null, end: null }; VL.projects = []; }
+  if (VL.cid !== cid) { VL.cid = cid; VL.seq = []; VL.pairs = []; VL.overall = ''; VL.projects = []; VL.open = {}; }
   host.innerHTML = '<div style="padding:14px;background:var(--panel);color:var(--on-panel);border-radius:10px;">' +
     '<h3 style="margin:0 0 4px;">Video Lab <span style="font-size:12px;font-weight:normal;">(admin only, test bench)</span></h3>' +
-    '<div style="font-size:13px;margin-bottom:12px;">Pick a start and an end picture, say what happens between them, then Generate. ' +
-      'fal makes the clip on its own servers (a few minutes); you can leave and come back. No tokens are charged.</div>' +
+    '<div style="font-size:13px;margin-bottom:12px;">Add pictures in the order they happen, say what happens between each pair, then Generate. ' +
+      'fal makes each clip on its own servers and joins them into one video (a few minutes); you can leave and come back. No tokens are charged.</div>' +
     '<div id="vl-form">Loading...</div>' +
     '<h3 style="margin:22px 0 6px;">Runs</h3>' +
     '<div id="vl-runs">Loading...</div>' +
@@ -41798,19 +41799,51 @@ function vlDefaultName() {
   return 'Video Lab ' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-function vlPickHTML(which) {
-  var a = VL.picks[which];
-  var label = which === 'start' ? 'Start picture' : 'End picture';
-  // v3.4.88 -- the whole box is the button: it opens the Archive window (Ian: "if you hit the start picture or the
-  // end picture it shows the archive modal").
-  return '<div style="flex:1;min-width:200px;border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;" title="Pick from the Archive" onclick="vlChoose(\'' + which + '\')">' +
-    '<div style="font-weight:bold;margin-bottom:6px;">' + label + '</div>' +
-    (a ? '<img src="' + escapeHtml(a.image_url) + '" style="max-width:100%;max-height:220px;display:block;" alt="">' +
-         '<div style="font-size:12px;margin-top:4px;" data-no-words>' + escapeHtml(archiveMomentLabel(a) || archiveTypeLabel(a.image_type) || ('Archive #' + a.id)) + '</div>' +
-         '<button class="btn btn-sm" style="margin-top:6px;" onclick="event.stopPropagation(); vlChoose(\'' + which + '\')">Change</button> ' +
-         '<button class="btn btn-sm" style="margin-top:6px;" onclick="event.stopPropagation(); vlClearPick(\'' + which + '\')">Clear</button>'
-       : '<div style="font-size:13px;padding:30px 0;text-align:center;border:1px dashed var(--border);border-radius:6px;">Click to pick from the Archive</div>') +
-  '</div>';
+// What is typed on the form goes back into VL before anything changes the sequence, so nothing typed is lost.
+// noPairs: the redraw itself, which must not read the clip boxes back (after a remove or a move they are stale).
+function vlReadForm(noPairs) {
+  function v(id) { var e = document.getElementById(id); return e ? e.value : null; }
+  var s = document.getElementById('vl-sound');
+  var out = { name: v('vl-name'), overall: v('vl-overall'), model: v('vl-model'), sound: !!(s && s.checked) };
+  if (out.overall != null) VL.overall = out.overall; else out.overall = VL.overall;
+  for (var i = 0; !noPairs && i < VL.pairs.length; i++) {
+    var pp = v('vl-pp-' + i), pd = v('vl-pd-' + i);
+    if (pp != null) VL.pairs[i].prompt = pp;
+    if (pd) VL.pairs[i].duration = pd;
+  }
+  return out;
+}
+
+function vlFitPairs(m) {
+  while (VL.pairs.length < Math.max(0, VL.seq.length - 1)) VL.pairs.push({ prompt: '', duration: m ? m.defDuration : '' });
+  VL.pairs.length = Math.max(0, VL.seq.length - 1);
+  if (m) VL.pairs.forEach(function (p) { if (m.durations.indexOf(String(p.duration)) < 0) p.duration = m.defDuration; });
+}
+
+function vlPicHTML(i) {
+  var a = VL.seq[i];
+  return '<div style="display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:6px;">' +
+    '<div style="font-weight:bold;width:24px;text-align:center;">' + (i + 1) + '</div>' +
+    '<img src="' + escapeHtml(a.image_url) + '" style="width:150px;height:100px;object-fit:cover;border-radius:4px;cursor:pointer;" alt="" title="Change this picture" onclick="vlChoose(' + i + ')">' +
+    '<div style="font-size:12px;flex:1;" data-no-words>' + escapeHtml(archiveMomentLabel(a) || archiveTypeLabel(a.image_type) || ('Archive #' + a.id)) + '</div>' +
+    '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
+      '<button class="btn btn-sm" title="Earlier" onclick="vlMove(' + i + ', -1)"' + (i === 0 ? ' disabled' : '') + '>&#8593;</button>' +
+      '<button class="btn btn-sm" title="Later" onclick="vlMove(' + i + ', 1)"' + (i === VL.seq.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
+      '<button class="btn btn-sm" onclick="vlChoose(' + i + ')">Change</button>' +
+      '<button class="btn btn-sm" title="Take it out" onclick="vlRemove(' + i + ')">&#215;</button>' +
+    '</div></div>';
+}
+
+function vlPairHTML(i, m) {
+  var p = VL.pairs[i];
+  return '<div style="margin:6px 0 6px 34px;padding:8px;border-left:3px solid rgba(var(--accent-rgb),0.5);">' +
+    '<div style="font-size:12px;margin-bottom:4px;">Clip ' + (i + 1) + ': what happens from picture ' + (i + 1) + ' to picture ' + (i + 2) + '</div>' +
+    '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">' +
+      '<textarea id="vl-pp-' + i + '" rows="2" maxlength="1500" style="flex:1;min-width:240px;" oninput="vlShowCost()">' + escapeHtml(p.prompt || '') + '</textarea>' +
+      '<select id="vl-pd-' + i + '" onchange="vlShowCost()">' + m.durations.map(function (d) {
+        return '<option value="' + d + '"' + (String(p.duration) === d ? ' selected' : '') + '>' + d + ' s</option>';
+      }).join('') + '</select>' +
+    '</div></div>';
 }
 
 function vlRenderForm() {
@@ -41818,23 +41851,27 @@ function vlRenderForm() {
   if (!host) return;
   var ms = VL.models || [];
   if (!ms.length) { host.innerHTML = '<p>Could not load the model list.</p>'; return; }
-  var keep = vlReadForm();
+  var keep = vlReadForm(true);
   var m = vlModel(keep.model || ms[0].key);
-  var durs = m.durations.map(function (d) {
-    var sel = (keep.duration && m.durations.indexOf(keep.duration) >= 0) ? keep.duration === d : d === m.defDuration;
-    return '<option value="' + d + '"' + (sel ? ' selected' : '') + '>' + d + ' seconds</option>';
-  }).join('');
+  vlFitPairs(m);
+  var seqHtml = '';
+  for (var i = 0; i < VL.seq.length; i++) { seqHtml += vlPicHTML(i); if (i < VL.seq.length - 1) seqHtml += vlPairHTML(i, m); }
   host.innerHTML =
     (VL.webhook ? '' : '<div style="color:#b00;margin-bottom:8px;">PUBLIC_BASE_URL is not set on this server, so fal cannot report back.</div>') +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">' + vlPickHTML('start') + vlPickHTML('end') + '</div>' +
-    '<div style="margin-bottom:8px;"><label>Name<br><input id="vl-name" type="text" maxlength="120" style="width:100%;max-width:520px;" value="' + escapeHtml(keep.name || vlDefaultName()) + '" autocomplete="off" data-1p-ignore data-lpignore="true"></label></div>' +
-    '<div style="margin-bottom:8px;"><label>What happens between the two pictures' + (m.promptRequired ? '' : ' (optional for this model)') + '<br>' +
-      '<textarea id="vl-prompt" rows="4" maxlength="2500" style="width:100%;max-width:720px;">' + escapeHtml(keep.prompt || '') + '</textarea></label></div>' +
+    '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">' +
+      '<label style="flex:1;min-width:220px;max-width:520px;">Name<br><input id="vl-name" type="text" maxlength="120" style="width:100%;" value="' + escapeHtml(keep.name || vlDefaultName()) + '" autocomplete="off" data-1p-ignore data-lpignore="true"></label>' +
+      '<button class="btn btn-sm" onclick="vlNew()" title="Clear the form and start a new video; the videos already made stay in Runs below">New video</button>' +
+    '</div>' +
+    '<div style="margin-bottom:10px;"><label>Overall prompt (goes into every clip: who, where, the mood)<br>' +
+      '<textarea id="vl-overall" rows="3" maxlength="2000" style="width:100%;max-width:720px;" oninput="vlShowCost()">' + escapeHtml(VL.overall || '') + '</textarea></label></div>' +
+    '<div style="font-weight:bold;margin-bottom:6px;">Pictures, in order</div>' +
+    '<div id="vl-seq">' + seqHtml + '</div>' +
+    '<div style="margin:8px 0 12px;"><button class="btn btn-sm" onclick="vlChoose(\'add\')">+ Add picture</button>' +
+      (VL.seq.length < 2 ? ' <span style="font-size:12px;">Two pictures at least.</span>' : '') + '</div>' +
     '<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px;">' +
-      '<label>Model<br><select id="vl-model" onchange="vlRenderForm()">' + ms.map(function (x) {
+      '<label>Model<br><select id="vl-model" onchange="vlReadForm(); vlRenderForm()">' + ms.map(function (x) {
         return '<option value="' + x.key + '"' + (x.key === m.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
       }).join('') + '</select></label>' +
-      '<label>Duration<br><select id="vl-duration" onchange="vlShowCost()">' + durs + '</select></label>' +
       '<label><input id="vl-sound" type="checkbox" onchange="vlShowCost()"' + (keep.sound ? ' checked' : '') + '> Model\'s own sound</label>' +
       '<span id="vl-cost" style="font-size:13px;"></span>' +
       '<button class="btn btn-primary" id="vl-go" onclick="vlGenerate()">Generate</button>' +
@@ -41843,29 +41880,26 @@ function vlRenderForm() {
   vlShowCost();
 }
 
-function vlReadForm() {
-  function v(id) { var e = document.getElementById(id); return e ? e.value : ''; }
-  var s = document.getElementById('vl-sound');
-  return { name: v('vl-name'), prompt: v('vl-prompt'), model: v('vl-model'), duration: v('vl-duration'), sound: !!(s && s.checked) };
-}
-
 function vlShowCost() {
   var f = vlReadForm(), m = vlModel(f.model), el = document.getElementById('vl-cost');
   if (!m || !el) return;
   var per = f.sound ? m.priceSound : m.price;
-  el.textContent = 'About $' + (per * Number(f.duration || m.defDuration)).toFixed(2) + ' at fal ($' + per + ' a second)';
+  var secs = VL.pairs.reduce(function (t, p) { return t + Number(p.duration || m.defDuration); }, 0);
+  el.textContent = VL.pairs.length
+    ? (VL.pairs.length + ' clip' + (VL.pairs.length === 1 ? '' : 's') + ', ' + secs + ' s, about $' + (per * secs).toFixed(2) + ' at fal')
+    : 'Add two pictures or more';
 }
 
-// v3.4.88 -- the Archive window (openReplacePicker's modal) in a mode of its own. Open to the whole Archive for now
-// (Ian: "Eventually we will limit this to pictures on the storyboard"); its filters and pin work as everywhere else.
-// The pick comes back through applyArchiveToTarget, which hands a 'videolab' pick to vlPick.
+// The Archive window (openReplacePicker's modal) in a mode of its own; applyArchiveToTarget hands the pick to vlPick.
+// which: a picture's index to change it, or 'add' to put a new one on the end.
 function vlChoose(which) {
   var cid = state.currentCampaign && state.currentCampaign.id;
   if (!cid) return;
-  state.pickerCtx = { mode: 'videolab', vlWhich: which === 'end' ? 'end' : 'start', pinArea: 'videolab', campaignId: cid };
+  vlReadForm();
+  state.pickerCtx = { mode: 'videolab', vlWhich: (which === 'add' ? 'add' : Number(which)), pinArea: 'videolab', campaignId: cid };
   try { _rpReset(); } catch (e) {}
   var tEl = document.getElementById('replace-picker-title');
-  if (tEl) tEl.textContent = which === 'end' ? 'Video Lab: pick the end picture' : 'Video Lab: pick the start picture';
+  if (tEl) tEl.textContent = which === 'add' ? 'Video Lab: add picture ' + (VL.seq.length + 1) : 'Video Lab: change picture ' + (Number(which) + 1);
   state.pickerFilters = fpApply('videolab', cid, emptyArchiveFilters());
   var modal = document.getElementById('replace-picker-modal');
   if (modal) { modal.classList.remove('hidden'); pickerRaise(modal); }
@@ -41873,30 +41907,67 @@ function vlChoose(which) {
 }
 
 function vlPick(which, id) {
-  var rows = state.archives || [];
-  for (var i = 0; i < rows.length; i++) if (String(rows[i].id) === String(id)) { VL.picks[which] = rows[i]; break; }   // v3.4.88: the picker may pass the id as text
+  var rows = state.archives || [], a = null;
+  for (var i = 0; i < rows.length; i++) if (String(rows[i].id) === String(id)) { a = rows[i]; break; }
+  if (!a) return;
+  if (which === 'add' || which == null || Number(which) >= VL.seq.length) VL.seq.push(a);
+  else VL.seq[Number(which)] = a;
   vlRenderForm();
 }
-function vlClearPick(which) { VL.picks[which] = null; vlRenderForm(); }
+
+// v3.4.90 -- New video (Ian: "a new button to clear what's there and make a new one, pushing the last video you made down
+// to the list"): empties the form, keeps the model and sound choice, and folds every run in the list closed.
+function vlNew() {
+  var f = vlReadForm();
+  var typed = VL.seq.length || String(f.overall || '').trim() || VL.pairs.some(function (p) { return String(p.prompt || '').trim(); });
+  function go() {
+    VL.seq = []; VL.pairs = []; VL.overall = ''; VL.open = {};
+    var n = document.getElementById('vl-name'); if (n) n.value = '';
+    var o = document.getElementById('vl-overall'); if (o) o.value = '';
+    var msg = document.getElementById('vl-msg'); if (msg) msg.textContent = '';
+    vlRenderForm();
+    vlRenderRuns();
+  }
+  if (!typed) { go(); return; }
+  uiConfirm('Clear the form and start a new video? Videos already made stay in Runs below.', { okText: 'New video' }).then(function (yes) { if (yes) go(); });
+}
+
+function vlMove(i, dir) {
+  vlReadForm();
+  var j = i + dir;
+  if (j < 0 || j >= VL.seq.length) return;
+  var t = VL.seq[i]; VL.seq[i] = VL.seq[j]; VL.seq[j] = t;
+  vlRenderForm();
+}
+
+function vlRemove(i) {
+  vlReadForm();
+  VL.seq.splice(i, 1);
+  if (VL.pairs.length) VL.pairs.splice(Math.min(i, VL.pairs.length - 1), 1);
+  vlRenderForm();
+}
 
 function vlGenerate() {
   if (VL.busy) return;
   var f = vlReadForm(), m = vlModel(f.model), msg = document.getElementById('vl-msg');
   function say(t) { if (msg) msg.textContent = t; }
-  if (!VL.picks.start || !VL.picks.end) { say('Pick a start picture and an end picture first.'); return; }
-  if (m && m.promptRequired && !String(f.prompt).trim()) { say('This model needs a prompt.'); return; }
+  if (VL.seq.length < 2) { say('Add two pictures at least.'); return; }
+  if (m && m.promptRequired && !String(f.overall || '').trim()) {
+    for (var i = 0; i < VL.pairs.length; i++) if (!String(VL.pairs[i].prompt || '').trim()) { say('This model needs a prompt for clip ' + (i + 1) + ', or an overall prompt.'); return; }
+  }
   VL.busy = true; if (msg) msg.innerHTML = vlSpin(16) + ' Sending to fal...';
   var go = document.getElementById('vl-go'); if (go) go.disabled = true;
   fetch('/api/video-lab/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
     campaign_id: state.currentCampaign && state.currentCampaign.id,
     session_id: state.currentSession && state.currentSession.id,
-    name: f.name || vlDefaultName(), prompt: f.prompt, model: f.model, duration: f.duration, sound: f.sound,
-    start_url: VL.picks.start.image_url, end_url: VL.picks.end.image_url,
-    start_archive_id: VL.picks.start.id, end_archive_id: VL.picks.end.id
+    name: f.name || vlDefaultName(), model: f.model, sound: f.sound, overall_prompt: f.overall || '',
+    pictures: VL.seq.map(function (a) { return { url: a.image_url, archive_id: a.id }; }),
+    pairs: VL.pairs.map(function (p) { return { prompt: p.prompt || '', duration: String(p.duration) }; })
   }) }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
     VL.busy = false; if (go) go.disabled = false;
     if (!res.ok) { say((res.j && res.j.error) || 'Could not start it.'); vlLoadRuns(); return; }
     say('Started. It shows below; it takes a few minutes.');
+    if (res.j && res.j.project) VL.open[res.j.project.id] = true;
     var n = document.getElementById('vl-name'); if (n) n.value = vlDefaultName();
     vlLoadRuns();
   }).catch(function () { VL.busy = false; if (go) go.disabled = false; say('Could not reach the server.'); });
@@ -41912,10 +41983,10 @@ function vlLoadRuns() {
 }
 
 function vlStatusText(s) {
-  return { queued: 'Waiting to send', running: 'Being made at fal', saving: 'Saving the clip', done: 'Done', error: 'Failed' }[s] || s;
+  return { queued: 'Waiting to send', running: 'Being made at fal', saving: 'Saving the clip', done: 'Done', error: 'Failed', making: 'Being made' }[s] || s;
 }
 
-// v3.4.89 -- a spinning ring (the storyboard's momentBusySpin keyframes) and how long a run has been going.
+// A spinning ring (the storyboard's momentBusySpin keyframes) and how long a run has been going.
 function vlSpin(px) {
   px = px || 18;
   return '<span style="display:inline-block;width:' + px + 'px;height:' + px + 'px;border:' + Math.max(2, Math.round(px / 9)) + 'px solid rgba(var(--accent-rgb),0.25);' +
@@ -41925,49 +41996,85 @@ function vlElapsed(from) {
   var secs = Math.max(0, Math.round((Date.now() - new Date(from).getTime()) / 1000));
   return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
 }
+function vlBusy(s) { return ['queued', 'running', 'saving'].indexOf(s) >= 0; }
+
+// Where a video is: its clips, then the join.
+function vlProgress(p) {
+  var shots = p.shots || [];
+  var done = shots.filter(function (s) { return s.status === 'done'; }).length, bad = shots.filter(function (s) { return s.status === 'error'; }).length;
+  if (p.final_video_url) return 'Done';
+  if (bad && done + bad === shots.length) return 'Failed: ' + bad + ' of ' + shots.length + ' clip' + (shots.length === 1 ? '' : 's');
+  if (p.merge_status === 'error') return 'The join failed';
+  if (p.merge_status === 'running' || p.merge_status === 'saving') return 'Joining ' + shots.length + ' clips';
+  return 'Making clips: ' + done + ' of ' + shots.length + ' done';
+}
 
 function vlRenderRuns() {
   var host = document.getElementById('vl-runs');
   if (!host) { vlStopTimer(); return; }
   var ps = VL.projects || [];
   if (!ps.length) host.innerHTML = '<p style="font-size:13px;">No runs yet in this campaign.</p>';
-  else host.innerHTML = ps.map(function (p) {
-    var s = (p.shots || [])[0] || {};
-    var m = null; (VL.models || []).forEach(function (x) { if (x.key === s.model) m = x; });
-    var secs = (s.finished_at && s.created_at) ? Math.round((new Date(s.finished_at) - new Date(s.created_at)) / 1000) : null;
-    return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;">' +
-      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
-        '<input type="text" value="' + escapeHtml(p.name || '') + '" maxlength="120" style="flex:1;min-width:200px;font-weight:bold;" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true" onchange="vlRename(' + p.id + ', this.value)">' +
-        (s.status === 'done' && s.video_url ? '<a class="btn btn-sm" href="/api/video-lab/shots/' + s.id + '/download">Download</a>' : '') +
-        '<button class="btn btn-sm btn-danger" onclick="vlDelete(' + p.id + ')">Delete</button>' +
-      '</div>' +
-      '<div style="font-size:12px;margin:6px 0;">' + escapeHtml(vlStatusText(s.status)) +
-        ' &middot; ' + escapeHtml(m ? m.label : (s.model || '')) + ' &middot; ' + escapeHtml(String(s.duration || '')) + ' s' + (s.sound ? ' with sound' : '') +
-        ' &middot; about $' + Number(s.est_cost_usd || 0).toFixed(2) +
-        (secs != null ? ' &middot; took ' + Math.floor(secs / 60) + 'm ' + (secs % 60) + 's' : '') +
-        ' &middot; ' + escapeHtml(new Date(p.created_at).toLocaleString()) + '</div>' +
-      (s.status === 'error' ? '<div style="color:#b00;font-size:12px;margin-bottom:6px;" data-no-words>' + escapeHtml(s.error || '') + '</div>' : '') +
-      // v3.4.89 -- the player as wide as the panel allows (Ian: "much bigger"), and a spinner with the time so far while
-      // fal is still making it; the two pictures sit underneath.
-      '<div>' +
-        (s.status === 'done' && s.video_url
-          ? '<video src="' + escapeHtml(s.video_url) + '" controls preload="metadata" style="display:block;width:100%;max-width:1100px;max-height:78vh;background:#000;border-radius:6px;"></video>'
-          : '<div style="width:100%;max-width:1100px;aspect-ratio:16/9;max-height:60vh;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;border:1px dashed var(--border);border-radius:6px;font-size:14px;">' +
-              (['queued', 'running', 'saving'].indexOf(s.status) >= 0
-                ? vlSpin(44) + '<div>' + escapeHtml(vlStatusText(s.status)) + (s.created_at ? ' &middot; ' + vlElapsed(s.created_at) + ' so far' : '') + '</div><div style="font-size:12px;">Usually a few minutes. You can leave and come back.</div>'
-                : '<div>' + escapeHtml(vlStatusText(s.status)) + '</div>') +
-            '</div>') +
-        '<div style="display:flex;gap:6px;margin-top:8px;">' +
-          (s.start_url ? '<img src="' + escapeHtml(s.start_url) + '" style="width:90px;height:68px;object-fit:cover;" alt="" title="Start">' : '') +
-          (s.end_url ? '<img src="' + escapeHtml(s.end_url) + '" style="width:90px;height:68px;object-fit:cover;" alt="" title="End">' : '') +
-        '</div>' +
-      '</div>' +
-      (s.prompt ? '<div style="font-size:12px;margin-top:6px;white-space:pre-wrap;" data-no-words>' + escapeHtml(s.prompt) + '</div>' : '') +
-    '</div>';
-  }).join('');
-  var open = ps.some(function (p) { return p.status === 'making' || (p.shots || []).some(function (s) { return ['queued', 'running', 'saving'].indexOf(s.status) >= 0; }); });
+  else host.innerHTML = ps.map(vlRunHTML).join('');
+  var open = ps.some(function (p) { return p.status === 'making' || (p.shots || []).some(function (s) { return vlBusy(s.status); }); });
   if (open) vlStartTimer(); else vlStopTimer();
 }
+
+function vlRunHTML(p) {
+  var shots = p.shots || [];
+  var m = null; (VL.models || []).forEach(function (x) { if (shots[0] && x.key === shots[0].model) m = x; });
+  var pics = shots.map(function (s) { return s.start_url; }).concat(shots.length ? [shots[shots.length - 1].end_url] : []).filter(Boolean);
+  var secs = shots.reduce(function (t, s) { return t + Number(s.duration || 0); }, 0);
+  var making = p.status === 'making';
+  var isOpen = !!VL.open[p.id];
+  // The short row: click anywhere but its buttons to open or close it.
+  var row = '<div style="display:flex;gap:10px;align-items:center;cursor:pointer;flex-wrap:wrap;" onclick="vlToggle(' + p.id + ')" title="' + (isOpen ? 'Close' : 'Open') + '">' +
+    '<span style="width:14px;">' + (isOpen ? '&#9662;' : '&#9656;') + '</span>' +
+    '<div style="display:flex;gap:3px;">' + pics.slice(0, 8).map(function (u) { return '<img src="' + escapeHtml(u) + '" style="width:44px;height:30px;object-fit:cover;border-radius:3px;" alt="">'; }).join('') +
+      (pics.length > 8 ? '<span style="font-size:11px;align-self:center;">+' + (pics.length - 8) + '</span>' : '') + '</div>' +
+    '<div style="flex:1;min-width:160px;"><div style="font-weight:bold;" data-no-words>' + escapeHtml(p.name || '') + '</div>' +
+      '<div style="font-size:12px;">' + (making ? vlSpin(12) + ' ' : '') + escapeHtml(vlProgress(p)) +
+        ' &middot; ' + shots.length + ' clip' + (shots.length === 1 ? '' : 's') + ', ' + secs + ' s &middot; about $' + Number(p.total_cost_usd || 0).toFixed(2) +
+        ' &middot; ' + escapeHtml(m ? m.label : (shots[0] && shots[0].model) || '') + ' &middot; ' + escapeHtml(new Date(p.created_at).toLocaleString()) + '</div></div>' +
+    (p.final_video_url ? '<a class="btn btn-sm" href="/api/video-lab/projects/' + p.id + '/download" onclick="event.stopPropagation();">Download</a>' : '') +
+    '<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); vlDelete(' + p.id + ')">Delete</button>' +
+  '</div>';
+  if (!isOpen) return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' + row + '</div>';
+  var settings = {}; try { settings = JSON.parse(p.settings || '{}') || {}; } catch (e) { settings = {}; }
+  var big = p.final_video_url
+    ? '<video src="' + escapeHtml(p.final_video_url) + '" controls preload="metadata" style="display:block;width:100%;max-width:1100px;max-height:78vh;background:#000;border-radius:6px;"></video>'
+    : '<div style="width:100%;max-width:1100px;aspect-ratio:16/9;max-height:60vh;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;border:1px dashed var(--border);border-radius:6px;font-size:14px;">' +
+        (making ? vlSpin(44) + '<div>' + escapeHtml(vlProgress(p)) + ' &middot; ' + vlElapsed(p.created_at) + ' so far</div><div style="font-size:12px;">Usually a few minutes. You can leave and come back.</div>'
+                : '<div>' + escapeHtml(vlProgress(p)) + '</div>' +
+                  (p.merge_error ? '<div style="color:#b00;font-size:12px;max-width:90%;" data-no-words>' + escapeHtml(p.merge_error) + '</div>' : '') +
+                  (p.merge_status === 'error' ? '<button class="btn btn-sm" onclick="vlJoinAgain(' + p.id + ')">Join again</button>' : '')) +
+      '</div>';
+  var clips = shots.map(function (s, i) {
+    var own = ''; try { own = (JSON.parse(s.settings || '{}') || {}).own_prompt || ''; } catch (e) {}
+    return '<div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;border-top:1px solid var(--border);padding:8px 0;">' +
+      (s.status === 'done' && s.video_url
+        ? '<video src="' + escapeHtml(s.video_url) + '" controls preload="metadata" style="width:260px;max-width:100%;background:#000;border-radius:4px;"></video>'
+        : '<div style="width:260px;max-width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;gap:8px;border:1px dashed var(--border);border-radius:4px;font-size:12px;">' +
+            (vlBusy(s.status) ? vlSpin(20) + ' ' : '') + escapeHtml(vlStatusText(s.status)) + '</div>') +
+      '<div style="flex:1;min-width:200px;font-size:12px;">' +
+        '<div><b>Clip ' + (i + 1) + '</b>: pictures ' + (i + 1) + ' to ' + (i + 2) + ' &middot; ' + escapeHtml(String(s.duration || '')) + ' s &middot; ' + escapeHtml(vlStatusText(s.status)) +
+          (s.attempt > 1 ? ' &middot; try ' + s.attempt : '') + '</div>' +
+        (own ? '<div style="white-space:pre-wrap;margin-top:4px;" data-no-words>' + escapeHtml(own) + '</div>' : '') +
+        (s.status === 'error' ? '<div style="color:#b00;margin-top:4px;" data-no-words>' + escapeHtml(s.error || '') + '</div>' : '') +
+        '<div style="margin-top:6px;display:flex;gap:6px;">' +
+          ((s.status === 'done' || s.status === 'error') && p.merge_status !== 'running' ? '<button class="btn btn-sm" onclick="vlRedo(' + s.id + ')">Redo</button>' : '') +
+          (s.status === 'done' && s.video_url ? '<a class="btn btn-sm" href="/api/video-lab/shots/' + s.id + '/download">Download clip</a>' : '') +
+        '</div></div></div>';
+  }).join('');
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:12px;">' + row +
+    '<div style="margin-top:10px;">' +
+      '<input type="text" value="' + escapeHtml(p.name || '') + '" maxlength="120" style="width:100%;max-width:520px;font-weight:bold;margin-bottom:8px;" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true" onchange="vlRename(' + p.id + ', this.value)">' +
+      big +
+      (settings.overall_prompt ? '<div style="font-size:12px;margin-top:8px;white-space:pre-wrap;" data-no-words><b>Overall:</b> ' + escapeHtml(settings.overall_prompt) + '</div>' : '') +
+      '<div style="margin-top:8px;">' + clips + '</div>' +
+    '</div></div>';
+}
+
+function vlToggle(id) { VL.open[id] = !VL.open[id]; vlRenderRuns(); }
 
 function vlStartTimer() {
   if (VL.timer) return;
@@ -41983,15 +42090,25 @@ function vlRename(id, name) {
   name = String(name || '').trim();
   if (!name) { vlLoadRuns(); return; }
   fetch('/api/video-lab/projects/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
-    .then(function (r) { return r.json(); }).then(function (j) { if (j && j.error) showError(j.error); })
+    .then(function (r) { return r.json(); }).then(function (j) { if (j && j.error) showError(j.error); else vlLoadRuns(); })
     .catch(function () { showError('Could not rename it.'); });
 }
 
+function vlPost(url, failText) {
+  fetch(url, { method: 'POST' }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.error) showError(j.error);
+    vlLoadRuns();
+  }).catch(function () { showError(failText); });
+}
+function vlRedo(shotId) { vlPost('/api/video-lab/shots/' + shotId + '/redo', 'Could not redo it.'); }
+function vlJoinAgain(pid) { vlPost('/api/video-lab/projects/' + pid + '/join', 'Could not join it again.'); }
+
 function vlDelete(id) {
-  uiConfirm('Delete this video? The clip is removed from storage. This cannot be undone.', { okText: 'Delete', danger: true }).then(function (yes) {
+  uiConfirm('Delete this video? Its clips and the joined video are removed from storage. This cannot be undone.', { okText: 'Delete', danger: true }).then(function (yes) {
     if (!yes) return;
     fetch('/api/video-lab/projects/' + id, { method: 'DELETE' }).then(function (r) { return r.json(); }).then(function (j) {
       if (j && j.error) showError(j.error);
+      delete VL.open[id];
       vlLoadRuns();
     }).catch(function () { showError('Could not delete it.'); });
   });

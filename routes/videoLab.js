@@ -1,5 +1,5 @@
 // ============================================================
-// v3.4.86 -- TD-090. THE VIDEO LAB (admin only). Spec: claude/VIDEO_SPEC.md.
+// v3.4.86 -- TD-090. THE VIDEO LAB (admin only; v3.4.90: picture sequences joined into one video). Spec: claude/VIDEO_SPEC.md.
 // Two pictures (start and end) and a prompt go to a fal video model; fal makes the clip on its own
 // servers; we copy the finished clip to R2 and list it on the session's Video Lab tab.
 //
@@ -17,7 +17,9 @@
 //   video_shots     one pair of pictures in that video: position, start/end, prompt, model, duration,
 //                   the fal ticket, the clip in R2, cost, timings. Columns for later (dialogue,
 //                   replaces_shot_id, settings) are here now so adding shots needs no migration.
-// Today the Lab makes a project with ONE shot per Generate. Created here, lazily, so database/db.js
+// v3.4.90: the Lab makes a SEQUENCE: N pictures in order become N-1 shots (1->2, 2->3, ...), each with its own prompt
+// and duration plus the video's overall prompt; when every shot is saved, fal's ffmpeg merge joins them into one video
+// (final_video_url). A one-shot video needs no join. Redo remakes one shot and joins again. Created here, lazily, so database/db.js
 // is untouched; id SERIAL because the db wrapper appends RETURNING id to every INSERT.
 //
 // NO TOKENS ARE CHARGED (Ian: "Don't worry about deducting tokens on this test run, but we'll need
@@ -58,6 +60,8 @@ const MODELS = {
   }
 };
 const DONE_STATES = ['done', 'error'];
+const MERGE_ENDPOINT = 'fal-ai/ffmpeg-api/merge-videos';   // v3.4.90: joins clips in order on fal's servers (listed at $0)
+const MAX_PICTURES = 60;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 const STUCK_MINUTES = 45;
 
@@ -132,7 +136,13 @@ function ensureTables() {
         finished_at TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
+    // v3.4.90 -- the join: fal's ticket, its state and any error, kept on the video itself.
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS merge_request_id TEXT');
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS merge_status TEXT');
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS merge_error TEXT');
+    await db.exec('ALTER TABLE video_projects ADD COLUMN IF NOT EXISTS merge_started_at TIMESTAMP');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_video_shots_request ON video_shots(request_id)');
+    await db.exec('CREATE INDEX IF NOT EXISTS idx_video_projects_merge ON video_projects(merge_request_id)');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_video_shots_project ON video_shots(project_id, position)');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_video_projects_campaign ON video_projects(campaign_id, created_at)');
   })();
@@ -149,6 +159,13 @@ function buildInput(m, prompt, startUrl, endUrl, duration, sound) {
   input.duration = m.durationValue(duration);
   input.generate_audio = !!sound;
   return input;
+}
+
+// v3.4.90 -- the overall prompt (the whole video: who, where, mood) goes into every shot, then this shot's own direction.
+function shotPrompt(overall, own) {
+  overall = String(overall || '').trim(); own = String(own || '').trim();
+  if (overall && own) return (overall + '\n\nThis shot: ' + own).slice(0, 2500);
+  return (overall || own).slice(0, 2500);
 }
 
 function cleanName(s) {
@@ -192,45 +209,102 @@ router.post('/projects', requireAuth, requireAdmin, async function (req, res) {
   const b = req.body || {};
   const m = MODELS[b.model];
   if (!m) return res.status(400).json({ error: 'Pick a model.' });
-  const duration = String(b.duration || m.defDuration);
-  if (m.durations.indexOf(duration) < 0) return res.status(400).json({ error: 'That duration is not offered for ' + m.label + '.' });
   const cid = parseInt(b.campaign_id, 10);
   if (!cid) return res.status(400).json({ error: 'campaign_id is required' });
-  const startUrl = String(b.start_url || ''), endUrl = String(b.end_url || '');
-  if (!startUrl || !endUrl) return res.status(400).json({ error: 'Pick a start picture and an end picture.' });
-  if (!storage.isOurPublicUrl(startUrl) || !storage.isOurPublicUrl(endUrl)) return res.status(400).json({ error: 'Both pictures must be Campaignia pictures.' });
-  const prompt = String(b.prompt || '').trim().slice(0, 2500);
-  if (m.promptRequired && !prompt) return res.status(400).json({ error: m.label + ' needs a prompt: say what happens between the two pictures.' });
+  // v3.4.90: pictures [{url, archive_id}] in order and pairs [{prompt, duration}] between them. The v3.4.86 shape
+  // (start_url / end_url / prompt / duration) still works: it is a sequence of two.
+  let pics = Array.isArray(b.pictures) ? b.pictures : [{ url: b.start_url, archive_id: b.start_archive_id }, { url: b.end_url, archive_id: b.end_archive_id }];
+  pics = pics.map(function (p) { return { url: String((p && p.url) || ''), archive_id: parseInt(p && p.archive_id, 10) || null }; });
+  if (pics.length < 2 || pics.some(function (p) { return !p.url; })) return res.status(400).json({ error: 'Pick at least two pictures.' });
+  if (pics.length > MAX_PICTURES) return res.status(400).json({ error: 'At most ' + MAX_PICTURES + ' pictures in one video.' });
+  if (pics.some(function (p) { return !storage.isOurPublicUrl(p.url); })) return res.status(400).json({ error: 'Every picture must be a Campaignia picture.' });
+  const overall = String(b.overall_prompt || '').trim().slice(0, 2000);
+  const pairsIn = Array.isArray(b.pairs) ? b.pairs : [{ prompt: b.prompt, duration: b.duration }];
+  const shots = [];
+  for (let i = 0; i < pics.length - 1; i++) {
+    const pr = pairsIn[i] || {};
+    const d = String(pr.duration || b.duration || m.defDuration);
+    if (m.durations.indexOf(d) < 0) return res.status(400).json({ error: 'Clip ' + (i + 1) + ': ' + d + ' seconds is not offered for ' + m.label + '.' });
+    const own = String(pr.prompt || '').trim().slice(0, 1500);
+    const full = shotPrompt(overall, own);
+    if (m.promptRequired && !full) return res.status(400).json({ error: m.label + ' needs a prompt for clip ' + (i + 1) + ' (pictures ' + (i + 1) + ' to ' + (i + 2) + '), or an overall prompt.' });
+    shots.push({ position: i + 1, start: pics[i], end: pics[i + 1], own: own, full: full, duration: d });
+  }
   const sound = !!b.sound;
   const hook = webhookUrl();
   if (!hook) return res.status(500).json({ error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' });
-  let projectId = null, shotId = null;
+  let projectId = null;
   try {
     await ensureTables();
     const db = await getDb();
     const name = cleanName(b.name) || ('Video Lab ' + new Date().toISOString().slice(0, 16).replace('T', ' '));
     const sid = parseInt(b.session_id, 10) || null;
-    const cost = estCost(m, duration, sound);
-    const p = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, name, kind, status, total_cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(req.session.userId, cid, sid, name, 'lab', 'making', cost);
+    const total = Math.round(shots.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
+    const settings = JSON.stringify({ overall_prompt: overall, pictures: pics, model: b.model, sound: sound });
+    const p = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, name, kind, status, total_cost_usd, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(req.session.userId, cid, sid, name, 'lab', 'making', total, settings);
     projectId = p.lastInsertRowid;
-    const s = await db.prepare('INSERT INTO video_shots (project_id, position, start_url, end_url, start_archive_id, end_archive_id, prompt, model, endpoint, duration, sound, status, est_cost_usd) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(projectId, startUrl, endUrl, parseInt(b.start_archive_id, 10) || null, parseInt(b.end_archive_id, 10) || null, prompt, b.model, m.endpoint, duration, sound, 'queued', cost);
-    shotId = s.lastInsertRowid;
-    const input = buildInput(m, prompt, startUrl, endUrl, duration, sound);
+    for (const x of shots) {
+      const r = await db.prepare('INSERT INTO video_shots (project_id, position, start_url, end_url, start_archive_id, end_archive_id, prompt, model, endpoint, duration, sound, status, est_cost_usd, settings) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(projectId, x.position, x.start.url, x.end.url, x.start.archive_id, x.end.archive_id, x.full, b.model, m.endpoint, x.duration, sound, 'queued', estCost(m, x.duration, sound), JSON.stringify({ own_prompt: x.own }));
+      x.id = r.lastInsertRowid;
+    }
+    // Send every shot to fal; they are made side by side. A refusal fails that shot only.
     const fal = falClient();
-    const sub = await fal.queue.submit(m.endpoint, { input: input, webhookUrl: hook });
-    await db.prepare("UPDATE video_shots SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, shotId);
-    console.log('[video-lab] shot ' + shotId + ' submitted to ' + m.endpoint + ' (' + duration + ' s), request ' + sub.request_id);
+    let sent = 0;
+    for (const x of shots) {
+      try {
+        const sub = await fal.queue.submit(m.endpoint, { input: buildInput(m, x.full, x.start.url, x.end.url, x.duration, sound), webhookUrl: hook });
+        await db.prepare("UPDATE video_shots SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, x.id);
+        sent++;
+      } catch (e) {
+        const msg = falErrorText(e);
+        await db.prepare("UPDATE video_shots SET status = 'error', error = ?, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(('fal refused it: ' + msg).slice(0, 1000), x.id);
+      }
+    }
+    console.log('[video-lab] project ' + projectId + ': ' + sent + ' of ' + shots.length + ' shot(s) sent to ' + m.endpoint);
+    await projectStatus(db, projectId);
     const out = await projectsWithShots(db, 'id = ?', [projectId]);
+    if (!sent) return res.status(502).json({ error: 'fal refused the run: ' + ((out[0] && out[0].shots[0] && out[0].shots[0].error) || 'unknown'), project: out[0] || null, project_id: projectId });
     res.json({ project: out[0] || null });
   } catch (e) {
     const msg = falErrorText(e);
     console.error('[video-lab] submit failed:', msg);
-    if (shotId) {
-      try { const db = await getDb(); await db.prepare("UPDATE video_shots SET status = 'error', error = ?, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(msg.slice(0, 1000), shotId); await projectStatus(db, projectId); } catch (_e) {}
+    res.status(500).json({ error: 'Could not start it: ' + msg, project_id: projectId });
+  }
+});
+
+// v3.4.90 -- Redo one shot: the same pictures, prompt and settings sent again. Its old clip and the joined video are
+// removed (the join is made again once every shot is back).
+router.post('/shots/:id/redo', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const shot = await db.prepare('SELECT * FROM video_shots WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!shot) return res.status(404).json({ error: 'Not found.' });
+    if (['queued', 'running', 'saving'].indexOf(shot.status) >= 0) return res.status(409).json({ error: 'That clip is still being made.' });
+    const p = await db.prepare('SELECT * FROM video_projects WHERE id = ?').get(shot.project_id);
+    if (p && p.merge_status === 'running') return res.status(409).json({ error: 'The clips are being joined right now; try again in a minute.' });
+    const m = MODELS[shot.model];
+    if (!m) return res.status(400).json({ error: 'That model is no longer offered.' });
+    const hook = webhookUrl();
+    if (!hook) return res.status(500).json({ error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' });
+    const old = [shot.video_url, p && p.final_video_url].filter(Boolean);
+    await db.prepare("UPDATE video_shots SET status = 'queued', request_id = NULL, video_url = NULL, fal_video_url = NULL, file_size = NULL, error = NULL, finished_at = NULL, attempt = COALESCE(attempt, 1) + 1, updated_at = NOW() WHERE id = ?").run(shot.id);
+    await db.prepare("UPDATE video_projects SET final_video_url = NULL, merge_request_id = NULL, merge_status = NULL, merge_error = NULL, status = 'making', updated_at = NOW() WHERE id = ?").run(shot.project_id);
+    for (const f of old) { try { await storage.deleteFile(f); } catch (e) {} }
+    try {
+      const sub = await falClient().queue.submit(m.endpoint, { input: buildInput(m, shot.prompt, shot.start_url, shot.end_url, shot.duration, shot.sound), webhookUrl: hook });
+      await db.prepare("UPDATE video_shots SET request_id = ?, status = 'running', submitted_at = NOW(), created_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, shot.id);
+    } catch (e) {
+      await db.prepare("UPDATE video_shots SET status = 'error', error = ?, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(('fal refused it: ' + falErrorText(e)).slice(0, 1000), shot.id);
     }
-    res.status(502).json({ error: 'fal refused the run: ' + msg, project_id: projectId });
+    await projectStatus(db, shot.project_id);
+    const out = await projectsWithShots(db, 'id = ?', [shot.project_id]);
+    res.json({ project: out[0] || null });
+  } catch (e) {
+    console.error('[video-lab] redo error:', e && e.message);
+    res.status(500).json({ error: 'Could not redo it.' });
   }
 });
 
@@ -263,19 +337,36 @@ function fileNameFor(name, shotId) {
   const base = String(name || 'video').replace(/[^A-Za-z0-9 ._-]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'video';
   return base + ' (shot ' + shotId + ').mp4';
 }
+async function sendVideo(res, url, fname) {
+  const key = storage.keyFromUrl(url);
+  const buf = key ? await storage.getObject(key) : null;
+  if (!buf) return res.status(404).json({ error: 'The video file is missing from storage.' });
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Length', String(buf.length));
+  res.setHeader('Content-Disposition', 'attachment; filename="' + fname + '"');
+  res.end(buf);
+}
+// v3.4.90 -- the joined video as one file.
+router.get('/projects/:id/download', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const p = await db.prepare('SELECT id, name, final_video_url FROM video_projects WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!p || !p.final_video_url) return res.status(404).json({ error: 'That video is not finished.' });
+    const base = String(p.name || 'video').replace(/[^A-Za-z0-9 ._-]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'video';
+    await sendVideo(res, p.final_video_url, base + '.mp4');
+  } catch (e) {
+    console.error('[video-lab] download error:', e && e.message);
+    res.status(500).json({ error: 'Could not read the video.' });
+  }
+});
 router.get('/shots/:id/download', requireAuth, requireAdmin, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
     const shot = await db.prepare('SELECT s.id, s.video_url, p.name FROM video_shots s JOIN video_projects p ON p.id = s.project_id WHERE s.id = ?').get(parseInt(req.params.id, 10));
     if (!shot || !shot.video_url) return res.status(404).json({ error: 'No video for that shot.' });
-    const key = storage.keyFromUrl(shot.video_url);
-    const buf = key ? await storage.getObject(key) : null;
-    if (!buf) return res.status(404).json({ error: 'The video file is missing from storage.' });
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Length', String(buf.length));
-    res.setHeader('Content-Disposition', 'attachment; filename="' + fileNameFor(shot.name, shot.id) + '"');
-    res.end(buf);
+    await sendVideo(res, shot.video_url, fileNameFor(shot.name, shot.id));
   } catch (e) {
     console.error('[video-lab] download error:', e && e.message);
     res.status(500).json({ error: 'Could not read the video.' });
@@ -290,7 +381,7 @@ router.delete('/projects/:id', requireAuth, requireAdmin, async function (req, r
     const p = await db.prepare('SELECT * FROM video_projects WHERE id = ?').get(id);
     if (!p) return res.status(404).json({ error: 'Not found.' });
     const shots = await db.prepare('SELECT id, video_url FROM video_shots WHERE project_id = ?').all(id);
-    const files = shots.map(function (s) { return s.video_url; }).concat([p.final_video_url]).filter(Boolean);
+    const files = shots.map(function (s) { return s.video_url; }).concat([p.final_video_url]).filter(function (f, i, all) { return f && all.indexOf(f) === i; });   // v3.4.90: a one-shot video's file is its shot's
     // deleteFile logs and swallows its own failures, so this counts files asked for, not proven gone.
     let asked = 0;
     for (const f of files) {
@@ -309,12 +400,83 @@ router.delete('/projects/:id', requireAuth, requireAdmin, async function (req, r
 // ---- finishing a run -----------------------------------------------------------------------
 async function projectStatus(db, projectId) {
   if (!projectId) return;
-  const shots = await db.prepare('SELECT status FROM video_shots WHERE project_id = ?').all(projectId);
-  let st = 'done';
+  const p = await db.prepare('SELECT * FROM video_projects WHERE id = ?').get(projectId);
+  if (!p) return;
+  const shots = await db.prepare('SELECT id, status, video_url FROM video_shots WHERE project_id = ? ORDER BY position, id').all(projectId);
+  let st;
   if (shots.some(function (s) { return DONE_STATES.indexOf(s.status) < 0; })) st = 'making';
-  else if (shots.some(function (s) { return s.status === 'error'; })) st = shots.every(function (s) { return s.status === 'error'; }) ? 'error' : 'done';
+  else if (shots.some(function (s) { return s.status === 'error'; })) st = 'error';
+  else if (p.final_video_url) st = 'done';
+  else if (p.merge_status === 'error') st = 'error';
+  else st = 'making';   // every shot saved; the join is on its way
   await db.prepare('UPDATE video_projects SET status = ?, updated_at = NOW() WHERE id = ?').run(st, projectId);
+  // v3.4.90 -- every shot saved and nothing joined yet: one shot is the video itself; more go to fal's merge. The claim
+  // (merge_status NULL -> 'running') lets only one caller start the join.
+  if (st === 'making' && shots.length && shots.every(function (s) { return s.status === 'done' && s.video_url; }) && !p.final_video_url) {
+    if (shots.length === 1) {
+      await db.prepare("UPDATE video_projects SET final_video_url = ?, merge_status = 'single', status = 'done', updated_at = NOW() WHERE id = ? AND final_video_url IS NULL").run(shots[0].video_url, projectId);
+      return;
+    }
+    const claim = await db.prepare("UPDATE video_projects SET merge_status = 'running', merge_error = NULL, merge_started_at = NOW(), updated_at = NOW() WHERE id = ? AND merge_status IS NULL").run(projectId);
+    if (!claim.changes) return;
+    try {
+      const sub = await falClient().queue.submit(MERGE_ENDPOINT, { input: { video_urls: shots.map(function (s) { return s.video_url; }) }, webhookUrl: webhookUrl() || undefined });
+      await db.prepare('UPDATE video_projects SET merge_request_id = ?, updated_at = NOW() WHERE id = ?').run(sub.request_id, projectId);
+      console.log('[video-lab] project ' + projectId + ': joining ' + shots.length + ' clips, request ' + sub.request_id);
+    } catch (e) {
+      await db.prepare("UPDATE video_projects SET merge_status = 'error', merge_error = ?, status = 'error', updated_at = NOW() WHERE id = ?").run(('fal refused the join: ' + falErrorText(e)).slice(0, 1000), projectId);
+    }
+  }
 }
+
+// v3.4.90 -- the join is back: claim it ('running' -> 'saving'), copy the joined video to R2, and the video is done.
+async function finishMerge(project, falResult, falError) {
+  const db = await getDb();
+  const claim = await db.prepare("UPDATE video_projects SET merge_status = 'saving', updated_at = NOW() WHERE id = ? AND merge_status = 'running'").run(project.id);
+  if (!claim.changes) return 'not-mine';
+  try {
+    if (falError) throw new Error(falError);
+    let data = falResult;
+    if (!data || !data.video) { const r = await falClient().queue.result(MERGE_ENDPOINT, { requestId: project.merge_request_id }); data = r && (r.data || r); }
+    const url = data && data.video && data.video.url;
+    if (!url || !/^https:\/\//i.test(url)) throw new Error('fal returned no joined video');
+    const buf = await fetchVideo(url);
+    const stored = await storage.uploadFile(buf, 'vl-' + project.id + '-joined-' + Date.now() + '.mp4', 'video/mp4', 'video-lab');
+    await db.prepare("UPDATE video_projects SET final_video_url = ?, merge_status = 'done', merge_error = NULL, status = 'done', updated_at = NOW() WHERE id = ?").run(stored, project.id);
+    console.log('[video-lab] project ' + project.id + ' joined: ' + buf.length + ' bytes -> ' + stored);
+    return 'done';
+  } catch (e) {
+    const msg = falErrorText(e);
+    await db.prepare("UPDATE video_projects SET merge_status = 'error', merge_error = ?, status = 'error', updated_at = NOW() WHERE id = ?").run(msg.slice(0, 1000), project.id);
+    console.error('[video-lab] project ' + project.id + ' join failed: ' + msg);
+    return 'error';
+  }
+}
+
+async function fetchVideo(url) {
+  const axios = require('axios');
+  const https = require('https');
+  const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 180000, maxContentLength: MAX_VIDEO_BYTES, maxBodyLength: MAX_VIDEO_BYTES, httpsAgent: new https.Agent({ minVersion: 'TLSv1.2' }) });
+  const ct = String(resp.headers['content-type'] || 'video/mp4').split(';')[0].trim();
+  if (!/^video\//.test(ct) && !/octet-stream/.test(ct)) throw new Error('fal returned ' + ct + ', not a video');
+  return Buffer.from(resp.data);
+}
+
+// Join again after a failed join (the clips are all there).
+router.post('/projects/:id/join', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const id = parseInt(req.params.id, 10);
+    const r = await db.prepare("UPDATE video_projects SET merge_status = NULL, merge_error = NULL, merge_request_id = NULL, updated_at = NOW() WHERE id = ? AND merge_status = 'error'").run(id);
+    if (!r.changes) return res.status(409).json({ error: 'Nothing to join again.' });
+    await projectStatus(db, id);
+    const out = await projectsWithShots(db, 'id = ?', [id]);
+    res.json({ project: out[0] || null });
+  } catch (e) {
+    res.status(500).json({ error: 'Could not join it again.' });
+  }
+});
 
 // Claim the shot (only one caller wins), fetch the result from fal by our own ticket, copy the
 // clip to R2. falResult is the fal result data if the caller already has it.
@@ -332,12 +494,7 @@ async function finishShot(shot, falResult, falError) {
     }
     const url = data && data.video && data.video.url;
     if (!url || !/^https:\/\//i.test(url)) throw new Error('fal returned no video');
-    const axios = require('axios');
-    const https = require('https');
-    const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 180000, maxContentLength: MAX_VIDEO_BYTES, maxBodyLength: MAX_VIDEO_BYTES, httpsAgent: new https.Agent({ minVersion: 'TLSv1.2' }) });
-    const buf = Buffer.from(resp.data);
-    const ct = String(resp.headers['content-type'] || 'video/mp4').split(';')[0].trim();
-    if (!/^video\//.test(ct) && !/octet-stream/.test(ct)) throw new Error('fal returned ' + ct + ', not a video');
+    const buf = await fetchVideo(url);
     const fname = 'vl-' + shot.project_id + '-' + shot.id + '-' + Date.now() + '.mp4';
     const stored = await storage.uploadFile(buf, fname, 'video/mp4', 'video-lab');
     await db.prepare("UPDATE video_shots SET status = 'done', fal_video_url = ?, video_url = ?, file_size = ?, error = NULL, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(url, stored, buf.length, shot.id);
@@ -364,7 +521,16 @@ router.post('/webhook', async function (req, res) {
     if (!rid) return;
     const db = await getDb();
     const shot = await db.prepare('SELECT * FROM video_shots WHERE request_id = ?').get(rid);
-    if (!shot) return;
+    if (!shot) {
+      // v3.4.90 -- or the join of a whole video
+      const proj = await db.prepare('SELECT * FROM video_projects WHERE merge_request_id = ?').get(rid);
+      if (!proj) return;
+      if (String(b.status || '').toUpperCase() === 'ERROR') { await finishMerge(proj, null, 'fal: ' + (b.error || JSON.stringify(b.payload || {})).toString().slice(0, 500)); return; }
+      let md = null;
+      try { const r = await falClient().queue.result(MERGE_ENDPOINT, { requestId: rid }); md = r && (r.data || r); } catch (e) { md = b.payload || null; }
+      await finishMerge(proj, md, null);
+      return;
+    }
     if (String(b.status || '').toUpperCase() === 'ERROR') {
       await finishShot(shot, null, 'fal: ' + (b.error || JSON.stringify(b.payload || {})).toString().slice(0, 500));
       return;
@@ -402,6 +568,21 @@ async function sweep() {
       if (s === 'COMPLETED') await finishShot(shot, null, (st && st.error) ? ('fal: ' + st.error) : null);
       else if (ageMin > STUCK_MINUTES) await finishShot(shot, null, 'timed out after ' + STUCK_MINUTES + ' minutes (fal says ' + (s || 'nothing') + ')');
     }
+    // v3.4.90 -- joins: one in flight is asked about directly; a video whose shots are all saved but never started its
+    // join (a restart at the wrong moment) is started now.
+    const joins = await db.prepare("SELECT * FROM video_projects WHERE merge_status = 'running' ORDER BY id LIMIT 20").all();
+    for (const p of joins) {
+      const ageMin = (Date.now() - new Date(p.merge_started_at || p.updated_at).getTime()) / 60000;
+      if (!p.merge_request_id) { if (ageMin > 5) await finishMerge(p, null, 'the join never reached fal'); continue; }
+      let st = null;
+      try { st = await falClient().queue.status(MERGE_ENDPOINT, { requestId: p.merge_request_id, logs: false }); }
+      catch (e) { if (ageMin > STUCK_MINUTES) await finishMerge(p, null, 'fal status check failed: ' + falErrorText(e)); continue; }
+      const s = String(st && st.status || '').toUpperCase();
+      if (s === 'COMPLETED') await finishMerge(p, null, (st && st.error) ? ('fal: ' + st.error) : null);
+      else if (ageMin > STUCK_MINUTES) await finishMerge(p, null, 'the join timed out after ' + STUCK_MINUTES + ' minutes');
+    }
+    const waiting = await db.prepare("SELECT id FROM video_projects WHERE status = 'making' AND final_video_url IS NULL AND merge_status IS NULL ORDER BY id LIMIT 20").all();
+    for (const p of waiting) await projectStatus(db, p.id);
   } catch (e) {
     if (!/DATABASE_URL/.test(String(e && e.message))) console.error('[video-lab] sweep error:', e && e.message);
   } finally {
@@ -421,6 +602,9 @@ module.exports.MODELS = MODELS;
 module.exports.estCost = estCost;
 module.exports.buildInput = buildInput;
 module.exports.fileNameFor = fileNameFor;
+module.exports.shotPrompt = shotPrompt;
+module.exports._finishMerge = finishMerge;
+module.exports.MERGE_ENDPOINT = MERGE_ENDPOINT;
 module.exports._sweep = sweep;
 module.exports._finishShot = finishShot;
 module.exports._ensureTables = ensureTables;

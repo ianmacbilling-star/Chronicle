@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.90",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3490-video-lab-sequence",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video Lab: any number of pictures in order, a prompt between each, joined into one video.",
+        "detail": "TD-090. Ian: N pictures in order with a prompt between each image, like the storyboard, and an overall prompt too. Pictures are added and changed in the Archive window, moved up or down and taken out; between each pair is what happens and how long that clip runs; the overall prompt goes into every clip. Generate sends every clip to fal at once; when the last is saved, fal joins them (fal-ai/ffmpeg-api/merge-videos) and the joined video is stored. Redo remakes one clip and joins again; Join again retries a failed join. Past runs are short rows; a click opens one to the full player with each clip underneath. Runs from v3.4.86 to v3.4.89 show as two-picture videos.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.89",
     "staged_on": "2026-11-07",
     "entries": [
