@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.77",
+    "staged_on": "2026-11-06",
+    "entries": [
+      {
+        "id": "3477-brand-words",
+        "kind": "feature",
+        "public": false,
+        "summary": "Story: campaigns are called stories and sessions chapters.",
+        "detail": "Ian chose option A for now: a small script, public/js/brand-words.js, swaps whole words on screen for brands with a word list (Story: campaign to story, session to chapter, keeping plural and case). It never touches form fields or the places that show people's own words (names, descriptions, panel titles, narrative, captions), and it stops at once on Campaignia. Option B, each place asking the brand for its word, comes later with the full word list.",
+        "td": [
+          "TD-1105"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.76",
     "staged_on": "2026-11-06",
     "entries": [
