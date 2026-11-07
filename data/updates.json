@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.92",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3492-session-order-arrows",
+        "kind": "feature",
+        "public": true,
+        "summary": "Story Masters can now put sessions in any order: arrows and a drag handle on each session card.",
+        "detail": "TD-933 build 2. Bottom right of each session card, beside the Draft or Ready chip and the menu: a left arrow, a right arrow and a drag handle, for the Story Master only. The arrows follow the page, which shows the newest session first: left moves a card toward the front (later in the story), right moves it toward the back (earlier in the story). The drag handle drops a card anywhere. Publish, the book and the session arrows on the Storyboard follow the new order. The order is saved whole and refused if the list changed in the meantime, in which case the page reloads it.",
+        "td": [
+          "TD-933"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.91",
     "staged_on": "2026-11-07",
     "entries": [

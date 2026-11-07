@@ -456,6 +456,30 @@ router.get('/:id', requireAuth, verifyCampaignMember, async function(req, res) {
   }));
 });
 
+// v3.4.92 -- TD-933 build 2. THE STORY MASTER SETS THE ORDER OF THE SESSIONS. ids: every session of the campaign,
+// in story order (first played first). Refused unless it names each one exactly once, so a list made before
+// someone added or deleted a session cannot drop or duplicate a place. Before PUT /:id, which would take "order".
+router.put('/order', requireAuth, verifyCampaignDM, async function(req, res) {
+  try {
+    const raw = (req.body && Array.isArray(req.body.ids)) ? req.body.ids : null;
+    const ids = raw ? raw.map(function (v) { return Number(v); }) : null;
+    if (!ids || !ids.length || ids.some(function (n) { return !Number.isInteger(n) || n <= 0; })) return res.status(400).json({ error: 'Send the sessions in order.' });
+    const db = await getDb();
+    const rows = await db.prepare('SELECT id FROM sessions WHERE campaign_id = ?').all(req.params.campaignId);
+    const have = {}; (rows || []).forEach(function (r) { have[String(r.id)] = true; });
+    const seen = {};
+    const okList = ids.length === (rows || []).length && ids.every(function (n) { if (!have[String(n)] || seen[String(n)]) return false; seen[String(n)] = true; return true; });
+    if (!okList) return res.status(409).json({ error: 'The session list changed. Refresh the page and try again.' });
+    await db.prepare(
+      'UPDATE sessions s SET sort_order = x.ord FROM unnest(?::int[]) WITH ORDINALITY AS x(id, ord) WHERE s.id = x.id AND s.campaign_id = ?'
+    ).run('{' + ids.join(',') + '}', req.params.campaignId);
+    res.json({ success: true, ids: ids });
+  } catch (e) {
+    console.error('session order save failed:', e && e.message);
+    res.status(500).json({ error: 'The order could not be saved.' });
+  }
+});
+
 // POST create session
 router.post('/', requireAuth, verifyCampaignDM, checkSessionLimit, async function(req, res) {
   const { name, session_date, description } = req.body;

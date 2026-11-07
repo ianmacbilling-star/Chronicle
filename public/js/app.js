@@ -3985,7 +3985,7 @@ function renderSessions() {
   });
 
   // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
-  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s) {
+  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s, _si) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
     // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
@@ -4007,7 +4007,7 @@ function renderSessions() {
           '<button class="row-menu-item row-menu-item-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete session</button>' +
         '</div>' +
       '</div>';
-    return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+    return '<div class="session-card" data-sess-id="' + Number(s.id) + '" onclick="selectSession(' + s.id + ')">' +
       sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
@@ -4017,6 +4017,7 @@ function renderSessions() {
           readyChip +
           transcriptChip +
           deleteMenu +
+          sessOrderControls(s, _si, ordered.length) +   // v3.4.92 -- TD-933: the arrows and the gripper, Story Master only
         '</div>' +
       '</div>' +
     '</div>';
@@ -19052,7 +19053,7 @@ function renderSessions() {
   });
 
   // v3.0.997 -- the session tiles as books too (Ian); SESSION_CARDS_AS_BOOKS is their switch.
-  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s) {
+  list.innerHTML = '<div class="session-card-grid' + (SESSION_CARDS_AS_BOOKS ? ' sess-books' : '') + '">' + ordered.map(function(s, _si) {
     var thumbSrc = s.title_image_url || s.establishing_image || s.first_image_url;
     // v3.0.663 -- TD-457. A DRAWN TITLE IS NOT CROPPED ON THE CARD EITHER.
     // v3.0.664 -- TD-460. AND NOW IT ACTUALLY ISN'T. The 663 test scanned s.moments, which this
@@ -19074,7 +19075,7 @@ function renderSessions() {
           '<button class="row-menu-item row-menu-item-danger" onclick="event.stopPropagation();deleteSession(' + s.id + ')">Delete session</button>' +
         '</div>' +
       '</div>';
-    return '<div class="session-card" onclick="selectSession(' + s.id + ')">' +
+    return '<div class="session-card" data-sess-id="' + Number(s.id) + '" onclick="selectSession(' + s.id + ')">' +
       sessionBookWash(thumbSrc) +   // v3.0.997
       thumb +
       '<div class="session-card-body">' +
@@ -19084,6 +19085,7 @@ function renderSessions() {
           readyChip +
           transcriptChip +
           deleteMenu +
+          sessOrderControls(s, _si, ordered.length) +   // v3.4.92 -- TD-933: the arrows and the gripper, Story Master only
         '</div>' +
       '</div>' +
     '</div>';
@@ -42128,3 +42130,124 @@ function vlDelete(id) {
     }).catch(function () { showError('Could not delete it.'); });
   });
 }
+
+// =================================================================================================
+// v3.4.92 -- TD-933 build 2. MOVING A SESSION ON THE SESSIONS PAGE (Ian, 2026-11-07: ordered by date "is a
+// little hit and miss"). The Story Master gets two arrows and a gripper at the bottom right of each session
+// card, beside the Draft/Ready chip and the ... menu. The arrows FOLLOW THE PAGE (Ian: "Follow the session
+// page"): the page is newest first, so the left arrow moves a card toward the front, which is LATER in the
+// story, and the right arrow moves it toward the back, EARLIER in the story. The gripper drags a card to any
+// spot. Publish and the book read the same order oldest first. The whole order is sent (ids, story order) and
+// the server refuses it unless it names every session of the campaign exactly once. APPENDED (TD-853).
+// =================================================================================================
+var _sessOrderBusy = false, _sessDrag = null, _sessMark = null;
+function sessIsStoryMaster() {
+  return !!(state && state.currentCampaign && state.currentCampaign.my_role === 'dm');
+}
+function sessOrderControls(s, i, n) {
+  if (!sessIsStoryMaster() || n < 2) return '';
+  var bs = 'background:none;border:1px solid rgba(var(--accent-rgb),0.4);color:var(--accent-pale);border-radius:6px;padding:0 7px;font-size:11px;line-height:22px;height:24px;cursor:pointer;';
+  var off = 'opacity:0.35;cursor:default;';
+  var btn = function (ok, d, sym, tip) {
+    return ok ? '<button type="button" class="sess-move" style="' + bs + '" title="' + tip + '" onclick="event.stopPropagation();sessMove(' + Number(s.id) + ',' + d + ')">' + sym + '</button>'
+      : '<button type="button" class="sess-move" disabled style="' + bs + off + '" onclick="event.stopPropagation();">' + sym + '</button>';
+  };
+  return '<span class="sess-order-ctl" style="display:inline-flex;gap:4px;margin-left:auto;align-items:center;">' +
+    btn(i > 0, -1, '&#9664;', 'Later in the story (moves toward the front)') +
+    btn(i < n - 1, 1, '&#9654;', 'Earlier in the story (moves toward the back)') +
+    '<span class="sess-grip" title="Drag to move this session" onclick="event.stopPropagation();" style="display:inline-block;padding:0 3px;font-size:16px;line-height:18px;color:var(--accent);cursor:grab;user-select:none;">&#10303;</span></span>';
+}
+// The cards as the page shows them, newest first: the same order the session arrows on the Storyboard walk.
+function sessPageIds() {
+  return sessNavOrdered().map(function (s) { return Number(s.id); });
+}
+function sessMove(id, d) {
+  var page = sessPageIds(), k = page.indexOf(Number(id)), j = k + Number(d);
+  if (k < 0 || j < 0 || j >= page.length) return;
+  var x = page[k]; page[k] = page[j]; page[j] = x;
+  sessSaveOrder(page);
+}
+function sessMoveTo(id, targetId, after) {
+  var page = sessPageIds(), k = page.indexOf(Number(id));
+  if (k < 0 || Number(id) === Number(targetId)) return;
+  page.splice(k, 1);
+  var j = page.indexOf(Number(targetId)); if (j < 0) return;
+  page.splice(after ? j + 1 : j, 0, Number(id));
+  sessSaveOrder(page);
+}
+// page: ids newest first. Story order is the reverse. Shown at once; put back from the server if refused.
+function sessSaveOrder(page) {
+  if (_sessOrderBusy || !state.currentCampaign) return;
+  var before = sessPageIds();
+  if (before.join() === page.join()) return;
+  var story = page.slice().reverse(), pos = {};
+  story.forEach(function (sid, i) { pos[String(sid)] = i + 1; });
+  (state.sessions || []).forEach(function (s) { if (pos[String(s.id)]) s.sort_order = pos[String(s.id)]; });
+  renderSessions();
+  _sessOrderBusy = true;
+  var cid = state.currentCampaign.id;
+  fetch('/api/campaigns/' + cid + '/sessions/order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: story }) })
+    .then(function (r) { return r.json().catch(function () { return { error: 'The order could not be saved.' }; }); })
+    .then(function (data) {
+      _sessOrderBusy = false;
+      if (!data || data.error) {
+        try { billingToast((data && data.error) || 'The order could not be saved.', 'error'); } catch (e) {}
+        if (state.currentCampaign && String(state.currentCampaign.id) === String(cid)) loadSessions();
+      }
+    })
+    .catch(function () {
+      _sessOrderBusy = false;
+      try { billingToast('The order could not be saved. Check your connection and try again.', 'error'); } catch (e) {}
+      if (state.currentCampaign && String(state.currentCampaign.id) === String(cid)) loadSessions();
+    });
+}
+// --- Drag and drop: from the gripper only, as on the Storyboard, so a card is never dragged by accident. ---
+function _sessCardOf(el) {
+  if (!el || typeof el.closest !== 'function') return null;
+  return el.closest('.session-card[data-sess-id]');
+}
+function _sessPaint(el, side) {
+  if (_sessMark && _sessMark !== el) _sessMark.style.boxShadow = '';
+  _sessMark = el || null;
+  if (el) el.style.boxShadow = side;
+}
+function _sessPlace(e) {
+  var c = _sessCardOf(e.target);
+  if (_sessDrag === null || !c) return null;
+  var tid = Number(c.getAttribute('data-sess-id'));
+  if (tid === _sessDrag) return null;
+  var r = c.getBoundingClientRect(), after = e.clientX > r.left + r.width / 2;
+  return { id: tid, after: after, el: c, side: after ? 'inset -4px 0 0 #e8c766' : 'inset 4px 0 0 #e8c766' };
+}
+function _sessUndrag() {
+  var all = document.querySelectorAll('.session-card[data-sess-drag]');
+  for (var n = 0; n < all.length; n++) { all[n].removeAttribute('draggable'); all[n].removeAttribute('data-sess-drag'); all[n].style.cursor = ''; }
+}
+try {
+  document.addEventListener('mousedown', function (e) {
+    var t = e.target; if (!t || typeof t.closest !== 'function' || !t.closest('.sess-grip')) return;
+    var card = _sessCardOf(t); if (!card || !sessIsStoryMaster()) return;
+    card.setAttribute('draggable', 'true'); card.setAttribute('data-sess-drag', '1'); card.style.cursor = 'grabbing';
+  }, true);
+  document.addEventListener('mouseup', function () { if (_sessDrag === null) _sessUndrag(); }, true);
+  document.addEventListener('dragstart', function (e) {
+    var card = e.target && e.target.closest ? e.target.closest('.session-card[data-sess-drag]') : null; if (!card) return;
+    _sessDrag = Number(card.getAttribute('data-sess-id'));
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'session'); } catch (x) {}
+  });
+  document.addEventListener('dragover', function (e) {
+    if (_sessDrag === null) return;
+    var p = _sessPlace(e);
+    if (!p) { _sessPaint(null); return; }
+    e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (x) {}
+    _sessPaint(p.el, p.side);
+  });
+  document.addEventListener('drop', function (e) {
+    if (_sessDrag === null) return;
+    var p = _sessPlace(e), id = _sessDrag; _sessDrag = null; _sessPaint(null); _sessUndrag();
+    if (!p) return;
+    e.preventDefault();
+    sessMoveTo(id, p.id, p.after);
+  });
+  document.addEventListener('dragend', function () { _sessDrag = null; _sessPaint(null); _sessUndrag(); });
+} catch (e) {}
