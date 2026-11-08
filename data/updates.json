@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.20",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3520-writer-cuts",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Write the shot list plans the cuts and fills every box; pictures in a shot can be archived.",
+        "detail": "Ian, 2026-11-08: \"have it do the cuts then put the prompts in\"; \"the Rewrite shot list should basically start over and clear what's there\"; \"we need to give them the ability to Archive pics from the KeyFrames\". Write the shot list now sees every picture of the episode in order and plans the shots itself (runs of 1 to 5 pictures, cut where the place changes, time jumps or someone must leave and come back), names them, and fills each shot's start, actions, lines (who, during which action, off-screen), camera, end, sounds, surroundings and length. It starts over every time: the episode's shots are replaced (pictures keep their order, sources and Revert slots); if the episode has takes it says how many will be deleted and asks first, and it waits while a shot is being made. A plan that skips, repeats or reorders a picture, or puts more than 5 in a shot, changes nothing and charges nothing. Each picture card has Archive: the exact picture (retouched or not) is copied into the campaign's Archive as '<panel title> (video)' in the version's art style, with the archive cap and rights check; pressed again by its archiver it comes out. The Tall/Square picture tags and Expand no longer show on reference models.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.19",
     "staged_on": "2026-11-08",
     "entries": [

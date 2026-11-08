@@ -42174,6 +42174,7 @@ function vlKfCardHTML(d, si, ki, n) {
         (k.prev ? '<button type="button" class="panel-pill" onclick="vlRevertKf(' + si + ',' + ki + ')" title="Back to the picture before the last retouch (free)">Revert</button>' : '') +
         '<button type="button" class="panel-pill" onclick="vlChoose(\'' + si + ':' + ki + '\')" title="Put a different picture from the Archive here">Replace</button>' +
         '<button type="button" class="panel-pill" onclick="vlRemove(' + si + ',' + ki + ')" title="Take this keyframe out of the episode (the storyboard is not changed)">Remove</button>' +
+        vlArchivePillHTML(k.url) +   // v3.5.20
       '</div>' +
     '</div>' +
     '<div class="storyboard-panel-meta">' +
@@ -42732,7 +42733,7 @@ function vlStyleRowHTML(d, writing) {
         return '<option value="' + escapeHtml(x.key) + '"' + (x.key === cur.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
       }).join('') + '</select></div>' +
     '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">' +
-      '<button class="btn btn-sm" id="vl-sl-btn" onclick="vlWriteShotList()"' + (writing ? ' disabled' : '') + ' title="Campaignia writes the overall direction and every shot from this version\'s story, its pictures and the cast, in this style, knowing where the cuts are. It replaces what is in the boxes; the book is not changed.">' +
+      '<button class="btn btn-sm" id="vl-sl-btn" onclick="vlWriteShotList()"' + (writing ? ' disabled' : '') + ' title="Campaignia plans the shots (where the cuts go) and writes the overall direction and every shot\'s boxes from this version\'s story, its pictures and the cast, in this style. It starts over: the shots and boxes are replaced. The book is not changed.">' +
         (writing ? vlSpin(12) + ' Writing the shot list...' : (vlHasWords(d) ? '&#9998; Rewrite the shot list' : '&#9998; Write the shot list')) + '</button>' +
       '<span id="vl-sl-price" style="' + VL_DESC + '">' + escapeHtml(vlSlPriceText(info)) + '</span>' +
     '</div>' +
@@ -42787,7 +42788,7 @@ function vlWriteShotList() {
       if (!saved) { var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so nothing was written.'; return; }
       VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running' }, fresh: true });
       vlRenderOpen(true);
-      fetch('/api/video-lab/episodes/' + id + '/shot-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: d.style }) })
+      fetch('/api/video-lab/episodes/' + id + '/shot-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: d.style, replace_takes: nTakes > 0 }) })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok || !res.j || !res.j.job) {
@@ -42804,8 +42805,13 @@ function vlWriteShotList() {
         .catch(function () { VL.writing = null; vlRenderOpen(true); var mc = document.getElementById('vl-sl-msg'); if (mc) mc.textContent = 'Could not reach the server.'; });
     });
   };
-  if (!vlHasWords(d)) { go(); return; }
-  uiConfirm('Write a new shot list? It replaces the overall direction and the words of every shot. The book is not changed.', { okText: 'Write it' }).then(function (yes) { if (yes) go(); });
+  // v3.5.20 -- it starts over (Ian: "the Rewrite shot list should basically start over and clear what's there"): the
+  // shots are planned again and every box is replaced; takes go with their shots, so they are named first.
+  var ep0 = vlFindEp(d.id), nTakes = ((ep0 && ep0.shots) || []).reduce(function (t, s) { return t + ((s.takes || []).length); }, 0);
+  if (!vlHasWords(d) && !nTakes && d.shots.length <= 1) { go(); return; }
+  uiConfirm((vlHasWords(d) || d.shots.length > 1 ? 'Rewrite the shot list? It starts over: the shots are planned again (where the cuts go) and the overall direction and every box are replaced.' : 'Write the shot list? The shots are planned (where the cuts go) and every box is filled.') +
+    (nTakes ? ' The ' + nTakes + ' take' + (nTakes === 1 ? '' : 's') + ' of this episode will be deleted.' : '') + ' The book is not changed.', { okText: vlHasWords(d) ? 'Start over' : 'Write it', danger: nTakes > 0 })
+    .then(function (yes) { if (yes) go(); });
 }
 function vlSlPoll(id) {
   if (VL.slTimer) clearTimeout(VL.slTimer);
@@ -42904,6 +42910,8 @@ var VL_WIDE_MIN = 1.25;
 function vlShapeOf(ratio) { return ratio < 0.95 ? 'tall' : 'square'; }
 function vlNotWide(url) { var r = VL.kfShape[url]; return typeof r === 'number' && r < VL_WIDE_MIN; }
 function vlShapeTagHTML(url, si, ki) {
+  var mm = VL.draft && vlModel(VL.draft.model);
+  if (mm && mm.reference) return '';   // v3.5.20: reference pictures may be any shape, so no tag (Ian: the tags cluttered the pictures)
   var bad = vlNotWide(url);
   return '<div class="vl-shape-tag" style="position:absolute;left:6px;right:6px;bottom:6px;display:' + (bad ? 'flex' : 'none') + ';gap:6px;align-items:center;justify-content:space-between;' +
       'background:rgba(0,0,0,0.72);border:1px solid rgba(var(--accent-rgb),0.6);border-radius:8px;padding:4px 6px 4px 9px;">' +
@@ -43116,6 +43124,31 @@ function vlRefreshChecks() {
     var c = document.getElementById('vl-chk-' + si); if (c) c.innerHTML = vlChecksHTML(si);
     var a = document.getElementById('vl-cast-' + si); if (a) a.innerHTML = vlCastLineHTML(si);
   });
+}
+
+// v3.5.20 -- ARCHIVE A PICTURE OF A SHOT (Ian: "we need to give them the ability to Archive pics from the KeyFrames").
+// The exact picture (a retouched or expanded copy included) goes into the campaign's Archive; pressed again, it comes out.
+function vlIsArchived(url) { var ep = VL.draft && vlFindEp(VL.draft.id); return !!(ep && (ep.archived || []).indexOf(url) >= 0); }
+function vlArchivePillHTML(url) {
+  var on = vlIsArchived(url);
+  return '<button type="button" class="panel-pill vl-archive' + (on ? ' is-on' : '') + '" data-kfu="' + escapeHtml(url) + '" onclick="vlArchiveKf(this.getAttribute(\'data-kfu\'))" title="' +
+    (on ? 'In your Archive. Click to remove it.' : 'Save this picture (as it is here, retouched or not) to your Archive') + '">' + (on ? 'Archived' : 'Archive') + '</button>';
+}
+function vlArchiveKf(url) {
+  var d = VL.draft, ep = d && vlFindEp(d.id);
+  if (!ep || !url) return;
+  var on = vlIsArchived(url), r = VL.kfShape[url];
+  var shape = typeof r === 'number' ? (r >= 1.15 ? 'wide' : r < 0.95 ? 'tall' : 'square') : '';
+  fetch('/api/video-lab/episodes/' + ep.id + '/keyframe-archive', { method: on ? 'DELETE' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url, shape: shape }) })
+    .then(function (res) { return res.json(); })
+    .then(function (j) {
+      if (!j || !j.success) { if (!(typeof _cmpRightsRefused === 'function' && _cmpRightsRefused(j))) showError((j && j.error) || 'Could not update the Archive.'); return; }
+      ep.archived = (ep.archived || []).filter(function (u) { return u !== url; });
+      if (!on) ep.archived.push(url);
+      if (typeof showAlert === 'function') showAlert(on ? 'Removed from your Archive.' : 'Picture saved to your Archive.');
+      Array.prototype.forEach.call(document.querySelectorAll('.vl-archive'), function (b) { if (b.getAttribute('data-kfu') === url) b.outerHTML = vlArchivePillHTML(url); });
+    })
+    .catch(function () { showError('Could not reach the server.'); });
 }
 // =================================================================================================
 // v3.4.92 -- TD-933 build 2. MOVING A SESSION ON THE SESSIONS PAGE (Ian, 2026-11-07: ordered by date "is a
