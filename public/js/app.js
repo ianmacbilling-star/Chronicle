@@ -42736,21 +42736,31 @@ function vlStyle(key) {
 }
 function vlSlWriting(id) { return VL.writing != null && String(VL.writing) === String(id); }
 function vlHasWords(d) { return !!(String(d.overall || '').trim() || d.shots.some(function (s) { return String(s.start || '').trim() || vlActionsList(s.actions).length || s.lines.length || String(s.camera || '').trim() || String(s.end || '').trim(); })); }   // v3.5.19
+// v3.5.23 -- THE DIRECTOR (Ian, 2026-11-08: "lets start the concept of our AI Director... like our AI Editor on books").
+// Two buttons: Create Shots plans the cuts; the Director's Notes write every box of the shots as they stand.
+var VL_TIP_SHOTS = 'The Director reads your pictures in story order and divides them into shots, cutting where the place changes, time jumps, or someone has to leave and come back. Each shot gets one to five pictures and a name. Next, the Director\'s Notes gives each shot its direction. Don\'t like a cut? Move it with \u2702 or UnCut.';
+var VL_TIP_NOTES = 'The Director gives every shot its direction: how it opens, what the characters do and say, where the camera goes, how it ends, and the sound and surroundings, plus who appears in it. Your shots stay exactly as they are. Everything the Director writes is yours to change.';
+function vlSlKind(info) { var j = info && info.job; return (j && j.kind === 'shots') ? 'shots' : 'notes'; }
 function vlStyleRowHTML(d, writing) {
   var ss = VL.styles || [];
   if (!ss.length) return '';
   var cur = vlStyle(d.style) || ss[0];
   var info = VL.sl[d.id] || {};
+  var kind = writing ? vlSlKind(info) : null;
+  function btn(mode, icon, label, busyLabel, tip, price) {
+    return '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">' +
+      '<button class="btn btn-sm" id="vl-sl-btn-' + mode + '" onclick="vlWriteShotList(\'' + mode + '\')"' + (writing ? ' disabled' : '') + ' title="' + escapeHtml(tip) + '">' +
+        (kind === mode ? vlSpin(12) + ' ' + busyLabel : icon + ' ' + label) + '</button>' +
+      '<span id="vl-sl-price-' + mode + '" style="' + VL_DESC + '">' + escapeHtml(price) + '</span>' +
+    '</div>';
+  }
   return '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">' +
     '<div style="flex:1;min-width:220px;"><label class="form-label" for="vl-style">Style</label>' +
       '<select id="vl-style" class="form-input" onchange="vlStyleChange()" onblur="vlFlushSave()"' + (writing ? ' disabled' : '') + '>' + ss.map(function (x) {
         return '<option value="' + escapeHtml(x.key) + '"' + (x.key === cur.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
       }).join('') + '</select></div>' +
-    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">' +
-      '<button class="btn btn-sm" id="vl-sl-btn" onclick="vlWriteShotList()"' + (writing ? ' disabled' : '') + ' title="Campaignia plans the shots (where the cuts go) and writes the overall direction and every shot\'s boxes from this version\'s story, its pictures and the cast, in this style. It starts over: the shots and boxes are replaced. The book is not changed.">' +
-        (writing ? vlSpin(12) + ' Writing the shot list...' : (vlHasWords(d) ? '&#9998; Rewrite the shot list' : '&#9998; Write the shot list')) + '</button>' +
-      '<span id="vl-sl-price" style="' + VL_DESC + '">' + escapeHtml(vlSlPriceText(info)) + '</span>' +
-    '</div>' +
+    btn('shots', '&#9986;', 'Create Shots', 'The Director is planning the shots...', VL_TIP_SHOTS, vlSlPriceText(info, 'shots')) +
+    btn('notes', '&#127916;', 'Director\'s Notes', 'The Director is writing the notes...', VL_TIP_NOTES, vlSlPriceText(info, 'notes')) +
   '</div>' +
   '<div id="vl-style-desc" style="' + VL_DESC + 'margin-top:6px;">' + escapeHtml(cur.description || '') + vlStyleHint(cur, d) + '</div>' +
   '<div id="vl-sl-msg" style="' + VL_DESC + 'margin-top:4px;">' + vlSlMsgHTML(info) + '</div>';
@@ -42758,16 +42768,18 @@ function vlStyleRowHTML(d, writing) {
 function vlStyleHint(st, d) {
   return (st && st.speech && d && !d.sound) ? escapeHtml(' Tick The model\'s own sound to hear the lines.') : '';
 }
-function vlSlPriceText(info) {
-  var e = info && info.estimate;
+function vlSlPriceText(info, mode) {
+  var e = info && (mode === 'shots' ? info.estimate_shots : info.estimate);
   if (!e) return '';
   return 'About ' + e.tokens + ' token' + (e.tokens === 1 ? '' : 's');
 }
 function vlSlMsgHTML(info) {
   var j = info && info.job;
   if (!j || j.status === 'running' || !info.fresh) return '';
-  if (j.status === 'done') return escapeHtml('Shot list written: ' + j.tokens_charged + ' token' + (j.tokens_charged === 1 ? '' : 's') + ' used. Every box can still be edited.');
-  return '<span style="color:var(--danger);">' + escapeHtml(j.error || 'The shot list could not be written. Nothing was charged.') + '</span>';
+  var shots = j.kind === 'shots';
+  if (j.status === 'done') return escapeHtml((shots ? 'The Director planned the shots: ' : 'The Director\'s Notes are in: ') + j.tokens_charged + ' token' + (j.tokens_charged === 1 ? '' : 's') + ' used.' +
+    (shots ? (VL.chainNotes ? ' Now the notes...' : ' Next, the Director\'s Notes give each shot its direction.') : ' Everything the Director wrote is yours to change.'));
+  return '<span style="color:var(--danger);">' + escapeHtml(j.error || (shots ? 'The Director could not plan the shots.' : 'The Director could not write the notes.') + ' Nothing was charged.') + '</span>';
 }
 function vlStyleChange() {
   var d = VL.draft;
@@ -42783,49 +42795,66 @@ function vlSlRefresh(id) {
     .then(function (res) {
       if (!res.ok || !res.j) return;
       var prev = VL.sl[id] || {};
-      VL.sl[id] = { estimate: res.j.estimate, job: res.j.job, fresh: prev.fresh };
+      VL.sl[id] = { estimate: res.j.estimate, estimate_shots: res.j.estimate_shots, job: res.j.job, fresh: prev.fresh };
       var j = res.j.job;
       if (j && j.status === 'running') { if (!vlSlWriting(id)) { VL.writing = id; vlRenderOpen(true); } vlSlPoll(id); return; }
-      var pe = document.getElementById('vl-sl-price'); if (pe) pe.textContent = vlSlPriceText(VL.sl[id]);
+      ['shots', 'notes'].forEach(function (m) { var pe = document.getElementById('vl-sl-price-' + m); if (pe) pe.textContent = vlSlPriceText(VL.sl[id], m); });
     })
     .catch(function () {});
 }
-function vlWriteShotList() {
+function vlWriteShotList(mode, chained) {
+  mode = mode === 'shots' ? 'shots' : 'notes';
   var d = VL.draft;
   if (!d || VL.busy || vlSlWriting(d.id)) return;
   vlReadForm();
   if (!vlKfCount(d)) { var m0 = document.getElementById('vl-sl-msg'); if (m0) m0.textContent = 'An episode needs one keyframe at least.'; return; }
+  var ep0 = vlFindEp(d.id), nTakes = ((ep0 && ep0.shots) || []).reduce(function (t, s) { return t + ((s.takes || []).length); }, 0);
   var go = function () {
     var id = d.id;
     if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
     vlSave(function (saved) {
-      if (!saved) { var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so nothing was written.'; return; }
-      VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running' }, fresh: true });
+      if (!saved) { VL.chainNotes = null; var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so the Director did not start.'; return; }
+      VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running', kind: mode }, fresh: true });
       vlRenderOpen(true);
-      fetch('/api/video-lab/episodes/' + id + '/shot-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: d.style, replace_takes: nTakes > 0 }) })
+      fetch('/api/video-lab/episodes/' + id + '/shot-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: d.style, mode: mode, replace_takes: mode === 'shots' && nTakes > 0 }) })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok || !res.j || !res.j.job) {
-            VL.writing = null; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: null });
+            VL.writing = null; VL.chainNotes = null; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: null });
             vlRenderOpen(true);
-            if (!(res.j && res.j.error === 'INSUFFICIENT_TOKENS')) cgLogClient({ url: '/api/video-lab/episodes/' + id + '/shot-list', fn: 'vlWriteShotList', kind: 'video-shot-list', status: 0, message: 'Write the shot list was refused: ' + ((res.j && res.j.error) || 'no reason') });
+            if (!(res.j && res.j.error === 'INSUFFICIENT_TOKENS')) cgLogClient({ url: '/api/video-lab/episodes/' + id + '/shot-list', fn: 'vlWriteShotList', kind: 'video-shot-list', status: 0, message: (mode === 'shots' ? 'Create Shots' : 'Director\'s Notes') + ' was refused: ' + ((res.j && res.j.error) || 'no reason') });
             var me = document.getElementById('vl-sl-msg');
-            if (me) { if (res.j && res.j.error === 'INSUFFICIENT_TOKENS') me.innerHTML = insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')); else me.textContent = (res.j && res.j.error) || 'Could not start the shot list.'; }
+            if (me) { if (res.j && res.j.error === 'INSUFFICIENT_TOKENS') me.innerHTML = insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')); else me.textContent = (res.j && (res.j.message || res.j.error)) || 'The Director could not start.'; }
             return;
           }
-          VL.sl[id] = { estimate: res.j.estimate, job: res.j.job, fresh: true };
+          VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: res.j.job, fresh: true });
           vlSlPoll(id);
         })
-        .catch(function () { VL.writing = null; vlRenderOpen(true); var mc = document.getElementById('vl-sl-msg'); if (mc) mc.textContent = 'Could not reach the server.'; });
+        .catch(function () { VL.writing = null; VL.chainNotes = null; vlRenderOpen(true); var mc = document.getElementById('vl-sl-msg'); if (mc) mc.textContent = 'Could not reach the server.'; });
     });
   };
-  // v3.5.20 -- it starts over (Ian: "the Rewrite shot list should basically start over and clear what's there"): the
-  // shots are planned again and every box is replaced; takes go with their shots, so they are named first.
-  var ep0 = vlFindEp(d.id), nTakes = ((ep0 && ep0.shots) || []).reduce(function (t, s) { return t + ((s.takes || []).length); }, 0);
-  if (!vlHasWords(d) && !nTakes && d.shots.length <= 1) { go(); return; }
-  uiConfirm((vlHasWords(d) || d.shots.length > 1 ? 'Rewrite the shot list? It starts over: the shots are planned again (where the cuts go) and the overall direction and every box are replaced.' : 'Write the shot list? The shots are planned (where the cuts go) and every box is filled.') +
-    (nTakes ? ' The ' + nTakes + ' take' + (nTakes === 1 ? '' : 's') + ' of this episode will be deleted.' : '') + ' The book is not changed.', { okText: vlHasWords(d) ? 'Start over' : 'Write it', danger: nTakes > 0 })
-    .then(function (yes) { if (yes) go(); });
+  if (chained) { go(); return; }
+  if (mode === 'shots') {
+    // Create Shots plans the cuts again: asked whenever there are shots made by hand or takes (Ian: ask even with no takes).
+    if (d.shots.length <= 1 && !nTakes) { go(); return; }
+    uiConfirm('The Director will replace the current ' + d.shots.length + ' shot' + (d.shots.length === 1 ? '' : 's') + ' with a new plan of the cuts. A shot whose pictures stay the same keeps its words' + (nTakes ? ' and takes' : '') + '; the others start empty.' +
+      (nTakes ? ' Takes of shots that change are deleted (this episode has ' + nTakes + ' take' + (nTakes === 1 ? '' : 's') + ').' : '') + ' The book is not changed.', { okText: 'Plan the shots', danger: nTakes > 0 })
+      .then(function (yes) { if (yes) go(); });
+    return;
+  }
+  // The Director's Notes on an episode that is not cut yet (one shot of more than five pictures): cut it first?
+  if (d.shots.length === 1 && d.shots[0].kfs.length > 5) {
+    uiConfirm('This episode isn\'t cut yet. Create Shots first? The Director will plan the shots, then write the notes for each one.' + (nTakes ? ' Its ' + nTakes + ' take' + (nTakes === 1 ? '' : 's') + ' will be deleted.' : ''), { okText: 'Create Shots first', danger: nTakes > 0 })
+      .then(function (yes) { if (yes) { VL.chainNotes = d.id; vlWriteShotList('shots', true); } });
+    return;
+  }
+  notesGo();
+  function notesGo() {
+    if (!vlHasWords(d) && !nTakes) { go(); return; }
+    uiConfirm('The Director will write the notes for every shot: the overall direction and every box are replaced, and the references become the characters named. Your shots stay exactly as they are.' +
+      (nTakes ? ' The ' + nTakes + ' take' + (nTakes === 1 ? '' : 's') + ' stay, marked out of date.' : '') + ' The book is not changed.', { okText: 'Write the notes' })
+      .then(function (yes) { if (yes) go(); });
+  }
 }
 function vlSlPoll(id) {
   if (VL.slTimer) clearTimeout(VL.slTimer);
@@ -42836,12 +42865,15 @@ function vlSlPoll(id) {
       .then(function (res) {
         var j = res.j && res.j.job;
         if (res.ok && j && j.status === 'running') { if (vlSlWriting(id)) vlSlPoll(id); return; }
-        VL.sl[id] = { estimate: res.j && res.j.estimate, job: j, fresh: true };
+        VL.sl[id] = { estimate: res.j && res.j.estimate, estimate_shots: res.j && res.j.estimate_shots, job: j, fresh: true };
         if (res.j && res.j.episode) vlPutEp(res.j.episode);
         if (vlSlWriting(id)) VL.writing = null;
         if (VL.draft && String(VL.draft.id) === String(id)) VL.draft = null;
+        var chain = String(VL.chainNotes) === String(id) && j && j.status === 'done' && j.kind === 'shots';   // v3.5.23: Create Shots first, then the notes
+        if (String(VL.chainNotes) === String(id) && !chain) VL.chainNotes = null;
         vlRenderList(); vlRenderOpen(true);
         if (j && j.status === 'done' && typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        if (chain) { VL.chainNotes = null; if (VL.draft && String(VL.draft.id) === String(id)) vlWriteShotList('notes', true); }
       })
       .catch(function () { if (vlSlWriting(id)) vlSlPoll(id); });
   }, 3000);

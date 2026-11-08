@@ -303,6 +303,7 @@ function ensureTables() {
     // v3.5.09 -- Retouch on a keyframe: its one-step Revert slot, and the episode a retouch job belongs to.
     await db.exec('ALTER TABLE keyframes ADD COLUMN IF NOT EXISTS prev_image_url TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS name TEXT');   // v3.5.15: a shot's own name
+    await db.exec('ALTER TABLE episode_writer_jobs ADD COLUMN IF NOT EXISTS kind TEXT');   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
     // v3.5.19 -- a shot described in plain words, one set per shot (VIDEO_REFERENCE_SHOTS_SPEC section 2). actions and
     // lines are JSON; actions NULL means the shot was never saved this way (its words are still on its keyframes).
     for (const c of ['start_text TEXT', 'actions TEXT', 'lines TEXT', 'camera TEXT', 'end_text TEXT', 'sounds TEXT', 'around TEXT', 'seconds INTEGER', 'refs TEXT']) {   // refs: v3.5.22
@@ -1548,6 +1549,9 @@ async function storyOfVersion(db, forkId) {
 function structureSig(shots) { return shortSig(JSON.stringify(shots.map(function (s) { return [s.id].concat(s.keyframes.map(function (k) { return k.image_url; })); }))); }
 function movesIn(s) { return s.keyframes.length === 1 ? 1 : s.keyframes.length - 1; }
 function pictureSig(pictures) { return shortSig(JSON.stringify(pictures.map(function (p) { return p.url; }))); }
+// v3.5.23 -- the cuts as they stand: which pictures each shot holds. Director's Notes writes for these cuts and only these.
+function cutSig(shots) { return shortSig(JSON.stringify(shots.map(function (s) { return [s.id, s.keyframes.map(function (k) { return k.image_url; })]; }))); }
+function withMode(ctx, mode) { const c = Object.assign({}, ctx); c.mode = mode === 'shots' ? 'shots' : 'notes'; c.sig = c.mode === 'shots' ? pictureSig(c.pictures) : cutSig(c.shots); return c; }
 const SL_MAX_PER_SHOT = 5;   // v3.5.20: a reference shot sends 5 pictures at most
 
 async function shotListContext(db, ep) {
@@ -1595,7 +1599,7 @@ function estimateShotList(ctx, prices) {
   const words = ctx.pictures.reduce(function (t, p) { return t + p.words.length; }, 0);
   const castChars = ctx.cast.reduce(function (t, c) { return t + String(c.name || '').length + String(c.description || '').length + Math.min(800, String(c.prompt || '').length); }, 0);
   const inTok = Math.ceil((4500 + ctx.story.text.length + words + castChars) / 4) + Math.min(n, SL_MAX_IMAGES) * 360;
-  const outTok = 400 + n * 260;
+  const outTok = ctx.mode === 'shots' ? 200 + n * 40 : 400 + n * 260;   // v3.5.23: Create Shots answers with the cuts only
   const usd = usdFor(prices, inTok, outTok);
   return { input_tokens: inTok, output_tokens: outTok, usd: Math.round(usd * 10000) / 10000, tokens: tokensFor(prices, usd), moves: moves, shots: ctx.shots.length };
 }
@@ -1615,35 +1619,49 @@ async function pictureForModel(url) {
 // "have it do the cuts then put the prompts in"; "the Rewrite shot list should basically start over and clear what's
 // there". It is given every picture of the episode in order, decides which run of pictures makes each shot, and writes
 // each shot's plain-word boxes.
+// v3.5.23 -- THE DIRECTOR, IN TWO STEPS (Ian, 2026-11-08: "two separate buttons... Then the user can do the cuts or the
+// AI can... Then the AI can do the Shot list knowing what the cuts are"; "lets start the concept of our AI Director...
+// like our AI Editor on books"). ctx.mode 'shots' (Create Shots): the Director divides the pictures into shots and names
+// them, no words. ctx.mode 'notes' (Director's Notes): the Director writes every box of the shots as they stand.
+function directorHead(ctx) {
+  return 'You are the Director of a short video made from the illustrations of a story, for the video model ' + ctx.m.label + (ctx.m.reference ? ' (reference mode)' : '') + '.\n\n' +
+    'SHOTS AND CUTS\nThe video is a series of SHOTS joined by CUTS. A shot is one continuous camera run in one place: the camera never cuts away inside it.\n\n';
+}
 function shotListRequest(ctx, images) {
-  const m = ctx.m, style = ctx.style, N = ctx.pictures.length;
-  const ref = !!m.reference;
-  const system =
-    'You are the director of a short video made from the illustrations of a story. You plan its SHOTS and describe each one for the video model, ' + m.label + (ref ? ' (reference mode)' : '') + '.\n\n' +
-    'SHOTS AND CUTS\nThe video is a series of SHOTS joined by CUTS. A shot is one continuous camera run in one place: the camera never cuts away inside it. ' +
-    'You are given the episode\'s ' + N + ' pictures in story order. Group them, in order, into shots: every picture used exactly once, none skipped, none moved; each shot is a run of 1 to ' + SL_MAX_PER_SHOT + ' consecutive pictures. ' +
-    'Cut where the place changes, where time jumps, or where someone must leave the frame and come back later. Keep pictures together when they are one continuous moment in one place. A single picture can be a shot (a reaction, a line, an establishing view).\n\n' +
-    (ref ? 'HOW THE MODEL USES THE PICTURES\nEach shot is ONE clip. Its first picture is how the shot opens; its later pictures only show the place, the light and who is there: the model does NOT copy their poses or positions, so say in the words what happens and how the shot ends. ' +
-      'The cast\'s own reference pictures are sent too, so describe what characters DO, not how they look.\n\n'
-      : 'HOW THE MODEL USES THE PICTURES\nA shot of several pictures moves from each picture exactly to the next, so the action must flow through every picture of the shot.\n\n') +
-    'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
-    'FOR EACH SHOT write these, in plain words:\n' +
-    '- name: 2 to 5 words naming the shot.\n' +
-    '- start: who is where when the shot opens, and which way they face (one or two sentences).\n' +
-    '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning.\n' +
-    (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view}. At most two short lines in a shot; an empty list when nobody should talk.\n'
-      : '- lines: always an empty list in this style.\n') +
-    '- camera: what the camera does. If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
-    '- end: who is where when the shot ends, and which way they face.\n' +
-    '- sounds: sounds only, never actions.\n' +
-    '- around: what the surroundings do (smoke, fire, weather, light), never the characters.\n' +
-    '- seconds: the shot\'s length, a whole number from 4 to 15.\n\n' +
-    'THE OVERALL DIRECTION is sent with every shot: one short paragraph (at most 600 characters) naming the setting, the mood and the light' + (ref ? '' : ', and each main character\'s look in words (build, hair, clothes, colours)') + '. Keep the art style as it is in the pictures.\n\n' +
-    'RULES\n- Keep the names exactly as the story and the cast list write them.\n- Each action is at most 300 characters; every other field short.\n- Never describe a cut inside a shot.\n' +
-    '- Write original words; never reproduce text from any published source.\n- Never put words, captions or titles on screen.\n\n' +
-    'ANSWER WITH ONLY THIS JSON, no other text:\n' +
-    '{"overall": "...", "shots": [{"pictures": [1, 2], "name": "...", "start": "...", "actions": ["...", "..."], "lines": [{"who": "...", "line": "...", "during": 1, "offscreen": false}], "camera": "...", "end": "...", "sounds": "...", "around": "...", "seconds": 10}]}\n' +
-    '"pictures" lists the picture numbers of the shot. Across all shots they must be exactly 1 to ' + N + ', in order.';
+  const m = ctx.m, style = ctx.style, N = ctx.pictures.length, ref = !!m.reference;
+  let system;
+  if (ctx.mode === 'shots') {
+    system = directorHead(ctx) +
+      'YOUR JOB NOW: divide the episode\'s ' + N + ' pictures, in story order, into shots. Every picture is used exactly once, none skipped, none moved; each shot is a run of 1 to ' + SL_MAX_PER_SHOT + ' consecutive pictures. ' +
+      'Cut where the place changes, where time jumps, or where someone must leave the frame and come back later. Keep pictures together when they are one continuous moment in one place. A single picture can be a shot (a reaction, a line, an establishing view). ' +
+      'Give each shot a name of 2 to 5 words. Do not write anything else: what happens in each shot is written later.\n\n' +
+      'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
+      'ANSWER WITH ONLY THIS JSON, no other text:\n{"shots": [{"pictures": [1, 2], "name": "..."}, {"pictures": [3], "name": "..."}]}\n' +
+      '"pictures" lists the picture numbers of the shot. Across all shots they must be exactly 1 to ' + N + ', in order.';
+  } else {
+    system = directorHead(ctx) +
+      'YOUR JOB NOW: the episode is already divided into ' + ctx.shots.length + ' shots, shown below. Keep them exactly as they are and write the Director\'s Notes for each one.\n\n' +
+      (ref ? 'HOW THE MODEL USES THE PICTURES\nEach shot is ONE clip. Its first picture is how the shot opens; its later pictures only show the place, the light and who is there: the model does NOT copy their poses or positions, so say in the words what happens and how the shot ends. ' +
+        'The cast\'s own reference pictures are sent too, so describe what characters DO, not how they look.\n\n'
+        : 'HOW THE MODEL USES THE PICTURES\nA shot of several pictures moves from each picture exactly to the next, so the action must flow through every picture of the shot.\n\n') +
+      'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
+      'FOR EACH SHOT write these, in plain words:\n' +
+      '- name: 2 to 5 words naming the shot.\n' +
+      '- start: who is where when the shot opens, and which way they face (one or two sentences).\n' +
+      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning.\n' +
+      (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view}. At most two short lines in a shot; an empty list when nobody should talk.\n'
+        : '- lines: always an empty list in this style.\n') +
+      '- camera: what the camera does. If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
+      '- end: who is where when the shot ends, and which way they face.\n' +
+      '- sounds: sounds only, never actions.\n' +
+      '- around: what the surroundings do (smoke, fire, weather, light), never the characters.\n' +
+      '- seconds: the shot\'s length, a whole number from 4 to 15.\n\n' +
+      'THE OVERALL DIRECTION is sent with every shot: one short paragraph (at most 600 characters) naming the setting, the mood and the light' + (ref ? '' : ', and each main character\'s look in words (build, hair, clothes, colours)') + '. Keep the art style as it is in the pictures.\n\n' +
+      'RULES\n- Keep the names exactly as the story and the cast list write them.\n- Each action is at most 300 characters; every other field short.\n- Never describe a cut inside a shot; never move a picture to another shot.\n' +
+      '- Write original words; never reproduce text from any published source.\n- Never put words, captions or titles on screen.\n\n' +
+      'ANSWER WITH ONLY THIS JSON, no other text, one entry per shot in order:\n' +
+      '{"overall": "...", "shots": [{"shot": 1, "name": "...", "start": "...", "actions": ["...", "..."], "lines": [{"who": "...", "line": "...", "during": 1, "offscreen": false}], "camera": "...", "end": "...", "sounds": "...", "around": "...", "seconds": 10}]}';
+  }
   const content = [];
   const head = [];
   head.push('THE STORY: ' + (ctx.campaignName ? '"' + ctx.campaignName + '"' : 'untitled') + (ctx.sessionName ? ', the session "' + ctx.sessionName + '"' : '') + '.');
@@ -1663,25 +1681,64 @@ function shotListRequest(ctx, images) {
   }
   head.push('');
   const sent = images.filter(Boolean).length;
-  head.push('THE PICTURES OF THIS EPISODE, IN STORY ORDER (' + N + ').' +
+  head.push('THE PICTURES OF THIS EPISODE, IN STORY ORDER (' + N + ')' + (ctx.mode === 'shots' ? '' : ', SHOT BY SHOT') + '.' +
     (sent < N ? (sent ? ' Only ' + sent + ' are shown as pictures; the others are described in words only.' : ' They are described in words only.') : ''));
   content.push({ type: 'text', text: head.join('\n') });
+  let shotOf = null;
+  if (ctx.mode !== 'shots') { shotOf = []; let n = 0; ctx.shots.forEach(function (sh, si) { sh.keyframes.forEach(function () { shotOf[n++] = si; }); }); }
   ctx.pictures.forEach(function (p, i) {
+    if (shotOf && (i === 0 || shotOf[i] !== shotOf[i - 1])) {
+      const sh = ctx.shots[shotOf[i]], first = i + 1, last = i + sh.keyframes.length;
+      content.push({ type: 'text', text: (i ? '--- CUT ---\n' : '') + 'SHOT ' + (shotOf[i] + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' });
+    }
     content.push({ type: 'text', text: 'Picture ' + (i + 1) + '. ' + p.words });
     if (images[i]) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: images[i] } });
   });
-  content.push({ type: 'text', text: 'Now plan the shots of these ' + N + ' pictures and write every shot, as JSON, in the ' + style.label + ' style.' });
-  return { system: system, content: content, max_tokens: Math.min(16000, 1500 + N * 520) };
+  content.push({ type: 'text', text: ctx.mode === 'shots' ? 'Now divide these ' + N + ' pictures into shots, as JSON.'
+    : 'Now write the Director\'s Notes for these ' + ctx.shots.length + ' shots, as JSON, in the ' + style.label + ' style.' });
+  return { system: system, content: content, max_tokens: ctx.mode === 'shots' ? Math.min(4000, 600 + N * 80) : Math.min(16000, 1500 + N * 520) };
+}
+function readJson(raw) {
+  const clean = String(raw || '').replace(/```json|```/g, '').trim();
+  try { return JSON.parse(clean); } catch (e) {
+    const a = clean.indexOf('{'), b = clean.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { return JSON.parse(clean.slice(a, b + 1)); } catch (e2) { return null; } }
+    return null;
+  }
+}
+function wordsFrom(x, ctx) {
+  const actions = (Array.isArray(x.actions) ? x.actions : [x.actions]).map(textOf).filter(Boolean);
+  let lines = [];
+  if (ctx.style.speech && Array.isArray(x.lines)) lines = x.lines.map(function (l) {
+    l = l || {};
+    let who = textOf(l.who);
+    const off = !!l.offscreen || /off-?screen/i.test(who);
+    who = who.replace(/\s*\(off-?screen\)\s*/i, '').trim();
+    return { who: who, text: textOf(l.line != null ? l.line : l.text), when: parseInt(l.during != null ? l.during : l.when, 10) || 0, off: off };
+  });
+  return cleanWords({ start: textOf(x.start), actions: actions, lines: lines, camera: textOf(x.camera), end: textOf(x.end), sounds: textOf(x.sounds), around: textOf(x.around), seconds: parseFloat(String(x.seconds == null ? '' : x.seconds).replace(/[^0-9.]/g, '')) });
 }
 function parseShotList(raw, ctx) {
-  const clean = String(raw || '').replace(/```json|```/g, '').trim();
-  let p = null;
-  try { p = JSON.parse(clean); } catch (e) {
-    const a = clean.indexOf('{'), b = clean.lastIndexOf('}');
-    if (a >= 0 && b > a) { try { p = JSON.parse(clean.slice(a, b + 1)); } catch (e2) { p = null; } }
-  }
+  const p = readJson(raw);
   if (!p || typeof p !== 'object' || !Array.isArray(p.shots) || !p.shots.length) return { error: 'unreadable' };
   const N = ctx.pictures.length;
+  if (ctx.mode !== 'shots') {
+    // Director's Notes: one entry per shot as it stands, in order
+    if (p.shots.length !== ctx.shots.length) return { error: p.shots.length + ' shots came back for ' + ctx.shots.length };
+    const shots = [];
+    let first = 1;
+    for (let i = 0; i < p.shots.length; i++) {
+      const x = p.shots[i] || {};
+      const w = wordsFrom(x, ctx);
+      if (!w.actions.length && !w.start) return { error: 'shot ' + (i + 1) + ' came back with no words' };
+      const n = ctx.shots[i].keyframes.length, pics = [];
+      for (let j = 0; j < n; j++) pics.push(first + j);
+      first += n;
+      shots.push({ pictures: pics, name: cleanShotName(textOf(x.name)), words: w });
+    }
+    return { overall: textOf(p.overall).slice(0, 2000), shots: shots };
+  }
+  // Create Shots: the cuts and the names only
   let next = 1;
   const shots = [];
   for (let i = 0; i < p.shots.length; i++) {
@@ -1690,21 +1747,10 @@ function parseShotList(raw, ctx) {
     if (!pics.length) return { error: 'shot ' + (i + 1) + ' has no pictures' };
     for (let j = 0; j < pics.length; j++) { if (pics[j] !== next) return { error: 'shot ' + (i + 1) + ' has picture ' + pics[j] + ' where picture ' + next + ' was due' }; next++; }
     if (pics.length > SL_MAX_PER_SHOT) return { error: 'shot ' + (i + 1) + ' has ' + pics.length + ' pictures (at most ' + SL_MAX_PER_SHOT + ')' };
-    const actions = (Array.isArray(x.actions) ? x.actions : [x.actions]).map(textOf).filter(Boolean);
-    let lines = [];
-    if (ctx.style.speech && Array.isArray(x.lines)) lines = x.lines.map(function (l) {
-      l = l || {};
-      let who = textOf(l.who);
-      const off = !!l.offscreen || /off-?screen/i.test(who);
-      who = who.replace(/\s*\(off-?screen\)\s*/i, '').trim();
-      return { who: who, text: textOf(l.line != null ? l.line : l.text), when: parseInt(l.during != null ? l.during : l.when, 10) || 0, off: off };
-    });
-    const w = cleanWords({ start: textOf(x.start), actions: actions, lines: lines, camera: textOf(x.camera), end: textOf(x.end), sounds: textOf(x.sounds), around: textOf(x.around), seconds: parseFloat(String(x.seconds == null ? '' : x.seconds).replace(/[^0-9.]/g, '')) });
-    if (!w.actions.length && !w.start) return { error: 'shot ' + (i + 1) + ' came back with no words' };
-    shots.push({ pictures: pics, name: cleanShotName(textOf(x.name)), words: w });
+    shots.push({ pictures: pics, name: cleanShotName(textOf(x.name)), words: null });
   }
   if (next !== N + 1) return { error: 'the shots cover ' + (next - 1) + ' of ' + N + ' pictures' };
-  return { overall: textOf(p.overall).slice(0, 2000), shots: shots };
+  return { overall: null, shots: shots };
 }
 function moveBoxText(s) {
   const lines = [];
@@ -1749,11 +1795,11 @@ async function runningWriter(db, episodeId) {
 }
 function jobView(j) {
   if (!j) return null;
-  return { id: j.id, status: j.status, error: j.error || null, tokens_charged: j.tokens_charged || 0, style: j.style, started_at: j.started_at, finished_at: j.finished_at };
+  return { id: j.id, kind: j.kind === 'shots' ? 'shots' : 'notes', status: j.status, error: j.error || null, tokens_charged: j.tokens_charged || 0, style: j.style, started_at: j.started_at, finished_at: j.finished_at };
 }
 async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
   const db = await getDb();
-  const JFN = 'shot list job ' + jobId + ' (episode ' + episodeId + ')';
+  const JFN = (ctx.mode === 'shots' ? 'Create Shots' : 'Director\'s Notes') + ' job ' + jobId + ' (episode ' + episodeId + ')';
   let inTok = 0, outTok = 0, result = null, lastErr = '';
   try {
     const images = [];
@@ -1773,14 +1819,14 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
   const usd = Math.round(usdFor(prices, inTok, outTok) * 10000) / 10000;
   if (!result) {
     await db.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, finished_at = NOW() WHERE id = ? AND status = 'running'")
-      .run(('The shot list came back incomplete (' + lastErr + '). Nothing was charged; try again.').slice(0, 1000), inTok, outTok, usd, jobId);
+      .run(((ctx.mode === 'shots' ? 'The Director\u2019s plan came back incomplete (' : 'The Director\u2019s Notes came back incomplete (') + lastErr + '). Nothing was charged; try again.').slice(0, 1000), inTok, outTok, usd, jobId);
     console.error('[video] ' + JFN + ' failed: ' + lastErr + ' ($' + usd + ' to Campaignia)');
     vlDebug(userId, 'error', JFN, 'Failed after two tries: ' + lastErr, { input_tokens: inTok, output_tokens: outTok, cost_usd: usd });
     return;
   }
   const charge = tokensFor(prices, usd);
   const shotList = { style: ctx.style.key, model: ctx.modelKey, written_at: new Date().toISOString(), overall: result.overall, shots: result.shots };
-  let filled = false, files = [];
+  let filled = false, files = [], kept = 0;
   const wpool = await refsPool(db, ctx.ep).catch(function () { return { characters: [], assets: [] }; });   // v3.5.22
   await db.transaction(async function (tx) {
     const claim = await tx.prepare("UPDATE episode_writer_jobs SET status = 'done', input_tokens = ?, output_tokens = ?, cost_usd = ?, finished_at = NOW() WHERE id = ? AND status = 'running'").run(inTok, outTok, usd, jobId);
@@ -1788,47 +1834,72 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
     const ep = await tx.prepare('SELECT * FROM episodes WHERE id = ? FOR UPDATE').get(episodeId);
     const shots = ep ? await tx.prepare('SELECT * FROM shots WHERE episode_id = ? ORDER BY position, id').all(episodeId) : [];
     const kfs = ep ? await tx.prepare('SELECT * FROM keyframes WHERE episode_id = ? ORDER BY shot_id, position, id').all(episodeId) : [];
+    shots.forEach(function (s) { s.keyframes = kfs.filter(function (k) { return k.shot_id === s.id; }); });
+    const live = shots.filter(function (s) { return s.keyframes.length; });
     const pics = [];
-    shots.forEach(function (s) { kfs.filter(function (k) { return k.shot_id === s.id; }).forEach(function (k) { pics.push(k); }); });
-    if (!ep || pictureSig(pics.map(function (k) { return { url: k.image_url }; })) !== ctx.sig) {
-      await tx.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ? WHERE id = ?").run('The episode changed while its shot list was being written. Nothing was charged; try again.', jobId);
+    live.forEach(function (s) { s.keyframes.forEach(function (k) { pics.push(k); }); });
+    const sigNow = ctx.mode === 'shots' ? pictureSig(pics.map(function (k) { return { url: k.image_url }; })) : cutSig(live);
+    if (!ep || sigNow !== ctx.sig) {
+      await tx.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ? WHERE id = ?").run(ctx.mode === 'shots' ? 'The episode\u2019s pictures changed while the Director was planning the shots. Nothing was charged; try again.' : 'The shots changed while the Director was writing the notes. Nothing was charged; try again.', jobId);
       return;
     }
-    // v3.5.20 -- start over: the episode's shots are replaced by the writer's (their takes and files go; the start asked
-    // first when there were any). The pictures keep their order, sources and Revert slots.
+    function namedRefs(words) {   // v3.5.22: the characters the words name become the shot's references
+      const named = namedCast(wordsText({ overall: result.overall != null ? result.overall : ep.overall }, words), wpool.characters.filter(function (c) { return c.usable; }), 12);
+      return named.map(function (p) { const c = wpool.characters.filter(function (x) { return x.name === p.name; })[0]; return c ? { type: 'character', id: c.id } : null; }).filter(Boolean);
+    }
+    function kfOut(k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt || '', duration: k.duration, prev_url: k.prev_image_url || null }; }
+    if (ctx.mode !== 'shots') {
+      // v3.5.23 -- DIRECTOR'S NOTES: the shots stay exactly as they are (their pictures, cut styles and takes); every box
+      // is rewritten, the references become the characters named, and a shot without a name gets the Director's.
+      for (let i = 0; i < live.length; i++) {
+        const sh = result.shots[i];
+        await writeWords(tx, live[i].id, sh.words);
+        await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(namedRefs(sh.words)), live[i].id);
+        if (!cleanShotName(live[i].name) && sh.name) await tx.prepare('UPDATE shots SET name = ? WHERE id = ?').run(sh.name, live[i].id);
+      }
+      await tx.prepare('UPDATE episodes SET overall = ?, shot_list = ?, style = ?, updated_at = NOW() WHERE id = ?').run(result.overall, JSON.stringify(shotList), ctx.style.key, episodeId);
+      filled = true;
+      return;
+    }
+    // v3.5.23 -- CREATE SHOTS: the cuts only. A planned shot with exactly the pictures of a shot that is already there
+    // IS that shot: it keeps its name, words, references, cut style and takes. The others are new and empty (the
+    // Director's Notes fill them); shots that no longer exist go with their takes and files (asked first).
+    const used = {};
     const fresh = result.shots.map(function (sh) {
-      const named = namedCast(wordsText({ overall: result.overall }, sh.words), wpool.characters.filter(function (c) { return c.usable; }), 12);   // v3.5.22: the characters it names
-      const refs = named.map(function (p) { const c = wpool.characters.filter(function (x) { return x.name === p.name; })[0]; return c ? { type: 'character', id: c.id } : null; }).filter(Boolean);
-      return { id: null, name: sh.name, cut_style: 'instant', words: sh.words, refs: refs, keyframes: sh.pictures.map(function (n) {
-        const k = pics[n - 1];
-        return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: '', duration: k.duration, prev_url: k.prev_image_url || null };
-      }) };
+      const urls = sh.pictures.map(function (n) { return pics[n - 1].image_url; });
+      const same = live.filter(function (o) { return !used[o.id] && o.keyframes.length === urls.length && o.keyframes.every(function (k, j) { return k.image_url === urls[j]; }); })[0];
+      if (same) {
+        used[same.id] = true;
+        return { id: same.id, name: cleanShotName(same.name) || sh.name, cut_style: same.cut_style || 'instant', keyframes: same.keyframes.map(kfOut) };
+      }
+      return { id: null, name: sh.name, cut_style: 'instant', keyframes: sh.pictures.map(function (n) { return kfOut(pics[n - 1]); }) };
     });
+    kept = Object.keys(used).length;
     try { files = await writeShots(tx, ep, fresh); }
     catch (e) {
       if (!e.userFacing) throw e;
-      await tx.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ? WHERE id = ?").run('A shot was being made while the shot list was written, so nothing was changed. Nothing was charged; try again when it is made.', jobId);
+      await tx.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ? WHERE id = ?").run('A shot was being made while the Director planned the shots, so nothing was changed. Nothing was charged; try again when it is made.', jobId);
       files = [];
       return;
     }
-    await tx.prepare('UPDATE episodes SET overall = ?, shot_list = ?, style = ?, updated_at = NOW() WHERE id = ?').run(result.overall, JSON.stringify(shotList), ctx.style.key, episodeId);
+    await tx.prepare('UPDATE episodes SET shot_list = ?, style = ?, updated_at = NOW() WHERE id = ?').run(JSON.stringify(shotList), ctx.style.key, episodeId);
     filled = true;
   });
   if (!filled) { vlDebug(userId, 'warn', JFN, 'Not filled (the episode changed, was deleted, a shot was being made, or the job was interrupted); nothing charged'); return; }
-  if (files.length) { await forgetVideo(db, episodeId, files); await deleteFiles(files, 'episode ' + episodeId + ': shots replaced by the shot list'); }
+  if (files.length) { await forgetVideo(db, episodeId, files); await deleteFiles(files, 'episode ' + episodeId + ': shots replaced by Create Shots'); }
   let charged = 0;
   try {
     const tokens = require('./tokens');
     const bal = await tokens.getBalance(userId);
     charged = Math.min(charge, Math.max(0, bal.total));
-    if (charged > 0) await tokens.spendTokens(userId, charged, { source: 'video_shot_list', event_type: 'generation_spend', related_campaign_id: ctx.ep.campaign_id });
+    if (charged > 0) await tokens.spendTokens(userId, charged, { source: ctx.mode === 'shots' ? 'video_shot_plan' : 'video_shot_list', event_type: 'generation_spend', related_campaign_id: ctx.ep.campaign_id });
     if (charged < charge) console.warn('[video] ' + JFN + ': balance covered ' + charged + ' of ' + charge + ' token(s)');
-    await tokens.recordGeneration(userId, { event_type: 'video_shot_list', tokens_redeemed: charged, quantity: result.shots.length, unit: 'shots', model: require('../config/models').TEXT_MODEL, related_campaign_id: ctx.ep.campaign_id, related_session_id: ctx.ep.session_id });
+    await tokens.recordGeneration(userId, { event_type: ctx.mode === 'shots' ? 'video_shot_plan' : 'video_shot_list', tokens_redeemed: charged, quantity: result.shots.length, unit: 'shots', model: require('../config/models').TEXT_MODEL, related_campaign_id: ctx.ep.campaign_id, related_session_id: ctx.ep.session_id });
   } catch (e) { console.error('[video] shot list charge failed:', e && e.message); }
   await db.prepare('UPDATE episode_writer_jobs SET tokens_charged = ? WHERE id = ?').run(charged, jobId);
   console.log('[video] ' + JFN + ': ' + result.shots.length + ' shot(s), ' + inTok + ' in / ' + outTok + ' out, $' + usd + ', ' + charged + ' token(s)');
-  vlDebug(userId, 'info', JFN, 'Shots planned and filled: ' + result.shots.length + ' shot(s), ' + charged + ' token(s) charged', { input_tokens: inTok, output_tokens: outTok, cost_usd: usd, worked_out: charge,
-    plan: result.shots.map(function (sh) { return { pictures: sh.pictures, name: sh.name, actions: sh.words.actions.length, lines: sh.words.lines.length, seconds: sh.words.seconds }; }) });
+  vlDebug(userId, 'info', JFN, (ctx.mode === 'shots' ? 'The Director planned ' + result.shots.length + ' shot(s), ' + kept + ' kept as they were' : 'The Director wrote the notes of ' + result.shots.length + ' shot(s)') + ', ' + charged + ' token(s) charged', { mode: ctx.mode, input_tokens: inTok, output_tokens: outTok, cost_usd: usd, worked_out: charge,
+    plan: result.shots.map(function (sh) { return sh.words ? { pictures: sh.pictures, name: sh.name, actions: sh.words.actions.length, lines: sh.words.lines.length, seconds: sh.words.seconds } : { pictures: sh.pictures, name: sh.name }; }) });
 }
 
 // v3.5.20 -- ARCHIVE A PICTURE OF A SHOT (Ian, 2026-11-08: "we need to give them the ability to Archive pics from the
@@ -1914,23 +1985,26 @@ router.post('/episodes/:id/shot-list', requireAuth, requireVideo, async function
       await db.prepare('UPDATE episodes SET style = ?, updated_at = NOW() WHERE id = ?').run(b.style, ep0.id);
       ep = Object.assign({}, ep0, { style: b.style });
     }
-    const ctx = await shotListContext(db, ep);
+    // v3.5.23 -- b.mode 'shots' is Create Shots (the cuts), anything else the Director's Notes (the words).
+    const ctx = withMode(await shotListContext(db, ep), b.mode);
     if (!ctx.pictures.length) return vlRefuse(req, res, FN, 400, 'This episode has no keyframes.');
-    // v3.5.20 -- writing starts over: every shot is replaced, so their takes go. Asked first.
-    const tk = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE episode_id = ?').get(ep.id);
-    const nTakes = Number(tk && tk.n) || 0;
-    if (nTakes && b.replace_takes !== true) return res.status(409).json({ error: 'TAKES', takes: nTakes, message: 'Writing the shot list starts over: the shots are planned again, and the ' + nTakes + ' take' + (nTakes === 1 ? '' : 's') + ' of this episode will be deleted.' });
+    if (ctx.mode === 'shots') {
+      // Create Shots plans the cuts again; a shot whose pictures change goes with its takes. Asked first.
+      const tk = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE episode_id = ?').get(ep.id);
+      const nTakes = Number(tk && tk.n) || 0;
+      if (nTakes && b.replace_takes !== true) return res.status(409).json({ error: 'TAKES', takes: nTakes, message: 'The Director will plan the shots again. A shot whose pictures stay the same keeps its takes; the others are deleted with theirs (this episode has ' + nTakes + ' take' + (nTakes === 1 ? '' : 's') + ').' });
+    }
     const busy = await db.prepare("SELECT id FROM takes WHERE episode_id = ? AND status = 'making' LIMIT 1").get(ep.id);
-    if (busy) return vlRefuse(req, res, FN, 409, 'A shot is being made. Write the shot list when it is done.');
+    if (busy) return vlRefuse(req, res, FN, 409, 'A shot is being made. Ask the Director when it is done.');
     const prices = await shotListPrices(db);
     const est = estimateShotList(ctx, prices);
     const bal = await require('./tokens').getBalance(req.session.userId);
-    vlDebug(req.session.userId, 'info', FN, 'Shot list asked for', { style: ctx.style.key, model: ctx.modelKey, shots: ctx.shots.length, keyframes: ctx.pictures.length, story_chars: ctx.story.text.length, cast: ctx.cast.length, estimate: est, balance: bal.total });
-    if (bal.total < est.tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'Writing this shot list costs about ' + est.tokens + ' token' + (est.tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
+    vlDebug(req.session.userId, 'info', FN, (ctx.mode === 'shots' ? 'Create Shots' : 'Director\'s Notes') + ' asked for', { mode: ctx.mode, style: ctx.style.key, model: ctx.modelKey, shots: ctx.shots.length, keyframes: ctx.pictures.length, story_chars: ctx.story.text.length, cast: ctx.cast.length, estimate: est, balance: bal.total });
+    if (bal.total < est.tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: (ctx.mode === 'shots' ? 'Create Shots' : 'The Director\u2019s Notes') + ' costs about ' + est.tokens + ' token' + (est.tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
     await retireLostJobs(db, ep.id);
-    const ins = await db.prepare("INSERT INTO episode_writer_jobs (episode_id, user_id, status, style, model, boot_id, sig, est_tokens) VALUES (?, ?, 'running', ?, ?, ?, ?, ?) ON CONFLICT (episode_id) WHERE status = 'running' DO NOTHING")
-      .run(ep.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, ctx.sig, est.tokens);
-    if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'A shot list is already being written for this episode.');
+    const ins = await db.prepare("INSERT INTO episode_writer_jobs (episode_id, user_id, status, style, model, boot_id, sig, est_tokens, kind) VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?) ON CONFLICT (episode_id) WHERE status = 'running' DO NOTHING")
+      .run(ep.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, ctx.sig, est.tokens, ctx.mode);
+    if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'The Director is already working on this episode.');
     const job = await db.prepare('SELECT * FROM episode_writer_jobs WHERE id = ?').get(ins.lastInsertRowid);
     res.json({ job: jobView(job), estimate: est });
     runShotList(job.id, ep.id, req.session.userId, ctx, prices, key).catch(async function (e) {
@@ -1951,9 +2025,12 @@ router.get('/episodes/:id/shot-list', requireAuth, requireVideo, async function 
     if (!ep || !(await canSee(req, ep))) return res.status(404).json({ error: 'Not found.' });
     await retireLostJobs(db, ep.id);
     const j = await db.prepare('SELECT * FROM episode_writer_jobs WHERE episode_id = ? ORDER BY id DESC LIMIT 1').get(ep.id);
-    let estimate = null;
-    try { const ctx = await shotListContext(db, ep); if (ctx.pictures.length) estimate = estimateShotList(ctx, await shotListPrices(db)); } catch (e) { estimate = null; }
-    res.json({ job: jobView(j), estimate: estimate, episode: (j && j.status !== 'running') ? await loadEpisode(db, ep.id) : null });
+    let estimate = null, estimateShots = null;
+    try {
+      const ctx = await shotListContext(db, ep);
+      if (ctx.pictures.length) { const pr = await shotListPrices(db); estimate = estimateShotList(withMode(ctx, 'notes'), pr); estimateShots = estimateShotList(withMode(ctx, 'shots'), pr); }
+    } catch (e) { estimate = null; estimateShots = null; }
+    res.json({ job: jobView(j), estimate: estimate, estimate_shots: estimateShots, episode: (j && j.status !== 'running') ? await loadEpisode(db, ep.id) : null });
   } catch (e) {
     console.error('[video] shot list read error:', e && e.message);
     res.status(500).json({ error: 'Could not read the shot list.' });

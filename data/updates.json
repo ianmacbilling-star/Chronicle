@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.23",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3523-director",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: the Director - Create Shots plans the cuts; Director's Notes writes every shot's direction.",
+        "detail": "Ian, 2026-11-08: \"we need to have two separate buttons at the top. 1. Create Cuts... 2. Build the Shot list... Then the AI can do the Shot list knowing what the cuts are\"; \"lets start the concept of our AI Director... like our AI Editor on books\"; \"Directors Notes!\". The single Write / Rewrite the shot list button becomes two, each with its price and tooltip. Create Shots: the Director reads the pictures in story order and divides them into shots of one to five pictures, named; nothing else is written. A planned shot with exactly the pictures of a shot already there is that shot and keeps its name, words, references, cut style and takes; other shots start empty, and shots that no longer exist go with their takes and files (asked first whenever there is more than one shot or any takes). The overall direction is not touched. Director's Notes: the Director sees the shots as they stand (SHOT n headers and CUT markers) and writes the overall direction and every box of every shot; the cuts never move, a name given by hand is kept, the references become the characters named, and takes stay, marked out of date. Pressed on an episode that is one shot of more than five pictures, it asks \"This episode isn't cut yet. Create Shots first?\" and then runs both. Progress and confirm wording speaks of the Director. Jobs record which button (episode_writer_jobs.kind); Create Shots is charged as video_shot_plan.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.22",
     "staged_on": "2026-11-08",
     "entries": [
