@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.02",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3502-debug-spot-visible",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admins: while Debug Mode is on, the hidden spot beside the account button shows as a small red bar (a click opens the debug panel). It is half as wide.",
+        "detail": "Ian, 2026-11-08. The page asks once after an admin signs in, and the bar follows every change to Debug Mode (with the red recording dot). Never shown to anyone who is not an admin. Turned off, it is invisible in the same room as before.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.01",
     "staged_on": "2026-11-08",
     "entries": [

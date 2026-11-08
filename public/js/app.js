@@ -31526,7 +31526,40 @@ function cmpInitDebugPanel() {
 function cmpSetRecDot(on) {
   var dot = document.getElementById('debug-rec-dot');
   if (dot) dot.style.display = on ? 'inline-block' : 'none';
+  cmpEggShow(on);   // v3.5.02 -- the spot by the account button follows Debug Mode too
 }
+
+// v3.5.02 -- Ian, 2026-11-08: "if debug is on... make the little button ... visible." For an admin with Debug Mode on,
+// the spot by the account button shows as a small red bar (a click opens the debug panel, v3.5.00); otherwise it is
+// invisible exactly as before. Never shown to anyone who is not an admin, whatever their Debug Mode.
+function cmpEggShow(on) {
+  var el = document.getElementById('dbg-egg');
+  if (!el) return;
+  var show = !!on && !!(typeof state !== 'undefined' && state.user && state.user.is_admin);
+  el.style.background = show ? 'var(--alert-red)' : '';
+  el.style.opacity = show ? '0.75' : '';
+  el.style.height = show ? '22px' : '30px';
+  el.style.cursor = show ? 'pointer' : '';
+  el.style.marginLeft = show ? '4px' : '-3px';
+  el.style.marginRight = show ? '2px' : '-3px';
+  el.title = show ? 'Debug Mode is on: click for the debug panel' : '';
+}
+// Once after sign-in, for an admin: ask whether Debug Mode is on, so the spot shows without visiting My Account.
+// Waits for the sign-in to finish (up to a minute), then asks once.
+(function cmpEggInit() {
+  var tries = 0;
+  function go() {
+    tries++;
+    var u = (typeof state !== 'undefined' && state.user) ? state.user : null;
+    if (!u) { if (tries < 60) setTimeout(go, 1000); return; }
+    if (!u.is_admin) return;
+    fetch('/api/debug/status', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { cmpEggShow(!!(d && d.debug_mode)); })
+      .catch(function () {});
+  }
+  if (typeof document !== 'undefined') setTimeout(go, 1500);
+})();
 
 function cmpShowLogSection(show) {
   var sec = document.getElementById('debug-log-section');

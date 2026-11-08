@@ -129,8 +129,10 @@
     </div>
     <!-- v3.2.62 -- TD-996. An invisible spot to the right of the account button: seven clicks turn Debug Mode on or off
          for an admin (Ian, 2026-10-24), without going to the Account page. Nothing shows and nothing happens for
-         anyone else. No cursor change, no title, hidden from screen readers. -->
-    <span id="dbg-egg" onclick="cmpEggTap()" aria-hidden="true" style="display:inline-block;width:24px;height:30px;margin-left:-6px;margin-right:-12px;flex:0 0 auto;"></span>
+         anyone else. No cursor change, no title, hidden from screen readers.
+         v3.5.02 -- half as wide (Ian, 2026-11-08), taking the same room as before; and while Debug Mode is on, an admin
+         sees it (cmpEggShow): a small red bar, a click away from the debug panel. -->
+    <span id="dbg-egg" onclick="cmpEggTap()" aria-hidden="true" style="display:inline-block;width:12px;height:30px;margin-left:-3px;margin-right:-3px;flex:0 0 auto;align-self:center;border-radius:4px;"></span>
   </div>
 </div>
 
