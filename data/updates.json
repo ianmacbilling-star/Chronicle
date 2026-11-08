@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.04",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3504-video-episodes",
+        "kind": "feature",
+        "public": false,
+        "summary": "The Video tab is rebuilt as Episodes: an episode is shots joined by cuts; a shot is one continuous camera run through one or more keyframes; each shot can have several takes, one chosen.",
+        "detail": "Ian, 2026-11-08: 'Episode is made up of Shots... Each Shot can have multiple takes... Between each shot we should have a Cut'. New tables episodes, shots, keyframes, takes, moves and episode_writer_jobs; the old video tables are dropped once on first start (marker video_old_tables_dropped; Ian: no data to keep). Cut here splits a shot, Join removes a cut; Make this shot makes a take; the episode video joins the chosen takes with plain cuts. A one-keyframe shot brings that picture to life. The shot list writer is told where the cuts are. Saves go one at a time and the server locks the episode while it saves (the doubled-pictures bug). Cut styles, Final Cut and the Archive come in later builds.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.03",
     "staged_on": "2026-11-08",
     "entries": [

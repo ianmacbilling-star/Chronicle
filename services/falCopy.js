@@ -21,7 +21,7 @@ const FAL_RE = /https?:\/\/(?:[a-z0-9-]+\.)*fal\.media\/[^\s"'<>\\)]+/gi;
 // the login sessions table.
 const SKIP_TABLES = ['debug_logs', 'image_rights', 'session', 'sessions_store'];
 // Columns that hold fal's address on purpose, beside our own copy in another column.
-const SKIP_COLUMNS = { video_shots: ['fal_video_url'] };
+const SKIP_COLUMNS = { moves: ['fal_video_url'] };   // v3.5.04: the video clips' table is moves now (was video_shots)
 const NIGHT_HOUR_UTC = 8;   // 3 am Eastern (4 am in summer): the site is quiet
 const S = { running: false, phase: null, done: 0, total: 0, startedAt: null, finishedAt: null, last: null, error: null };
 
