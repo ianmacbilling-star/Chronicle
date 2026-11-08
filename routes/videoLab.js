@@ -1183,16 +1183,53 @@ router.post('/episodes/:id/keyframe-retouch', requireAuth, requireVideo, async f
     if (versionStyle) style = versionStyle;
     // v3.5.14 -- Expand: the same retouch, with our own words, drawn wide (16:9) whatever shape the picture was.
     const expand = !!b.expand;
-    const out = await require('./images').startKeyframeRetouch(db, { userId: req.session.userId, campaignId: ep.campaign_id, episodeId: ep.id, imageUrl: url,
+    // v3.5.24 -- the shot's own references go with the retouch (Ian, 2026-11-08: "The references in that shot should show
+    // in the Retouch modal to use"; "only the Shots References"). The page sends the shot's list; it is checked here.
+    let refs = null;
+    if (!expand && Array.isArray(b.refs)) {
+      const pool = await refsPool(db, ep);
+      refs = refsToSend(ep, null, cleanRefs(b.refs), pool, 12).map(function (r) { return { name: r.name, url: r.url, isAsset: r.kind === 'asset' }; });
+    }
+    const out = await require('./images').startKeyframeRetouch(db, { refs: refs, userId: req.session.userId, campaignId: ep.campaign_id, episodeId: ep.id, imageUrl: url,
       momentId: kf.moment_id || null, shape: shape, style: style, forceShape: expand ? 'wide' : null,
       instruction: expand ? EXPAND_INSTRUCTION : b.instruction, markedUrl: expand ? null : b.marked_url, refName: expand ? null : b.ref_name });
     if (out.error) return res.status(out.error === 'INSUFFICIENT_TOKENS' ? 402 : 400).json(out);
-    vlDebug(req.session.userId, 'info', FN, 'Keyframe retouch started (job ' + out.job_id + ')', { url: vlShortUrl(url), moment_id: kf.moment_id, archive_id: kf.archive_id, art_style: style });
+    vlDebug(req.session.userId, 'info', FN, 'Keyframe retouch started (job ' + out.job_id + ')', { url: vlShortUrl(url), moment_id: kf.moment_id, archive_id: kf.archive_id, art_style: style, shot_refs: refs ? refs.map(function (r) { return r.name; }) : null });
     res.json({ job_id: out.job_id });
   } catch (e) {
     console.error('[video] keyframe retouch error:', e && e.message);
     vlDebug(req.session && req.session.userId, 'error', FN, 'Could not start: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });
     if (!res.headersSent) res.status(500).json({ error: 'Could not start the retouch.' });
+  }
+});
+
+// v3.5.24 -- FLIP A KEYFRAME (Ian, 2026-11-08). The episode's copy of the picture is mirrored left to right (free, no
+// AI); every keyframe of the episode showing it takes the flipped one, with the old one in its Revert slot, as a retouch
+// lands. The book, the storyboard and the Archive are not touched.
+router.post('/episodes/:id/keyframe-flip', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/episodes/' + req.params.id + '/keyframe-flip';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!(await canChange(req, ep))) return vlRefuse(req, res, FN, 404, 'Not found.');
+    const url = String((req.body && req.body.image_url) || '');
+    const kf = await db.prepare('SELECT id FROM keyframes WHERE episode_id = ? AND image_url = ? LIMIT 1').get(ep.id, url);
+    if (!kf) return vlRefuse(req, res, FN, 409, 'That keyframe has changed; try again in a moment.', { url: vlShortUrl(url) });
+    const busy = await db.prepare("SELECT id FROM image_jobs WHERE kind = 'keyframe' AND episode_id = ? AND prev_image = ? AND status IN ('queued', 'processing') AND created_at > NOW() - INTERVAL '15 minutes' LIMIT 1").get(ep.id, url);
+    if (busy) return vlRefuse(req, res, FN, 409, 'That keyframe is being retouched; flip it when the retouch is done.');
+    try {
+      if (await require('../services/rightsCheck').refuseRejected(res, [url], 'It can\u2019t be flipped. Replace it with a picture you have the rights to.')) return;
+    } catch (e) { console.error('[video] rights check failed:', e && e.message); }
+    let m;
+    try { m = await require('./images').mirrorPicture(url); }
+    catch (e) { return vlRefuse(req, res, FN, 400, e && e.userFacing ? e.message : 'Could not flip the picture. Please try again.', { error: e && e.message }); }
+    const r = await db.prepare('UPDATE keyframes SET image_url = ?, prev_image_url = ? WHERE episode_id = ? AND image_url = ?').run(m.url, url, ep.id, url);
+    vlDebug(req.session.userId, 'info', FN, 'Keyframe flipped (' + r.changes + ' keyframe(s) show it)', { from: vlShortUrl(url), to: vlShortUrl(m.url) });
+    res.json({ success: true, image_url: m.url });
+  } catch (e) {
+    console.error('[video] keyframe flip error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not flip the picture.' });
   }
 });
 

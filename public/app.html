@@ -3817,6 +3817,7 @@
       <select class="form-input" id="retouch-action" onchange="rgActionChange()" style="margin:10px 0 0;">
         <option value="">What are you changing?</option>
         <option value="none">I'll type it below</option>
+        <option value="flip">Flip it left to right (mirror image)</option>
         <option value="move">Move a character</option>
         <option value="add">Add a character</option>
         <option value="extra">Add a person or object</option>
@@ -3849,7 +3850,7 @@
     </div>
     <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-sm" onclick="closeRetouch()">Cancel</button>
-      <button class="btn btn-sm btn-primary" onclick="submitRetouch()">Retouch image</button>
+      <button class="btn btn-sm btn-primary" id="retouch-go-btn" onclick="submitRetouch()">Retouch image</button>
     </div>
   </div>
 </div>

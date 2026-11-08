@@ -15996,6 +15996,9 @@ var RG_SIZE_NAMES = ['a point', 'small', 'medium', 'large'];
 // Every action declares which squares it needs and what each one asks. Adding
 // an action is a row here plus a template in rgCompose -- nothing else.
 var RG_ACTIONS = {
+  // v3.5.24 -- Flip: a mirror image, made here with no AI (free and instant, Revert undoes it). Story panels and video
+  // keyframes only (Ian, 2026-11-08: "Add an Option to the retouch drop down to flip the image from left to right").
+  flip: { cells: [], flip: true, ph: '' },
   none: {
     cells: ['from', 'to'], optional: ['from', 'to'],
     from: 'Optional: click the thing you mean.',
@@ -16329,6 +16332,9 @@ function rgCastBlockInner(label) {
   var note = missing.length
     ? ('<div style="font-size:11px;color:var(--accent-pale);margin-top:2px;">' + rgEsc(missing.join(', ')) + ' \u00b7 No Picture Exists</div>')
     : '';
+  if (!cs.length && state.retouchVl && rgState.momentId === state.retouchVl.rg) {   // v3.5.24 -- a video keyframe: its shot's references
+    return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">This shot has no references with a picture. Add a character or asset to the shot\u2019s References, then open Retouch again.</div>';
+  }
   if (!cs.length) {
     return '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Nothing on this panel has a reference picture, so none was sent when it was drawn. Add one below, then regenerate -- a retouch on its own would send the same empty cast again.</div>' +
       rows + note;
@@ -16422,6 +16428,9 @@ function rgActionChange() {
   rgState.active = def.cells.length ? def.cells[0] : null;
 
   var html = '';
+  if (def.flip) html += '<div style="font-size:11px;color:var(--gold-dim);line-height:1.5;">Mirrors the whole picture, left to right. Free and instant; Revert undoes it. Any lettering in the picture will read backwards.</div>';
+  var _fta = document.getElementById('retouch-instruction'); if (_fta) _fta.style.display = def.flip ? 'none' : '';
+  var _fgo = document.getElementById('retouch-go-btn'); if (_fgo) _fgo.textContent = def.flip ? 'Flip image' : 'Retouch image';
   if (def.cast) html += rgCastSelect(def.cast);
   for (var i = 0; i < def.cells.length; i++) {
     html += rgCellRow(def.cells[i], def[def.cells[i]]);
@@ -16450,7 +16459,7 @@ function rgActionChange() {
   if (srow) { if (def.cells.length) srow.classList.remove('hidden'); else srow.classList.add('hidden'); }
   var ta = document.getElementById('retouch-instruction');
   if (ta) ta.placeholder = def.ph;
-  if (row) row.classList.remove('hidden');
+  if (row) { if (def.flip) row.classList.add('hidden'); else row.classList.remove('hidden'); }
   rgPaintMarkers();
   rgPaintPrompt();
   rgPaintSizes();
@@ -16936,6 +16945,8 @@ function rgFinalInstruction() {
 function rgTeardown() {
   var wrap = document.getElementById('retouch-grid-wrap');
   if (wrap) wrap.classList.add('hidden');
+  var _tta = document.getElementById('retouch-instruction'); if (_tta) _tta.style.display = '';   // v3.5.24 -- Flip hid it
+  var _tgo = document.getElementById('retouch-go-btn'); if (_tgo) _tgo.textContent = 'Retouch image';
   var fr = document.getElementById('retouch-final-row');
   if (fr) fr.classList.add('hidden');
   rgResetFinal();
@@ -16993,6 +17004,9 @@ function rgSetup(momentId, ibTarget) {   // v3.3.82 -- ibTarget { url, shape, re
   rgState.size = 1;
   var sel = document.getElementById('retouch-action');
   if (sel) sel.value = '';
+  // v3.5.24 -- Flip is offered on story panels and video keyframes, not on Image Builder pictures.
+  var _flo = sel ? sel.querySelector('option[value="flip"]') : null;
+  if (_flo) { var _isVl = !!(state.retouchVl && state.retouchVl.rg === momentId); _flo.hidden = !!ibTarget && !_isVl; _flo.disabled = _flo.hidden; }
   rgActionChange();
   wrap.classList.remove('hidden');
   // Restart the animation by removing the class and forcing a reflow before
@@ -17088,6 +17102,17 @@ function submitRetouch() {
     }
     closeRetouch();
     titleBuildRetouch(_txt);
+    return;
+  }
+  // v3.5.24 -- Flip: no AI and no tokens, so it leaves before every check a retouch needs.
+  var _flSel = document.getElementById('retouch-action');
+  if (_flSel && _flSel.value === 'flip' && typeof rgState !== 'undefined') {
+    if (state.retouchVl && rgState.momentId === state.retouchVl.rg && !state.retouchMomentId && !state.retouchAssetId && !state.retouchCharId && !state.retouchSessionCharId) {
+      var _flT = state.retouchVl; closeRetouch(); vlFlipSend(_flT); return;
+    }
+    if (state.retouchMomentId && !state.retouchIb && !state.retouchAssetId && !state.retouchCharId && !state.retouchSessionCharId && String(rgState.momentId) === String(state.retouchMomentId)) {
+      var _flM = state.retouchMomentId; closeRetouch(); rgFlipMoment(_flM); return;
+    }
     return;
   }
   if (!ensureGenFree()) return;
@@ -17314,6 +17339,19 @@ function submitRetouch() {
     showPanelError(momentId, 'Could not start retouch.');
   })
   .catch(function(e){ showPanelError(momentId, 'Could not retouch: ' + e.message); });
+}
+
+// v3.5.24 -- Flip a story panel: the server mirrors it and arms Revert with the picture it was, as a retouch does.
+function rgFlipMoment(momentId) {
+  if (typeof panelJobBlocked === 'function' && panelJobBlocked(momentId)) return;
+  showPanelBusy(momentId, 'Flipping');
+  fetch('/api/images/flip-moment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ moment_id: momentId }) })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.image_url) { applyRegenResult(momentId, data.image_url); return; }
+      showPanelError(momentId, 'Could not flip: ' + ((data && (data.message || data.error)) || 'no reason given'));
+    })
+    .catch(function (e) { showPanelError(momentId, 'Could not flip: ' + e.message); });
 }
 
 function openReplacePicker(mode, id) {
@@ -42747,12 +42785,10 @@ function vlStyleRowHTML(d, writing) {
   var cur = vlStyle(d.style) || ss[0];
   var info = VL.sl[d.id] || {};
   var kind = writing ? vlSlKind(info) : null;
+  // v3.5.24 -- filled like Generate Story, the price on the button itself, level with the Style menu (Ian, 2026-11-08).
   function btn(mode, icon, label, busyLabel, tip, price) {
-    return '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">' +
-      '<button class="btn btn-sm" id="vl-sl-btn-' + mode + '" onclick="vlWriteShotList(\'' + mode + '\')"' + (writing ? ' disabled' : '') + ' title="' + escapeHtml(tip) + '">' +
-        (kind === mode ? vlSpin(12) + ' ' + busyLabel : icon + ' ' + label) + '</button>' +
-      '<span id="vl-sl-price-' + mode + '" style="' + VL_DESC + '">' + escapeHtml(price) + '</span>' +
-    '</div>';
+    return '<button class="btn btn-primary" id="vl-sl-btn-' + mode + '" onclick="vlWriteShotList(\'' + mode + '\')"' + (writing ? ' disabled' : '') + ' title="' + escapeHtml(tip) + '" style="white-space:nowrap;flex:none;">' +
+      (kind === mode ? vlSpin(12) + ' ' + busyLabel : icon + ' ' + label + ' <span id="vl-sl-price-' + mode + '">' + escapeHtml(price) + '</span>') + '</button>';
   }
   return '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">' +
     '<div style="flex:1;min-width:220px;"><label class="form-label" for="vl-style">Style</label>' +
@@ -42771,7 +42807,7 @@ function vlStyleHint(st, d) {
 function vlSlPriceText(info, mode) {
   var e = info && (mode === 'shots' ? info.estimate_shots : info.estimate);
   if (!e) return '';
-  return 'About ' + e.tokens + ' token' + (e.tokens === 1 ? '' : 's');
+  return '(' + e.tokens + ' token' + (e.tokens === 1 ? '' : 's') + ')';
 }
 function vlSlMsgHTML(info) {
   var j = info && info.job;
@@ -42890,10 +42926,19 @@ function vlRetouch(si, ki) {
   vlReadForm();
   state.retouchMomentId = null; state.retouchTitle = null; state.retouchCharId = null; state.retouchSessionCharId = null; state.retouchAssetId = null; state.retouchIb = null;
   var rg = 'vl' + d.id + '-' + Date.now();
-  state.retouchVl = { episodeId: d.id, url: k.url, rg: rg };
+  // v3.5.24 -- the shot's own references, to pick from (Ian: "so you can make a character or asset look more like their
+  // reference"; "only the Shots References. They can add more and open again"). Only those with a usable picture.
+  var refs = [], ids = [];
+  (d.shots[si].refs || []).forEach(function (r) {
+    var it = vlPoolItem(r.type, r.id);
+    if (!it || !it.usable || !it.url) return;
+    refs.push({ name: it.name, kind: r.type === 'asset' ? 'asset' : 'character', category: it.category || '' });
+    ids.push({ type: r.type, id: r.id });
+  });
+  state.retouchVl = { episodeId: d.id, url: k.url, rg: rg, refs: ids };
   var ta = document.getElementById('retouch-instruction'); if (ta) ta.value = '';
   var modal = document.getElementById('retouch-modal'); if (modal) modal.classList.remove('hidden');
-  try { rgSetup(rg, { url: k.url, shape: null, refs: [] }); } catch (e) {}
+  try { rgSetup(rg, { url: k.url, shape: null, refs: refs }); } catch (e) {}
   if (ta) setTimeout(function () { ta.focus(); }, 30);
 }
 function vlRetouchSend(t, instruction, snap, refName) {
@@ -42907,7 +42952,7 @@ function vlRetouchSend(t, instruction, snap, refName) {
   var marked = (typeof rgUploadMarked === 'function') ? rgUploadMarked(snap) : Promise.resolve(null);
   Promise.resolve(marked).then(function (markedUrl) {
     return fetch('/api/video-lab/episodes/' + t.episodeId + '/keyframe-retouch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_url: url, instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null, expand: !!t.expand }) });   // v3.5.14 expand
+      body: JSON.stringify({ image_url: url, instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null, expand: !!t.expand, refs: t.expand ? undefined : (t.refs || []) }) });   // v3.5.14 expand; v3.5.24 the shot's references
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
       var j = res.j || {};
@@ -42916,6 +42961,29 @@ function vlRetouchSend(t, instruction, snap, refName) {
       undo(escapeHtml(j.message || j.error || 'Could not retouch the keyframe.'));
     })
     .catch(function () { undo('Could not reach the server.'); });
+}
+// v3.5.24 -- Flip a keyframe: the server mirrors the episode's copy (free, at once); it swaps in like a retouch, with the
+// old picture in the Revert slot.
+function vlFlipSend(t) {
+  var url = t.url;
+  VL.kfBusy[url] = 'flip';
+  vlRenderOpen(true);
+  fetch('/api/video-lab/episodes/' + t.episodeId + '/keyframe-flip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_url: url }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      delete VL.kfBusy[url];
+      var d = VL.draft;
+      if (j && j.image_url) {
+        if (d && String(d.id) === String(t.episodeId)) {
+          d.shots.forEach(function (s) { s.kfs.forEach(function (k) { if (k.url === url) { k.prev = url; k.url = j.image_url; } }); });
+          vlStructural();
+        }
+        return;
+      }
+      vlRenderOpen(true);
+      var m = document.getElementById('vl-msg'); if (m) m.textContent = (j && (j.message || j.error)) || 'Could not flip the picture.';
+    })
+    .catch(function () { delete VL.kfBusy[url]; vlRenderOpen(true); var m = document.getElementById('vl-msg'); if (m) m.textContent = 'Could not reach the server.'; });
 }
 // Follow a retouch to its end, then swap the picture in (pollRefJob: the same poll the other retouches use).
 function vlKfFollow(episodeId, jobId, oldUrl) {

@@ -1907,6 +1907,79 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
   }
 });
 
+// v3.5.24 -- FLIP (Ian, 2026-11-08: "Add an Option to the retouch drop down to flip the image from left to right...
+// basically mirror image it. It should work also in storyboard."). A mirror image of one of our pictures, made here: no
+// AI, no tokens, no job. The flipped copy keeps the source's rights verdict, as a retouch does. Shared by the story
+// panel route below and the Video tab's keyframes.
+async function mirrorPicture(url) {
+  const buf = await fetchFile(url);
+  if (!buf) { const e = new Error('Only a Campaignia picture can be flipped.'); e.userFacing = true; throw e; }
+  const sharp = require('sharp');
+  const meta = await sharp(buf).metadata();
+  let img = sharp(buf).flop(), ext = 'png', type = 'image/png';
+  if (meta.format === 'jpeg') { img = img.jpeg({ quality: 92 }); ext = 'jpg'; type = 'image/jpeg'; }
+  else if (meta.format === 'webp') { img = img.webp({ quality: 92 }); ext = 'webp'; type = 'image/webp'; }
+  else img = img.png();
+  const out = await img.toBuffer();
+  const newUrl = await uploadFile(out, 'flip-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext, type);
+  if (!newUrl) throw new Error('the flipped picture could not be stored');
+  try { await rightsCheck.inherit(url, newUrl); } catch (e) { console.error('flip: rights inherit failed:', e && e.message); }
+  return { url: newUrl, width: meta.width || null, height: meta.height || null };
+}
+
+// POST /api/images/flip-moment
+// A story panel mirrored left to right. The checks are the retouch's (owner, lock, title panel, a job in flight, the
+// rights check); the bookkeeping is the retouch webhook's: the picture it was goes into the one-step Revert slot, and a
+// picture leaving that slot is released.
+router.post('/flip-moment', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const moment = await db.prepare(
+    'SELECT m.*, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
+    'FROM moments m JOIN sessions s ON m.session_id = s.id JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ?'
+  ).get(req.body && req.body.moment_id);
+  if (!moment) return res.status(404).json({ error: 'Moment not found' });
+  const myRole = await getCampaignRole(req.session.userId, moment.campaign_id);
+  if (!myRole) return res.status(403).json({ error: 'Access denied' });
+  if (String(moment.fork_owner) !== String(req.session.userId)) return res.status(403).json({ error: 'You can only flip your own version' });
+  if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to flip.' });
+  if (!moment.image) return res.json({ error: 'This panel has no image to flip yet.' });
+  { const _busy = await pendingMomentJob(db, moment.id); if (_busy) return panelBusyReply(res, _busy, req.session.userId); }
+  if (await rightsCheck.refuseRejected(res, [moment.image], 'It can\u2019t be flipped. Replace it with a picture you have the rights to.')) return;
+  var _blt = null;
+  try { var _lm = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {}; _blt = _lm && _lm.built_title; } catch (e) { _blt = null; }
+  if (_blt && _blt.url && String(_blt.url) === String(moment.image)) {
+    return res.json({ error: 'TITLE_PANEL', message: 'This panel holds a chapter title from the Title Builder. Open the Title Builder to change it.' });
+  }
+  try {
+    const prev = moment.image;
+    const m = await mirrorPicture(prev);
+    const now = new Date().toISOString();
+    // the panel may have changed while the picture was being flipped: only the picture that was flipped is replaced
+    const upd = await db.prepare('UPDATE moments SET image = ?, img_w = COALESCE(?, img_w), img_h = COALESCE(?, img_h), edited_at = ?, edited_by = ? WHERE id = ? AND image = ?')
+      .run(m.url, m.width, m.height, now, req.session.userId, moment.id, prev);
+    if (!upd || !upd.changes) { try { await releaseImage(db, m.url); } catch (e) {} return res.json({ error: 'The panel changed while it was being flipped. Try again.' }); }
+    const leaving = (moment.revert_image && moment.revert_image !== prev && moment.revert_image !== m.url) ? moment.revert_image : null;
+    await db.prepare('UPDATE moments SET revert_image = ?, revert_img_w = ?, revert_img_h = ? WHERE id = ?').run(prev, moment.img_w || null, moment.img_h || null, moment.id);
+    if (leaving) {
+      try {
+        const _dr = await db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(moment.id);
+        let _dm = null;
+        try { _dm = (_dr && _dr.layout_meta) ? (typeof _dr.layout_meta === 'object' ? _dr.layout_meta : JSON.parse(_dr.layout_meta)) : null; } catch (_pe) { _dm = null; }
+        if (_dm && typeof _dm === 'object' && !Array.isArray(_dm) && _dm.prev_shape && _dm.prev_shape.image === leaving) {
+          delete _dm.prev_shape;
+          await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_dm), moment.id);
+        }
+      } catch (_de) { console.error('flip: clearing the old undo-slot record failed (the file is kept):', _de && _de.message); }
+      await releaseImage(db, leaving);
+    }
+    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /flip-moment', message: 'Flipped moment ' + moment.id + ' left to right', detail: { moment_id: moment.id, from: prev, to: m.url } }); } catch (_le) {}
+    res.json({ success: true, image_url: m.url });
+  } catch (e) {
+    console.error('flip-moment error:', e && e.message);
+    res.json({ error: e && e.userFacing ? e.message : 'Could not flip the picture. Please try again.' });
+  }
+});
+
 // POST /api/images/revert-moment
 // One-deep undo of the last retouch/regenerate: restore the retained prior image
 // and release the current one. Free (no token spend). Owner-only, blocked when locked.
@@ -4391,6 +4464,13 @@ async function startKeyframeRetouch(db, o) {
     refs = combineRefs(cl.refs, al.refs); charText = cl.text; shape = moment.shape || shape;
     if (!style) style = moment.style || null;
   }
+  // v3.5.24 -- the Video tab sends the shot's own references (Ian: "only the Shots References"), already resolved and
+  // checked there; they replace the panel's.
+  if (Array.isArray(o.refs)) {
+    refs = o.refs.filter(function (r) { return r && r.name && r.url && isOurPublicUrl(r.url); }).slice(0, MAX_PANEL_REFS)
+      .map(function (r) { return { name: String(r.name), url: r.url, isAsset: !!r.isAsset }; });
+    charText = '';
+  }
   if (o.forceShape) shape = o.forceShape;   // v3.5.14 -- Expand on the Video tab: drawn wide (16:9) whatever shape the picture was
   let instr = instruction;
   if (instr.indexOf('{{REF:') !== -1) {
@@ -4426,6 +4506,7 @@ async function startKeyframeRetouch(db, o) {
 
 module.exports = router;
 module.exports.startKeyframeRetouch = startKeyframeRetouch;   // v3.5.09 -- TD-090
+module.exports.mirrorPicture = mirrorPicture;   // v3.5.24 -- Flip, for the Video tab's keyframes
 module.exports.generateReferenceImage = generateReferenceImage;
 // v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.
 module.exports.charPromptWithHeight = charPromptWithHeight;

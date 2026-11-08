@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.24",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3524-flip-refs",
+        "kind": "feature",
+        "public": false,
+        "summary": "Retouch can flip a picture left to right; a video keyframe's Retouch uses its shot's references; the Director's buttons are filled with their price.",
+        "detail": "Ian, 2026-11-08: \"Add an Option to the retouch drop down to flip the image from left to right... basically mirror image it. It should work also in storyboard\"; \"when you open the retouch on a key Frame image in a shot... The references in that shot should show in the the Retouch modal to use\" (\"only the Shots References. They can add more and open again\"); \"Put the (1 token) on the buttons themselves... Fill these buttons in with yellow... Just like our Generate Story button\". Flip: a new first choice in Retouch's What are you changing? menu, on story panels and video keyframes (not Image Builder pictures). The server mirrors the picture with no AI and no tokens; the copy keeps the source's rights verdict. A story panel's old picture goes into its Revert slot as a retouch's does (owner, lock, title-panel, busy and rights checks as on Retouch; the picture leaving the slot is released); a keyframe's every copy in the episode takes the flip with the old one in Revert. The words box hides and the button reads Flip image. Keyframe Retouch: the reference menu lists the shot's References that have a picture; the server re-checks them and sends them in place of the panel's (Expand sends none). The Director's buttons are btn-primary, with (n tokens) on the button, level with the Style menu.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.23",
     "staged_on": "2026-11-08",
     "entries": [
