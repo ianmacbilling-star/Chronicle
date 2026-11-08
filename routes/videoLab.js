@@ -77,25 +77,25 @@ const EXPAND_INSTRUCTION = 'Expand this picture into a wide 16:9 frame. Keep eve
   'Continue the scene naturally out to the left and right so it fills the wide frame, matching what is already there. Do not crop anyone, do not add new characters, and do not add any text.';
 const MODELS = {
   seedance2: {
-    label: 'Seedance 2.0 (ByteDance)', endpoint: 'bytedance/seedance-2.0/image-to-video',
+    label: 'Seedance 2.0', group: 'keyframes', endpoint: 'bytedance/seedance-2.0/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.3024, priceSound: 0.3024,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
   },
   seedance2fast: {
-    label: 'Seedance 2.0 Fast (ByteDance)', endpoint: 'bytedance/seedance-2.0/fast/image-to-video',
+    label: 'Seedance 2.0 Fast', group: 'keyframes', endpoint: 'bytedance/seedance-2.0/fast/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.2419, priceSound: 0.2419,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
   },
   kling3std: {
-    label: 'Kling 3.0 Standard (Kuaishou)', endpoint: 'fal-ai/kling-video/v3/standard/image-to-video',
+    label: 'Kling 3.0 Standard', group: 'keyframes', endpoint: 'fal-ai/kling-video/v3/standard/image-to-video',
     start: 'start_image_url', end: 'end_image_url', durations: ['3', '5', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.084, priceSound: 0.126,
     extra: {}, promptRequired: false
   },
   veo31fast: {
-    label: 'Veo 3.1 Fast (Google)', endpoint: 'fal-ai/veo3.1/fast/first-last-frame-to-video',
+    label: 'Veo 3.1 Fast', group: 'keyframes', endpoint: 'fal-ai/veo3.1/fast/first-last-frame-to-video',
     start: 'first_frame_url', end: 'last_frame_url', durations: ['4', '6', '8'], defDuration: '8',
     durationValue: function (d) { return String(d) + 's'; }, price: 0.10, priceSound: 0.15,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true,
@@ -107,13 +107,13 @@ const MODELS = {
   // picture into the next. The shot's length is its boxes' lengths added up (4 to 15 s). Prices as the image-to-video
   // ones until fal's are read.
   seedance2ref: {
-    label: 'Seedance 2.0 Reference (test)', endpoint: 'bytedance/seedance-2.0/reference-to-video', reference: true,
+    label: 'Seedance 2.0', group: 'reference', endpoint: 'bytedance/seedance-2.0/reference-to-video', reference: true,
     durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.3024, priceSound: 0.3024,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
   },
   seedance2reffast: {
-    label: 'Seedance 2.0 Fast Reference (test)', endpoint: 'bytedance/seedance-2.0/fast/reference-to-video', reference: true,
+    label: 'Seedance 2.0 Fast', group: 'reference', endpoint: 'bytedance/seedance-2.0/fast/reference-to-video', reference: true,
     durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.2419, priceSound: 0.2419,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
@@ -122,7 +122,7 @@ const MODELS = {
 const REF_MAX_IMAGES = 9;      // fal: up to 9 reference images
 const REF_MAX_KEYFRAMES = 5;   // the rest of the 9 are kept for the cast
 const REF_MIN_SECS = 4, REF_MAX_SECS = 15;
-const DEFAULT_MODEL = 'seedance2fast';
+const DEFAULT_MODEL = 'seedance2reffast';   // v3.5.19: reference mode is the normal way (was seedance2fast, keyframes)
 const MERGE_ENDPOINT = 'fal-ai/ffmpeg-api/merge-videos';   // joins clips in order on fal's servers (listed at $0)
 const MAX_KEYFRAMES = 60;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
@@ -303,6 +303,11 @@ function ensureTables() {
     // v3.5.09 -- Retouch on a keyframe: its one-step Revert slot, and the episode a retouch job belongs to.
     await db.exec('ALTER TABLE keyframes ADD COLUMN IF NOT EXISTS prev_image_url TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS name TEXT');   // v3.5.15: a shot's own name
+    // v3.5.19 -- a shot described in plain words, one set per shot (VIDEO_REFERENCE_SHOTS_SPEC section 2). actions and
+    // lines are JSON; actions NULL means the shot was never saved this way (its words are still on its keyframes).
+    for (const c of ['start_text TEXT', 'actions TEXT', 'lines TEXT', 'camera TEXT', 'end_text TEXT', 'sounds TEXT', 'around TEXT', 'seconds INTEGER']) {
+      await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS ' + c);
+    }
     await db.exec('ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS episode_id INTEGER');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_image_jobs_episode ON image_jobs(episode_id)');
   })();
@@ -313,8 +318,42 @@ function ensureTables() {
 // ---- reading an episode ----------------------------------------------------------------------
 // What a shot will be made from now: the model, the sound, the overall direction and every keyframe with its move's
 // words and length. A take records the same signature, so a take made before an edit shows as out of date.
-function shotSig(ep, kfs) {
-  return shortSig(JSON.stringify([ep.model, !!ep.sound, String(ep.overall || '')].concat(kfs.map(function (k) { return [k.image_url, k.prompt || '', k.duration || '']; }))));
+function shotSig(ep, kfs, shot) {
+  const w = shot ? shotWords(shot) : null;
+  return shortSig(JSON.stringify([ep.model, !!ep.sound, String(ep.overall || '')].concat(kfs.map(function (k) { return [k.image_url, k.prompt || '', k.duration || '']; }))
+    .concat(w ? [w] : [])));   // v3.5.19: the shot's own words too
+}
+// v3.5.19 -- A SHOT IN PLAIN WORDS. A shot's words as stored (JSON in actions and lines), or null for a shot never saved
+// this way. lines: [{ who, text, when (1-based action number, or 0 for any time), off (heard off-screen) }].
+const SHOT_MIN_SECS = 4, SHOT_MAX_SECS = 15, SHOT_DEFAULT_SECS = 8;
+function parseJson(v, dflt) { if (v == null) return dflt; if (typeof v !== 'string') return v; try { return JSON.parse(v); } catch (e) { return dflt; } }
+function shotWords(shot) {
+  if (!shot || shot.actions == null) return null;
+  const actions = parseJson(shot.actions, []), lines = parseJson(shot.lines, []);
+  return { start: String(shot.start_text || ''), actions: Array.isArray(actions) ? actions.map(String) : [], lines: Array.isArray(lines) ? lines : [],
+    camera: String(shot.camera || ''), end: String(shot.end_text || ''), sounds: String(shot.sounds || ''), around: String(shot.around || ''),
+    seconds: Math.max(SHOT_MIN_SECS, Math.min(SHOT_MAX_SECS, parseInt(shot.seconds, 10) || SHOT_DEFAULT_SECS)) };
+}
+function clampSecs(n) { return Math.max(SHOT_MIN_SECS, Math.min(SHOT_MAX_SECS, Math.round(Number(n) || SHOT_DEFAULT_SECS))); }
+// A shot never saved in plain words: its old per-keyframe words become its actions, in order (spec section 5).
+function legacyWords(kfs, m) {
+  const n = kfs.length === 1 ? 1 : kfs.length - 1 + (hasAfter(kfs) ? 1 : 0);
+  const actions = [];
+  let secs = 0;
+  for (let i = 0; i < n; i++) { const w = String(kfs[i].prompt || '').trim(); if (w) actions.push(w); secs += Number(kfs[i].duration || (m && m.defDuration) || 0) || 0; }
+  return { start: '', actions: actions, lines: [], camera: '', end: '', sounds: '', around: '', seconds: clampSecs(secs || SHOT_DEFAULT_SECS) };
+}
+function cleanText(v, max) { return String(v == null ? '' : v).replace(/\r\n?/g, '\n').trim().slice(0, max); }
+function cleanWords(s) {
+  const actions = (Array.isArray(s.actions) ? s.actions : String(s.actions || '').split('\n'))
+    .map(function (a) { return cleanText(a, 900).replace(/^\s*\d+\s*[.)]\s*/, ''); }).filter(Boolean).slice(0, 20);
+  const lines = (Array.isArray(s.lines) ? s.lines : []).map(function (l) {
+    l = l || {};
+    const when = parseInt(l.when, 10);
+    return { who: cleanText(l.who, 80), text: cleanText(l.text, 300).replace(/^["\u201c]+|["\u201d]+$/g, ''), when: when >= 1 && when <= actions.length ? when : 0, off: !!l.off };
+  }).filter(function (l) { return l.text; }).slice(0, 12);
+  return { start: cleanText(s.start_text != null ? s.start_text : s.start, 900), actions: actions, lines: lines, camera: cleanText(s.camera, 900), end: cleanText(s.end_text != null ? s.end_text : s.end, 900),
+    sounds: cleanText(s.sounds, 600), around: cleanText(s.around, 600), seconds: clampSecs(s.seconds) };
 }
 // Which chosen takes, in order, the episode video is made of.
 function chosenSig(shots) { return shots.map(function (s) { return s.chosen_take_id || 0; }).join(','); }
@@ -327,11 +366,19 @@ async function loadEpisodes(db, where, params) {
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE episode_id = ANY(?) ORDER BY shot_id, position, id').all([ids]);
   const takes = await db.prepare('SELECT * FROM takes WHERE episode_id = ANY(?) ORDER BY shot_id, id').all([ids]);
   const moves = await db.prepare('SELECT * FROM moves WHERE episode_id = ANY(?) ORDER BY take_id, position, id').all([ids]);
+  const castByVersion = {};
+  for (const ep of eps) {
+    const key = ep.fork_id + ':' + ep.campaign_id;
+    if (!castByVersion[key]) castByVersion[key] = (await castRefs(db, ep, true)).all.filter(function (c) { return c.name; }).map(function (c) { return { name: c.name, usable: !!c.usable, why_not: c.why_not || null }; });
+  }
   eps.forEach(function (ep) {
     ep.shots = shots.filter(function (s) { return s.episode_id === ep.id; });
     ep.shots.forEach(function (s) {
       s.keyframes = kfs.filter(function (k) { return k.shot_id === s.id; });
-      s.sig = shotSig(ep, s.keyframes);
+      s.sig = shotSig(ep, s.keyframes, s);
+      const w = shotWords(s);   // v3.5.19
+      s.words = w || legacyWords(s.keyframes, MODELS[ep.model]);
+      s.words_saved = !!w;
       s.takes = takes.filter(function (t) { return t.shot_id === s.id; });
       s.takes.forEach(function (t) {
         t.moves = moves.filter(function (m) { return m.take_id === t.id; });
@@ -339,6 +386,7 @@ async function loadEpisodes(db, where, params) {
       });
     });
     const cs = chosenSig(ep.shots);
+    ep.cast = castByVersion[ep.fork_id + ':' + ep.campaign_id] || [];   // v3.5.19: who can be sent as a reference (the page's "Also sent")
     ep.video_current = !!(ep.video_url && ep.video_sig === cs);
   });
   // v3.5.09 -- keyframe retouches still being drawn (the picture being retouched, and the job), so a page opened
@@ -423,8 +471,8 @@ function vlSaveSummary(b) {
 router.get('/models', requireAuth, requireVideo, function (req, res) {
   const out = Object.keys(MODELS).map(function (k) {
     const m = MODELS[k];
-    return { key: k, label: m.label, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired };
-  });
+    return { key: k, label: m.label, group: m.group || 'keyframes', reference: !!m.reference, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired };
+  }).sort(function (a, b) { return (b.reference ? 1 : 0) - (a.reference ? 1 : 0); });   // v3.5.19: reference first
   const styles = VIDEO_STYLES.map(function (s) { return { key: s.key, label: s.label, description: s.description, speech: s.speech, defaultShot: s.defaultShot }; });
   vlDebug(req.session && req.session.userId, 'info', 'GET /api/video-lab/models', 'Models offered: ' + out.map(function (x) { return x.key; }).join(', '));   // v3.5.18
   res.json({ models: out, webhook: !!webhookUrl(), styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES });
@@ -460,6 +508,10 @@ router.get('/episodes/:id', requireAuth, requireVideo, async function (req, res)
 // label, prompt, duration}]}]. A shot's id is kept when it is one of this episode's (so its takes stay); the others are
 // new; shots no longer sent are removed with their takes. Runs inside the caller's transaction. Returns the files of
 // removed takes, to delete once the transaction is in.
+async function writeWords(tx, sid, w) {
+  await tx.prepare('UPDATE shots SET start_text = ?, actions = ?, lines = ?, camera = ?, end_text = ?, sounds = ?, around = ?, seconds = ? WHERE id = ?')
+    .run(w.start, JSON.stringify(w.actions), JSON.stringify(w.lines), w.camera, w.end, w.sounds, w.around, w.seconds, sid);
+}
 async function writeShots(tx, ep, shotsIn) {
   const have = await tx.prepare('SELECT id FROM shots WHERE episode_id = ?').all(ep.id);
   const haveIds = {}; have.forEach(function (s) { haveIds[s.id] = true; });
@@ -472,9 +524,11 @@ async function writeShots(tx, ep, shotsIn) {
     if (sid && haveIds[sid] && !keep[sid]) {
       if (s.name === undefined) await tx.prepare('UPDATE shots SET position = ?, cut_style = ? WHERE id = ?').run(pos, s.cut_style, sid);   // a save that sends no name (a page from before v3.5.15) keeps it
       else await tx.prepare('UPDATE shots SET position = ?, cut_style = ?, name = ? WHERE id = ?').run(pos, s.cut_style, s.name || null, sid);
+      if (s.words) await writeWords(tx, sid, s.words);   // v3.5.19 (a save without words keeps them)
     } else {
       const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style, name) VALUES (?, ?, ?, ?)').run(ep.id, pos, s.cut_style, s.name || null);
       sid = r.lastInsertRowid;
+      if (s.words) await writeWords(tx, sid, s.words);
     }
     keep[sid] = true;
     for (let i = 0; i < s.keyframes.length; i++) {
@@ -530,7 +584,7 @@ function cleanShots(list, m) {
     const room = MAX_KEYFRAMES - n;
     if (room <= 0 || !kfs.length) return;
     n += Math.min(room, kfs.length);
-    out.push({ id: parseInt(s.id, 10) || null, name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
+    out.push({ id: parseInt(s.id, 10) || null, words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
 }
@@ -653,7 +707,8 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
           !!src.sound, src.style, src.overall || '', false, 'copy', src.shot_list || null);
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
-        return { name: s.name, cut_style: s.cut_style, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+        const w = s.words || {};
+        return { name: s.name, cut_style: s.cut_style, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m));
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -745,6 +800,77 @@ function planReference(ep, kfs, shotNo, cast) {
   const own = steps.join('\n\n');
   return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: own, full: full, duration: String(secs), images: pics.concat(people.map(function (p) { return p.url; })), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
+// v3.5.19 -- THE SCRIPT a shot in plain words becomes (VIDEO_REFERENCE_SHOTS_SPEC section 3). pics: { cast: [{ name, n }],
+// scene: [n...] } for a reference model (the @Image numbers), or null for a keyframe model (no picture lines).
+function sayLine(l) { return (l.who ? l.who + (l.off ? ' (off-screen)' : '') + ' says' : (l.off ? 'Someone off-screen says' : 'Someone says')) + ': "' + l.text + '"'; }
+function shotScript(ep, w, pics) {
+  const out = [];
+  out.push('One continuous shot, no cuts. Keep every character looking exactly the same from start to finish.');
+  if (pics) {
+    pics.cast.forEach(function (c) { out.push('@Image' + c.n + ' is ' + c.name + ': ' + c.name + '\'s face, hair, build, clothes and gear must match @Image' + c.n + ' whenever ' + c.name + ' is on screen.'); });
+    if (pics.cast.length) out.push('If a scene picture shows a character differently, follow the character\'s own picture.');
+    if (pics.scene.length) out.push('@Image' + pics.scene[0] + ' is how the shot opens: start the video looking like it, in its art style.');
+    if (pics.scene.length > 1) out.push(pics.scene.slice(1).map(function (n) { return '@Image' + n; }).join(', ') + (pics.scene.length === 2 ? ' shows' : ' show') +
+      ' the place, the light and who is there. Do not copy poses, positions or which way anyone faces from ' + (pics.scene.length === 2 ? 'it' : 'them') + '.');
+  }
+  const overall = String(ep.overall || '').trim();
+  if (overall) out.push('Overall: ' + overall);
+  if (w.start) out.push('Start: ' + w.start);
+  const loose = w.lines.filter(function (l) { return !l.when; });
+  if (w.actions.length || loose.length) {
+    out.push('What happens, in order:');
+    w.actions.forEach(function (a, i) {
+      const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return 'As this happens, ' + sayLine(l) + '.'; });
+      out.push((i + 1) + '. ' + a + (said.length ? ' ' + said.join(' ') : ''));
+    });
+    loose.forEach(function (l) { out.push((w.actions.length ? 'Then, ' : '') + sayLine(l) + '.'); });
+  }
+  if (w.camera) out.push('Camera: ' + w.camera);
+  if (w.end) out.push('End: ' + w.end);
+  if (w.sounds) out.push('Sound: ' + w.sounds);
+  if (w.around) out.push('Around them: ' + w.around);
+  return out.join('\n').slice(0, 6000);
+}
+function wordsHaveContent(ep, w) { return !!(String(ep.overall || '').trim() || w.start || w.actions.length || w.lines.length || w.camera || w.end); }
+function wordsText(ep, w) { return [ep.overall, w.start, w.actions.join(' '), w.camera, w.end, w.sounds, w.around].concat(w.lines.map(function (l) { return l.who + ' ' + l.text; })).join(' '); }
+function namedCast(text, cast, room) {
+  const words = String(text || '').toLowerCase(), people = [];
+  (cast || []).forEach(function (c) {
+    if (people.length >= room || !c.url || !c.name) return;
+    if (people.some(function (p) { return p.name === c.name || p.url === c.url; })) return;
+    const first = String(c.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9'-]/g, '');
+    if (first.length >= 2 && new RegExp('(^|[^a-z0-9])' + first.replace(/[-']/g, '\\$&') + '([^a-z0-9]|$)').test(words)) people.push({ name: String(c.name).trim(), url: c.url });
+  });
+  return people;
+}
+// A reference shot in plain words: one move; the cast named first (they win), then up to 5 scene pictures.
+function planReferenceWords(ep, kfs, w, shotNo, cast) {
+  const m = MODELS[ep.model];
+  if (!kfs.length) return { error: 'Shot ' + shotNo + ' has no pictures.' };
+  if (!wordsHaveContent(ep, w)) return { error: 'Shot ' + shotNo + ' needs words: say what the characters do, or how the shot starts.' };
+  const scenePics = kfs.slice(0, REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });
+  const people = namedCast(wordsText(ep, w), cast, REF_MAX_IMAGES - scenePics.length);
+  const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1 }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };
+  return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics), duration: String(w.seconds),
+    images: people.map(function (p) { return p.url; }).concat(scenePics), cast: people.map(function (p) { return p.name; }) }], model: m };
+}
+// A keyframe-model shot in plain words: the same script (no picture lines) for every move; the length shared out.
+function planMovesWords(ep, kfs, w, shotNo) {
+  const m = MODELS[ep.model];
+  if (!m) return { error: 'Pick a video model.' };
+  if (!kfs.length) return { error: 'Shot ' + shotNo + ' has no pictures.' };
+  if (m.promptRequired && !wordsHaveContent(ep, w)) return { error: m.label + ' needs words for shot ' + shotNo + '.' };
+  const full = shotScript(ep, w, null), n = kfs.length === 1 ? 1 : kfs.length - 1;
+  const d = snapDuration(m, w.seconds / n) || m.defDuration;
+  const out = [];
+  for (let i = 0; i < n; i++) out.push({ position: i + 1, start: kfs[i].image_url, end: kfs.length === 1 ? null : kfs[i + 1].image_url, own: w.actions.join('\n'), full: full, duration: String(d) });
+  return { moves: out, model: m };
+}
+function planShot(ep, kfs, shot, shotNo, cast) {
+  const m = MODELS[ep.model], w = shotWords(shot);
+  if (w) return m && m.reference ? planReferenceWords(ep, kfs, w, shotNo, cast) : planMovesWords(ep, kfs, w, shotNo);
+  return m && m.reference ? planReference(ep, kfs, shotNo, cast) : planMoves(ep, kfs, shotNo);   // never saved in plain words (before v3.5.19)
+}
 // The version's cast with their reference pictures (the version's own, else the character's).
 async function castRefs(db, ep, detail) {
   let rows = [];
@@ -784,7 +910,7 @@ async function makeShot(db, req, ep, shot, shotNo) {
   const m = MODELS[ep.model];
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
   const cast = m && m.reference ? await castRefs(db, ep, true) : null;
-  const plan = m && m.reference ? planReference(ep, kfs, shotNo, cast.usable) : planMoves(ep, kfs, shotNo);   // v3.5.16
+  const plan = planShot(ep, kfs, shot, shotNo, cast ? cast.usable : []);   // v3.5.16; v3.5.19: in plain words
   // v3.5.18 -- what a Generate is about to send, for debug mode (Ian: "Put what you need to see in debug mode").
   vlDebug(req.session && req.session.userId, plan.error ? 'warn' : 'info', 'makeShot', 'Shot ' + shotNo + ' (shot ' + shot.id + ', episode ' + ep.id + '): model ' + ep.model + ' = ' +
     (m ? (m.reference ? 'REFERENCE mode' : 'KEYFRAME mode') : 'unknown model') + (plan.error ? '; refused: ' + plan.error : '; ' + plan.moves.length + ' move(s)'), {
@@ -803,7 +929,7 @@ async function makeShot(db, req, ep, shot, shotNo) {
   const cost = Math.round(plan.moves.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
   const directions = JSON.stringify({ overall: ep.overall || '', style: ep.style, moves: plan.moves.map(function (x) { return { own: x.own, duration: x.duration, images: x.images || undefined, cast: x.cast || undefined }; }) });
   const ins = await db.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, est_cost_usd) VALUES (?, ?, ?, 'making', ?, ?, ?, ?, ?) ON CONFLICT (shot_id) WHERE status = 'making' DO NOTHING")
-    .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep, kfs), directions, cost);
+    .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep, kfs, shot), directions, cost);
   if (!ins.lastInsertRowid) return { status: 409, error: 'Shot ' + shotNo + ' is already being made.' };
   const takeId = ins.lastInsertRowid;
   await db.prepare('UPDATE shots SET chosen_take_id = ? WHERE id = ?').run(takeId, shot.id);
@@ -864,7 +990,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id)) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
-      const p = MODELS[ep.model] && MODELS[ep.model].reference ? planReference(ep, kfs, i + 1, []) : planMoves(ep, kfs, i + 1);   // v3.5.16
+      const p = planShot(ep, kfs, shots[i], i + 1, []);   // v3.5.16; v3.5.19
       if (p.error) return res.status(400).json({ error: p.error });
     }
     const errors = [];
@@ -1629,6 +1755,19 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
         if (x) await tx.prepare('UPDATE keyframes SET prompt = ?, duration = ? WHERE id = ?').run(moveBoxText(x), x.duration, k.id);
         else await tx.prepare("UPDATE keyframes SET prompt = '' WHERE id = ?").run(k.id);
       }
+      // v3.5.19 -- the shot's plain-word boxes from the same answer (until v3.5.20 writes them box by box): each move's
+      // action is one action, its lines are said during it, its camera and sound joined in order.
+      const acts = [], lines = [], cams = [], snds = [];
+      let secs = 0;
+      mv.forEach(function (x) {
+        if (x.action) acts.push(x.action);
+        (x.dialogue || []).forEach(function (dl) { lines.push({ who: dl.speaker || '', text: dl.line, when: x.action ? acts.length : 0, off: /off-?screen/i.test(dl.speaker || '') }); });
+        if (x.camera) cams.push(x.camera);
+        if (x.sound) snds.push(x.sound);
+        secs += Number(x.duration) || 0;
+      });
+      lines.forEach(function (l) { l.who = l.who.replace(/\s*\(off-?screen\)\s*/i, '').trim(); });
+      await writeWords(tx, live[i].id, cleanWords({ start: '', actions: acts, lines: lines, camera: cams.join(' Then: '), end: '', sounds: snds.join(' '), around: '', seconds: secs }));
     }
     await tx.prepare('UPDATE episodes SET overall = ?, shot_list = ?, style = ?, updated_at = NOW() WHERE id = ?').run(result.overall, JSON.stringify(shotList), ctx.style.key, episodeId);
     filled = true;

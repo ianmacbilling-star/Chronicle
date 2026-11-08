@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.19",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3519-plain-words",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: each shot is described in plain-word boxes, and reference mode is the default.",
+        "detail": "Ian, 2026-11-08: \"instead of one prompt break it up into things users understand\" (claude/VIDEO_REFERENCE_SHOTS_SPEC.md). Each shot has one set of boxes instead of a box per picture: How does the shot start? / What do the characters do? (numbered) / What do they say? (who, the line, When, heard off-screen) / What does the camera do? / How does the shot end? / How long? (4 to 15 s), with sounds and surroundings under a toggle. Under the pictures: who is also sent as a character picture, and who cannot be and why. Plain-word checks warn about an action in the wrong box, someone who leaves and is needed again, too much for the length, more than 5 pictures, a line with no When, and no end. The server joins the boxes into one script: the named cast's pictures first (they win), the first picture as the opening, later pictures for place only (no poses), then start, actions with their lines, camera, end, sound, surroundings. Seedance 2.0 Fast (reference) is the default; the keyframe models are grouped as Keyframes (exact frames) and get the same script on every move. Old per-picture words show as the shot's actions until saved. The shot list writer fills the boxes from its answer until v3.5.20 writes them box by box.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.18",
     "staged_on": "2026-11-08",
     "entries": [
