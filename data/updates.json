@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.00",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3500-debug-spot-opens-panel",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admins: while Debug Mode is on, one click on the hidden spot beside the account button opens My Account with the debug panel open.",
+        "detail": "Ian, 2026-11-08. While Debug Mode is off, seven clicks still turn it on; while it is on, turn it off from the panel.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.99",
     "staged_on": "2026-11-07",
     "entries": [

@@ -31404,12 +31404,23 @@ function cmpVersionTap() {
 // v3.2.62 -- TD-996. Seven clicks on the invisible spot right of the account button (#dbg-egg) flip Debug Mode, for an
 // admin only (Ian: "NOBODY would know to do this"; admin-only so even a stray find does nothing). Same server
 // switch as the Account page box; a toast says which way it went, and the box and the red dot follow.
+// v3.5.00 -- Ian, 2026-11-08: "If debug is turned on and i do a single click to the area up next to the profile button
+// ... take me right to the account page with the debug panel open." While Debug Mode is ON, the first click asks the
+// server and, finding it on, opens My Account with the Developer / Debug panel shown (turn it off there). While it is
+// OFF, the seven clicks turn it on exactly as before. (Seven fast clicks while it is on, before the answer comes
+// back, still turn it off, as they always did.)
 var _cmpEggTaps = 0, _cmpEggTimer = null;
 function cmpEggTap() {
   if (!(typeof state !== 'undefined' && state.user && state.user.is_admin)) return;
   _cmpEggTaps++;
   if (_cmpEggTimer) clearTimeout(_cmpEggTimer);
   _cmpEggTimer = setTimeout(function () { _cmpEggTaps = 0; }, 2000);
+  if (_cmpEggTaps === 1) {
+    fetch('/api/debug/status', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.debug_mode && _cmpEggTaps > 0 && _cmpEggTaps < 7) { _cmpEggTaps = 0; cmpOpenDebugPanel(); } })
+      .catch(function () {});
+  }
   if (_cmpEggTaps < 7) return;
   _cmpEggTaps = 0;
   fetch('/api/debug/status', { headers: { 'Accept': 'application/json' } })
@@ -31426,6 +31437,17 @@ function cmpEggTap() {
       billingToast(now ? 'Debug Mode is ON.' : 'Debug Mode is OFF.', 'info');
     })
     .catch(function () { billingToast('Could not change Debug Mode.', 'error'); });
+}
+
+// v3.5.00 -- My Account, with the Developer / Debug panel shown and in view (as the version label's seven taps do).
+function cmpOpenDebugPanel() {
+  if (typeof closeUserMenu === 'function') { try { closeUserMenu(); } catch (e) {} }
+  showView('account');
+  var p = document.getElementById('dev-debug-panel');
+  if (!p) return;
+  p.style.display = 'block';
+  cmpInitDebugPanel();
+  setTimeout(function () { try { p.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }, 60);
 }
 
 function cmpInitDebugPanel() {
