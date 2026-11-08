@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.11",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3511-generate-take-corner",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: Generate take sits at each shot's bottom right, after its last panel.",
+        "detail": "Ian, 2026-11-08: 'Put the generate take button at the end of the take... bottom right corner.' The shot's title and its takes stay at the top.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.10",
     "staged_on": "2026-11-08",
     "entries": [

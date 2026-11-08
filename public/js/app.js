@@ -42214,6 +42214,7 @@ function vlShotHTML(d, si, m, n0) {
   return '<div style="' + VL_SHOT + (si % 2 === 0 ? VL_SHOT_ODD : '') + '">' +
     '<div id="vl-live-' + s.ck + '"></div>' +
     '<div class="panels-grid" style="margin-top:8px;">' + cells.join('') + '</div>' +
+    '<div id="vl-livebtn-' + s.ck + '" style="display:flex;justify-content:flex-end;margin-top:10px;"></div>' +   // v3.5.11: Generate take, bottom right (Ian)
   '</div>';
 }
 function vlCutMarkHTML(si) {
@@ -42524,18 +42525,22 @@ function vlTakeCardHTML(t, chosen, n) {
     '</div>' +
   '</div>';
 }
+// v3.5.11 -- Ian, 2026-11-08: "Put the generate take button at the end of the take... bottom right corner." The shot's
+// bar (title, takes) stays at the top; its Generate take button sits at the shot's bottom right, after the last panel.
+function vlShotBtnHTML(ep, ds, si) {
+  var s = vlEpShot(ep, ds.id);
+  var making = (s ? (s.takes || []) : []).some(function (t) { return t.status === 'making'; });
+  return !ds.id ? '<button class="btn btn-sm" disabled>' + vlSpin(10) + ' Saving...</button>'
+    : making ? '<button class="btn btn-sm" disabled>' + vlSpin(10) + ' Being made</button>'
+    : '<button class="btn btn-sm btn-primary" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now">Generate take</button>';
+}
 function vlLiveShotHTML(ep, ds, si, m) {
   var s = vlEpShot(ep, ds.id);
   var takes = s ? (s.takes || []) : [];
-  var making = takes.some(function (t) { return t.status === 'making'; });
   var secs = vlShotSecs(ds, m);
-  var btn = !ds.id ? '<button class="btn btn-sm" disabled>' + vlSpin(10) + ' Saving...</button>'
-    : making ? '<button class="btn btn-sm" disabled>' + vlSpin(10) + ' Being made</button>'
-    : '<button class="btn btn-sm btn-primary" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now">Generate take</button>';
   return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
       '<div style="' + VL_TITLE + 'font-size:14px;">Shot ' + (si + 1) + '</div>' +
       '<span style="' + VL_DESC + 'flex:1;">' + ds.kfs.length + ' keyframe' + (ds.kfs.length === 1 ? '' : 's') + ' &middot; ' + secs + ' s &middot; one continuous camera run' + (takes.length ? ' &middot; ' + takes.length + ' take' + (takes.length === 1 ? '' : 's') : '') + '</span>' +
-      btn +
     '</div>' +
     (takes.length ? '<div style="display:flex;gap:8px;overflow-x:auto;margin-top:8px;padding-bottom:2px;">' + takes.map(function (t, i) { return vlTakeCardHTML(t, String(t.id) === String(s.chosen_take_id), i + 1); }).join('') + '</div>' : '');
 }
@@ -42569,7 +42574,10 @@ function vlRenderLive() {
   if (!d || !ep) return;
   (ep.retouching || []).forEach(function (r) { if (!VL.kfBusy[r.image_url] && !VL.kfDone[r.job_id]) vlKfFollow(ep.id, r.job_id, r.image_url); });   // v3.5.09 (never a job already seen to the end)
   var m = vlModel(d.model);
-  d.shots.forEach(function (ds, si) { vlSetLive(document.getElementById('vl-live-' + ds.ck), 'shot-' + ds.ck, vlLiveShotHTML(ep, ds, si, m)); });
+  d.shots.forEach(function (ds, si) {
+    vlSetLive(document.getElementById('vl-live-' + ds.ck), 'shot-' + ds.ck, vlLiveShotHTML(ep, ds, si, m));
+    vlSetLive(document.getElementById('vl-livebtn-' + ds.ck), 'btn-' + ds.ck, vlShotBtnHTML(ep, ds, si));   // v3.5.11
+  });
   vlSetLive(document.getElementById('vl-epvideo'), 'ep', vlEpVideoHTML(ep));
   if (vlBusyEp(ep)) vlStartTimer();
 }
@@ -42589,9 +42597,9 @@ function vlMakeShot(si) {
   if (!d || vlSlWriting(d.id)) return;
   var msg = document.getElementById('vl-msg');
   var ck = d.shots[si] && d.shots[si].ck;
-  var live = document.getElementById('vl-live-' + ck), b = live && live.querySelector('button.btn');
+  var live = document.getElementById('vl-livebtn-' + ck), b = live && live.querySelector('button.btn');   // v3.5.11: the button's own place
   if (b) { b.disabled = true; b.innerHTML = vlSpin(10) + ' Starting...'; }
-  var undo = function () { VL.liveSig['shot-' + ck] = null; vlRenderLive(); };
+  var undo = function () { VL.liveSig['shot-' + ck] = null; VL.liveSig['btn-' + ck] = null; vlRenderLive(); };
   vlAfterSave(msg, function () {
     var s = null; if (VL.draft) VL.draft.shots.forEach(function (x) { if (x.ck === ck) s = x; });
     if (!s || !s.id) { undo(); return; }
@@ -42600,7 +42608,7 @@ function vlMakeShot(si) {
       .then(function (res) {
         if (res.j && res.j.episode) vlPutEp(res.j.episode);
         if (msg) msg.textContent = res.ok ? '' : ((res.j && res.j.error) || 'Could not start it.');
-        VL.liveSig['shot-' + ck] = null;
+        VL.liveSig['shot-' + ck] = null; VL.liveSig['btn-' + ck] = null;
         vlRenderList(); vlRenderLive();
       })
       .catch(function () { if (msg) msg.textContent = 'Could not reach the server.'; undo(); });
