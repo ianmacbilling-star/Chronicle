@@ -2368,7 +2368,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       // v3.1.98 -- TD-979. A RETOUCH IS AN EDIT OF ITS SOURCE, and keeps the source's rejection, as a copy does
       // (inherit). The routes refuse a rejected source before charging; this is the net under them, so no edit
       // can ever turn a rejected picture into an unmarked one. Never throws.
-      if ((job.kind === 'retouch' || job.kind === 'asset_retouch') && job.prev_image && imageUrl) await rightsCheck.inherit(job.prev_image, imageUrl);
+      if ((job.kind === 'retouch' || job.kind === 'asset_retouch' || job.kind === 'keyframe') && job.prev_image && imageUrl) await rightsCheck.inherit(job.prev_image, imageUrl);   // v3.5.09: a video keyframe's retouch too
       // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
       // width/height in its webhook, so without this the layout uses the nominal shape aspect
       // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3
@@ -2561,13 +2561,25 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           }
           await logImageGeneration(db, job.user_id, 'builder_image', job.builder_image_id, null);
         }
+        // v3.5.09 -- TD-090. A KEYFRAME OF A VIDEO EPISODE (Retouch on the Video tab). Only the episode's own copy changes:
+        // every keyframe of that episode still showing the picture that was retouched takes the new one, and keeps the
+        // old one in its one-step Revert slot. The book, the storyboard and the Archive are not touched. (Keyframe rows
+        // are rewritten by each save, so they are found by episode and picture, not by id; the page also swaps the
+        // picture in when it sees the job done, so a save in the meantime cannot put the old one back for good.)
+        if (job.kind === 'keyframe' && job.episode_id) {
+          const _kr = await db.prepare('UPDATE keyframes SET image_url = ?, prev_image_url = ? WHERE episode_id = ? AND image_url = ?')
+            .run(imageUrl, job.prev_image, job.episode_id, job.prev_image);
+          await logImageGeneration(db, job.user_id, 'video_keyframe', job.episode_id, null);
+          try { await logDebug(job.user_id, { level: 'info', source: 'generation', page: 'Video tab', fn: 'webhook keyframe retouch', message: 'Keyframe retouched in episode ' + job.episode_id + ' (' + (_kr && _kr.changes) + ' keyframe(s) now show it)', detail: { episode_id: job.episode_id, image_url: imageUrl } }); } catch (_ke) {}
+        }
       const genSource = (job.kind === 'char_ref') ? 'character_reference'
         : (job.kind === 'session_ref') ? 'amendment_reference'
         : (job.kind === 'asset_ref') ? 'asset_reference'
         : (job.kind === 'asset_retouch') ? 'asset_retouch'
         : (job.kind === 'retouch') ? 'panel_retouch'
         : (job.kind === 'batch') ? 'panel_batch'
-        : (job.kind === 'builder') ? 'builder_image' : 'panel_regen';   // v3.3.71 -- TD-1080
+        : (job.kind === 'builder') ? 'builder_image'
+        : (job.kind === 'keyframe') ? 'video_keyframe_retouch' : 'panel_regen';   // v3.3.71 -- TD-1080; v3.5.09 keyframe
       if (job.cost && job.cost > 0) {
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: genSource, event_type: 'generation_spend' });
       }
@@ -4341,7 +4353,78 @@ router.delete('/builder/images/:id', requireAuth, async function (req, res) {
   } catch (e) { console.error('[image-builder] delete error:', e.message); res.json({ error: 'Could not delete the picture.' }); }
 });
 
+// v3.5.09 -- TD-090. RETOUCH ON A VIDEO KEYFRAME, started by routes/videoLab.js (which checks video access, the episode
+// and the picture first). The same retouch the Story panels use: the picture is Image 1; a keyframe from a storyboard
+// panel brings that panel's cast and assets as references (as retouch-moment gathers them); one from the Archive has
+// none. The reader's markers ride along (marked_url) and a picked reference narrows the payload (ref_name). The usual
+// retouch price, spent when the picture arrives (the 'keyframe' webhook branch). Returns { job_id } or { error }.
+async function startKeyframeRetouch(db, o) {
+  const fal_key = process.env.FAL_API_KEY;
+  if (!fal_key) return { error: 'Image generation is not configured. Please contact support.' };
+  const webhookUrl = falWebhookUrl();
+  if (!webhookUrl) return { error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' };
+  const instruction = String(o.instruction || '').trim();
+  if (!instruction) return { error: 'Describe the change you want.' };
+  const modelKey = await getSelectedModel(db);
+  const cost = await getTokenCost(modelKey);
+  if (!(await canAfford(o.userId, cost))) return { error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' };
+  let refs = [], charText = '', shape = o.shape || null, style = o.style || null;   // shape: the Archive row's, for a picture from the Archive
+  const moment = o.momentId ? await db.prepare('SELECT m.*, s.campaign_id AS campaign_id FROM moments m JOIN sessions s ON s.id = m.session_id WHERE m.id = ?').get(o.momentId) : null;
+  if (moment && Number(moment.campaign_id) === Number(o.campaignId)) {
+    const chars = await db.prepare(
+      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+      'sc.change_note, sc.change_moment_index, sc.change_status ' +
+      'FROM characters ch ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
+      'WHERE ch.campaign_id = ?'
+    ).all(moment.fork_id, o.campaignId);
+    await attachPriorReferences(db, chars, moment.session_id, o.campaignId, moment.fork_id);
+    const text = (moment.prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
+    let ec = null, ea = null;
+    if (moment.cast_explicit) {
+      ec = (await db.prepare('SELECT character_id FROM moment_characters WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.character_id; });
+      ea = (await db.prepare('SELECT asset_id FROM moment_assets WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.asset_id; });
+    }
+    const cl = buildCharacterBlock(chars, text, moment.panel_order, ec);
+    const al = buildAssetBlock(await db.prepare(ASSET_REF_SQL).all(o.campaignId), text, ea);
+    refs = combineRefs(cl.refs, al.refs); charText = cl.text; shape = moment.shape || shape;
+    if (!style) style = moment.style || null;
+  }
+  let instr = instruction;
+  if (instr.indexOf('{{REF:') !== -1) {
+    instr = instr.replace(/\{\{REF:([^}]*)\}\}/g, function (m, nm) {
+      const want = String(nm || '').trim().toLowerCase();
+      for (let i = 0; i < refs.length; i++) {
+        const rn = refs[i] && refs[i].name;
+        if (rn && String(rn).trim().toLowerCase() === want) return 'the single reference picture supplied with this request, which is the reference for ' + rn + ',';
+      }
+      return 'the supplied reference image for ' + nm;
+    });
+  }
+  const pick = String(o.refName || '').trim();
+  if (pick) {
+    const hit = refs.filter(function (x) { return x && x.name && String(x.name).trim().toLowerCase() === pick.toLowerCase(); })[0];
+    if (hit) instr = 'The character or object being corrected is ' + hit.name + '. The single reference picture supplied with this request is the reference for ' + hit.name +
+      ', and it is the only one supplied. Apply the change to ' + hit.name + ' and to no one else.\n\n' + instr;
+  }
+  const _rs = await resolveGenStyle(db, style, o.userId, o.campaignId);
+  if (_rs.locked) return { error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' };
+  let marked = String(o.markedUrl || '').trim();
+  if (marked && !isOurPublicUrl(marked)) marked = '';
+  const sub = await submitRetouch(o.imageUrl, instr, _rs.styleForGen, fal_key, webhookUrl, { refs: refs, text: charText }, shape, marked || null, (pick && refs.some(function (x) { return x && x.name && String(x.name).trim().toLowerCase() === pick.toLowerCase(); })) ? pick : null, false, null);
+  const now = new Date().toISOString();
+  const job = await db.prepare(
+    'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, episode_id, prev_image, temp_inputs, created_at, updated_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(sub.request_id, o.userId, o.campaignId, 'keyframe', 'queued', sub.model, style, cost, o.episodeId, o.imageUrl, marked ? JSON.stringify([marked]) : null, now, now);
+  try { await logDebug(o.userId, { level: 'info', source: 'generation', page: 'Video tab', fn: 'POST keyframe retouch', message: 'Retouching a keyframe of episode ' + o.episodeId + ' (request ' + sub.request_id + ')',
+    detail: { instruction_raw: instruction, instruction_sent: instr, refs: refs.map(function (x) { return x && x.name; }), ref_name_picked: pick || null, marked_url: marked ? 'yes' : 'no', moment_id: o.momentId || null, style: style } }); } catch (_le) {}
+  return { job_id: job.lastInsertRowid, cost: cost };
+}
+
 module.exports = router;
+module.exports.startKeyframeRetouch = startKeyframeRetouch;   // v3.5.09 -- TD-090
 module.exports.generateReferenceImage = generateReferenceImage;
 // v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.
 module.exports.charPromptWithHeight = charPromptWithHeight;

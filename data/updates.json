@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.09",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3509-keyframe-retouch",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Retouch and Revert on every keyframe. Only the episode's copy changes; the storyboard is not touched.",
+        "detail": "Ian, 2026-11-08: 'put the retouch option on the keyframes'. The Story panels' Retouch window (markers, picked reference) on a keyframe; a keyframe from the storyboard brings that panel's cast and assets as references, one from the Archive its own shape and style. The usual retouch price, spent when the picture arrives, through the shared picture pipeline (routes/images.js: startKeyframeRetouch and a 'keyframe' webhook branch). Every keyframe of the episode showing the old picture takes the new one, with the old in a one-step Revert slot (free). Takes made from the old picture show out of date.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.08",
     "staged_on": "2026-11-08",
     "entries": [

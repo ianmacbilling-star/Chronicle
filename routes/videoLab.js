@@ -272,6 +272,10 @@ function ensureTables() {
     await db.exec('CREATE INDEX IF NOT EXISTS idx_moves_request ON moves(request_id)');
     await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_writer_one_running ON episode_writer_jobs(episode_id) WHERE status = 'running'");
     await db.exec('CREATE INDEX IF NOT EXISTS idx_writer_episode ON episode_writer_jobs(episode_id, id)');
+    // v3.5.09 -- Retouch on a keyframe: its one-step Revert slot, and the episode a retouch job belongs to.
+    await db.exec('ALTER TABLE keyframes ADD COLUMN IF NOT EXISTS prev_image_url TEXT');
+    await db.exec('ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS episode_id INTEGER');
+    await db.exec('CREATE INDEX IF NOT EXISTS idx_image_jobs_episode ON image_jobs(episode_id)');
   })();
   _tablesReady.catch(function () { _tablesReady = null; });
   return _tablesReady;
@@ -308,6 +312,10 @@ async function loadEpisodes(db, where, params) {
     const cs = chosenSig(ep.shots);
     ep.video_current = !!(ep.video_url && ep.video_sig === cs);
   });
+  // v3.5.09 -- keyframe retouches still being drawn (the picture being retouched, and the job), so a page opened
+  // meanwhile shows them and follows them to the end.
+  const rt = await db.prepare("SELECT id, episode_id, prev_image FROM image_jobs WHERE kind = 'keyframe' AND episode_id = ANY(?) AND status IN ('queued', 'processing') AND created_at > NOW() - INTERVAL '15 minutes'").all([ids]);
+  eps.forEach(function (ep) { ep.retouching = rt.filter(function (j) { return j.episode_id === ep.id; }).map(function (j) { return { job_id: j.id, image_url: j.prev_image }; }); });
   return eps;
 }
 async function loadEpisode(db, id) { const out = await loadEpisodes(db, 'id = ?', [id]); return out[0] || null; }
@@ -342,8 +350,18 @@ async function versionAccess(req, db, sessionId, forkId) {
   return (v && String(v) === String(forkId)) ? s : null;
 }
 // A picture may go into an episode if it is on a storyboard of the session or in the campaign's Archive.
+// v3.5.09 -- a keyframe retouched in any episode of this session (a finished 'keyframe' job) is the campaign's too.
+async function retouchedPictures(db, ep, urls) {
+  if (!urls.length) return {};
+  const rows = await db.prepare("SELECT DISTINCT j.image_url FROM image_jobs j JOIN episodes e ON e.id = j.episode_id WHERE j.kind = 'keyframe' AND j.status = 'done' AND e.session_id = ? AND j.image_url = ANY(?)").all(ep.session_id, [urls]);
+  const ok = {}; rows.forEach(function (r) { ok[r.image_url] = true; });
+  return ok;
+}
 async function picturesAllowed(req, db, ep, urls) {
   if (req.vlAdmin || !urls.length) return true;
+  const rt = await retouchedPictures(db, ep, urls);   // v3.5.09
+  urls = urls.filter(function (u) { return !rt[u]; });
+  if (!urls.length) return true;
   const a = await db.prepare('SELECT DISTINCT image_url FROM campaign_archives WHERE campaign_id = ? AND image_url = ANY(?)').all(ep.campaign_id, [urls]);
   const b = await db.prepare('SELECT DISTINCT m.image AS image_url FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = ? AND m.image = ANY(?)').all(ep.session_id, [urls]);
   const ok = {}; (a || []).concat(b || []).forEach(function (r) { ok[r.image_url] = true; });
@@ -430,8 +448,8 @@ async function writeShots(tx, ep, shotsIn) {
     keep[sid] = true;
     for (let i = 0; i < s.keyframes.length; i++) {
       const k = s.keyframes[i];
-      await tx.prepare('INSERT INTO keyframes (episode_id, shot_id, position, image_url, source, moment_id, archive_id, label, prompt, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(ep.id, sid, i + 1, k.url, k.source, k.moment_id, k.archive_id, k.label, k.prompt, k.duration);
+      await tx.prepare('INSERT INTO keyframes (episode_id, shot_id, position, image_url, source, moment_id, archive_id, label, prompt, duration, prev_image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(ep.id, sid, i + 1, k.url, k.source, k.moment_id, k.archive_id, k.label, k.prompt, k.duration, k.prev_url || null);
     }
   }
   const gone = have.map(function (s) { return s.id; }).filter(function (id) { return !keep[id]; });
@@ -473,7 +491,8 @@ function cleanShots(list, m) {
       let d = String(k.duration == null ? '' : k.duration);
       if (m.durations.indexOf(d) < 0) d = snapDuration(m, parseFloat(d)) || m.defDuration;   // the nearest length the model offers
       return { url: String(k.url || k.image_url || ''), source: src, moment_id: parseInt(k.moment_id, 10) || null, archive_id: parseInt(k.archive_id, 10) || null,
-        label: k.label ? String(k.label).slice(0, 200) : null, prompt: String(k.prompt || '').slice(0, 1500), duration: d };
+        label: k.label ? String(k.label).slice(0, 200) : null, prompt: String(k.prompt || '').slice(0, 1500), duration: d,
+        prev_url: String(k.prev_url || k.prev_image_url || '') || null };   // v3.5.09: the Revert slot
     }).filter(function (k) { return k.url; });
     const room = MAX_KEYFRAMES - n;
     if (room <= 0 || !kfs.length) return;
@@ -532,6 +551,10 @@ router.put('/episodes/:id', requireAuth, requireVideo, async function (req, res)
       const notOurs = urls.filter(function (u) { return !storage.isOurPublicUrl(u); });
       if (notOurs.length) return vlRefuse(req, res, FN, 400, 'Every keyframe must be a Campaignia picture.', { sent: vlSaveSummary(b), not_campaignia: notOurs.slice(0, 10).map(vlShortUrl) });
       if (!(await picturesAllowed(req, db, ep0, urls))) return vlRefuse(req, res, FN, 400, 'Every keyframe must come from this campaign.', { sent: vlSaveSummary(b) });
+      // v3.5.09 -- a Revert slot holding a picture that is not this campaign's is emptied, not refused.
+      for (const s of shots) for (const k of s.keyframes) {
+        if (k.prev_url && (!storage.isOurPublicUrl(k.prev_url) || !(await picturesAllowed(req, db, ep0, [k.prev_url])))) k.prev_url = null;
+      }
     }
     let files = [];
     await db.transaction(async function (tx) {
@@ -597,7 +620,7 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
           !!src.sound, src.style, src.overall || '', false, 'copy', src.shot_list || null);
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
-        return { cut_style: s.cut_style, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration }; }) };
+        return { cut_style: s.cut_style, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m));
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -824,6 +847,44 @@ router.post('/takes/:id/join', requireAuth, requireVideo, async function (req, r
     res.json({ episode: await loadEpisode(db, x.ep.id) });
   } catch (e) {
     res.status(500).json({ error: 'Could not join it again.' });
+  }
+});
+
+// ---- retouch on a keyframe (v3.5.09) ---------------------------------------------------------
+// Ian, 2026-11-08: "put the retouch option on the keyframes". The Story panels' retouch (routes/images.js
+// startKeyframeRetouch) on the episode's own copy: when the picture arrives every keyframe of this episode still showing
+// the old picture takes the new one and keeps the old in its Revert slot. The book is not changed. Takes made from the
+// old picture show "out of date" (the shot's signature includes its pictures).
+router.post('/episodes/:id/keyframe-retouch', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/episodes/' + req.params.id + '/keyframe-retouch';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!(await canChange(req, ep))) return vlRefuse(req, res, FN, 404, 'Not found.');
+    const b = req.body || {};
+    const url = String(b.image_url || '');
+    const kf = await db.prepare('SELECT * FROM keyframes WHERE episode_id = ? AND image_url = ? ORDER BY id LIMIT 1').get(ep.id, url);
+    if (!kf) return vlRefuse(req, res, FN, 409, 'That keyframe has changed; try again in a moment.', { url: vlShortUrl(url) });
+    const busy = await db.prepare("SELECT id FROM image_jobs WHERE kind = 'keyframe' AND episode_id = ? AND prev_image = ? AND status IN ('queued', 'processing') AND created_at > NOW() - INTERVAL '15 minutes' LIMIT 1").get(ep.id, url);
+    if (busy) return res.status(409).json({ error: 'That keyframe is already being retouched.', job_id: busy.id });
+    try {
+      if (await require('../services/rightsCheck').refuseRejected(res, [url], 'It can\u2019t be retouched. Replace it with a picture you have the rights to. Nothing was charged.')) return;
+    } catch (e) { console.error('[video] rights check failed:', e && e.message); }
+    let shape = null, style = null;
+    if (kf.archive_id) {
+      const a = await db.prepare('SELECT shape, art_style FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(kf.archive_id, ep.campaign_id);
+      if (a) { shape = a.shape || null; style = a.art_style || null; }
+    }
+    const out = await require('./images').startKeyframeRetouch(db, { userId: req.session.userId, campaignId: ep.campaign_id, episodeId: ep.id, imageUrl: url,
+      momentId: kf.moment_id || null, shape: shape, style: style, instruction: b.instruction, markedUrl: b.marked_url, refName: b.ref_name });
+    if (out.error) return res.status(out.error === 'INSUFFICIENT_TOKENS' ? 402 : 400).json(out);
+    vlDebug(req.session.userId, 'info', FN, 'Keyframe retouch started (job ' + out.job_id + ')', { url: vlShortUrl(url), moment_id: kf.moment_id, archive_id: kf.archive_id });
+    res.json({ job_id: out.job_id });
+  } catch (e) {
+    console.error('[video] keyframe retouch error:', e && e.message);
+    vlDebug(req.session && req.session.userId, 'error', FN, 'Could not start: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });
+    if (!res.headersSent) res.status(500).json({ error: 'Could not start the retouch.' });
   }
 });
 

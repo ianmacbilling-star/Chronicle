@@ -17020,6 +17020,7 @@ function openRetouch(momentId) {
 function closeRetouch() {
   state.retouchTitle = null;   // v3.0.624 -- Cancel must disarm it, not just Submit
   state.retouchIb = null;      // v3.3.82
+  state.retouchVl = null;      // v3.5.09 -- a Video keyframe
   rgTeardown();                // v3.0.750 -- the grid belongs to the moment path only
   var modal = document.getElementById('retouch-modal');
   if (modal) modal.classList.add('hidden');
@@ -17114,6 +17115,16 @@ function submitRetouch() {
     var _ibRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
     closeRetouch();
     ibRetouchSend(_ibId, instruction, _ibSnap, _ibRef);
+    return;
+  }
+  // v3.5.09 -- a keyframe of a video episode (vlRetouch armed it; only while its own grid is the one set up, so a
+  // window opened from elsewhere is never sent here).
+  if (state.retouchVl && typeof rgState !== 'undefined' && rgState.momentId === state.retouchVl.rg && !state.retouchMomentId && !state.retouchAssetId && !state.retouchCharId && !state.retouchSessionCharId) {
+    var _vlT = state.retouchVl;
+    var _vlSnap = (typeof rgSnapshotMarkers === 'function') ? rgSnapshotMarkers() : null;
+    var _vlRef = (typeof rgChosenRef === 'function') ? rgChosenRef() : null;
+    closeRetouch();
+    vlRetouchSend(_vlT, instruction, _vlSnap, _vlRef);
     return;
   }
 
@@ -41915,7 +41926,8 @@ var VL_SHOT_ODD = 'background:linear-gradient(rgba(150,150,150,0.16),rgba(150,15
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
 var VL = { models: null, episodes: [], openId: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, saving: false, savePending: false, waiters: [],
-  busy: false, styles: [], defaultStyle: 'living', writing: null, slTimer: null, sl: {}, liveSig: {}, ck: 0, saveError: '' };
+  busy: false, styles: [], defaultStyle: 'living', writing: null, slTimer: null, sl: {}, liveSig: {}, ck: 0, saveError: '',
+  kfBusy: {}, kfDone: {} };   // v3.5.09: picture being retouched -> its job id; retouch jobs this page has seen to the end
 
 function vlIsAdmin() { return !!(state.user && (state.user.is_admin || state.user.videoOn)); }   // v3.4.94: or the video switch is on
 
@@ -42106,7 +42118,7 @@ function vlDraftFrom(ep) {
     style: (vlStyle(ep.style) || vlStyle(VL.defaultStyle) || {}).key || 'living',
     shots: (ep.shots || []).map(function (s) {
       return { ck: ++VL.ck, id: s.id, cut_style: s.cut_style || 'instant',
-        kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || ''), other: '' }; }) };
+        kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || ''), other: '', prev: k.prev_image_url || '' }; }) };
     }) };
   vlFitDurations(d, m);
   vlRoles(d);
@@ -42152,10 +42164,15 @@ function vlKfCardHTML(d, si, ki, n) {
   var k = d.shots[si].kfs[ki];
   var label = k.source === 'title' ? 'Title picture' : (k.label || (k.source === 'archive' ? 'From the Archive' : ''));
   var first = si === 0 && ki === 0, last = si === d.shots.length - 1 && ki === d.shots[si].kfs.length - 1;
+  var busy = !!VL.kfBusy[k.url];   // v3.5.09: being retouched
   return '<div class="storyboard-panel">' +
-    '<div class="storyboard-panel-img">' +
-      '<img class="moment-img-generated" src="' + escapeHtml(k.url) + '" alt="" loading="lazy" style="cursor:default;">' +
-      '<div class="panel-img-actions">' +
+    '<div class="storyboard-panel-img" style="position:relative;">' +
+      '<img class="moment-img-generated" src="' + escapeHtml(k.url) + '" alt="" loading="lazy" style="cursor:default;' + (busy ? 'opacity:0.45;' : '') + '">' +
+      (busy ? '<div style="position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;pointer-events:none;">' + vlSpin(34) +
+        '<div class="moment-title" style="color:var(--accent-pale);">Retouching...</div></div>' : '') +
+      '<div class="panel-img-actions"' + (busy ? ' style="display:none;"' : '') + '>' +
+        '<button type="button" class="panel-pill" onclick="vlRetouch(' + si + ',' + ki + ')" title="Change this keyframe with the Retouch window. Only this episode\'s copy changes; the storyboard is not touched.">Retouch</button>' +
+        (k.prev ? '<button type="button" class="panel-pill" onclick="vlRevertKf(' + si + ',' + ki + ')" title="Back to the picture before the last retouch (free)">Revert</button>' : '') +
         '<button type="button" class="panel-pill" onclick="vlChoose(\'' + si + ':' + ki + '\')" title="Put a different picture from the Archive here">Replace</button>' +
         '<button type="button" class="panel-pill" onclick="vlRemove(' + si + ',' + ki + ')" title="Take this keyframe out of the episode (the storyboard is not changed)">Remove</button>' +
       '</div>' +
@@ -42350,7 +42367,7 @@ function vlSave(cb) {
   VL.saving = true; VL.savePending = false; VL.saveError = '';
   var keys = d.shots.map(function (s) { return s.ck; });
   var body = { name: d.name, overall: d.overall, model: d.model, sound: d.sound, style: d.style,
-    shots: d.shots.map(function (s) { return { id: s.id, cut_style: s.cut_style, keyframes: s.kfs.map(function (k) { return { url: k.url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt || '', duration: String(k.duration || '') }; }) }; }) };
+    shots: d.shots.map(function (s) { return { id: s.id, cut_style: s.cut_style, keyframes: s.kfs.map(function (k) { return { url: k.url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt || '', duration: String(k.duration || ''), prev_url: k.prev || null }; }) }; }) };
   var id = d.id;
   function done(ok) { VL.saving = false; if (VL.savePending) { vlSave(); return; } vlSaveDone(ok); }
   fetch('/api/video-lab/episodes/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -42560,6 +42577,7 @@ function vlSetLive(el, key, html) {
 function vlRenderLive() {
   var d = VL.draft, ep = d ? vlFindEp(d.id) : null;
   if (!d || !ep) return;
+  (ep.retouching || []).forEach(function (r) { if (!VL.kfBusy[r.image_url] && !VL.kfDone[r.job_id]) vlKfFollow(ep.id, r.job_id, r.image_url); });   // v3.5.09 (never a job already seen to the end)
   var m = vlModel(d.model);
   d.shots.forEach(function (ds, si) { vlSetLive(document.getElementById('vl-live-' + ds.ck), 'shot-' + ds.ck, vlLiveShotHTML(ep, ds, si, m)); });
   vlSetLive(document.getElementById('vl-epvideo'), 'ep', vlEpVideoHTML(ep));
@@ -42789,6 +42807,74 @@ function vlSlPoll(id) {
       })
       .catch(function () { if (vlSlWriting(id)) vlSlPoll(id); });
   }, 3000);
+}
+
+// ---- retouch on a keyframe (v3.5.09) ----------------------------------------------------------
+// The Story panels' Retouch window (rgSetup with a target of its own), sent by submitRetouch's Video branch to
+// vlRetouchSend. Only the episode's copy changes. While it is drawn the card shows a spinner; when it lands every
+// keyframe of this episode showing the old picture takes the new one, with the old in its Revert slot, and the episode
+// is saved (the server has done the same; the save keeps them in step).
+function vlRetouch(si, ki) {
+  var d = VL.draft, k = d && d.shots[si] && d.shots[si].kfs[ki];
+  if (!k || VL.kfBusy[k.url]) return;
+  vlReadForm();
+  state.retouchMomentId = null; state.retouchTitle = null; state.retouchCharId = null; state.retouchSessionCharId = null; state.retouchAssetId = null; state.retouchIb = null;
+  var rg = 'vl' + d.id + '-' + Date.now();
+  state.retouchVl = { episodeId: d.id, url: k.url, rg: rg };
+  var ta = document.getElementById('retouch-instruction'); if (ta) ta.value = '';
+  var modal = document.getElementById('retouch-modal'); if (modal) modal.classList.remove('hidden');
+  try { rgSetup(rg, { url: k.url, shape: null, refs: [] }); } catch (e) {}
+  if (ta) setTimeout(function () { ta.focus(); }, 30);
+}
+function vlRetouchSend(t, instruction, snap, refName) {
+  var url = t.url;
+  VL.kfBusy[url] = 'starting';
+  vlRenderOpen(true);
+  var undo = function (msgHtml) {
+    delete VL.kfBusy[url]; vlRenderOpen(true);
+    var m = document.getElementById('vl-msg'); if (m) m.innerHTML = msgHtml;
+  };
+  var marked = (typeof rgUploadMarked === 'function') ? rgUploadMarked(snap) : Promise.resolve(null);
+  Promise.resolve(marked).then(function (markedUrl) {
+    return fetch('/api/video-lab/episodes/' + t.episodeId + '/keyframe-retouch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_url: url, instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null }) });
+  }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      var j = res.j || {};
+      if (j.job_id && (res.ok || /already being retouched/.test(j.error || ''))) { vlKfFollow(t.episodeId, j.job_id, url); return; }
+      if (j.error === 'INSUFFICIENT_TOKENS') { undo(insufficientTokensHtml(escapeHtml(j.message || 'You are out of tokens.'))); return; }
+      undo(escapeHtml(j.message || j.error || 'Could not retouch the keyframe.'));
+    })
+    .catch(function () { undo('Could not reach the server.'); });
+}
+// Follow a retouch to its end, then swap the picture in (pollRefJob: the same poll the other retouches use).
+function vlKfFollow(episodeId, jobId, oldUrl) {
+  VL.kfBusy[oldUrl] = jobId;
+  var c = document.getElementById('vl-ed-' + episodeId); if (c) vlRenderOpen(true);
+  pollRefJob(jobId, function (newUrl) {
+    VL.kfDone[jobId] = true;   // a list read before it landed must not start following it again (and undo a Revert)
+    delete VL.kfBusy[oldUrl];
+    var d = VL.draft;
+    if (d && String(d.id) === String(episodeId)) {
+      d.shots.forEach(function (s) { s.kfs.forEach(function (k) { if (k.url === oldUrl) { k.prev = oldUrl; k.url = newUrl; } }); });
+      vlStructural();
+    }
+    if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+  }, function (err) {
+    VL.kfDone[jobId] = true;
+    delete VL.kfBusy[oldUrl];
+    vlRenderOpen(true);
+    var m = document.getElementById('vl-msg'); if (m) m.textContent = 'The retouch did not come back: ' + err + '. Nothing was charged.';
+  });
+}
+// Revert: the picture before the last retouch comes back (free); the retouched one goes into the slot, so Revert again
+// swaps back.
+function vlRevertKf(si, ki) {
+  vlReadForm();
+  var d = VL.draft, k = d && d.shots[si] && d.shots[si].kfs[ki];
+  if (!k || !k.prev || VL.kfBusy[k.url]) return;
+  var t = k.url; k.url = k.prev; k.prev = t;
+  vlStructural();
 }
 
 // =================================================================================================
