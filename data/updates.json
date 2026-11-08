@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.16",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3516-reference-test",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: two test models, Seedance 2.0 Reference and Seedance 2.0 Fast Reference, that make each shot as one clip directed from references instead of fixed keyframes.",
+        "detail": "Ian, 2026-11-08, after a take where Gubuk doubled and changed between two keyframes: 'Let's just try reference option... hard code that in for a second and let me test it.' With a Reference model chosen, a shot is one clip on fal's Seedance 2.0 reference-to-video: its first 5 keyframes (in order) and the reference pictures of the cast named in the shot's words or the overall direction (the version's own picture, else the character's; 9 pictures at most) are sent as @Image1... with words that name each one, then the boxes in order. Its length is the boxes' lengths added up, 4 to 15 seconds. The clip does not start or end exactly on the keyframes. Prices shown are the image-to-video ones until fal's are read.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.15",
     "staged_on": "2026-11-08",
     "entries": [

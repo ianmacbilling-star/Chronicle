@@ -100,8 +100,28 @@ const MODELS = {
     durationValue: function (d) { return String(d) + 's'; }, price: 0.10, priceSound: 0.15,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true,
     single: { endpoint: 'fal-ai/veo3.1/fast/image-to-video', start: 'image_url' }
+  },
+  // v3.5.16 -- REFERENCE MODE, a test (Ian, 2026-11-08: "Let's just try reference option... hard code that in for a second
+  // and let me test it"). The whole shot is ONE clip: the keyframes and the cast's reference pictures go as references
+  // (@Image1...), not as fixed first and last frames, so the model directs the shot itself instead of morphing one
+  // picture into the next. The shot's length is its boxes' lengths added up (4 to 15 s). Prices as the image-to-video
+  // ones until fal's are read.
+  seedance2ref: {
+    label: 'Seedance 2.0 Reference (test)', endpoint: 'bytedance/seedance-2.0/reference-to-video', reference: true,
+    durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.3024, priceSound: 0.3024,
+    extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
+  },
+  seedance2reffast: {
+    label: 'Seedance 2.0 Fast Reference (test)', endpoint: 'bytedance/seedance-2.0/fast/reference-to-video', reference: true,
+    durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.2419, priceSound: 0.2419,
+    extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
   }
 };
+const REF_MAX_IMAGES = 9;      // fal: up to 9 reference images
+const REF_MAX_KEYFRAMES = 5;   // the rest of the 9 are kept for the cast
+const REF_MIN_SECS = 4, REF_MAX_SECS = 15;
 const DEFAULT_MODEL = 'seedance2fast';
 const MERGE_ENDPOINT = 'fal-ai/ffmpeg-api/merge-videos';   // joins clips in order on fal's servers (listed at $0)
 const MAX_KEYFRAMES = 60;
@@ -686,12 +706,61 @@ function planMoves(ep, kfs, shotNo) {
   }
   return { moves: out, model: m };
 }
+// v3.5.16 -- a reference shot: one move, the keyframes and the cast named in the words as @Image references.
+// cast: [{ name, url }] (the version's reference pictures). Returns { moves, model } or { error }.
+function planReference(ep, kfs, shotNo, cast) {
+  const m = MODELS[ep.model];
+  if (!kfs.length) return { error: 'Shot ' + shotNo + ' has no keyframes.' };
+  const n = kfs.length === 1 ? 1 : kfs.length - 1 + (hasAfter(kfs) ? 1 : 0);
+  const steps = [];
+  let secs = 0;
+  for (let i = 0; i < n; i++) {
+    const w = String(kfs[i].prompt || '').trim();
+    secs += Number(kfs[i].duration || m.defDuration) || 0;
+    if (w) steps.push(w);
+  }
+  const overall = String(ep.overall || '').trim();
+  if (!steps.length && !overall) return { error: m.label + ' needs words for shot ' + shotNo + ', or an overall direction.' };
+  secs = Math.max(REF_MIN_SECS, Math.min(REF_MAX_SECS, Math.round(secs)));
+  const pics = kfs.slice(0, REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });
+  const words = (overall + ' ' + steps.join(' ')).toLowerCase();
+  const people = [];
+  (cast || []).forEach(function (c) {
+    if (people.length >= REF_MAX_IMAGES - pics.length || !c.url || !c.name) return;
+    if (people.some(function (p) { return p.name === c.name || p.url === c.url; })) return;
+    const first = String(c.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9'-]/g, '');
+    if (first.length >= 2 && new RegExp('(^|[^a-z0-9])' + first.replace(/[-']/g, '\\$&') + '([^a-z0-9]|$)').test(words)) people.push({ name: String(c.name).trim(), url: c.url });
+  });
+  const lines = [];
+  lines.push('One continuous shot, no cuts. Keep every character looking exactly the same from start to finish.');
+  if (pics.length === 1) lines.push('@Image1 is how the shot opens: start the video looking like it, same place, same people, same art style.');
+  else lines.push('@Image1 is how the shot opens: start the video looking like it. ' + pics.slice(1).map(function (u, i) { return '@Image' + (i + 2); }).join(', ') +
+    (pics.length === 2 ? ' is a later moment' : ' are later moments, in order,') + ' of the same shot: pass through ' + (pics.length === 2 ? 'it' : 'them') + ' as the action reaches ' + (pics.length === 2 ? 'it' : 'them') + '. Keep the art style of these pictures.');
+  people.forEach(function (p, i) { lines.push('@Image' + (pics.length + i + 1) + ' is ' + p.name + ': ' + p.name + '\'s face, hair, build, clothes and gear must match @Image' + (pics.length + i + 1) + ' whenever ' + p.name + ' is on screen.'); });
+  if (overall) lines.push('Overall: ' + overall);
+  lines.push('What happens, in order:');
+  steps.forEach(function (w, i) { lines.push((i + 1) + '. ' + w); });
+  const full = lines.join('\n').slice(0, 6000);
+  const own = steps.join('\n\n');
+  return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: own, full: full, duration: String(secs), images: pics.concat(people.map(function (p) { return p.url; })), cast: people.map(function (p) { return p.name; }) }], model: m };
+}
+// The version's cast with their reference pictures (the version's own, else the character's).
+async function castRefs(db, ep) {
+  try {
+    return (await db.prepare('SELECT ch.name, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id))
+      .filter(function (c) { return c.url && storage.isOurPublicUrl(c.url); });
+  } catch (e) {
+    console.error('[video] cast references could not be read: ' + (e && e.message));
+    return [];
+  }
+}
 // What one move sends to fal: each model names its pictures and its length its own way.
-function buildInput(m, prompt, startUrl, endUrl, duration, sound) {
+function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
   const input = Object.assign({}, m.extra);
   if (prompt) input.prompt = prompt;
   let endpoint = m.endpoint;
-  if (endUrl) { input[m.start] = startUrl; input[m.end] = endUrl; }
+  if (m.reference) input.image_urls = (images && images.length ? images : [startUrl]).slice(0, REF_MAX_IMAGES);   // v3.5.16
+  else if (endUrl) { input[m.start] = startUrl; input[m.end] = endUrl; }
   else if (m.single) { endpoint = m.single.endpoint; input[m.single.start] = startUrl; }
   else input[m.start] = startUrl;
   input.duration = m.durationValue(duration);
@@ -708,14 +777,14 @@ async function takesFull(db, shotId) {
 async function makeShot(db, req, ep, shot, shotNo) {
   const m = MODELS[ep.model];
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
-  const plan = planMoves(ep, kfs, shotNo);
+  const plan = m && m.reference ? planReference(ep, kfs, shotNo, await castRefs(db, ep)) : planMoves(ep, kfs, shotNo);   // v3.5.16
   if (plan.error) return { status: 400, error: plan.error };
   if (await takesFull(db, shot.id)) return { status: 409, full: true, error: 'Shot ' + shotNo + ' already has ' + MAX_TAKES + ' takes. Delete one to make another.' };
   const hook = webhookUrl();
   if (!hook) return { status: 500, error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' };
   const sound = !!ep.sound;
   const cost = Math.round(plan.moves.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
-  const directions = JSON.stringify({ overall: ep.overall || '', style: ep.style, moves: plan.moves.map(function (x) { return { own: x.own, duration: x.duration }; }) });
+  const directions = JSON.stringify({ overall: ep.overall || '', style: ep.style, moves: plan.moves.map(function (x) { return { own: x.own, duration: x.duration, images: x.images || undefined, cast: x.cast || undefined }; }) });
   const ins = await db.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, est_cost_usd) VALUES (?, ?, ?, 'making', ?, ?, ?, ?, ?) ON CONFLICT (shot_id) WHERE status = 'making' DO NOTHING")
     .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep, kfs), directions, cost);
   if (!ins.lastInsertRowid) return { status: 409, error: 'Shot ' + shotNo + ' is already being made.' };
@@ -723,7 +792,7 @@ async function makeShot(db, req, ep, shot, shotNo) {
   await db.prepare('UPDATE shots SET chosen_take_id = ? WHERE id = ?').run(takeId, shot.id);
   const rows = [];
   for (const x of plan.moves) {
-    const bi = buildInput(m, x.full, x.start, x.end, x.duration, sound);
+    const bi = buildInput(m, x.full, x.start, x.end, x.duration, sound, x.images);
     const r = await db.prepare('INSERT INTO moves (take_id, episode_id, position, start_url, end_url, prompt, model, endpoint, duration, sound, status, est_cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(takeId, ep.id, x.position, x.start, x.end, x.full, ep.model, bi.endpoint, x.duration, sound, 'queued', estCost(m, x.duration, sound));
     rows.push({ id: r.lastInsertRowid, bi: bi });
@@ -778,7 +847,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id)) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
-      const p = planMoves(ep, kfs, i + 1);
+      const p = MODELS[ep.model] && MODELS[ep.model].reference ? planReference(ep, kfs, i + 1, []) : planMoves(ep, kfs, i + 1);   // v3.5.16
       if (p.error) return res.status(400).json({ error: p.error });
     }
     const errors = [];
