@@ -131,8 +131,10 @@
          for an admin (Ian, 2026-10-24), without going to the Account page. Nothing shows and nothing happens for
          anyone else. No cursor change, no title, hidden from screen readers.
          v3.5.02 -- half as wide (Ian, 2026-11-08), taking the same room as before; and while Debug Mode is on, an admin
-         sees it (cmpEggShow): a small red bar, a click away from the debug panel. -->
-    <span id="dbg-egg" onclick="cmpEggTap()" aria-hidden="true" style="display:inline-block;width:12px;height:30px;margin-left:-3px;margin-right:-3px;flex:0 0 auto;align-self:center;border-radius:4px;"></span>
+         sees it (cmpEggShow): a small red bar, a click away from the debug panel.
+         v3.5.03 -- out of the row (Ian: "get rid of all the extra space around the debug button... the profile menu
+         shoved as far right as possible"): pinned in the header's right padding, which is 16px from v3.5.03. -->
+    <span id="dbg-egg" onclick="cmpEggTap()" aria-hidden="true" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);width:12px;height:30px;border-radius:4px;"></span>
   </div>
 </div>
 

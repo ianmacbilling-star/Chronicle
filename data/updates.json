@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.5.03",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3503-header-right-edge",
+        "kind": "fix",
+        "public": false,
+        "summary": "The account menu sits further right (16px from the edge); the admin debug bar sits in that strip and takes no room. The fal copy panel now follows a copy already running to its end.",
+        "detail": "Ian, 2026-11-08: get rid of the extra space around the debug button, the profile menu as far right as possible. The spot is pinned in the header's right padding. On the Tools panel, 'already running' used to stop asking for progress, so the end never showed; and a server with no record of the run (after a deploy) now says so and suggests Find.",
+        "td": [
+          "TD-996",
+          "TD-1003"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.02",
     "staged_on": "2026-11-08",
     "entries": [

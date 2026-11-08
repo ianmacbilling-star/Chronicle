@@ -1946,7 +1946,11 @@ function falPicsCopyClick() {
     var out = document.getElementById('fal-pics-out'); if (out) out.textContent = 'Starting\u2026';
     fetch('/api/admin/fal-pictures/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       .then(function (r) { return r.json(); })
-      .then(function (s) { if (s && s.error) { var o = document.getElementById('fal-pics-out'); if (o) o.textContent = s.error; return; } renderFalPicsStatus(s); falPicsPoll(); })
+      .then(function (s) {
+        // v3.5.03 -- "already running": say so AND keep following it (it used to stop asking, so the end never showed)
+        if (s && s.error) { var o = document.getElementById('fal-pics-out'); if (o) o.textContent = s.error; if (/already running/.test(s.error)) falPicsPoll(); return; }
+        renderFalPicsStatus(s); falPicsPoll();
+      })
       .catch(function (e) { var o = document.getElementById('fal-pics-out'); if (o) o.textContent = 'Could not start: ' + e.message; });
   });
 }
@@ -1963,7 +1967,8 @@ function renderFalPicsStatus(s) {
   var out = document.getElementById('fal-pics-out'); if (!out || !s) return;
   if (s.running) { out.innerHTML = '<div style="font-size:16px;font-weight:700;">Copying&hellip; ' + (s.done || 0) + ' of ' + (s.total || '?') + '</div>'; return; }
   if (s.error) { out.innerHTML = '<div style="font-size:16px;font-weight:700;color:var(--error);">' + _upEsc(s.error) + '</div>'; return; }
-  var o = s.last; if (!o) { out.textContent = ''; return; }
+  // v3.5.03 -- no record of a run on the server answering (a deploy swapped it during the copy): say so plainly
+  var o = s.last; if (!o) { out.innerHTML = '<div style="font-size:16px;font-weight:700;">The copy is not running on this server (a deploy may have restarted it). Press Find to see what is left.</div>'; return; }
   var h = '<div style="font-size:16px;font-weight:700;margin:4px 0 6px;">Copied ' + o.copied + ' of ' + o.found + ' to our storage (' + o.rows_changed + ' rows re-pointed).</div>' +
     '<div><b>Fal no longer has:</b> ' + o.gone.length + ' &nbsp; <b>Failed:</b> ' + o.failed.length + '</div>';
   if (o.gone.length) h += '<div style="margin-top:6px;">Fal no longer has these, so they were left as they are:<br>' + o.gone.map(function (g) { return _upEsc(g.url) + ' <span style="opacity:0.7;">(' + _upEsc(g.places.join(', ')) + ')</span>'; }).join('<br>') + '</div>';
@@ -31539,9 +31544,7 @@ function cmpEggShow(on) {
   el.style.background = show ? 'var(--alert-red)' : '';
   el.style.opacity = show ? '0.75' : '';
   el.style.height = show ? '22px' : '30px';
-  el.style.cursor = show ? 'pointer' : '';
-  el.style.marginLeft = show ? '4px' : '-3px';
-  el.style.marginRight = show ? '2px' : '-3px';
+  el.style.cursor = show ? 'pointer' : '';   // v3.5.03 -- no margins: it sits in the header's right padding
   el.title = show ? 'Debug Mode is on: click for the debug panel' : '';
 }
 // Once after sign-in, for an admin: ask whether Debug Mode is on, so the spot shows without visiting My Account.
