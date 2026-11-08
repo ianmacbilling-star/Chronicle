@@ -1256,9 +1256,11 @@ function shotListRequest(ctx, images) {
     (style.speech ? '- Dialogue: only a character visible in that move speaks; at most two short lines a move; leave it empty when nobody should talk.\n' : '- Dialogue: always an empty list in this style.\n') +
     '- Write original words; never reproduce text from any published source.\n- Never put words, captions or titles on screen.\n\n' +
     'ANSWER WITH ONLY THIS JSON, no other text:\n' +
-    '{"overall": "...", "shots": [{"moves": [{"action": "...", "camera": "...", "dialogue": [{"speaker": "...", "line": "..."}], "sound": "...", "duration": "' + def + '"}]}]}\n' +
+    '{"overall": "...", "shots": [{"shot": 1, "moves": [{"from": 1, "action": "...", "camera": "...", "dialogue": [{"speaker": "...", "line": "..."}], "sound": "...", "duration": "' + def + '"}]}]}\n' +
     'The shots list has exactly ' + counts.length + ' entr' + (counts.length === 1 ? 'y' : 'ies') + ', in order, and each shot has exactly this many moves: ' +
-    counts.map(function (c, i) { return 'shot ' + (i + 1) + ': ' + c; }).join(', ') + '.';
+    counts.map(function (c, i) { return 'shot ' + (i + 1) + ': ' + c; }).join(', ') + '. ' +
+    '"from" is the keyframe number (within its shot) the move starts on. A shot of N keyframes has N-1 moves, from 1 to N-1: the last keyframe starts no move, it is where the last move ends. ' +
+    'A shot of one keyframe has exactly one move, from 1.';
   const content = [];
   const head = [];
   head.push('THE STORY: ' + (ctx.campaignName ? '"' + ctx.campaignName + '"' : 'untitled') + (ctx.sessionName ? ', the session "' + ctx.sessionName + '"' : '') + '.');
@@ -1286,7 +1288,16 @@ function shotListRequest(ctx, images) {
     content.push({ type: 'text', text: shotHead + 'Shot ' + p.shot + ', keyframe ' + p.k + ' of ' + p.of + '. ' + p.words });
     if (images[i]) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: images[i] } });
   });
-  content.push({ type: 'text', text: 'Now write the shot list as JSON: the overall direction and the moves of every shot, in the ' + style.label + ' style.' });
+  // v3.5.05 -- every move named, so a long shot is not answered with one move too many (Ian, 2026-11-08: "shot 1 came
+  // back with 16 moves, not 15").
+  const plan = ctx.shots.map(function (s, i) {
+    const n = s.keyframes.length;
+    if (n === 1) return 'Shot ' + (i + 1) + ': 1 move, from keyframe 1 (the picture brought to life).';
+    const list = [];
+    for (let k = 1; k < n; k++) list.push(k + '\u2192' + (k + 1));
+    return 'Shot ' + (i + 1) + ': ' + (n - 1) + ' move' + (n === 2 ? '' : 's') + ': ' + list.join(', ') + '.';
+  });
+  content.push({ type: 'text', text: 'THE MOVES TO WRITE, exactly these and no others:\n' + plan.join('\n') + '\n\nNow write the shot list as JSON: the overall direction and the moves of every shot, in the ' + style.label + ' style.' });
   const total = counts.reduce(function (t, c) { return t + c; }, 0);
   return { system: system, content: content, max_tokens: Math.min(16000, 1200 + total * 450) };
 }
@@ -1302,8 +1313,21 @@ function parseShotList(raw, ctx) {
   const shots = [];
   for (let i = 0; i < p.shots.length; i++) {
     const want = movesIn(ctx.shots[i]);
-    const mv = (p.shots[i] && Array.isArray(p.shots[i].moves)) ? p.shots[i].moves : null;
-    if (!mv || mv.length !== want) return { error: 'shot ' + (i + 1) + ' came back with ' + (mv ? mv.length : 0) + ' moves, not ' + want };
+    let mv = (p.shots[i] && Array.isArray(p.shots[i].moves)) ? p.shots[i].moves : null;
+    if (!mv) return { error: 'shot ' + (i + 1) + ' came back with no moves' };
+    // v3.5.05 -- line the moves up by the keyframe each starts on ("from"): a move from the last keyframe of a longer
+    // shot (it leads nowhere) is dropped, as is a second move from the same keyframe. Without "from", one move too many
+    // loses the last. Only a move that is missing still fails the list.
+    const hasFrom = mv.every(function (x) { return x && Number.isFinite(parseInt(x.from, 10)); });
+    if (hasFrom) {
+      const byFrom = {};
+      mv.forEach(function (x) { const f = parseInt(x.from, 10); if (f >= 1 && f <= want && !byFrom[f]) byFrom[f] = x; });
+      const lined = [];
+      for (let f = 1; f <= want; f++) if (byFrom[f]) lined.push(byFrom[f]);
+      mv = lined;   // a keyframe with no move from it leaves the list short, and it fails below
+    }
+    if (mv.length > want) mv = mv.slice(0, want);
+    if (mv.length !== want) return { error: 'shot ' + (i + 1) + ' came back with ' + mv.length + ' moves, not ' + want };
     const moves = [];
     for (let j = 0; j < mv.length; j++) {
       const s = mv[j] || {};

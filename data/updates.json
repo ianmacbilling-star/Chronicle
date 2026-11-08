@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.05",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3505-shot-list-moves",
+        "kind": "fix",
+        "public": false,
+        "summary": "Write the shot list no longer fails on a long shot: the writer is told every move by name, and its answer is lined up by the keyframe each move starts on.",
+        "detail": "Ian, 2026-11-08: 'The shot list came back incomplete (shot 1 came back with 16 moves, not 15)'. A shot of 16 keyframes has 15 moves; the writer added one from the last keyframe. Each move now says which keyframe it starts on ('from'); a move from the last keyframe, or a second move from the same one, is dropped. Without 'from', one too many loses the last. A missing move still fails the list, and nothing is charged.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.04",
     "staged_on": "2026-11-08",
     "entries": [
