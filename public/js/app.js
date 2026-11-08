@@ -41927,6 +41927,9 @@ var VL_SHOT = 'background:rgba(var(--panel-rgb),0.72);border:1px solid rgba(var(
 var VL_SHOT_ODD = 'background:linear-gradient(rgba(150,150,150,0.16),rgba(150,150,150,0.16)),rgba(var(--panel-rgb),0.72);';   // v3.5.07: shots 1, 3, 5... greyer (v3.5.08: a clear grey wash; Ian could not see 0.07)
 var VL_PAIRS = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:14px;margin-top:8px;align-items:stretch;';   // v3.5.12: two pairs to a row when wide
 var VL_PAIR = 'display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:6px;border:1px solid rgba(var(--accent-text-rgb),0.45);border-radius:var(--radius-lg);align-items:stretch;';   // v3.5.12: a picture and its box, locked together
+var VL_CUTMARK = 'position:absolute;top:0;left:50%;transform:translate(-50%,-50%);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px);padding:3px 10px;background:rgb(var(--panel-rgb));border:1px solid rgba(var(--accent-rgb),0.45);border-radius:999px;z-index:1;';   // v3.5.15
+var VL_SHOT_NAME = 'flex:0 1 320px;min-width:140px;padding:4px 8px;font-size:13px;height:auto;';   // v3.5.15
+var VL_MAX_TAKES = 3;   // v3.5.15: the server's MAX_TAKES
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
 var VL = { models: null, episodes: [], openId: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, saving: false, savePending: false, waiters: [],
@@ -42121,7 +42124,7 @@ function vlDraftFrom(ep) {
   var d = { id: ep.id, name: ep.name || '', overall: ep.overall || '', model: m ? m.key : ep.model, sound: !!ep.sound,
     style: (vlStyle(ep.style) || vlStyle(VL.defaultStyle) || {}).key || 'living',
     shots: (ep.shots || []).map(function (s) {
-      return { ck: ++VL.ck, id: s.id, cut_style: s.cut_style || 'instant',
+      return { ck: ++VL.ck, id: s.id, name: s.name || '', cut_style: s.cut_style || 'instant',
         kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || ''), prev: k.prev_image_url || '' }; }) };
     }) };
   vlFitDurations(d, m);
@@ -42219,18 +42222,24 @@ function vlShotHTML(d, si, m, n0) {
     '<div class="storyboard-panel-img"><div class="moment-img-placeholder" style="min-height:120px;">' +
       '<div style="font-size:26px;color:var(--accent-bright);">+</div><div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.6);">Add a keyframe to shot ' + (si + 1) + '</div>' +
     '</div></div></div>');
-  return '<div style="' + VL_SHOT + (si % 2 === 0 ? VL_SHOT_ODD : '') + '">' +
-    '<div id="vl-live-' + s.ck + '"></div>' +
+  // v3.5.15 -- the shot's name beside its number (Ian, 2026-11-08: "We do need the name on the shot"), and the cut
+  // before it sits on its own top border (Ian: "So you know you mean the shot below the line").
+  return '<div class="vl-shot" style="' + VL_SHOT + (si % 2 === 0 ? VL_SHOT_ODD : '') + 'position:relative;' + (si > 0 ? 'margin-top:26px;padding-top:18px;' : '') + '">' +
+    (si > 0 ? vlCutMarkHTML(si - 1) : '') +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+      '<div style="' + VL_TITLE + 'font-size:14px;flex:none;">Shot ' + (si + 1) + '</div>' +
+      '<input id="vl-sn-' + si + '" class="form-input vl-shot-name" type="text" maxlength="120" value="' + escapeHtml(s.name || '') + '" placeholder="Name this shot" title="The shot\'s name" style="' + VL_SHOT_NAME + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
+      '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:200px;"></div>' +
+    '</div>' +
     '<div style="' + VL_PAIRS + '">' + cells.join('') + '</div>' +
     '<div id="vl-livebtn-' + s.ck + '" style="margin-top:10px;"></div>' +   // v3.5.11: Generate take, bottom right (Ian); v3.5.13: the takes beside it
   '</div>';
 }
+// v3.5.15 -- the cut sits on the top border of the shot after it, in the middle (no dashed line between shots).
 function vlCutMarkHTML(si) {
-  return '<div style="display:flex;align-items:center;gap:10px;margin:10px 0;">' +
-    '<div style="flex:1;border-top:1px dashed rgba(var(--accent-rgb),0.45);"></div>' +
-    '<span style="' + VL_DESC + 'color:var(--accent-pale);">&#9986; Cut &middot; Instant</span>' +
+  return '<div class="vl-cutmark" style="' + VL_CUTMARK + '">' +
+    '<span style="' + VL_DESC + 'color:var(--accent-pale);white-space:nowrap;">&#9986; Cut &middot; Instant</span>' +
     '<button type="button" class="btn btn-sm" title="Remove this cut: shots ' + (si + 1) + ' and ' + (si + 2) + ' become one continuous shot" onclick="vlJoinShots(' + si + ')">UnCut - Join with previous shot</button>' +
-    '<div style="flex:1;border-top:1px dashed rgba(var(--accent-rgb),0.45);"></div>' +
   '</div>';
 }
 function vlEditorHTML(ep) {
@@ -42240,8 +42249,7 @@ function vlEditorHTML(ep) {
   var writing = vlSlWriting(ep.id);
   var parts = [], n = 1;
   for (var si = 0; si < d.shots.length; si++) {
-    if (si > 0) parts.push(vlCutMarkHTML(si - 1));
-    parts.push(vlShotHTML(d, si, m, n));
+    parts.push(vlShotHTML(d, si, m, n));   // v3.5.15: the cut is drawn on the shot's own top border
     n += d.shots[si].kfs.length;
   }
   if (!d.shots.length) parts.push('<div class="storyboard-panel" style="cursor:pointer;" onclick="vlChoose(\'add:0\')"><div class="storyboard-panel-img"><div class="moment-img-placeholder" style="min-height:120px;">' +
@@ -42288,6 +42296,7 @@ function vlReadForm() {
   var s = document.getElementById('vl-sound'); if (s) d.sound = !!s.checked;
   var sy = v('vl-style'); if (sy) d.style = sy;
   d.shots.forEach(function (sh, si) {
+    var sn = v('vl-sn-' + si); if (sn != null) sh.name = sn;   // v3.5.15
     sh.kfs.forEach(function (k, ki) {
       var p = v('vl-mp-' + si + '-' + ki), du = v('vl-md-' + si + '-' + ki);
       if (p != null) k.prompt = p;
@@ -42366,7 +42375,7 @@ function vlSave(cb) {
   VL.saving = true; VL.savePending = false; VL.saveError = '';
   var keys = d.shots.map(function (s) { return s.ck; });
   var body = { name: d.name, overall: d.overall, model: d.model, sound: d.sound, style: d.style,
-    shots: d.shots.map(function (s) { return { id: s.id, cut_style: s.cut_style, keyframes: s.kfs.map(function (k) { return { url: k.url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt || '', duration: String(k.duration || ''), prev_url: k.prev || null }; }) }; }) };
+    shots: d.shots.map(function (s) { return { id: s.id, name: s.name || '', cut_style: s.cut_style, keyframes: s.kfs.map(function (k) { return { url: k.url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt || '', duration: String(k.duration || ''), prev_url: k.prev || null }; }) }; }) };
   var id = d.id;
   function done(ok) { VL.saving = false; if (VL.savePending) { vlSave(); return; } vlSaveDone(ok); }
   fetch('/api/video-lab/episodes/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -42480,7 +42489,7 @@ function vlCutHere(si, ki) {
   vlReadForm();
   var d = VL.draft, s = d && d.shots[si];
   if (!s || ki >= s.kfs.length - 1) return;
-  d.shots.splice(si + 1, 0, { ck: ++VL.ck, id: null, cut_style: 'instant', kfs: s.kfs.splice(ki + 1) });
+  d.shots.splice(si + 1, 0, { ck: ++VL.ck, id: null, name: '', cut_style: 'instant', kfs: s.kfs.splice(ki + 1) });   // v3.5.15: the new shot starts without a name
   vlStructural();
 }
 // Remove the cut after shot si: the next shot's keyframes join it (vlStructural asks first if that shot has takes).
@@ -42490,6 +42499,7 @@ function vlJoinShots(si) {
   if (!d || !d.shots[si + 1]) return;
   var a = d.shots[si], b = d.shots[si + 1];
   a.kfs = a.kfs.concat(b.kfs);
+  if (!String(a.name || '').trim()) a.name = b.name || '';   // v3.5.15: the first shot's name is kept (the second's if it had none)
   d.shots.splice(si + 1, 1);
   vlStructural();
 }
@@ -42543,6 +42553,7 @@ function vlShotBtnHTML(ep, ds, si) {
   var making = takes.some(function (t) { return t.status === 'making'; });
   var btn = !ds.id ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Saving...</button>'
     : making ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Being made</button>'
+    : takes.length >= VL_MAX_TAKES ? '<span class="vl-full" style="' + VL_DESC + 'margin-right:8px;">' + VL_MAX_TAKES + ' takes max &mdash; delete one to make another.</span><button class="btn btn-sm vl-gen" disabled title="' + VL_MAX_TAKES + ' takes max: delete one to make another">Generate take</button>'   // v3.5.15
     : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now">Generate take</button>';
   return '<div style="display:flex;gap:10px;align-items:flex-end;">' +
     '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex:1;min-width:0;">' +
@@ -42554,10 +42565,7 @@ function vlLiveShotHTML(ep, ds, si, m) {
   var s = vlEpShot(ep, ds.id);
   var takes = s ? (s.takes || []) : [];
   var secs = vlShotSecs(ds, m);
-  return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
-      '<div style="' + VL_TITLE + 'font-size:14px;">Shot ' + (si + 1) + '</div>' +
-      '<span style="' + VL_DESC + 'flex:1;">' + ds.kfs.length + ' keyframe' + (ds.kfs.length === 1 ? '' : 's') + ' &middot; ' + secs + ' s &middot; one continuous camera run' + (takes.length ? ' &middot; ' + takes.length + ' take' + (takes.length === 1 ? '' : 's') : '') + '</span>' +
-    '</div>';   // v3.5.13: the takes moved to the shot's foot (vlShotBtnHTML)
+  return '<span style="' + VL_DESC + '">' + ds.kfs.length + ' keyframe' + (ds.kfs.length === 1 ? '' : 's') + ' &middot; ' + secs + ' s &middot; one continuous camera run' + (takes.length ? ' &middot; ' + takes.length + ' of ' + VL_MAX_TAKES + ' takes' : '') + '</span>';   // v3.5.13: the takes moved to the shot's foot; v3.5.15: the number and name are in vlShotHTML
 }
 function vlEpVideoHTML(ep) {
   var shots = ep.shots || [];
@@ -42635,7 +42643,7 @@ function vlMakeAll(checked) {
   if (!d || vlSlWriting(d.id)) return;
   if (!checked) {   // v3.5.14: only the shots this will make (no made or making take yet)
     var ep0 = vlFindEp(d.id), todo = [];
-    d.shots.forEach(function (ds, i) { var t = vlChosen(vlEpShot(ep0, ds.id) || {}); if (!t || (t.status !== 'done' && t.status !== 'making')) todo.push(i); });
+    d.shots.forEach(function (ds, i) { var es = vlEpShot(ep0, ds.id) || {}, t = vlChosen(es); if ((!t || (t.status !== 'done' && t.status !== 'making')) && (es.takes || []).length < VL_MAX_TAKES) todo.push(i); });   // v3.5.15: not a shot with 3 takes
     vlShapeCheck(todo, function () { vlMakeAll(true); }); return;
   }
   var msg = document.getElementById('vl-msg'), go = document.getElementById('vl-go');
@@ -42647,7 +42655,7 @@ function vlMakeAll(checked) {
       .then(function (res) {
         if (go) go.disabled = false;
         if (res.j && res.j.episode) vlPutEp(res.j.episode);
-        if (msg) msg.textContent = res.ok ? (res.j.made + ' shot' + (res.j.made === 1 ? '' : 's') + ' sent to fal. You can leave and come back.' + ((res.j.errors || []).length ? ' ' + res.j.errors[0] : '')) : ((res.j && res.j.error) || 'Could not start it.');
+        if (msg) msg.textContent = res.ok ? (res.j.made + ' shot' + (res.j.made === 1 ? '' : 's') + ' sent to fal. You can leave and come back.' + ((res.j.errors || []).length ? ' ' + res.j.errors[0] : '') + (res.j.note ? ' ' + res.j.note : '')) : ((res.j && res.j.error) || 'Could not start it.');
         vlRenderList(); vlRenderLive();
       })
       .catch(function () { if (go) go.disabled = false; if (msg) msg.textContent = 'Could not reach the server.'; });

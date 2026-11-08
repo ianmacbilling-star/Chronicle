@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.15",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3515-shot-names",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: shots can be named; a shot keeps at most 3 takes; the cut sits on the top border of the shot below it.",
+        "detail": "Ian, 2026-11-08: \"We do need the name on the shot\"; \"for now we limit them to 3 takes\"; the UnCut button \"right on the top border of the shot... So you know you mean the shot below the line\"; Delete \"actually deletes the take... no retrieval\". Each shot has a name box beside its number (one line, up to 120 characters; saved with the episode, kept by Copy; a new shot from Cut here starts unnamed, UnCut keeps the first shot's name). At 3 takes Generate take is closed with '3 takes max - delete one to make another'; the server refuses a 4th before anything is sent to fal, and Generate all shots skips full shots and names them. The cut label and UnCut sit in the middle of the lower shot's top border; the dashed line between shots is gone. Delete take (unchanged) asks, then removes the take, its moves and their files from storage.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.14",
     "staged_on": "2026-11-08",
     "entries": [

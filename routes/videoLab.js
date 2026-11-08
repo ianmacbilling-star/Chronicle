@@ -107,6 +107,7 @@ const MERGE_ENDPOINT = 'fal-ai/ffmpeg-api/merge-videos';   // joins clips in ord
 const MAX_KEYFRAMES = 60;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 const STUCK_MINUTES = 45;
+const MAX_TAKES = 3;   // v3.5.15 (Ian, 2026-11-08: "for now we limit them to 3 takes"): delete one to make another
 const CUT_STYLES = ['instant'];   // this build makes plain cuts only; the styles come in their own build (spec section 4)
 
 function estCost(m, duration, sound) {
@@ -281,6 +282,7 @@ function ensureTables() {
     await db.exec('CREATE INDEX IF NOT EXISTS idx_writer_episode ON episode_writer_jobs(episode_id, id)');
     // v3.5.09 -- Retouch on a keyframe: its one-step Revert slot, and the episode a retouch job belongs to.
     await db.exec('ALTER TABLE keyframes ADD COLUMN IF NOT EXISTS prev_image_url TEXT');
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS name TEXT');   // v3.5.15: a shot's own name
     await db.exec('ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS episode_id INTEGER');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_image_jobs_episode ON image_jobs(episode_id)');
   })();
@@ -447,9 +449,10 @@ async function writeShots(tx, ep, shotsIn) {
     pos++;
     let sid = parseInt(s.id, 10) || null;
     if (sid && haveIds[sid] && !keep[sid]) {
-      await tx.prepare('UPDATE shots SET position = ?, cut_style = ? WHERE id = ?').run(pos, s.cut_style, sid);
+      if (s.name === undefined) await tx.prepare('UPDATE shots SET position = ?, cut_style = ? WHERE id = ?').run(pos, s.cut_style, sid);   // a save that sends no name (a page from before v3.5.15) keeps it
+      else await tx.prepare('UPDATE shots SET position = ?, cut_style = ?, name = ? WHERE id = ?').run(pos, s.cut_style, s.name || null, sid);
     } else {
-      const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style) VALUES (?, ?, ?)').run(ep.id, pos, s.cut_style);
+      const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style, name) VALUES (?, ?, ?, ?)').run(ep.id, pos, s.cut_style, s.name || null);
       sid = r.lastInsertRowid;
     }
     keep[sid] = true;
@@ -487,6 +490,8 @@ async function deleteFiles(files, why) {
   if (files.length) console.log('[video] ' + why + ': ' + asked + '/' + files.length + ' file(s) sent for deletion');
 }
 
+// v3.5.15 -- a shot's name: one line, at most 120 characters; empty is no name (the shot shows "Shot n").
+function cleanShotName(v) { const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 120); return t || null; }
 function cleanShots(list, m) {
   const out = [];
   let n = 0;
@@ -504,7 +509,7 @@ function cleanShots(list, m) {
     const room = MAX_KEYFRAMES - n;
     if (room <= 0 || !kfs.length) return;
     n += Math.min(room, kfs.length);
-    out.push({ id: parseInt(s.id, 10) || null, cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
+    out.push({ id: parseInt(s.id, 10) || null, name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
 }
@@ -627,7 +632,7 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
           !!src.sound, src.style, src.overall || '', false, 'copy', src.shot_list || null);
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
-        return { cut_style: s.cut_style, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+        return { name: s.name, cut_style: s.cut_style, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m));
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -696,11 +701,16 @@ function buildInput(m, prompt, startUrl, endUrl, duration, sound) {
 
 // Make one shot: a new take (it becomes the chosen one), its moves sent to fal side by side. One take of a shot is made
 // at a time (a partial unique index is the claim). Returns { take } or { status, error }.
+async function takesFull(db, shotId) {
+  const c = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ?').get(shotId);
+  return Number(c && c.n) >= MAX_TAKES;
+}
 async function makeShot(db, req, ep, shot, shotNo) {
   const m = MODELS[ep.model];
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
   const plan = planMoves(ep, kfs, shotNo);
   if (plan.error) return { status: 400, error: plan.error };
+  if (await takesFull(db, shot.id)) return { status: 409, full: true, error: 'Shot ' + shotNo + ' already has ' + MAX_TAKES + ' takes. Delete one to make another.' };
   const hook = webhookUrl();
   if (!hook) return { status: 500, error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' };
   const sound = !!ep.sound;
@@ -763,8 +773,10 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
     const shots = await db.prepare('SELECT s.*, t.status AS chosen_status FROM shots s LEFT JOIN takes t ON t.id = s.chosen_take_id WHERE s.episode_id = ? ORDER BY s.position, s.id').all(ep.id);
     if (!shots.length) return res.status(400).json({ error: 'This episode has no keyframes.' });
     // Check every shot first, so a missing word in shot 5 does not leave shots 1 to 4 made and the rest not.
+    const full = {};   // v3.5.15: shots that already have MAX_TAKES takes are skipped, and named
     for (let i = 0; i < shots.length; i++) {
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
+      if (await takesFull(db, shots[i].id)) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
       const p = planMoves(ep, kfs, i + 1);
       if (p.error) return res.status(400).json({ error: p.error });
@@ -772,14 +784,19 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
     const errors = [];
     let made = 0;
     for (let i = 0; i < shots.length; i++) {
-      if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
+      if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making' || full[i]) continue;
       const r = await makeShot(db, req, ep, shots[i], i + 1);
+      if (r.full) full[i] = true;
       if (r.error) errors.push(r.error); else made++;
     }
+    const skipped = Object.keys(full).map(function (i) { return Number(i) + 1; }).sort(function (a, b) { return a - b; });
     const out = await loadEpisode(db, ep.id);
-    if (!made && errors.length) return res.status(400).json({ error: errors[0], episode: out });
+    const fullText = skipped.length ? (skipped.length === 1 ? 'Shot ' + skipped[0] + ' already has ' : 'Shots ' + skipped.join(', ') + ' already have ') + MAX_TAKES + ' takes, so ' + (skipped.length === 1 ? 'it was' : 'they were') + ' skipped. Delete a take to make another.' : '';
+    const other = errors.filter(function (x) { return !/already ha(s|ve) \d+ takes/.test(x); });
+    if (!made && other.length) return res.status(400).json({ error: other[0], episode: out, skipped: skipped });
+    if (!made && skipped.length) return res.status(409).json({ error: fullText, episode: out, skipped: skipped });
     if (!made) return res.status(409).json({ error: 'Every shot already has a take.', episode: out });
-    res.json({ episode: out, made: made, errors: errors });
+    res.json({ episode: out, made: made, errors: other, skipped: skipped, note: fullText || null });
   } catch (e) {
     console.error('[video] make episode error:', falErrorText(e));
     res.status(500).json({ error: 'Could not start it: ' + falErrorText(e) });
