@@ -41777,15 +41777,19 @@ function adminBrandsSave(changed) {
 // more like our style sheet... bring in the look from the Storyboard". So the open cut is laid out like the Storyboard:
 // picture cards (storyboard-panel) with a shot card (narrative-panel) between each pair, in the same panels-grid, and
 // every colour is a theme name, so it follows the brand. A draft saves itself as you type; Generate makes the shots
-// and joins them; a made cut is played full width with its shots underneath (Redo per shot, Join again). The video
-// style and the written shot list come in a later build; until then the shot boxes are typed by hand.
-// Every name here starts vl / VL; checked unused before v3.4.86 and again for v3.4.95.
+// and joins them; a made cut is played full width with its shots underneath (Redo per shot, Join again).
+// v3.4.98 -- THE VIDEO STYLE AND THE SHOT LIST (build 3, spec section 15): a Style picker (Animated, Living Illustration,
+// Documentary) and Write the shot list, which fills the Overall direction and every shot box. It runs as a job on the
+// server; while it runs the draft cannot be changed (the server refuses a save), and when it is done the draft is
+// read again from the server. Its price is shown on the button.
+// Every name here starts vl / VL; checked unused before v3.4.86, again for v3.4.95 and for v3.4.98 (vlSl*, vlStyle*).
 // ============================================================
 // The tab's boxes use the Storyboard panel's surface (.storyboard-panel), so they sit on the session page the same way.
 var VL_BOX = 'background:rgba(var(--panel-rgb),0.7);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);';
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
-var VL = { models: null, cuts: [], openId: null, openSig: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, busy: false, saving: false };
+var VL = { models: null, cuts: [], openId: null, openSig: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, busy: false, saving: false,
+  styles: [], defaultStyle: 'living', writing: null, slTimer: null, sl: {} };   // v3.4.98: writing = the cut whose shot list is being written; sl = its job and price
 
 function vlIsAdmin() { return !!(state.user && (state.user.is_admin || state.user.videoOn)); }   // v3.4.94: or the video switch is on
 
@@ -41818,7 +41822,7 @@ function vlOpen() {
       '<div style="min-width:220px;flex:1;">' +
         '<div style="' + VL_TITLE + '">Video</div>' +
         '<div style="' + VL_DESC + 'margin-top:2px;">Cuts of <b style="color:var(--accent-pale);" data-no-words>' + escapeHtml(vlForkName(f)) + '</b>. A cut is one video of this session: ' +
-          'its pictures in order, with a shot between each pair. Pin the one you like best. No tokens are charged yet.</div>' +
+          'its pictures in order, with a shot between each pair. Pin the one you like best. Writing a shot list costs tokens; making the video is free for now.</div>' +
       '</div>' +
       '<button class="btn btn-primary btn-sm" id="vl-new-btn" onclick="vlNewCut()">+ New cut</button>' +
     '</div>' +
@@ -41826,7 +41830,9 @@ function vlOpen() {
     '<div id="vl-open" style="margin-top:18px;"></div>';
   if (VL.models) vlLoadCuts();
   else fetch('/api/video-lab/models', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
-    VL.models = (d && d.models) || []; VL.webhook = !!(d && d.webhook); vlLoadCuts();
+    VL.models = (d && d.models) || []; VL.webhook = !!(d && d.webhook);
+    VL.styles = (d && d.styles) || []; if (d && d.defaultStyle) VL.defaultStyle = d.defaultStyle;   // v3.4.98
+    vlLoadCuts();
   }).catch(function () { VL.models = []; vlLoadCuts(); });
   ensureArchivesLoaded(function () {}, state.currentCampaign && state.currentCampaign.id);
 }
@@ -41892,7 +41898,8 @@ function vlCutRowHTML(c) {
     (shots.length ? ' &middot; ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') : '') +
     (secs ? ' &middot; ' + secs + ' s' : '') +
     (c.status !== 'draft' ? ' &middot; about $' + Number(c.total_cost_usd || 0).toFixed(2) : '') +
-    (m ? ' &middot; ' + escapeHtml(m.label) : '');
+    (m ? ' &middot; ' + escapeHtml(m.label) : '') +
+    (vlStyle(c.style) ? ' &middot; ' + escapeHtml(vlStyle(c.style).label) : '');   // v3.4.98
   return '<div class="vl-cut-row" style="' + VL_BOX + 'padding:10px 12px;margin-bottom:10px;cursor:pointer;' +
       (isOpen ? 'border-color:rgba(var(--accent-rgb),0.6);box-shadow:0 0 0 1px rgba(var(--accent-rgb),0.35);' : '') + '" onclick="vlOpenCut(' + c.id + ')">' +
     '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
@@ -41951,6 +41958,7 @@ function vlRenderOpen(force) {
     if (!VL.draft || String(VL.draft.id) !== String(c.id)) VL.draft = vlDraftFrom(c);
     host.innerHTML = vlDraftHTML(c);
     vlShowCost();
+    vlSlRefresh(c.id);   // v3.4.98: the shot list's price, and a job still being written
   } else {
     VL.draft = null;
     // A refresh redraws a made cut only when something about it changed, so a video being watched is not restarted.
@@ -41965,6 +41973,7 @@ function vlDraftFrom(c) {
   var st = vlSettings(c);
   var m = vlModel(st.model);
   var d = { id: c.id, name: c.name || '', overall: st.overall_prompt || '', model: m ? m.key : st.model, sound: !!st.sound,
+    style: (vlStyle(c.style) || vlStyle(VL.defaultStyle) || {}).key || 'living',   // v3.4.98
     pics: (c.pictures || []).map(function (p) { return { url: p.image_url, source: p.source, moment_id: p.moment_id, archive_id: p.archive_id, label: p.label || '' }; }),
     pairs: (st.pairs || []).map(function (p) { return { prompt: p.prompt || '', duration: String(p.duration || '') }; }) };
   vlFitPairs(d, m);
@@ -42014,7 +42023,7 @@ function vlShotCardHTML(d, i, m) {
         m.durations.map(function (x) { return '<option value="' + x + '"' + (String(p.duration) === x ? ' selected' : '') + '>' + x + ' s</option>'; }).join('') +
       '</select>' +
     '</div>' +
-    '<textarea class="narrative-inline-box" id="vl-pp-' + i + '" maxlength="1500" placeholder="What happens from picture ' + (i + 1) + ' to picture ' + (i + 2) + ': who moves and how, what the camera does, who speaks..." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(p.prompt || '') + '</textarea>' +
+    '<textarea class="narrative-inline-box" id="vl-pp-' + i + '"' + (vlSlWriting(d.id) ? ' disabled' : '') + ' maxlength="1500" placeholder="What happens from picture ' + (i + 1) + ' to picture ' + (i + 2) + ': who moves and how, what the camera does, who speaks..." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(p.prompt || '') + '</textarea>' +
   '</div>';
 }
 
@@ -42023,6 +42032,7 @@ function vlDraftHTML(c) {
   var m = vlModel(d.model);
   if (!m) return '<div style="' + VL_DESC + '">Could not load the model list.</div>';
   vlFitPairs(d, m);
+  var writing = vlSlWriting(c.id);   // v3.4.98: the boxes wait while the shot list is written
   var cells = [];
   for (var i = 0; i < d.pics.length; i++) { cells.push(vlPicCardHTML(d, i)); if (i < d.pics.length - 1) cells.push(vlShotCardHTML(d, i, m)); }
   cells.push('<div class="storyboard-panel" style="cursor:pointer;" onclick="vlChoose(\'add\')" title="Add a picture from the Archive at the end">' +
@@ -42042,16 +42052,17 @@ function vlDraftHTML(c) {
         '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);padding-bottom:9px;cursor:pointer;">' +
           '<input id="vl-sound" type="checkbox" onchange="vlEdit()" onblur="vlFlushSave()"' + (d.sound ? ' checked' : '') + '> The model\'s own sound</label>' +
       '</div>' +
+      vlStyleRowHTML(d, writing) +
     '</div>' +
     '<div class="narrative-panel" style="margin-bottom:14px;">' +
       '<div class="narrative-block-header"><span>&#9998; Overall direction: who, where, the mood. It goes into every shot.</span></div>' +
-      '<textarea class="narrative-inline-box" id="vl-overall" maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
+      '<textarea class="narrative-inline-box" id="vl-overall"' + (writing ? ' disabled' : '') + ' maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
     '</div>' +
-    '<div class="panels-grid">' + cells.join('') + '</div>' +
+    '<div class="panels-grid"' + (writing ? ' style="pointer-events:none;opacity:0.55;"' : '') + '>' + cells.join('') + '</div>' +
     '<div style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
       '<span id="vl-cost" style="' + VL_DESC + 'flex:1;min-width:200px;"></span>' +
       '<span id="vl-saved" style="' + VL_DESC + '"></span>' +
-      '<button class="btn btn-primary" id="vl-go" onclick="vlGenerate()">Generate</button>' +
+      '<button class="btn btn-primary" id="vl-go" onclick="vlGenerate()"' + (writing ? ' disabled' : '') + '>Generate</button>' +
     '</div>' +
     '<div id="vl-msg" style="' + VL_DESC + 'margin-top:6px;"></div>' +
   '</div>';
@@ -42066,6 +42077,7 @@ function vlReadForm() {
   var o = v('vl-overall'); if (o != null) d.overall = o;
   var mo = v('vl-model'); if (mo) d.model = mo;
   var s = document.getElementById('vl-sound'); if (s) d.sound = !!s.checked;
+  var sy = v('vl-style'); if (sy) d.style = sy;   // v3.4.98
   for (var i = 0; i < d.pairs.length; i++) {
     var pp = v('vl-pp-' + i), pd = v('vl-pd-' + i);
     if (pp != null) d.pairs[i].prompt = pp;
@@ -42074,6 +42086,7 @@ function vlReadForm() {
   return d;
 }
 function vlEdit(structural) {
+  if (VL.draft && vlSlWriting(VL.draft.id)) return;   // v3.4.98: nothing changes while the shot list is written
   vlReadForm();
   if (structural) { vlFitPairs(VL.draft, vlModel(VL.draft.model)); vlRenderOpen(true); }
   vlShowCost();
@@ -42105,7 +42118,7 @@ function vlFlushSave() {
 function vlSave(then) {
   var d = VL.draft;
   if (!d) { if (then) then(true); return; }
-  var body = { name: d.name, overall_prompt: d.overall, model: d.model, sound: d.sound,
+  var body = { name: d.name, overall_prompt: d.overall, model: d.model, sound: d.sound, style: d.style,   // v3.4.98 style
     pictures: d.pics.map(function (p) { return { url: p.url, source: p.source, moment_id: p.moment_id, archive_id: p.archive_id, label: p.label }; }),
     pairs: d.pairs.map(function (p) { return { prompt: p.prompt || '', duration: String(p.duration || '') }; }) };
   var id = d.id;
@@ -42169,7 +42182,7 @@ function vlRemove(i) {
 }
 
 function vlGenerate() {
-  if (VL.busy || !VL.draft) return;
+  if (VL.busy || !VL.draft || vlSlWriting(VL.draft.id)) return;   // v3.4.98
   var d = vlReadForm(), m = vlModel(d.model), msg = document.getElementById('vl-msg');
   function say(t) { if (msg) msg.textContent = t; }
   if (d.pics.length < 2) { say('A cut needs two pictures at least.'); return; }
@@ -42263,6 +42276,7 @@ function vlMadeHTML(c) {
         (c.final_video_url ? '<a class="btn btn-sm" href="/api/video-lab/projects/' + c.id + '/download">Download</a>' : '') +
       '</div>' +
       big +
+      (vlStyle(c.style) ? '<div style="' + VL_DESC + 'margin-top:10px;">Style: <b style="color:var(--accent-pale);">' + escapeHtml(vlStyle(c.style).label) + '</b></div>' : '') +   // v3.4.98
       (st.overall_prompt ? '<div class="moment-prompt-text" style="margin-top:10px;white-space:pre-wrap;" data-no-words><b>Overall direction:</b> ' + escapeHtml(st.overall_prompt) + '</div>' : '') +
     '</div>' +
     '<div class="panels-grid" style="margin-top:14px;">' + cells + '</div>' +
@@ -42298,6 +42312,123 @@ function vlPin(id, on) { vlFlushSave(); vlJson('/api/video-lab/cuts/' + id + '/p
 function vlCopy(id) { vlJson('/api/video-lab/cuts/' + id + '/copy', 'POST', null, 'Could not copy it.'); }
 function vlRedo(shotId) { vlJson('/api/video-lab/shots/' + shotId + '/redo', 'POST', null, 'Could not redo it.'); }
 function vlJoinAgain(pid) { vlJson('/api/video-lab/projects/' + pid + '/join', 'POST', null, 'Could not join it again.'); }
+
+// ---- the video style and the shot list (v3.4.98) ---------------------------------------------
+function vlStyle(key) {
+  var ss = VL.styles || [];
+  for (var i = 0; i < ss.length; i++) if (ss[i].key === key) return ss[i];
+  return null;
+}
+function vlSlWriting(id) { return VL.writing != null && String(VL.writing) === String(id); }
+// The Style row of an open draft: the picker, what the style does, and Write the shot list with its price.
+function vlStyleRowHTML(d, writing) {
+  var ss = VL.styles || [];
+  if (!ss.length) return '';
+  var cur = vlStyle(d.style) || ss[0];
+  var info = VL.sl[d.id] || {};
+  var hasList = !!(String(d.overall || '').trim() || d.pairs.some(function (p) { return String(p.prompt || '').trim(); }));
+  return '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">' +
+    '<div style="flex:1;min-width:220px;"><label class="form-label" for="vl-style">Style</label>' +
+      '<select id="vl-style" class="form-input" onchange="vlStyleChange()" onblur="vlFlushSave()"' + (writing ? ' disabled' : '') + '>' + ss.map(function (x) {
+        return '<option value="' + escapeHtml(x.key) + '"' + (x.key === cur.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
+      }).join('') + '</select></div>' +
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">' +
+      '<button class="btn btn-sm" id="vl-sl-btn" onclick="vlWriteShotList()"' + (writing ? ' disabled' : '') + ' title="Campaignia writes the overall direction and every shot from this version\'s story, its pictures and the cast, in this style. It replaces what is in the boxes; the book is not changed.">' +
+        (writing ? vlSpin(12) + ' Writing the shot list...' : (hasList ? '&#9998; Rewrite the shot list' : '&#9998; Write the shot list')) + '</button>' +
+      '<span id="vl-sl-price" style="' + VL_DESC + '">' + escapeHtml(vlSlPriceText(info)) + '</span>' +
+    '</div>' +
+  '</div>' +
+  '<div id="vl-style-desc" style="' + VL_DESC + 'margin-top:6px;">' + escapeHtml(cur.description || '') + vlStyleHint(cur, d) + '</div>' +
+  '<div id="vl-sl-msg" style="' + VL_DESC + 'margin-top:4px;">' + vlSlMsgHTML(info) + '</div>';
+}
+function vlStyleHint(st, d) {
+  return (st && st.speech && d && !d.sound) ? escapeHtml(' Tick The model\'s own sound to hear the lines.') : '';
+}
+function vlSlPriceText(info) {
+  var e = info && info.estimate;
+  if (!e) return '';
+  return 'About ' + e.tokens + ' token' + (e.tokens === 1 ? '' : 's');
+}
+function vlSlMsgHTML(info) {
+  var j = info && info.job;
+  if (!j || j.status === 'running' || !info.fresh) return '';   // only what happened on this page
+  if (j.status === 'done') return info.fresh ? escapeHtml('Shot list written: ' + j.tokens_charged + ' token' + (j.tokens_charged === 1 ? '' : 's') + ' used. Every box can still be edited.') : '';
+  return '<span style="color:var(--danger);">' + escapeHtml(j.error || 'The shot list could not be written. Nothing was charged.') + '</span>';
+}
+function vlStyleChange() {
+  var d = VL.draft;
+  if (!d || vlSlWriting(d.id)) return;
+  vlReadForm();
+  var st = vlStyle(d.style), el = document.getElementById('vl-style-desc');
+  if (el && st) el.innerHTML = escapeHtml(st.description || '') + vlStyleHint(st, d);
+  vlQueueSave();
+}
+// Ask the server for the price now, and whether a shot list is being written (after a reload, or on another tab).
+function vlSlRefresh(id) {
+  fetch('/api/video-lab/cuts/' + id + '/shot-list', { cache: 'no-store' })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j) return;
+      var prev = VL.sl[id] || {};
+      VL.sl[id] = { estimate: res.j.estimate, job: res.j.job, fresh: prev.fresh };
+      var j = res.j.job;
+      if (j && j.status === 'running') { if (!vlSlWriting(id)) { VL.writing = id; vlRenderOpen(true); } vlSlPoll(id); return; }
+      var pe = document.getElementById('vl-sl-price'); if (pe) pe.textContent = vlSlPriceText(VL.sl[id]);
+    })
+    .catch(function () {});
+}
+function vlWriteShotList() {
+  var d = VL.draft;
+  if (!d || VL.busy || vlSlWriting(d.id)) return;
+  vlReadForm();
+  if (d.pics.length < 2) { var m0 = document.getElementById('vl-sl-msg'); if (m0) m0.textContent = 'A cut needs two pictures at least.'; return; }
+  var filled = String(d.overall || '').trim() || d.pairs.some(function (p) { return String(p.prompt || '').trim(); });
+  var go = function () {
+    var id = d.id;
+    if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
+    VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running' }, fresh: true });
+    vlSave(function (saved) {
+      if (!saved) { VL.writing = null; vlRenderOpen(true); var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the cut, so nothing was written.'; return; }
+      vlRenderOpen(true);
+      fetch('/api/video-lab/cuts/' + id + '/shot-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: d.style }) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.j || !res.j.job) {
+            VL.writing = null; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: null });
+            vlRenderOpen(true);
+            var me = document.getElementById('vl-sl-msg');
+            if (me) { if (res.j && res.j.error === 'INSUFFICIENT_TOKENS') me.innerHTML = insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')); else me.textContent = (res.j && res.j.error) || 'Could not start the shot list.'; }
+            return;
+          }
+          VL.sl[id] = { estimate: res.j.estimate, job: res.j.job, fresh: true };
+          vlSlPoll(id);
+        })
+        .catch(function () { VL.writing = null; vlRenderOpen(true); var mc = document.getElementById('vl-sl-msg'); if (mc) mc.textContent = 'Could not reach the server.'; });
+    });
+  };
+  if (!filled) { go(); return; }
+  uiConfirm('Write a new shot list? It replaces the overall direction and every shot box with new words. The book is not changed.', { okText: 'Write it' }).then(function (yes) { if (yes) go(); });
+}
+// Every three seconds until the job is done; then the draft is read again from the server and drawn afresh.
+function vlSlPoll(id) {
+  if (VL.slTimer) clearTimeout(VL.slTimer);
+  VL.slTimer = setTimeout(function () {
+    VL.slTimer = null;
+    fetch('/api/video-lab/cuts/' + id + '/shot-list', { cache: 'no-store' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        var j = res.j && res.j.job;
+        if (res.ok && j && j.status === 'running') { if (vlSlWriting(id)) vlSlPoll(id); return; }
+        VL.sl[id] = { estimate: res.j && res.j.estimate, job: j, fresh: true };
+        if (res.j && res.j.cut) for (var k = 0; k < VL.cuts.length; k++) if (String(VL.cuts[k].id) === String(id)) VL.cuts[k] = res.j.cut;
+        if (vlSlWriting(id)) VL.writing = null;
+        if (VL.draft && String(VL.draft.id) === String(id)) VL.draft = null;
+        vlRenderCuts(); vlRenderOpen(true);
+        if (j && j.status === 'done' && typeof refreshTokenBalance === 'function') refreshTokenBalance();
+      })
+      .catch(function () { if (vlSlWriting(id)) vlSlPoll(id); });
+  }, 3000);
+}
 
 function vlDelete(id) {
   var c = vlFindCut(id);

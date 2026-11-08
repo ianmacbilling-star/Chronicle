@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.98",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3498-video-shot-list",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video tab: pick a style for each cut (Animated, Living Illustration, Documentary) and let Campaignia write the shot list.",
+        "detail": "TD-090, Video Phase 2 build 3. Write the shot list sends the version's story, the cut's pictures (small, as pictures and as words), the cast, the art style, the genre, the style's rules and the video model's lengths to the model that writes the story, and fills the overall direction and every shot box (action, camera, lines for Animated, sound, length). It runs as a job; the boxes wait while it is written; Rewrite asks first. Costs one token, or one per 8 cents of the real model cost when more, charged only when the boxes are filled; a refused or interrupted list costs nothing. The book's narrative is never changed. The clips themselves stay free.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.97",
     "staged_on": "2026-11-07",
     "entries": [

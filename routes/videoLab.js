@@ -29,8 +29,12 @@
 // Lab route so the two cannot drift). The Lab's runs are folded in as cuts the first time this starts (foldLabRuns).
 // Additive only (spec section 0): new columns and one new table; nothing outside the Video tab reads them.
 //
-// NO TOKENS ARE CHARGED (Ian: "Don't worry about deducting tokens on this test run, but we'll need
-// that"). est_cost_usd records what fal is expected to bill, from the price table below.
+// v3.4.98 -- THE SHOT LIST AND THE FIRST THREE VIDEO STYLES (Phase 2, build 3; spec section 15). A cut has a style
+// (Animated, Living Illustration, Documentary); Write the shot list fills its boxes from the model that writes the story.
+//
+// NO TOKENS ARE CHARGED FOR THE CLIPS (Ian: "Don't worry about deducting tokens on this test run, but we'll need
+// that"). est_cost_usd records what fal is expected to bill, from the price table below. v3.4.98: writing a shot list
+// does cost tokens (see the shot list section).
 // ============================================================
 const express = require('express');
 const router = express.Router();
@@ -210,6 +214,27 @@ function ensureTables() {
       )`);
     await db.exec('CREATE INDEX IF NOT EXISTS idx_video_cut_pictures_cut ON video_cut_pictures(cut_id, position)');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_video_projects_version ON video_projects(session_id, fork_id)');
+    // v3.4.98 -- one row per Write the shot list; one running per cut (the partial unique index is the claim).
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS video_shotlist_jobs (
+        id SERIAL PRIMARY KEY,
+        cut_id INTEGER NOT NULL REFERENCES video_projects(id) ON DELETE CASCADE,
+        user_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'running',
+        style TEXT,
+        model TEXT,
+        boot_id TEXT,
+        est_tokens INTEGER,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        cost_usd REAL DEFAULT 0,
+        tokens_charged INTEGER DEFAULT 0,
+        error TEXT,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        finished_at TIMESTAMP
+      )`);
+    await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_video_shotlist_one_running ON video_shotlist_jobs(cut_id) WHERE status = 'running'");
+    await db.exec('CREATE INDEX IF NOT EXISTS idx_video_shotlist_cut ON video_shotlist_jobs(cut_id, id)');
     await foldLabRuns(db);
   })();
   _tablesReady.catch(function () { _tablesReady = null; });
@@ -310,7 +335,8 @@ router.get('/models', requireAuth, requireVideo, function (req, res) {
     const m = MODELS[k];
     return { key: k, label: m.label, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired };
   });
-  res.json({ models: out, webhook: !!webhookUrl() });
+  const styles = VIDEO_STYLES.map(function (s) { return { key: s.key, label: s.label, description: s.description, speech: s.speech, defaultShot: s.defaultShot }; });   // v3.4.98
+  res.json({ models: out, webhook: !!webhookUrl(), styles: styles, defaultStyle: DEFAULT_STYLE });
 });
 
 async function projectsWithShots(db, where, params) {
@@ -617,8 +643,8 @@ router.post('/cuts', requireAuth, requireVideo, async function (req, res) {
     const pics = await storyboardPictures(db, sid, fid);
     const model = MODELS[b.model] ? b.model : Object.keys(MODELS)[0];
     const settings = JSON.stringify({ overall_prompt: '', model: model, sound: false, pairs: [] });
-    const r = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, fork_id, name, kind, status, total_cost_usd, settings, source, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(req.session.userId, s.campaign_id, sid, fid, cleanName(b.name) || defaultCutName(), 'cut', 'draft', 0, settings, 'storyboard', false);
+    const r = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, fork_id, name, kind, status, total_cost_usd, settings, source, pinned, style) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(req.session.userId, s.campaign_id, sid, fid, cleanName(b.name) || defaultCutName(), 'cut', 'draft', 0, settings, 'storyboard', false, styleFor(b.style).key);   // v3.4.98: a new cut starts on Living Illustration
     await writePictures(db, r.lastInsertRowid, pics);
     console.log('[video-lab] cut ' + r.lastInsertRowid + ' made from version ' + fid + ' of session ' + sid + ': ' + pics.length + ' picture(s)');
     res.json({ cut: await loadCut(db, r.lastInsertRowid) });
@@ -636,6 +662,7 @@ router.put('/cuts/:id', requireAuth, requireVideo, async function (req, res) {
     const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
     if (!(await canChange(req, cut))) return res.status(404).json({ error: 'Not found.' });
     if (cut.status !== 'draft') return res.status(409).json({ error: 'This cut has been made; copy it to change its pictures.' });
+    if (await runningShotList(db, cut.id)) return res.status(409).json({ error: 'The shot list is being written; your changes can be made when it is done.' });   // v3.4.98
     const b = req.body || {};
     const st = cutSettings(cut);
     if (b.overall_prompt != null) st.overall_prompt = String(b.overall_prompt).slice(0, 2000);
@@ -649,7 +676,8 @@ router.put('/cuts/:id', requireAuth, requireVideo, async function (req, res) {
       await writePictures(db, cut.id, pics);
     }
     const name = b.name != null ? (cleanName(b.name) || cut.name) : cut.name;
-    await db.prepare('UPDATE video_projects SET name = ?, settings = ?, updated_at = NOW() WHERE id = ?').run(name, JSON.stringify(st), cut.id);
+    const style = (b.style != null && VIDEO_STYLES.some(function (s) { return s.key === b.style; })) ? b.style : cut.style;   // v3.4.98
+    await db.prepare('UPDATE video_projects SET name = ?, settings = ?, style = ?, updated_at = NOW() WHERE id = ?').run(name, JSON.stringify(st), style, cut.id);
     res.json({ cut: await loadCut(db, cut.id) });
   } catch (e) {
     console.error('[video-lab] save cut error:', e && e.message);
@@ -664,6 +692,7 @@ router.post('/cuts/:id/generate', requireAuth, requireVideo, async function (req
     const db = await getDb();
     const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
     if (!(await canChange(req, cut))) return res.status(404).json({ error: 'Not found.' });
+    if (await runningShotList(db, cut.id)) return res.status(409).json({ error: 'The shot list is still being written; Generate when it is done.' });   // v3.4.98
     const st = cutSettings(cut);
     const m = MODELS[st.model];
     if (!m) return res.status(400).json({ error: 'Pick a model.' });
@@ -708,8 +737,8 @@ router.post('/cuts/:id/copy', requireAuth, requireVideo, async function (req, re
     const model = MODELS[st.model] ? st.model : (shots[0] && MODELS[shots[0].model] ? shots[0].model : Object.keys(MODELS)[0]);
     const settings = JSON.stringify({ overall_prompt: st.overall_prompt || '', model: model, sound: !!st.sound, pairs: cleanPairs(pairs) });
     const name = cleanName(String(src.name || 'Cut') + ' (copy)');
-    const r = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, fork_id, name, kind, status, total_cost_usd, settings, source, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(req.session.userId, src.campaign_id, src.session_id, src.fork_id, name, 'cut', 'draft', 0, settings, 'copy', false);
+    const r = await db.prepare('INSERT INTO video_projects (user_id, campaign_id, session_id, fork_id, name, kind, status, total_cost_usd, settings, source, pinned, style, shot_list) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(req.session.userId, src.campaign_id, src.session_id, src.fork_id, name, 'cut', 'draft', 0, settings, 'copy', false, src.style || null, src.shot_list || null);   // v3.4.98: the style and shot list come too
     await writePictures(db, r.lastInsertRowid, (src.pictures || []).map(function (p) { return { url: p.image_url, source: p.source, moment_id: p.moment_id, archive_id: p.archive_id, label: p.label }; }));
     res.json({ cut: await loadCut(db, r.lastInsertRowid) });
   } catch (e) {
@@ -732,6 +761,415 @@ router.post('/cuts/:id/pin', requireAuth, requireVideo, async function (req, res
   } catch (e) {
     console.error('[video-lab] pin error:', e && e.message);
     res.status(500).json({ error: 'Could not pin it.' });
+  }
+});
+
+// ---- the shot list (v3.4.98) -----------------------------------------------------------------
+// Video Phase 2, build 3 (claude/VIDEO_PHASE2_SPEC.md section 15). Ian, 2026-11-07: "for the cut you would pick the
+// video style... Then it would generate the prompts that go on each shot... and then that in conjunction with the story
+// would all be fed to the video AI engine". Write the shot list sends the version's story, the cut's pictures (as
+// pictures and as words), the cast, the art style, the genre, the chosen style's rules and the video model's limits to
+// the model that writes the story (TEXT_MODEL), and fills the Overall direction and every shot box from what comes back.
+// The book's narrative is only read, never written. It runs as a job (a long chapter with pictures can pass Cloudflare's
+// ~100 s ceiling, TD-396): one row per press in video_shotlist_jobs, one running per cut (a partial unique index), so a
+// deploy mid-call reads "interrupted, nothing charged" instead of spinning. Tokens (Ian: "one token... or more if it's
+// more than 8 cents"): max(1, ceil(actual cost / 8 cents)), worked out from the reply's usage at the stored prices, and
+// charged only once the boxes are filled. Additive only (spec section 0): one new table; nothing outside the Video tab
+// reads it. The clips themselves stay free.
+
+// The first three video styles (Ian, 2026-11-07: Animated, Living Illustration, Documentary). Records like narrative
+// styles, kept here for this build. defaultShot is snapped to the chosen model's durations.
+const VIDEO_STYLES = [
+  { key: 'animated', label: 'Animated',
+    description: 'Full motion: the characters act, move and speak; the camera follows the action.',
+    motion: 'high', defaultShot: 5, speech: true,
+    instructions: 'ANIMATED. Real action happens between the two pictures: name what each character in the shot does, step by step, so the movement carries the first picture into the second. The camera may move (follow, pan, push in, pull back) to serve the action. Characters may speak: short lines in their own words, said by a character who is in the shot, a few words that fit inside the shot\'s length (about two words a second at most). Add sound effects that fit. Keep faces, costumes and the art style true to the pictures: more motion means more drift, so keep the action clear and simple rather than busy.' },
+  { key: 'living', label: 'Living Illustration',
+    description: 'The picture comes alive gently: cloaks stir, fire flickers, dust drifts, a slow push in. Characters hold their poses.',
+    motion: 'low', defaultShot: 5, speech: false,
+    instructions: 'LIVING ILLUSTRATION. Subtle motion only: hair and cloth stirring, light and flame flickering, smoke, dust, rain or particles drifting, breathing, blinking. Characters keep their pose and their place; nobody walks, fights or gestures. The camera is slow (a gentle push in or pan) or still. No speech. Keep the art style exactly as painted. The move from one picture to the next is a slow drift or dissolve, never a cut or a jump.' },
+  { key: 'documentary', label: 'Documentary',
+    description: 'Slow camera moves across each picture, like a documentary. Narration comes later with voices.',
+    motion: 'low', defaultShot: 6, speech: false,
+    instructions: 'DOCUMENTARY. Treat each shot as a slow camera move over the start picture that settles toward the end picture, as in a documentary about paintings: say which part of the picture the camera starts on, where it drifts or zooms, and what it comes to rest on. Nothing in the picture moves by itself: no character motion. No speech (narration comes later). Ambient sound only (wind, a room, a crowd far off).' }
+];
+const DEFAULT_STYLE = 'living';
+function styleFor(key) {
+  for (let i = 0; i < VIDEO_STYLES.length; i++) if (VIDEO_STYLES[i].key === key) return VIDEO_STYLES[i];
+  for (let i = 0; i < VIDEO_STYLES.length; i++) if (VIDEO_STYLES[i].key === DEFAULT_STYLE) return VIDEO_STYLES[i];
+  return VIDEO_STYLES[0];
+}
+// The offered duration nearest to want (the longer on a tie: 5 s on a 4/6/8 model is 6), as the model's own string.
+function snapDuration(m, want) {
+  const n = Number(want);
+  if (!Number.isFinite(n)) return null;
+  let best = null;
+  m.durations.forEach(function (d) {
+    const a = Math.abs(Number(d) - n), b = best === null ? Infinity : Math.abs(Number(best) - n);
+    if (a < b || (a === b && Number(d) > Number(best))) best = d;
+  });
+  return best;
+}
+
+const SL_MAX_IMAGES = 20;            // pictures sent as pictures; the rest go as words only (spec 15.3)
+const SL_IMAGE_PX = 512;             // the long side of each picture sent
+const SL_STORY_CHARS = 30000;        // the version's story is trimmed to this
+const SL_TIMEOUT_MS = 240000;        // one call to the model
+const SL_STALE_MS = 10 * 60 * 1000;  // a job still 'running' after this was lost
+const SL_BOOT_GRACE_MS = 3 * 60 * 1000;   // a job from an earlier server process is lost once it is this old
+const SL_BOOT = require('crypto').randomBytes(6).toString('hex');   // this process; a deploy starts another
+// Prices live in app_settings so they can change without a deploy. Defaults: Claude Sonnet 4.6 list prices (USD per
+// million tokens, input 3, output 15; Anthropic's pricing, read 2026-11-07) and 8 cents a token (Ian).
+const SL_DEFAULTS = { shotlist_cents_per_token: 8, shotlist_price_in_per_mtok: 3, shotlist_price_out_per_mtok: 15 };
+async function shotListPrices(db) {
+  const out = {};
+  for (const k of Object.keys(SL_DEFAULTS)) {
+    let v = null;
+    try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(k); v = r ? parseFloat(r.value) : null; } catch (e) { v = null; }
+    out[k] = (Number.isFinite(v) && v > 0) ? v : SL_DEFAULTS[k];
+  }
+  return out;
+}
+function usdFor(prices, inTok, outTok) {
+  return (Number(inTok || 0) * prices.shotlist_price_in_per_mtok + Number(outTok || 0) * prices.shotlist_price_out_per_mtok) / 1000000;
+}
+function tokensFor(prices, usd) {
+  const n = Math.ceil((Number(usd || 0) * 100) / prices.shotlist_cents_per_token - 1e-9);
+  return Math.max(1, Number.isFinite(n) ? n : 1);
+}
+
+// The version's story as the Storyboard shows it: the opening, then each picture's own text and the text after it, in
+// panel order (the title picture's hidden block is skipped, TD-1106). byMoment: a picture's own text, by moment id.
+function textOf(v) { return String(v == null ? '' : v).replace(/\r\n/g, '\n').trim(); }
+async function storyOfVersion(db, forkId) {
+  const fork = await db.prepare('SELECT id, narrative_intro, narrative_sections, narrative_outro, art_style_override FROM session_forks WHERE id = ?').get(forkId);
+  const moments = await db.prepare('SELECT id, kind, title, description FROM moments WHERE fork_id = ? ORDER BY panel_order ASC, id ASC').all(forkId);
+  const byMoment = {};
+  const parts = [];
+  if (fork && textOf(fork.narrative_intro)) parts.push(textOf(fork.narrative_intro));
+  let blocks = null;
+  try { blocks = require('../services/panelOrder').readNorm(fork ? fork.narrative_sections : null, moments); } catch (e) { blocks = null; }
+  if (!blocks && fork && fork.narrative_sections) {
+    try { const raw = JSON.parse(fork.narrative_sections); if (Array.isArray(raw) && raw.length === moments.length) blocks = raw; } catch (e) { blocks = null; }
+  }
+  moments.forEach(function (mo, i) {
+    if (mo.kind === 'establishing') return;
+    const b = blocks ? (blocks[i] || {}) : {};
+    const own = textOf(b.before);
+    if (own) byMoment[mo.id] = own;
+    parts.push('[Picture: ' + textOf(mo.title || 'untitled') + ']' + (own ? '\n' + own : ''));
+    const after = textOf(b.after);
+    if (after) parts.push(after);
+  });
+  if (fork && textOf(fork.narrative_outro)) parts.push(textOf(fork.narrative_outro));
+  let text = parts.join('\n\n');
+  const hasStory = !!(blocks || (fork && (textOf(fork.narrative_intro) || textOf(fork.narrative_outro))));
+  let trimmed = false;
+  if (text.length > SL_STORY_CHARS) { text = text.slice(0, SL_STORY_CHARS); trimmed = true; }
+  return { fork: fork, moments: moments, text: hasStory ? text : '', byMoment: byMoment, trimmed: trimmed };
+}
+
+// Everything the writer is told about one cut, read fresh at the press.
+async function shotListContext(db, cut) {
+  const st = cutSettings(cut);
+  const m = MODELS[st.model] || MODELS[Object.keys(MODELS)[0]];
+  const style = styleFor(cut.style);
+  const pics = await db.prepare('SELECT * FROM video_cut_pictures WHERE cut_id = ? ORDER BY position, id').all(cut.id);
+  const story = await storyOfVersion(db, cut.fork_id);
+  const session = await db.prepare('SELECT id, name, art_style FROM sessions WHERE id = ?').get(cut.session_id);
+  const campaign = await db.prepare('SELECT id, name, art_style, genres FROM campaigns WHERE id = ?').get(cut.campaign_id);
+  const momentsById = {}; story.moments.forEach(function (mo) { momentsById[mo.id] = mo; });
+  let cast = await db.prepare('SELECT ch.name, ch.cls, ch.description, ch.is_npc, sc.prompt FROM session_characters sc JOIN characters ch ON ch.id = sc.character_id WHERE sc.fork_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(cut.fork_id);
+  if (!cast.length) cast = await db.prepare('SELECT name, cls, description, is_npc, canonical_prompt AS prompt FROM characters WHERE campaign_id = ? ORDER BY is_npc ASC, id ASC LIMIT 40').all(cut.campaign_id);
+  let artStyle = String((story.fork && story.fork.art_style_override) || (session && session.art_style) || (campaign && campaign.art_style) || '').trim();
+  const cm = /^custom:(\d+)$/i.exec(artStyle);
+  if (cm) {
+    try { const r = await db.prepare('SELECT name FROM custom_art_styles WHERE id = ?').get(parseInt(cm[1], 10)); artStyle = (r && r.name) ? String(r.name) : 'a custom art style'; } catch (e) { artStyle = 'a custom art style'; }
+  } else if (artStyle) {
+    try { artStyle = require('../services/artStyleCatalog').labelFor(artStyle); } catch (e) {}
+  }
+  let genres = [];
+  try { genres = require('../services/genres').genreLabels(campaign); } catch (e) { genres = []; }
+  return {
+    cut: cut, m: m, modelKey: st.model, style: style, story: story, cast: cast, artStyle: artStyle, genres: genres,
+    sessionName: session ? String(session.name || '') : '', campaignName: campaign ? String(campaign.name || '') : '',
+    pictures: pics.map(function (p, i) {
+      const mo = p.moment_id ? momentsById[p.moment_id] : null;
+      let words;
+      if (p.source === 'title') words = 'The title picture (the opening shot).';
+      else if (mo) words = 'A storyboard picture: "' + textOf(mo.title) + '".' + (textOf(mo.description) ? ' What it shows: ' + textOf(mo.description).slice(0, 600) : '') +
+        (story.byMoment[mo.id] ? '\nIts text in the story: ' + story.byMoment[mo.id].slice(0, 1200) : '');
+      else words = 'A picture from the Archive' + (p.label ? ': "' + textOf(p.label) + '"' : '') + '.';
+      return { n: i + 1, url: p.image_url, words: words };
+    })
+  };
+}
+
+// An estimate before the press, from the cut's size (pictures and story length): what the button shows and the
+// balance must cover. The charge afterwards is worked out from the real usage instead.
+function estimateShotList(ctx, prices) {
+  const n = ctx.pictures.length, shots = Math.max(0, n - 1);
+  const words = ctx.pictures.reduce(function (t, p) { return t + p.words.length; }, 0);
+  const castChars = ctx.cast.reduce(function (t, c) { return t + String(c.name || '').length + String(c.description || '').length + Math.min(800, String(c.prompt || '').length); }, 0);
+  const inTok = Math.ceil((4000 + ctx.story.text.length + words + castChars) / 4) + Math.min(n, SL_MAX_IMAGES) * 360;
+  const outTok = 300 + shots * 170;
+  const usd = usdFor(prices, inTok, outTok);
+  return { input_tokens: inTok, output_tokens: outTok, usd: Math.round(usd * 10000) / 10000, tokens: tokensFor(prices, usd), shots: shots };
+}
+
+// One picture, small, for the writer to look at (only our own pictures are fetched). null when it cannot be read: that
+// picture then goes as words only.
+async function pictureForModel(url) {
+  try {
+    if (!url || !storage.isOurPublicUrl(url)) return null;
+    const axios = require('axios');
+    const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000, maxContentLength: 25 * 1024 * 1024, maxBodyLength: 25 * 1024 * 1024 });
+    const out = await require('sharp')(Buffer.from(resp.data)).rotate().resize({ width: SL_IMAGE_PX, height: SL_IMAGE_PX, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
+    return out.toString('base64');
+  } catch (e) {
+    console.warn('[video-lab] shot list: could not read a picture (' + (e && e.message) + ')');
+    return null;
+  }
+}
+
+// What goes to the model: the rules in the system part, the cut in the message (story, cast, then each picture with its
+// words), and the exact JSON asked for. images: base64 per picture index, or null.
+function shotListRequest(ctx, images) {
+  const m = ctx.m, style = ctx.style;
+  const shots = ctx.pictures.length - 1;
+  const def = snapDuration(m, style.defaultShot) || m.defDuration;
+  const system =
+    'You are the director of a short video made from the illustrations of a story. The video is made by an image-to-video model, ' + m.label + ', ' +
+    'one shot at a time: each shot starts exactly on one picture and ends exactly on the next, and the model is told what happens in between. ' +
+    'You write the shot list: an overall direction for the whole video, then one shot for each pair of pictures, in order.\n\n' +
+    'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
+    'THE VIDEO MODEL\nShot lengths it offers, in seconds: ' + m.durations.join(', ') + '. Give every shot one of these exact numbers; ' + def + ' suits this style unless a shot needs more or less time. ' +
+    'Each shot runs from its start picture to its end picture, so describe how the first becomes the second, not a new scene. The model sees only the two pictures and your words: ' +
+    'name people as the pictures show them and describe what they do in plain visual terms.\n\n' +
+    'THE OVERALL DIRECTION is sent with every shot: one short paragraph (at most 600 characters) naming the setting, the mood, the light, and each main character\'s look in words ' +
+    '(build, hair, clothes, colours) so every shot keeps them the same. Keep the art style as it is in the pictures.\n\n' +
+    'RULES\n- Keep the names exactly as the story and the cast list write them.\n- Each shot\'s action is at most 450 characters; camera, sound and each line short.\n' +
+    (style.speech ? '- Dialogue: only a character visible in that shot speaks; at most two short lines a shot; leave it empty when nobody should talk.\n' : '- Dialogue: always an empty list in this style.\n') +
+    '- Write original words; never reproduce text from any published source.\n- Never put words, captions or titles on screen.\n\n' +
+    'ANSWER WITH ONLY THIS JSON, no other text:\n' +
+    '{"overall": "...", "shots": [{"action": "...", "camera": "...", "dialogue": [{"speaker": "...", "line": "..."}], "sound": "...", "duration": "' + def + '"}]}\n' +
+    'The shots list has exactly ' + shots + ' entr' + (shots === 1 ? 'y' : 'ies') + ': the first goes from picture 1 to picture 2, the last from picture ' + shots + ' to picture ' + (shots + 1) + '.';
+  const content = [];
+  const head = [];
+  head.push('THE STORY: ' + (ctx.campaignName ? '"' + ctx.campaignName + '"' : 'untitled') + (ctx.sessionName ? ', the session "' + ctx.sessionName + '"' : '') + '.');
+  if (ctx.genres.length) head.push('Genre: ' + ctx.genres.join(', ') + '.');
+  if (ctx.artStyle) head.push('Art style of the pictures: ' + ctx.artStyle + '.');
+  head.push('');
+  head.push(ctx.story.text ? ('The story of this version, as the book tells it' + (ctx.story.trimmed ? ' (trimmed: it is long)' : '') + ':\n' + ctx.story.text)
+    : 'This version has no written story yet; work from the pictures and their words.');
+  if (ctx.cast.length) {
+    head.push('');
+    head.push('THE CAST (as they are drawn):');
+    ctx.cast.forEach(function (c) {
+      const look = String(c.prompt || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      head.push('- ' + String(c.name || '').trim() + (c.is_npc ? ' (not a player character)' : '') + (c.cls ? ', ' + String(c.cls).trim() : '') +
+        (c.description ? ': ' + String(c.description).replace(/\s+/g, ' ').trim().slice(0, 400).replace(/[.\s]*$/, '.') : '') + (look ? ' Looks: ' + look : ''));
+    });
+  }
+  head.push('');
+  const sent = images.filter(Boolean).length;
+  head.push('THE PICTURES OF THIS VIDEO, IN ORDER (' + ctx.pictures.length + ' pictures, so ' + shots + ' shot' + (shots === 1 ? '' : 's') + ').' +
+    (sent < ctx.pictures.length ? (sent ? ' Only ' + sent + ' are shown as pictures; the others are described in words only.' : ' They are described in words only.') : ''));
+  content.push({ type: 'text', text: head.join('\n') });
+  ctx.pictures.forEach(function (p, i) {
+    content.push({ type: 'text', text: 'Picture ' + p.n + '. ' + p.words });
+    if (images[i]) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: images[i] } });
+  });
+  content.push({ type: 'text', text: 'Now write the shot list as JSON: the overall direction and exactly ' + shots + ' shot' + (shots === 1 ? '' : 's') + ', in the ' + style.label + ' style.' });
+  return { system: system, content: content, max_tokens: Math.min(16000, 1200 + shots * 450) };
+}
+
+// The reply, checked: readable JSON, exactly one shot per pair, a length the model offers (the nearest offered length
+// when it gave another number). Anything else is { error } and is tried once more.
+function parseShotList(raw, ctx) {
+  const clean = String(raw || '').replace(/```json|```/g, '').trim();
+  let p = null;
+  try { p = JSON.parse(clean); } catch (e) {
+    const a = clean.indexOf('{'), b = clean.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { p = JSON.parse(clean.slice(a, b + 1)); } catch (e2) { p = null; } }
+  }
+  if (!p || typeof p !== 'object' || !Array.isArray(p.shots)) return { error: 'unreadable' };
+  const want = ctx.pictures.length - 1;
+  if (p.shots.length !== want) return { error: 'came back with ' + p.shots.length + ' shots, not ' + want };
+  const shots = [];
+  for (let i = 0; i < p.shots.length; i++) {
+    const s = p.shots[i] || {};
+    const d = snapDuration(ctx.m, parseFloat(String(s.duration == null ? '' : s.duration).replace(/[^0-9.]/g, '')));
+    if (!d) return { error: 'shot ' + (i + 1) + ' has no length' };
+    let dlg = [];
+    if (Array.isArray(s.dialogue)) dlg = s.dialogue.map(function (x) { return { speaker: textOf(x && x.speaker).slice(0, 80), line: textOf(x && x.line).replace(/^["\u201c]+|["\u201d]+$/g, '').slice(0, 300) }; }).filter(function (x) { return x.line; });
+    else if (textOf(s.dialogue)) dlg = [{ speaker: '', line: textOf(s.dialogue).slice(0, 300) }];
+    if (!ctx.style.speech) dlg = [];
+    shots.push({ action: textOf(s.action).slice(0, 900), camera: textOf(s.camera).slice(0, 300), dialogue: dlg.slice(0, 4), sound: textOf(s.sound).slice(0, 300), duration: d });
+  }
+  return { overall: textOf(p.overall).slice(0, 2000), shots: shots };
+}
+
+// What a shot box says: plain words the person can edit, and exactly what the video model will be sent.
+function shotBoxText(s) {
+  const lines = [];
+  if (s.action) lines.push(s.action);
+  if (s.camera) lines.push('Camera: ' + s.camera);
+  (s.dialogue || []).forEach(function (x) { lines.push((x.speaker ? x.speaker + ': ' : '') + '"' + x.line + '"'); });
+  if (s.sound) lines.push('Sound: ' + s.sound);
+  return lines.join('\n').slice(0, 1500);
+}
+
+async function callShotListModel(key, req) {
+  const { TEXT_MODEL } = require('../config/models');
+  const ac = new AbortController();
+  const t = setTimeout(function () { try { ac.abort(); } catch (e) {} }, SL_TIMEOUT_MS);
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: TEXT_MODEL, max_tokens: req.max_tokens, system: req.system, messages: [{ role: 'user', content: req.content }] }),
+      signal: ac.signal
+    });
+    const data = await r.json();
+    if (!data || data.error || !Array.isArray(data.content)) return { error: (data && data.error && data.error.message) || ('the writer answered ' + r.status), usage: (data && data.usage) || {} };
+    return { text: data.content.map(function (b) { return b.text || ''; }).join(''), usage: data.usage || {}, truncated: data.stop_reason === 'max_tokens' };
+  } catch (e) {
+    return { error: (e && e.name === 'AbortError') ? 'the writer took too long to answer' : 'the writer could not be reached', usage: {} };
+  } finally { clearTimeout(t); }
+}
+
+// A job left 'running' by a server that has gone (a deploy, a restart) is marked interrupted: nothing was charged.
+async function retireLostJobs(db, cutId) {
+  const now = Date.now();
+  const rows = await db.prepare("SELECT id, boot_id, started_at FROM video_shotlist_jobs WHERE cut_id = ? AND status = 'running'").all(cutId);
+  for (const j of rows) {
+    const age = now - new Date(j.started_at).getTime();
+    if (age > SL_STALE_MS || (j.boot_id !== SL_BOOT && age > SL_BOOT_GRACE_MS)) {
+      await db.prepare("UPDATE video_shotlist_jobs SET status = 'interrupted', error = ?, finished_at = NOW() WHERE id = ? AND status = 'running'")
+        .run('Interrupted (the server restarted while it was being written). Nothing was charged; try again.', j.id);
+    }
+  }
+}
+async function runningShotList(db, cutId) {
+  await retireLostJobs(db, cutId);
+  return db.prepare("SELECT id FROM video_shotlist_jobs WHERE cut_id = ? AND status = 'running' LIMIT 1").get(cutId);
+}
+function jobView(j) {
+  if (!j) return null;
+  return { id: j.id, status: j.status, error: j.error || null, tokens_charged: j.tokens_charged || 0, style: j.style, started_at: j.started_at, finished_at: j.finished_at };
+}
+
+// The job itself, after the press has been answered. Two tries at most; the boxes are filled and the tokens charged
+// only when the job is still this one's to finish (a deleted cut or an interrupted job charges nothing).
+async function runShotList(jobId, cutId, userId, ctx, prices, key) {
+  const db = await getDb();
+  let inTok = 0, outTok = 0, result = null, lastErr = '';
+  try {
+    const images = [];
+    for (let i = 0; i < ctx.pictures.length; i++) images.push(i < SL_MAX_IMAGES ? await pictureForModel(ctx.pictures[i].url) : null);
+    const req = shotListRequest(ctx, images);
+    for (let attempt = 1; attempt <= 2 && !result; attempt++) {
+      const r = await callShotListModel(key, req);
+      inTok += Number((r.usage && r.usage.input_tokens) || 0); outTok += Number((r.usage && r.usage.output_tokens) || 0);
+      if (r.error) { lastErr = r.error; continue; }
+      const p = parseShotList(r.text, ctx);
+      if (p.error) { lastErr = (r.truncated ? 'it ran out of room' : p.error); continue; }
+      result = p;
+    }
+  } catch (e) { lastErr = (e && e.message) || 'unknown error'; }
+  const usd = Math.round(usdFor(prices, inTok, outTok) * 10000) / 10000;
+  if (!result) {
+    await db.prepare("UPDATE video_shotlist_jobs SET status = 'error', error = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, finished_at = NOW() WHERE id = ? AND status = 'running'")
+      .run(('The shot list came back incomplete (' + lastErr + '). Nothing was charged; try again.').slice(0, 1000), inTok, outTok, usd, jobId);
+    console.error('[video-lab] shot list job ' + jobId + ' failed: ' + lastErr + ' ($' + usd + ' to Campaignia)');
+    return;
+  }
+  const charge = tokensFor(prices, usd);
+  const shotList = { style: ctx.style.key, model: ctx.modelKey, written_at: new Date().toISOString(), overall: result.overall, shots: result.shots };
+  let filled = false;
+  await db.transaction(async function (tx) {
+    const claim = await tx.prepare("UPDATE video_shotlist_jobs SET status = 'done', input_tokens = ?, output_tokens = ?, cost_usd = ?, finished_at = NOW() WHERE id = ? AND status = 'running'").run(inTok, outTok, usd, jobId);
+    if (!claim.changes) return;
+    const cut = await tx.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(cutId);
+    const n = await tx.prepare('SELECT COUNT(*)::int AS n FROM video_cut_pictures WHERE cut_id = ?').get(cutId);
+    if (!cut || cut.status !== 'draft' || !n || n.n !== result.shots.length + 1) {
+      await tx.prepare("UPDATE video_shotlist_jobs SET status = 'error', error = ? WHERE id = ?").run('The cut changed while its shot list was being written. Nothing was charged; try again.', jobId);
+      return;
+    }
+    const st = cutSettings(cut);
+    st.overall_prompt = result.overall;
+    st.pairs = result.shots.map(function (s) { return { prompt: shotBoxText(s), duration: s.duration }; });
+    await tx.prepare('UPDATE video_projects SET settings = ?, shot_list = ?, style = ?, updated_at = NOW() WHERE id = ?').run(JSON.stringify(st), JSON.stringify(shotList), ctx.style.key, cutId);
+    filled = true;
+  });
+  if (!filled) { console.log('[video-lab] shot list job ' + jobId + ': not filled (cut changed, deleted or job interrupted); nothing charged'); return; }
+  let charged = 0;
+  try {
+    const tokens = require('./tokens');
+    const bal = await tokens.getBalance(userId);
+    charged = Math.min(charge, Math.max(0, bal.total));
+    if (charged > 0) await tokens.spendTokens(userId, charged, { source: 'video_shot_list', event_type: 'generation_spend', related_campaign_id: ctx.cut.campaign_id });
+    if (charged < charge) console.warn('[video-lab] shot list job ' + jobId + ': balance covered ' + charged + ' of ' + charge + ' token(s)');
+    await tokens.recordGeneration(userId, { event_type: 'video_shot_list', tokens_redeemed: charged, quantity: result.shots.length, unit: 'shots', model: require('../config/models').TEXT_MODEL, related_campaign_id: ctx.cut.campaign_id, related_session_id: ctx.cut.session_id });
+  } catch (e) { console.error('[video-lab] shot list charge failed:', e && e.message); }
+  await db.prepare('UPDATE video_shotlist_jobs SET tokens_charged = ? WHERE id = ?').run(charged, jobId);
+  console.log('[video-lab] shot list job ' + jobId + ' for cut ' + cutId + ': ' + result.shots.length + ' shot(s), ' + inTok + ' in / ' + outTok + ' out, $' + usd + ', ' + charged + ' token(s)');
+}
+
+// The press. Answers at once with the job; the tab asks GET below until it is done.
+router.post('/cuts/:id/shot-list', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
+    if (!(await canChange(req, cut))) return res.status(404).json({ error: 'Not found.' });
+    if (cut.status !== 'draft') return res.status(409).json({ error: 'This cut has been made; copy it to write a new shot list.' });
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return res.status(500).json({ error: 'The writer is not set up on this server (ANTHROPIC_API_KEY).' });
+    const b = req.body || {};
+    let c = cut;
+    if (b.style != null && VIDEO_STYLES.some(function (s) { return s.key === b.style; }) && b.style !== cut.style) {
+      await db.prepare('UPDATE video_projects SET style = ?, updated_at = NOW() WHERE id = ?').run(b.style, cut.id);
+      c = Object.assign({}, cut, { style: b.style });
+    }
+    const ctx = await shotListContext(db, c);
+    if (ctx.pictures.length < 2) return res.status(400).json({ error: 'A cut needs two pictures at least.' });
+    const prices = await shotListPrices(db);
+    const est = estimateShotList(ctx, prices);
+    const bal = await require('./tokens').getBalance(req.session.userId);
+    if (bal.total < est.tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'Writing this shot list costs about ' + est.tokens + ' token' + (est.tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
+    await retireLostJobs(db, cut.id);
+    const ins = await db.prepare("INSERT INTO video_shotlist_jobs (cut_id, user_id, status, style, model, boot_id, est_tokens) VALUES (?, ?, 'running', ?, ?, ?, ?) ON CONFLICT (cut_id) WHERE status = 'running' DO NOTHING")
+      .run(cut.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, est.tokens);
+    if (!ins.lastInsertRowid) return res.status(409).json({ error: 'A shot list is already being written for this cut.' });
+    const job = await db.prepare('SELECT * FROM video_shotlist_jobs WHERE id = ?').get(ins.lastInsertRowid);
+    res.json({ job: jobView(job), estimate: est });
+    runShotList(job.id, cut.id, req.session.userId, ctx, prices, key).catch(async function (e) {
+      console.error('[video-lab] shot list job ' + job.id + ' crashed:', e && e.message);
+      try { await db.prepare("UPDATE video_shotlist_jobs SET status = 'error', error = ?, finished_at = NOW() WHERE id = ? AND status = 'running'").run('Something went wrong writing it. Nothing was charged; try again.', job.id); } catch (e2) {}
+    });
+  } catch (e) {
+    console.error('[video-lab] shot list start error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not start the shot list.' });
+  }
+});
+
+// The latest job of a cut, the price of writing one now, and the cut itself once a job has filled it.
+router.get('/cuts/:id/shot-list', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
+    if (!cut || !(await canSee(req, cut))) return res.status(404).json({ error: 'Not found.' });
+    await retireLostJobs(db, cut.id);
+    const j = await db.prepare('SELECT * FROM video_shotlist_jobs WHERE cut_id = ? ORDER BY id DESC LIMIT 1').get(cut.id);
+    let estimate = null;
+    if (cut.status === 'draft') { try { estimate = estimateShotList(await shotListContext(db, cut), await shotListPrices(db)); } catch (e) { estimate = null; } }
+    res.json({ job: jobView(j), estimate: estimate, cut: (j && j.status !== 'running') ? await loadCut(db, cut.id) : null });
+  } catch (e) {
+    console.error('[video-lab] shot list read error:', e && e.message);
+    res.status(500).json({ error: 'Could not read the shot list.' });
   }
 });
 
@@ -949,3 +1387,7 @@ module.exports._sweep = sweep;
 module.exports._finishShot = finishShot;
 module.exports._ensureTables = ensureTables;
 module.exports._stopSweep = function () { if (_timer) clearInterval(_timer); _timer = null; };
+// v3.4.98 -- the shot list, for the batch tests
+module.exports.VIDEO_STYLES = VIDEO_STYLES;
+module.exports._shotList = { styleFor: styleFor, snapDuration: snapDuration, usdFor: usdFor, tokensFor: tokensFor, shotListPrices: shotListPrices, estimateShotList: estimateShotList,
+  shotListContext: shotListContext, shotListRequest: shotListRequest, parseShotList: parseShotList, shotBoxText: shotBoxText, runShotList: runShotList, retireLostJobs: retireLostJobs, BOOT: SL_BOOT };
