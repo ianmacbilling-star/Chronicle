@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.17",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3517-video-pins",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: the pin (as on the version picker and My Campaigns) replaces the stars on episodes and takes.",
+        "detail": "Ian, 2026-11-08: \"Shouldnt we replace the stars with our SOP Pins?\" The episode row, the Pin this episode button and each take now use _vpickPinSvg: filled when pinned, outline when not. A pinned take is the one the shot uses in the episode (Pinned: the take this shot uses in the episode / Pin this take: use it in the episode); one per shot, as the star was. The episode box says 'pinned take(s)' where it said 'chosen'.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.16",
     "staged_on": "2026-11-08",
     "entries": [

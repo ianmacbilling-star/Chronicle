@@ -41929,6 +41929,7 @@ var VL_PAIRS = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(min(1
 var VL_PAIR = 'display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:6px;border:1px solid rgba(var(--accent-text-rgb),0.45);border-radius:var(--radius-lg);align-items:stretch;';   // v3.5.12: a picture and its box, locked together
 var VL_CUTMARK = 'position:absolute;top:0;left:50%;transform:translate(-50%,-50%);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px);padding:3px 10px;background:rgb(var(--panel-rgb));border:1px solid rgba(var(--accent-rgb),0.45);border-radius:999px;z-index:1;';   // v3.5.15
 var VL_SHOT_NAME = 'flex:0 1 320px;min-width:140px;padding:4px 8px;font-size:13px;height:auto;';   // v3.5.15
+var VL_PIN = 'background:none;border:none;cursor:pointer;line-height:0;padding:2px;display:inline-flex;align-items:center;';   // v3.5.17 (Ian: "replace the stars with our SOP Pins")
 var VL_MAX_TAKES = 3;   // v3.5.15: the server's MAX_TAKES
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
@@ -42077,7 +42078,7 @@ function vlEpRowHTML(ep) {
     '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
       '<button type="button" title="' + (ep.pinned ? 'Pinned: the episode Final Cut will use for this version. Click to unpin.' : 'Pin this episode: the one Final Cut will use for this version') + '" ' +
         'onclick="event.stopPropagation(); vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')" ' +
-        'style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;padding:0 2px;color:' + (ep.pinned ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.35)') + ';">' + (ep.pinned ? '&#9733;' : '&#9734;') + '</button>' +
+        'class="vl-pin" style="' + VL_PIN + 'color:' + (ep.pinned ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.45)') + ';">' + _vpickPinSvg(!!ep.pinned) + '</button>' +   // v3.5.17: the standard pin, not a star
       '<div style="display:flex;gap:3px;">' + pics.slice(0, 6).map(function (u) {
         return '<img src="' + escapeHtml(u) + '" alt="" loading="lazy" style="width:52px;height:36px;object-fit:cover;border-radius:4px;border:1px solid rgba(var(--accent-rgb),0.15);">';
       }).join('') + (pics.length > 6 ? '<span style="' + VL_DESC + 'align-self:center;">+' + (pics.length - 6) + '</span>' : '') + '</div>' +
@@ -42266,7 +42267,7 @@ function vlEditorHTML(ep) {
           }).join('') + '</select></div>' +
         '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);padding-bottom:9px;cursor:pointer;">' +
           '<input id="vl-sound" type="checkbox" onchange="vlEdit()" onblur="vlFlushSave()"' + (d.sound ? ' checked' : '') + '> The model\'s own sound</label>' +
-        '<button class="btn btn-sm" style="margin-bottom:4px;" onclick="vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')">' + (ep.pinned ? '&#9733; Pinned' : '&#9734; Pin this episode') + '</button>' +
+        '<button class="btn btn-sm vl-pin-btn" style="margin-bottom:4px;display:inline-flex;align-items:center;gap:5px;' + (ep.pinned ? 'border-color:var(--accent-bright);color:var(--accent-bright);' : '') + '" onclick="vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')">' + _vpickPinSvg(!!ep.pinned) + '<span>' + (ep.pinned ? 'Pinned' : 'Pin this episode') + '</span></button>' +   // v3.5.17
       '</div>' +
       vlStyleRowHTML(d, writing) +
     '</div>' +
@@ -42534,8 +42535,8 @@ function vlTakeCardHTML(t, chosen, n) {
   return '<div style="width:220px;flex:0 0 auto;border:1px solid ' + (chosen ? 'rgba(var(--accent-rgb),0.8)' : 'rgba(var(--accent-rgb),0.2)') + ';border-radius:8px;padding:6px;">' +
     body +
     '<div style="display:flex;gap:4px;align-items:center;margin-top:5px;flex-wrap:wrap;">' +
-      '<button type="button" title="' + (chosen ? 'The chosen take: the one the episode uses' : 'Use this take in the episode') + '" ' + (t.status === 'done' && !chosen ? 'onclick="vlChooseTake(' + t.id + ')"' : 'disabled') +
-        ' style="background:none;border:none;font-size:16px;line-height:1;padding:0 2px;cursor:' + (t.status === 'done' && !chosen ? 'pointer' : 'default') + ';color:' + (chosen ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.4)') + ';">' + (chosen ? '&#9733;' : '&#9734;') + '</button>' +
+      '<button type="button" class="vl-pin vl-take-pin" title="' + (chosen ? 'Pinned: the take this shot uses in the episode' : 'Pin this take: use it in the episode') + '" ' + (t.status === 'done' && !chosen ? 'onclick="vlChooseTake(' + t.id + ')"' : 'disabled') +
+        ' style="' + VL_PIN + 'cursor:' + (t.status === 'done' && !chosen ? 'pointer' : 'default') + ';color:' + (chosen ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.45)') + ';">' + _vpickPinSvg(chosen) + '</button>' +   // v3.5.17: the standard pin
       '<span style="' + VL_DESC + 'flex:1;">Take ' + n + (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : '') + '</span>' +
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download" title="Download this take">&#8681;</a>' : '') +
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
@@ -42577,8 +42578,8 @@ function vlEpVideoHTML(ep) {
   var note = '';
   if (joining) note = vlSpin(12) + ' Joining ' + shots.length + ' shots with plain cuts...';
   else if (ep.join_status === 'error') note = '<span style="color:var(--danger);" data-no-words>Joining the shots failed: ' + escapeHtml(ep.join_error || '') + '</span> <button class="btn btn-sm" onclick="vlJoinEpisode(' + ep.id + ')">Join again</button>';
-  else if (made < shots.length) note = made + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' made. The episode video is put together once every shot has a chosen take.';
-  else if (ep.video_url && !ep.video_current) note = 'Out of date: the chosen takes have changed.';
+  else if (made < shots.length) note = made + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' made. The episode video is put together once every shot has a pinned take.';
+  else if (ep.video_url && !ep.video_current) note = 'Out of date: the pinned takes have changed.';
   if (!ep.video_url && !note) return '';
   return '<div style="' + VL_BOX + 'padding:12px 14px;">' + head +
     (ep.video_url ? '<video src="' + escapeHtml(ep.video_url) + '" controls preload="metadata" style="display:block;width:100%;max-height:70vh;background:#000;border-radius:var(--radius-lg);"></video>' : '') +
