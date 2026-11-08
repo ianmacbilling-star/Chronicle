@@ -42010,11 +42010,11 @@ function vlShotCardHTML(d, i, m) {
   return '<div class="narrative-panel">' +
     '<div class="narrative-block-header">' +
       '<span>&#127916; Shot ' + (i + 1) + ': picture ' + (i + 1) + ' &rarr; ' + (i + 2) + '</span>' +
-      '<select id="vl-pd-' + i + '" class="narrative-regen-btn" style="cursor:pointer;" title="How long this shot runs" onchange="vlEdit()">' +
+      '<select id="vl-pd-' + i + '" class="narrative-regen-btn" style="cursor:pointer;" title="How long this shot runs" onchange="vlEdit()" onblur="vlFlushSave()">' +
         m.durations.map(function (x) { return '<option value="' + x + '"' + (String(p.duration) === x ? ' selected' : '') + '>' + x + ' s</option>'; }).join('') +
       '</select>' +
     '</div>' +
-    '<textarea class="narrative-inline-box" id="vl-pp-' + i + '" maxlength="1500" placeholder="What happens from picture ' + (i + 1) + ' to picture ' + (i + 2) + ': who moves and how, what the camera does, who speaks..." oninput="vlEdit()">' + escapeHtml(p.prompt || '') + '</textarea>' +
+    '<textarea class="narrative-inline-box" id="vl-pp-' + i + '" maxlength="1500" placeholder="What happens from picture ' + (i + 1) + ' to picture ' + (i + 2) + ': who moves and how, what the camera does, who speaks..." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(p.prompt || '') + '</textarea>' +
   '</div>';
 }
 
@@ -42034,18 +42034,18 @@ function vlDraftHTML(c) {
     '<div style="' + VL_BOX + 'padding:14px 16px;margin-bottom:14px;">' +
       '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">' +
         '<div style="flex:2;min-width:220px;"><label class="form-label" for="vl-name">Name</label>' +
-          '<input id="vl-name" class="form-input" type="text" maxlength="120" value="' + escapeHtml(d.name) + '" oninput="vlEdit()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true"></div>' +
+          '<input id="vl-name" class="form-input" type="text" maxlength="120" value="' + escapeHtml(d.name) + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true"></div>' +
         '<div style="flex:1;min-width:200px;"><label class="form-label" for="vl-model">Video model</label>' +
-          '<select id="vl-model" class="form-input" onchange="vlEdit(true)">' + ms.map(function (x) {
+          '<select id="vl-model" class="form-input" onchange="vlEdit(true)" onblur="vlFlushSave()">' + ms.map(function (x) {
             return '<option value="' + x.key + '"' + (x.key === m.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
           }).join('') + '</select></div>' +
         '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);padding-bottom:9px;cursor:pointer;">' +
-          '<input id="vl-sound" type="checkbox" onchange="vlEdit()"' + (d.sound ? ' checked' : '') + '> The model\'s own sound</label>' +
+          '<input id="vl-sound" type="checkbox" onchange="vlEdit()" onblur="vlFlushSave()"' + (d.sound ? ' checked' : '') + '> The model\'s own sound</label>' +
       '</div>' +
     '</div>' +
     '<div class="narrative-panel" style="margin-bottom:14px;">' +
       '<div class="narrative-block-header"><span>&#9998; Overall direction: who, where, the mood. It goes into every shot.</span></div>' +
-      '<textarea class="narrative-inline-box" id="vl-overall" maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()">' + escapeHtml(d.overall) + '</textarea>' +
+      '<textarea class="narrative-inline-box" id="vl-overall" maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
     '</div>' +
     '<div class="panels-grid">' + cells.join('') + '</div>' +
     '<div style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +

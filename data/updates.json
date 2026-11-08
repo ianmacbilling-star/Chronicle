@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.97",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3497-video-blur-save",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video tab: every field of a draft cut saves the moment you leave it, as well as while you type.",
+        "detail": "TD-090. Ian: make sure the fields save on blur. Name, video model, sound, overall direction, each shot box and each shot length now save at once when they lose focus (vlFlushSave), instead of only after the short pause while typing.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.96",
     "staged_on": "2026-11-07",
     "entries": [
