@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.18",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3518-video-debug",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: debug mode shows what each Generate sends.",
+        "detail": "Ian, 2026-11-08, after two takes meant as reference tests came back as keyframe takes: \"Put what you need to see in debug mode.\" Each Generate writes one line: the episode's model and whether that is REFERENCE or KEYFRAME mode, each move's length, pictures and full words, the cast sent, and every character of the version with its reference picture and why one is not usable (none saved, or not a Campaignia picture). A save that changes the model says so (old -> new), and opening the Video tab lists the models the server offers.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.17",
     "staged_on": "2026-11-08",
     "entries": [

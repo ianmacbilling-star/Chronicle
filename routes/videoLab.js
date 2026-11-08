@@ -426,6 +426,7 @@ router.get('/models', requireAuth, requireVideo, function (req, res) {
     return { key: k, label: m.label, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired };
   });
   const styles = VIDEO_STYLES.map(function (s) { return { key: s.key, label: s.label, description: s.description, speech: s.speech, defaultShot: s.defaultShot }; });
+  vlDebug(req.session && req.session.userId, 'info', 'GET /api/video-lab/models', 'Models offered: ' + out.map(function (x) { return x.key; }).join(', '));   // v3.5.18
   res.json({ models: out, webhook: !!webhookUrl(), styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES });
 });
 
@@ -609,7 +610,7 @@ router.put('/episodes/:id', requireAuth, requireVideo, async function (req, res)
     await forgetVideo(db, id, files);
     await deleteFiles(files, 'episode ' + id + ': shots removed');
     await maybeJoinEpisode(db, id);
-    vlDebug(req.session.userId, 'info', FN, 'Saved the episode', { sent: vlSaveSummary(b) });
+    vlDebug(req.session.userId, 'info', FN, 'Saved the episode' + (ep0.model !== model ? ' (model ' + ep0.model + ' -> ' + model + ')' : ''), { sent: vlSaveSummary(b), model_before: ep0.model, model_now: model, model_sent_known: b.model == null ? null : !!MODELS[b.model] });   // v3.5.18
     res.json({ episode: await loadEpisode(db, id) });
   } catch (e) {
     if (e && e.userFacing) return vlRefuse(req, res, FN, e.userFacing, e.message, { sent: vlSaveSummary(b) });
@@ -745,14 +746,19 @@ function planReference(ep, kfs, shotNo, cast) {
   return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: own, full: full, duration: String(secs), images: pics.concat(people.map(function (p) { return p.url; })), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
 // The version's cast with their reference pictures (the version's own, else the character's).
-async function castRefs(db, ep) {
+async function castRefs(db, ep, detail) {
+  let rows = [];
   try {
-    return (await db.prepare('SELECT ch.name, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id))
-      .filter(function (c) { return c.url && storage.isOurPublicUrl(c.url); });
+    rows = await db.prepare('SELECT ch.name, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id);
   } catch (e) {
     console.error('[video] cast references could not be read: ' + (e && e.message));
-    return [];
+    rows = [];
+    if (detail) return { usable: [], all: [{ error: 'could not read the cast: ' + (e && e.message) }] };
   }
+  const usable = rows.filter(function (c) { return c.url && storage.isOurPublicUrl(c.url); });
+  if (!detail) return usable;
+  // v3.5.18 -- for debug mode: every character, and why one is not usable
+  return { usable: usable, all: rows.map(function (c) { return { name: c.name, picture: c.url ? vlShortUrl(c.url) : null, usable: !!(c.url && storage.isOurPublicUrl(c.url)), why_not: !c.url ? 'no reference picture' : (!storage.isOurPublicUrl(c.url) ? 'not a Campaignia picture' : undefined) }; }) };
 }
 // What one move sends to fal: each model names its pictures and its length its own way.
 function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
@@ -777,7 +783,18 @@ async function takesFull(db, shotId) {
 async function makeShot(db, req, ep, shot, shotNo) {
   const m = MODELS[ep.model];
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
-  const plan = m && m.reference ? planReference(ep, kfs, shotNo, await castRefs(db, ep)) : planMoves(ep, kfs, shotNo);   // v3.5.16
+  const cast = m && m.reference ? await castRefs(db, ep, true) : null;
+  const plan = m && m.reference ? planReference(ep, kfs, shotNo, cast.usable) : planMoves(ep, kfs, shotNo);   // v3.5.16
+  // v3.5.18 -- what a Generate is about to send, for debug mode (Ian: "Put what you need to see in debug mode").
+  vlDebug(req.session && req.session.userId, plan.error ? 'warn' : 'info', 'makeShot', 'Shot ' + shotNo + ' (shot ' + shot.id + ', episode ' + ep.id + '): model ' + ep.model + ' = ' +
+    (m ? (m.reference ? 'REFERENCE mode' : 'KEYFRAME mode') : 'unknown model') + (plan.error ? '; refused: ' + plan.error : '; ' + plan.moves.length + ' move(s)'), {
+    model: ep.model, reference: !!(m && m.reference), keyframes: kfs.length,
+    cast_in_version: cast ? cast.all : undefined,
+    moves: plan.error ? undefined : plan.moves.map(function (x) {
+      return { position: x.position, duration: x.duration, start: vlShortUrl(x.start), end: x.end ? vlShortUrl(x.end) : null,
+        images: x.images ? x.images.map(vlShortUrl) : undefined, cast_sent: x.cast || undefined, prompt: String(x.full || '').slice(0, 3000) };
+    })
+  });
   if (plan.error) return { status: 400, error: plan.error };
   if (await takesFull(db, shot.id)) return { status: 409, full: true, error: 'Shot ' + shotNo + ' already has ' + MAX_TAKES + ' takes. Delete one to make another.' };
   const hook = webhookUrl();
