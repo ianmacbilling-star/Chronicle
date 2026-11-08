@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.01",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3501-pictures-still-on-fal",
+        "kind": "fix",
+        "public": false,
+        "summary": "Pictures that never reached our storage (still on fal) are now copied there: nightly, before the monthly clean-up, and from Dashboard > Tools.",
+        "detail": "When copying a new picture to our storage fails, the picture keeps fal's address so it is not lost; fal does not keep files for ever. On 21-22 October an R2 key problem left 18 storyboard pictures on staging that way, and a video cut made from them could not be saved. services/falCopy.js finds every fal address in this site's database, copies each file once into this site's own bucket (through the usual upload, so staging to staging's bucket and production to production's), and points every row that used it at the copy, one transaction per picture; the archive's source_url follows, so archived marks stay. A picture fal no longer has is listed and left alone; the rights verdict follows each copy. Logs, the rights record and video_shots.fal_video_url are not touched. Runs once a night after 3 am Eastern (an email only when it did something or something failed), at the start of the monthly clean-up, and from the new panel under the orphan check: Find (only looks) and Copy them to our storage.",
+        "td": [
+          "TD-1003"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.00",
     "staged_on": "2026-11-08",
     "entries": [

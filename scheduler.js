@@ -552,6 +552,14 @@ async function tick() {
   } catch (e) {
     console.error('[scheduler] storage clean-up failed:', e && e.message);
   }
+  // v3.5.01 -- pictures still on fal, once a night (Ian, 2026-11-08): copied to this environment's own bucket and the
+  // rows re-pointed; an email only when something was copied or went wrong. Its own try, like every job here.
+  try {
+    const fc = await require('./services/falCopy').maybeNightly(db);
+    if (fc && fc.found) console.log('[scheduler] pictures on fal: found ' + fc.found + ', copied ' + fc.copied + ', gone ' + fc.gone.length + ', failed ' + fc.failed.length);
+  } catch (e) {
+    console.error('[scheduler] pictures-on-fal copy failed:', e && e.message);
+  }
   // v3.1.43 -- TD-934. Every tick, its own try, like every job here.
   try {
     const g = await deliverDueGifts(db);

@@ -1761,6 +1761,8 @@ function impersonateSyncAdminPanel() {
   if (dsec) dsec.style.display = (isAdmin && !inSession) ? '' : 'none';
   var usec = document.getElementById('unused-pics-section');   // v3.2.65 -- TD-1006, same rule
   if (usec) usec.style.display = (isAdmin && !inSession) ? '' : 'none';
+  var fsec = document.getElementById('fal-pics-section');   // v3.5.01 -- same rule
+  if (fsec) fsec.style.display = (isAdmin && !inSession) ? '' : 'none';
   var csec = document.getElementById('cleanup-section');   // v3.2.71 -- its own panel now
   if (csec) csec.style.display = (isAdmin && !inSession) ? '' : 'none';
   if (csec && isAdmin && !inSession && typeof cleanupLoad === 'function') { try { cleanupLoad(); } catch (e) {} }   // v3.2.68
@@ -1912,6 +1914,63 @@ function unusedPicsRun() {
     .then(renderUnusedPics)
     .catch(function (e) { renderUnusedPics({ error: 'Could not run the check: ' + e.message }); });
 }
+// v3.5.01 -- Pictures still on fal: Find (a list, changes nothing) and Copy them to our storage (a background job;
+// the page asks how it is going every two seconds). Results large and bold, as on the storage panels.
+var _falPicsTimer = null;
+function falPicsFind() {
+  var out = document.getElementById('fal-pics-out');
+  if (out) out.textContent = 'Looking through every table\u2026';
+  fetch('/api/admin/fal-pictures', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(renderFalPicsFind)
+    .catch(function (e) { renderFalPicsFind({ error: 'Could not look: ' + e.message }); });
+}
+function renderFalPicsFind(d) {
+  var out = document.getElementById('fal-pics-out'); if (!out) return;
+  if (!d || d.error) { out.textContent = (d && d.error) || 'Could not look.'; return; }
+  var td = 'padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);vertical-align:top;';
+  var th = 'position:sticky;top:0;background:var(--panel);text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-text-rgb),0.85);';
+  var h = '<div style="font-size:16px;font-weight:700;margin:4px 0 6px;">' + (d.count ? (d.count + ' picture' + (d.count === 1 ? '' : 's') + ' still on fal') : 'No pictures on fal. All of them are in our storage.') + '</div>' +
+    '<div style="opacity:0.8;">' + _upEsc(d.env) + ', bucket ' + _upEsc(d.bucket) + ' (' + d.columns_read + ' columns read)</div>';
+  if (d.places && d.places.length) h += '<div style="margin-top:6px;">' + d.places.map(function (p) { return _upEsc(p.table + '.' + p.column) + ': <b>' + p.rows + '</b>'; }).join(' &middot; ') + '</div>';
+  if (d.pictures && d.pictures.length) {
+    h += '<div style="overflow:auto;max-height:40vh;margin-top:8px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--panel-rgb),0.94);color-scheme:dark;font-size:12px;">' +
+      '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">address</th><th style="' + th + '">used in</th></tr></thead><tbody>' +
+      d.pictures.map(function (p) { return '<tr><td style="' + td + 'word-break:break-all;"><a href="' + _upEsc(p.url) + '" target="_blank" rel="noopener" style="color:var(--accent-pale);">' + _upEsc(p.url) + '</a></td><td style="' + td + '">' + _upEsc(p.places.join(', ')) + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+  }
+  out.innerHTML = h;
+}
+function falPicsCopyClick() {
+  _armClick('fal-pics-copy-btn', 'Copy them to our storage', 'Click again to copy them', function () {
+    var out = document.getElementById('fal-pics-out'); if (out) out.textContent = 'Starting\u2026';
+    fetch('/api/admin/fal-pictures/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(function (r) { return r.json(); })
+      .then(function (s) { if (s && s.error) { var o = document.getElementById('fal-pics-out'); if (o) o.textContent = s.error; return; } renderFalPicsStatus(s); falPicsPoll(); })
+      .catch(function (e) { var o = document.getElementById('fal-pics-out'); if (o) o.textContent = 'Could not start: ' + e.message; });
+  });
+}
+function falPicsPoll() {
+  if (_falPicsTimer) clearTimeout(_falPicsTimer);
+  _falPicsTimer = setTimeout(function () {
+    fetch('/api/admin/fal-pictures/status', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (s) { renderFalPicsStatus(s); if (s && s.running) falPicsPoll(); })
+      .catch(function () { falPicsPoll(); });
+  }, 2000);
+}
+function renderFalPicsStatus(s) {
+  var out = document.getElementById('fal-pics-out'); if (!out || !s) return;
+  if (s.running) { out.innerHTML = '<div style="font-size:16px;font-weight:700;">Copying&hellip; ' + (s.done || 0) + ' of ' + (s.total || '?') + '</div>'; return; }
+  if (s.error) { out.innerHTML = '<div style="font-size:16px;font-weight:700;color:var(--error);">' + _upEsc(s.error) + '</div>'; return; }
+  var o = s.last; if (!o) { out.textContent = ''; return; }
+  var h = '<div style="font-size:16px;font-weight:700;margin:4px 0 6px;">Copied ' + o.copied + ' of ' + o.found + ' to our storage (' + o.rows_changed + ' rows re-pointed).</div>' +
+    '<div><b>Fal no longer has:</b> ' + o.gone.length + ' &nbsp; <b>Failed:</b> ' + o.failed.length + '</div>';
+  if (o.gone.length) h += '<div style="margin-top:6px;">Fal no longer has these, so they were left as they are:<br>' + o.gone.map(function (g) { return _upEsc(g.url) + ' <span style="opacity:0.7;">(' + _upEsc(g.places.join(', ')) + ')</span>'; }).join('<br>') + '</div>';
+  if (o.failed.length) h += '<div style="margin-top:6px;color:var(--error);">Failed, left as they are (tried again tonight):<br>' + o.failed.map(function (f) { return _upEsc(f.url) + ': ' + _upEsc(f.error); }).join('<br>') + '</div>';
+  out.innerHTML = h;
+}
+
 function unusedPicsCsv() {
   var d = _unusedPics; if (!d || !d.items) return;
   var rows = ['key,folder,kind,size_bytes,stored,env'].concat(d.items.map(function (it) { return [it.key, it.folder || '', it.kind, it.size, it.last_modified, d.env].map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? ('"' + v.replace(/"/g, '""') + '"') : v; }).join(','); }));

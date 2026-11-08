@@ -2552,6 +2552,25 @@
         </div>
         <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
       </div>
+      <!-- v3.5.01 -- Pictures still on fal (Ian, 2026-11-08): right under the orphan check. -->
+      <div class="settings-section" id="fal-pics-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Pictures still on fal</div>
+        <div class="settings-section-desc">
+          Pictures whose address is still fal&rsquo;s, not ours. It happens when copying a new picture to our storage fails
+          (the picture keeps fal&rsquo;s address so it is not lost), and fal does not keep files for ever. Once a night, and
+          before the monthly clean-up, Campaignia copies them to this site&rsquo;s own storage by itself and emails you
+          if it did anything; these buttons do the same whenever you like.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+          <button class="btn btn-sm" onclick="falPicsFind()">Find pictures still on fal</button>
+          <span class="settings-section-desc" style="margin:0;">Only looks: lists them and where each is used. Changes nothing.</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+          <button class="btn btn-sm" id="fal-pics-copy-btn" onclick="falPicsCopyClick()">Copy them to our storage</button>
+          <span class="settings-section-desc" style="margin:0;">Copies each one to our storage and points every row that uses it at the copy. A picture fal no longer has is listed and left as it is.</span>
+        </div>
+        <div id="fal-pics-out" style="margin-top:10px;font-size:13px;"></div>
+      </div>
       <!-- v3.2.68 -- TD-1006. The monthly clean-up of this environment's own bucket. v3.2.71 -- its own panel on Tools. -->
       <style>#cleanup-section .cu-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;} #cleanup-section .cu-row .settings-section-desc{margin:0;}</style>
       <div class="settings-section" id="cleanup-section" style="display:none;margin-top:14px;">

@@ -171,9 +171,14 @@ async function maybeMonthly(db, nowDate) {
   if (await getSetting(db, 'storage_cleanup_month') === month) return null;
   if (S.running) return null;
   await setSetting(db, 'storage_cleanup_month', month);
+  // v3.5.01 -- first, any picture still on fal goes to our storage and its rows are re-pointed (services/falCopy.js),
+  // so nothing is judged under an old fal address. Its own try: a failure here never stops the clean-up.
+  let fal = null;
+  try { fal = await require('./falCopy').beforeMonthly(db); } catch (e) { console.error('[storage clean-up] pictures-on-fal step failed:', e && e.message); }
   S.running = true; S.phase = 'checking';
   try {
     const o = await run(db, mode === 'hold', now.getTime());
+    if (fal) o.fal = { found: fal.found, copied: fal.copied, gone: fal.gone.length, failed: fal.failed.length };
     if (mode === 'hold' && holdingOk().ok) { try { S.phase = 'emptying holding'; o.emptied = await emptyOld(HOLD_DAYS, now.getTime()); } catch (e) { o.emptied = { days: HOLD_DAYS, deleted: 0, deletedBytes: 0, tooRecent: 0, failed: -1 }; }
       await setSetting(db, 'storage_cleanup_last', JSON.stringify(o)); }
     S.last = o; S.phase = 'finished'; await mail(o); return o;
