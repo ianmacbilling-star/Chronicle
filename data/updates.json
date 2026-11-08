@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.07",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3507-after-move-uncut",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: the last keyframe of a shot gets an optional After box (what happens after that picture until the cut); UnCut - Join with previous shot; odd shots shaded; Generate take and Generate all shots.",
+        "detail": "Ian, 2026-11-08: Gubuk hears Drel, looks around and runs off after his keyframe and before the cut. When the After box has words, the shot gets one more move that starts on that picture with no end picture; empty, nothing changes. The shot list writer may write an after move (from the last keyframe) and may give a voice from off screen ('Drel (off-screen)'). A keyframe's words follow its role, so Cut here puts the move words aside and UnCut brings them back. A change that would delete a shot's takes now shows the result behind its question.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.06",
     "staged_on": "2026-11-08",
     "entries": [

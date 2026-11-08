@@ -630,14 +630,19 @@ function overallWith(overall, own) {
   if (overall && own) return (overall + '\n\nThis part of the shot: ' + own).slice(0, 2500);
   return (overall || own).slice(0, 2500);
 }
+// v3.5.07 -- AFTER THE LAST KEYFRAME (Ian, 2026-11-08: Gubuk hears Drel, looks around and runs off "before the cut").
+// The last keyframe of a longer shot holds an optional move of its own: when its words are filled, the shot gets one
+// more move that starts on that picture with no end picture. Empty, nothing changes. (A one-keyframe shot's only move
+// was always of this kind.)
+function hasAfter(kfs) { return kfs.length > 1 && !!String(kfs[kfs.length - 1].prompt || '').trim(); }
 function planMoves(ep, kfs, shotNo) {
   const m = MODELS[ep.model];
   if (!m) return { error: 'Pick a video model.' };
   if (!kfs.length) return { error: 'Shot ' + shotNo + ' has no keyframes.' };
   const out = [];
-  const n = kfs.length === 1 ? 1 : kfs.length - 1;
+  const n = kfs.length === 1 ? 1 : kfs.length - 1 + (hasAfter(kfs) ? 1 : 0);
   for (let i = 0; i < n; i++) {
-    const a = kfs[i], z = kfs.length === 1 ? null : kfs[i + 1];
+    const a = kfs[i], z = (kfs.length === 1 || i === kfs.length - 1) ? null : kfs[i + 1];
     const d = String(a.duration || m.defDuration);
     if (m.durations.indexOf(d) < 0) return { error: 'Shot ' + shotNo + ': ' + d + ' seconds is not offered for ' + m.label + '.' };
     const full = overallWith(ep.overall, a.prompt);
@@ -1092,7 +1097,7 @@ const VIDEO_STYLES = [
   { key: 'animated', label: 'Animated',
     description: 'Full motion: the characters act, move and speak; the camera follows the action.',
     motion: 'high', defaultShot: 5, speech: true,
-    instructions: 'ANIMATED. Real action happens: name what each character does, step by step, so the movement carries each keyframe into the next. The camera may move (follow, pan, push in, pull back) to serve the action. Characters may speak: short lines in their own words, said by a character who is on screen, a few words that fit inside the move\'s length (about two words a second at most). Add sound effects that fit. Keep faces, costumes and the art style true to the pictures: more motion means more drift, so keep the action clear and simple rather than busy.' },
+    instructions: 'ANIMATED. Real action happens: name what each character does, step by step, so the movement carries each keyframe into the next. The camera may move (follow, pan, push in, pull back) to serve the action. Characters may speak: short lines in their own words, said by a character on screen or called from off screen, a few words that fit inside the move\'s length (about two words a second at most). Add sound effects that fit. Keep faces, costumes and the art style true to the pictures: more motion means more drift, so keep the action clear and simple rather than busy.' },
   { key: 'living', label: 'Living Illustration',
     description: 'The picture comes alive gently: cloaks stir, fire flickers, dust drifts, a slow push in. Characters hold their poses.',
     motion: 'low', defaultShot: 5, speech: false,
@@ -1245,6 +1250,8 @@ function shotListRequest(ctx, images) {
     'HOW THE VIDEO IS BUILT\nThe video is a series of SHOTS joined by CUTS. A shot is one continuous camera run: the camera never cuts away inside it. ' +
     'A shot is made from one or more KEYFRAMES (pictures) in order. A shot of several keyframes is made of MOVES joined seamlessly: each move starts exactly on one keyframe and ends exactly on the next, ' +
     'so the camera and the action must flow through every keyframe as one unbroken take. A shot of ONE keyframe is one move that brings that single picture to life. ' +
+    'A shot of several keyframes may also end with an AFTER move: it starts on the last keyframe and has no end picture, for what happens after that picture until the cut (a character turns, speaks, runs out of frame). ' +
+    'Write an after move only when the story needs action after the last picture of the shot. ' +
     'Between shots there is a cut: the next shot may begin somewhere new, or later in time.\n\n' +
     'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
     'THE VIDEO MODEL\nMove lengths it offers, in seconds: ' + m.durations.join(', ') + '. Give every move one of these exact numbers; ' + def + ' suits this style unless a move needs more or less time. ' +
@@ -1253,13 +1260,13 @@ function shotListRequest(ctx, images) {
     '(build, hair, clothes, colours) so every shot keeps them the same. Keep the art style as it is in the pictures.\n\n' +
     'RULES\n- Keep the names exactly as the story and the cast list write them.\n- Each move\'s action is at most 450 characters; camera, sound and each line short.\n' +
     '- Inside a shot, each move continues the camera and the action of the move before it; never describe a cut inside a shot.\n' +
-    (style.speech ? '- Dialogue: only a character visible in that move speaks; at most two short lines a move; leave it empty when nobody should talk.\n' : '- Dialogue: always an empty list in this style.\n') +
+    (style.speech ? '- Dialogue: a character visible in that move speaks, or a voice from off screen (write the speaker as "Name (off-screen)"); at most two short lines a move; leave it empty when nobody should talk.\n' : '- Dialogue: always an empty list in this style.\n') +
     '- Write original words; never reproduce text from any published source.\n- Never put words, captions or titles on screen.\n\n' +
     'ANSWER WITH ONLY THIS JSON, no other text:\n' +
     '{"overall": "...", "shots": [{"shot": 1, "moves": [{"from": 1, "action": "...", "camera": "...", "dialogue": [{"speaker": "...", "line": "..."}], "sound": "...", "duration": "' + def + '"}]}]}\n' +
     'The shots list has exactly ' + counts.length + ' entr' + (counts.length === 1 ? 'y' : 'ies') + ', in order, and each shot has exactly this many moves: ' +
     counts.map(function (c, i) { return 'shot ' + (i + 1) + ': ' + c; }).join(', ') + '. ' +
-    '"from" is the keyframe number (within its shot) the move starts on. A shot of N keyframes has N-1 moves, from 1 to N-1: the last keyframe starts no move, it is where the last move ends. ' +
+    '"from" is the keyframe number (within its shot) the move starts on. A shot of N keyframes has N-1 moves, from 1 to N-1, and may add one after move, from N (the last keyframe). ' +
     'A shot of one keyframe has exactly one move, from 1.';
   const content = [];
   const head = [];
@@ -1295,7 +1302,7 @@ function shotListRequest(ctx, images) {
     if (n === 1) return 'Shot ' + (i + 1) + ': 1 move, from keyframe 1 (the picture brought to life).';
     const list = [];
     for (let k = 1; k < n; k++) list.push(k + '\u2192' + (k + 1));
-    return 'Shot ' + (i + 1) + ': ' + (n - 1) + ' move' + (n === 2 ? '' : 's') + ': ' + list.join(', ') + '.';
+    return 'Shot ' + (i + 1) + ': ' + (n - 1) + ' move' + (n === 2 ? '' : 's') + ': ' + list.join(', ') + '; and, only if needed, an after move from ' + n + '.';
   });
   content.push({ type: 'text', text: 'THE MOVES TO WRITE, exactly these and no others:\n' + plan.join('\n') + '\n\nNow write the shot list as JSON: the overall direction and the moves of every shot, in the ' + style.label + ' style.' });
   const total = counts.reduce(function (t, c) { return t + c; }, 0);
@@ -1314,6 +1321,7 @@ function parseShotList(raw, ctx) {
   for (let i = 0; i < p.shots.length; i++) {
     const want = movesIn(ctx.shots[i]);
     let mv = (p.shots[i] && Array.isArray(p.shots[i].moves)) ? p.shots[i].moves : null;
+    let after = null;
     if (!mv) return { error: 'shot ' + (i + 1) + ' came back with no moves' };
     // v3.5.05 -- line the moves up by the keyframe each starts on ("from"): a move from the last keyframe of a longer
     // shot (it leads nowhere) is dropped, as is a second move from the same keyframe. Without "from", one move too many
@@ -1321,16 +1329,20 @@ function parseShotList(raw, ctx) {
     const hasFrom = mv.every(function (x) { return x && Number.isFinite(parseInt(x.from, 10)); });
     if (hasFrom) {
       const byFrom = {};
-      mv.forEach(function (x) { const f = parseInt(x.from, 10); if (f >= 1 && f <= want && !byFrom[f]) byFrom[f] = x; });
+      mv.forEach(function (x) { const f = parseInt(x.from, 10); if (f >= 1 && f <= want + 1 && !byFrom[f]) byFrom[f] = x; });
       const lined = [];
       for (let f = 1; f <= want; f++) if (byFrom[f]) lined.push(byFrom[f]);
+      after = (ctx.shots[i].keyframes.length > 1 && byFrom[want + 1]) ? byFrom[want + 1] : null;   // v3.5.07: from the last keyframe = the after move
       mv = lined;   // a keyframe with no move from it leaves the list short, and it fails below
+    } else if (ctx.shots[i].keyframes.length > 1 && mv.length === want + 1) {
+      after = mv[want];   // v3.5.07: without "from", one more than the keyframes need is the after move
     }
     if (mv.length > want) mv = mv.slice(0, want);
     if (mv.length !== want) return { error: 'shot ' + (i + 1) + ' came back with ' + mv.length + ' moves, not ' + want };
     const moves = [];
-    for (let j = 0; j < mv.length; j++) {
-      const s = mv[j] || {};
+    const all = after ? mv.concat([after]) : mv;
+    for (let j = 0; j < all.length; j++) {
+      const s = all[j] || {};
       const d = snapDuration(ctx.m, parseFloat(String(s.duration == null ? '' : s.duration).replace(/[^0-9.]/g, '')));
       if (!d) return { error: 'shot ' + (i + 1) + ' move ' + (j + 1) + ' has no length' };
       let dlg = [];
@@ -1339,7 +1351,7 @@ function parseShotList(raw, ctx) {
       if (!ctx.style.speech) dlg = [];
       moves.push({ action: textOf(s.action).slice(0, 900), camera: textOf(s.camera).slice(0, 300), dialogue: dlg.slice(0, 4), sound: textOf(s.sound).slice(0, 300), duration: d });
     }
-    shots.push({ moves: moves });
+    shots.push({ moves: moves });   // v3.5.07: one more than the keyframes need when there is an after move
   }
   return { overall: textOf(p.overall).slice(0, 2000), shots: shots };
 }
@@ -1434,7 +1446,7 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
       const mv = result.shots[i].moves;
       for (let j = 0; j < live[i].keyframes.length; j++) {
         const k = live[i].keyframes[j];
-        const x = mv[j];   // the move that starts on this keyframe; the last keyframe of a longer shot has none
+        const x = mv[j];   // the move that starts on this keyframe; the last keyframe of a longer shot has one only when the writer gave an after move (v3.5.07)
         if (x) await tx.prepare('UPDATE keyframes SET prompt = ?, duration = ? WHERE id = ?').run(moveBoxText(x), x.duration, k.id);
         else await tx.prepare("UPDATE keyframes SET prompt = '' WHERE id = ?").run(k.id);
       }

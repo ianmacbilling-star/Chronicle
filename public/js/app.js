@@ -41903,9 +41903,15 @@ function adminBrandsSave(changed) {
 // chosen take the server joins them into the episode video. The editor saves itself as you type, ONE SAVE AT A TIME (the
 // doubled-pictures bug); the takes and the episode video are redrawn on their own, so a refresh never wipes typing.
 // Every name here starts vl / VL; checked unused for v3.5.04 (the v3.4.86-v3.5.03 cuts block is replaced whole).
+// v3.5.07 -- Ian, 2026-11-08: the last keyframe of a shot gets an optional "After this keyframe" box (what happens after
+// that picture until the cut); "UnCut - Join with previous shot"; odd shots shaded greyer; Generate take / Generate all
+// shots. A keyframe's words belong to its ROLE: 'to' (a move to the next keyframe) or 'own' (the last keyframe's after
+// move, or a one-keyframe shot's only move). When a cut or a move changes a keyframe's role, its words are put aside
+// (k.other, on this page only) and the other role's words come back, so Cut here then UnCut gives the words back.
 // ============================================================
 var VL_BOX = 'background:rgba(var(--panel-rgb),0.7);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);';
 var VL_SHOT = 'background:rgba(var(--panel-rgb),0.35);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:var(--radius-lg);padding:10px 12px 12px;';
+var VL_SHOT_ODD = 'background:linear-gradient(rgba(var(--accent-text-rgb),0.07),rgba(var(--accent-text-rgb),0.07)),rgba(var(--panel-rgb),0.35);';   // v3.5.07: shots 1, 3, 5... a little greyer
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
 var VL = { models: null, episodes: [], openId: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, saving: false, savePending: false, waiters: [],
@@ -42100,10 +42106,21 @@ function vlDraftFrom(ep) {
     style: (vlStyle(ep.style) || vlStyle(VL.defaultStyle) || {}).key || 'living',
     shots: (ep.shots || []).map(function (s) {
       return { ck: ++VL.ck, id: s.id, cut_style: s.cut_style || 'instant',
-        kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || '') }; }) };
+        kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || ''), other: '' }; }) };
     }) };
   vlFitDurations(d, m);
+  vlRoles(d);
   return d;
+}
+// v3.5.07 -- each keyframe's role from where it sits; a keyframe whose role changed swaps its words with the ones put aside.
+function vlRoles(d) {
+  d.shots.forEach(function (s) {
+    s.kfs.forEach(function (k, i) {
+      var role = (i < s.kfs.length - 1) ? 'to' : 'own';
+      if (k.role && k.role !== role) { var t = k.prompt || ''; k.prompt = k.other || ''; k.other = t; }
+      k.role = role;
+    });
+  });
 }
 function vlFitDurations(d, m) {
   if (!m) return;
@@ -42156,19 +42173,22 @@ function vlKfCardHTML(d, si, ki, n) {
 // The move that starts on keyframe ki of shot si: its words and its length. single: the shot has one keyframe.
 function vlMoveCardHTML(d, si, ki, m, n) {
   var s = d.shots[si], k = s.kfs[ki], single = s.kfs.length === 1;
-  var head = single ? '&#127916; This keyframe comes alive' : '&#127916; Keyframe ' + n + ' &rarr; ' + (n + 1);
+  var after = !single && ki === s.kfs.length - 1;   // v3.5.07: the optional move after the last keyframe
+  var head = single ? '&#127916; This keyframe comes alive' : after ? '&#127916; After keyframe ' + n + ' (optional): until the cut' : '&#127916; Keyframe ' + n + ' &rarr; ' + (n + 1);
   return '<div class="narrative-panel">' +
     '<div class="narrative-block-header">' +
       '<span>' + head + '</span>' +
       '<span style="display:inline-flex;gap:4px;align-items:center;">' +
-        (!single ? '<button type="button" class="narrative-regen-btn" title="Cut here: the camera cuts away after keyframe ' + n + ' and a new shot starts on keyframe ' + (n + 1) + '" onclick="vlCutHere(' + si + ',' + ki + ')">&#9986; Cut here</button>' : '') +
+        (!single && !after ? '<button type="button" class="narrative-regen-btn" title="Cut here: the camera cuts away after keyframe ' + n + ' and a new shot starts on keyframe ' + (n + 1) + '" onclick="vlCutHere(' + si + ',' + ki + ')">&#9986; Cut here</button>' : '') +
         '<select id="vl-md-' + si + '-' + ki + '" class="narrative-regen-btn" style="cursor:pointer;" title="How long this part runs" onchange="vlEdit()" onblur="vlFlushSave()">' +
           m.durations.map(function (x) { return '<option value="' + x + '"' + (String(k.duration) === x ? ' selected' : '') + '>' + x + ' s</option>'; }).join('') +
         '</select>' +
       '</span>' +
     '</div>' +
     '<textarea class="narrative-inline-box" id="vl-mp-' + si + '-' + ki + '" maxlength="1500" placeholder="' +
-      (single ? 'What happens in this picture: who moves and how, what the camera does, who speaks...' : 'From keyframe ' + n + ' to ' + (n + 1) + ': who moves and how, what the camera does, who speaks...') +
+      (single ? 'What happens in this picture: who moves and how, what the camera does, who speaks...' :
+        after ? 'Leave empty to end the shot on keyframe ' + n + '. Or write what happens after it until the cut: who turns, who speaks (or calls from off screen), who runs out of frame...' :
+        'From keyframe ' + n + ' to ' + (n + 1) + ': who moves and how, what the camera does, who speaks...') +
       '" oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(k.prompt || '') + '</textarea>' +
   '</div>';
 }
@@ -42177,13 +42197,13 @@ function vlShotHTML(d, si, m, n0) {
   var cells = [];
   for (var ki = 0; ki < s.kfs.length; ki++) {
     cells.push(vlKfCardHTML(d, si, ki, n0 + ki));
-    if (s.kfs.length === 1 || ki < s.kfs.length - 1) cells.push(vlMoveCardHTML(d, si, ki, m, n0 + ki));
+    cells.push(vlMoveCardHTML(d, si, ki, m, n0 + ki));   // v3.5.07: the last keyframe has its (optional) after box too
   }
   cells.push('<div class="storyboard-panel" style="cursor:pointer;" onclick="vlChoose(\'add:' + si + '\')" title="Add a keyframe from the Archive at the end of this shot">' +
     '<div class="storyboard-panel-img"><div class="moment-img-placeholder" style="min-height:120px;">' +
       '<div style="font-size:26px;color:var(--accent-bright);">+</div><div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.6);">Add a keyframe to shot ' + (si + 1) + '</div>' +
     '</div></div></div>');
-  return '<div style="' + VL_SHOT + '">' +
+  return '<div style="' + VL_SHOT + (si % 2 === 0 ? VL_SHOT_ODD : '') + '">' +
     '<div id="vl-live-' + s.ck + '"></div>' +
     '<div class="panels-grid" style="margin-top:8px;">' + cells.join('') + '</div>' +
   '</div>';
@@ -42192,7 +42212,7 @@ function vlCutMarkHTML(si) {
   return '<div style="display:flex;align-items:center;gap:10px;margin:10px 0;">' +
     '<div style="flex:1;border-top:1px dashed rgba(var(--accent-rgb),0.45);"></div>' +
     '<span style="' + VL_DESC + 'color:var(--accent-pale);">&#9986; Cut &middot; Instant</span>' +
-    '<button type="button" class="narrative-regen-btn" title="Remove this cut: shots ' + (si + 1) + ' and ' + (si + 2) + ' become one continuous shot" onclick="vlJoinShots(' + si + ')">Join into one shot</button>' +
+    '<button type="button" class="btn btn-sm" title="Remove this cut: shots ' + (si + 1) + ' and ' + (si + 2) + ' become one continuous shot" onclick="vlJoinShots(' + si + ')">UnCut - Join with previous shot</button>' +
     '<div style="flex:1;border-top:1px dashed rgba(var(--accent-rgb),0.45);"></div>' +
   '</div>';
 }
@@ -42234,7 +42254,7 @@ function vlEditorHTML(ep) {
     '<div style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
       '<span id="vl-cost" style="' + VL_DESC + 'flex:1;min-width:200px;"></span>' +
       '<span id="vl-saved" style="' + VL_DESC + '"></span>' +
-      '<button class="btn btn-primary" id="vl-go" onclick="vlMakeAll()"' + (writing ? ' disabled' : '') + ' title="Make every shot that has no take yet">Make the shots</button>' +
+      '<button class="btn btn-primary" id="vl-go" onclick="vlMakeAll()"' + (writing ? ' disabled' : '') + ' title="Generate a take of every shot that has no take yet">Generate all shots</button>' +
     '</div>' +
     '<div id="vl-msg" style="' + VL_DESC + 'margin-top:6px;"></div>' +
   '</div>';
@@ -42271,6 +42291,7 @@ function vlEdit(structural) {
 // No puts the episode back as the server has it.
 function vlStructural() {
   var d = VL.draft, ep = d ? vlFindEp(d.id) : null;
+  if (d) vlRoles(d);
   var go = function () {
     vlRenderOpen(true);
     if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
@@ -42280,6 +42301,7 @@ function vlStructural() {
   var keep = {}; d.shots.forEach(function (s) { if (s.id) keep[s.id] = true; });
   var lost = (ep.shots || []).filter(function (s) { return !keep[s.id] && (s.takes || []).length; });
   if (!lost.length) { go(); return; }
+  vlRenderOpen(true);   // the change is shown behind the question, so the page never shows half of each
   var n = lost.reduce(function (t, s) { return t + s.takes.length; }, 0);
   var which = lost.map(function (s) { return 'shot ' + s.position; }).join(' and ');
   uiConfirm('This takes ' + which + ' out of the episode as a shot of its own. ' + (lost.length === 1 ? 'It has ' : 'They have ') + n + ' take' + (n === 1 ? '' : 's') +
@@ -42291,7 +42313,10 @@ function vlStructural() {
     });
 }
 
-function vlMovesOf(s) { return s.kfs.length === 1 ? 1 : Math.max(0, s.kfs.length - 1); }
+function vlMovesOf(s) {
+  if (s.kfs.length === 1) return 1;
+  return Math.max(0, s.kfs.length - 1) + (s.kfs.length > 1 && String(s.kfs[s.kfs.length - 1].prompt || '').trim() ? 1 : 0);   // v3.5.07: the after move when written
+}
 function vlShotSecs(s, m) { var t = 0; for (var i = 0; i < vlMovesOf(s); i++) t += Number(s.kfs[i].duration || (m && m.defDuration) || 0); return t; }
 function vlShowCost() {
   var d = VL.draft, el = document.getElementById('vl-cost');
@@ -42404,7 +42429,7 @@ function vlPick(which, id) {
   } else {
     var s = d.shots[Number(p[0])], k = s && s.kfs[Number(p[1])];
     if (!k) return;
-    kf.prompt = k.prompt; kf.duration = k.duration;   // the move's words stay with its place
+    kf.prompt = k.prompt; kf.duration = k.duration; kf.other = k.other || ''; kf.role = k.role;   // the move's words stay with its place
     s.kfs[Number(p[1])] = kf;
   }
   vlStructural();
@@ -42499,7 +42524,7 @@ function vlLiveShotHTML(ep, ds, si, m) {
   var secs = vlShotSecs(ds, m);
   var btn = !ds.id ? '<button class="btn btn-sm" disabled>' + vlSpin(10) + ' Saving...</button>'
     : making ? '<button class="btn btn-sm" disabled>' + vlSpin(10) + ' Being made</button>'
-    : '<button class="btn btn-sm btn-primary" onclick="vlMakeShot(' + si + ')" title="Make a take of this shot from its keyframes and words as they are now">' + (takes.length ? 'Make another take' : 'Make this shot') + '</button>';
+    : '<button class="btn btn-sm btn-primary" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now">Generate take</button>';
   return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
       '<div style="' + VL_TITLE + 'font-size:14px;">Shot ' + (si + 1) + '</div>' +
       '<span style="' + VL_DESC + 'flex:1;">' + ds.kfs.length + ' keyframe' + (ds.kfs.length === 1 ? '' : 's') + ' &middot; ' + secs + ' s &middot; one continuous camera run' + (takes.length ? ' &middot; ' + takes.length + ' take' + (takes.length === 1 ? '' : 's') : '') + '</span>' +
