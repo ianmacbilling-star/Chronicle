@@ -236,7 +236,9 @@ router.post('/debug-mode', requireAuth, requireAdmin, async function (req, res) 
 router.get('/unused-pictures', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
-    const r = await require('../services/storageAudit').orphanReport(db);   // v3.2.73 -- every folder: pictures and PDFs
+    // v3.2.73 -- every folder: pictures and PDFs. v3.5.06 -- with the move's keep list, so ready to move matches the move.
+    const keep = new Set(await require('../services/storageCleanup').getKeep(db));
+    const r = await require('../services/storageAudit').orphanReport(db, { keep: keep });
     if (r.error) return res.json(r);
     res.json(r);
   } catch (e) {

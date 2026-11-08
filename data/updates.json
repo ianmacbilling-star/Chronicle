@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.06",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3506-orphans-ready",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Orphaned pictures and PDFs now splits orphaned into ready to move (what Move to holding would take now) and waiting (younger than the move's 30 days; print PDFs 90).",
+        "detail": "Ian, 2026-11-08: 'if they are too new shouldn't they be in the Too New column?' The report calls a file orphaned after a day; the move waits 30 days. A headline line (ready / waiting), two new columns, a moves column on the oldest 200 and in the CSV (next move, from a date, or never for a file put back before). The keep list is read the same way the move reads it. The move itself is unchanged.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.05",
     "staged_on": "2026-11-08",
     "entries": [

@@ -1774,6 +1774,8 @@ function impersonateSyncAdminPanel() {
 var _unusedPics = null;
 function _upBytes(n) { n = n || 0; return n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B'; }
 function _upEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+// v3.5.06 -- when the next Move to holding would take a file: now, from a date, or never (put back before).
+function _upMoveWord(it) { return it.move === 'ready' ? 'next move' : it.move === 'kept' ? 'never (put back)' : it.move === 'waiting' ? ('from ' + String(it.ready_on || '').slice(0, 10)) : ''; }
 function renderUnusedPics(d) {
   var out = document.getElementById('unused-pics-out');
   var csv = document.getElementById('unused-pics-csv');
@@ -1785,19 +1787,23 @@ function renderUnusedPics(d) {
   var td = 'padding:4px 10px;white-space:nowrap;border-bottom:1px solid rgba(var(--accent-rgb),0.12);color:var(--on-panel);';
   var th = 'position:sticky;top:0;background:var(--panel);text-align:left;padding:5px 10px;font-size:11px;color:rgba(var(--accent-text-rgb),0.85);';
   var tdr = td + 'text-align:right;';
-  var h = '<div style="line-height:1.6;">' +
+  // v3.5.06 -- orphaned split into ready to move (what Move to holding would take now) and waiting (younger than the
+  // move's wait: 30 days, print PDFs 90). The headline says it in one line, large and bold.
+  var h = '<div style="font-size:16px;font-weight:700;margin:4px 0 6px;">Ready to move now: ' + (d.ready || 0) + ' (' + _upBytes(d.ready_bytes) + ') &middot; waiting: ' + (d.waiting || 0) + ' (' + _upBytes(d.waiting_bytes) + ')</div>' +
+    '<div style="line-height:1.6;">' +
     '<div><strong>Database read:</strong> ' + _upEsc(d.env) + ' (' + d.tables_read + ' tables, ' + d.saved_books + ' saved books opened, ' + d.keys_mentioned + ' storage addresses mentioned)</div></div>' +
     '<div style="overflow:auto;margin-top:8px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--panel-rgb),0.94);color-scheme:dark;font-size:12px;">' +
-    '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">folder</th><th style="' + th + 'text-align:right;">files</th><th style="' + th + 'text-align:right;">size</th><th style="' + th + 'text-align:right;">in use</th><th style="' + th + 'text-align:right;">too new (left out)</th><th style="' + th + 'text-align:right;color:var(--highlight);">orphaned</th><th style="' + th + 'text-align:right;color:var(--highlight);">orphaned size</th></tr></thead><tbody>' +
-    (d.folders || []).map(function (f) { return '<tr><td style="' + td + '">' + _upEsc(f.label) + ' <span style="opacity:0.6;">' + _upEsc(f.prefix) + '</span></td><td style="' + tdr + '">' + f.listed + '</td><td style="' + tdr + '">' + _upBytes(f.listed_bytes) + '</td><td style="' + tdr + '">' + f.in_use + '</td><td style="' + tdr + '">' + f.recent + ' <span style="opacity:0.6;">(' + (f.min_age_days >= 1 ? (f.min_age_days + (f.min_age_days === 1 ? ' day' : ' days')) : '1 day') + ')</span></td><td style="' + tdr + 'color:var(--highlight);">' + f.unused + '</td><td style="' + tdr + 'color:var(--highlight);">' + _upBytes(f.unused_bytes) + '</td></tr>'; }).join('') +
-    '<tr><td style="' + td + 'font-weight:600;">Total</td><td style="' + tdr + 'font-weight:600;">' + d.listed + '</td><td style="' + tdr + 'font-weight:600;">' + _upBytes(d.listed_bytes) + '</td><td style="' + tdr + 'font-weight:600;">' + d.in_use + '</td><td style="' + tdr + 'font-weight:600;">' + d.recent + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + d.unused + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + _upBytes(d.unused_bytes) + '</td></tr>' +
-    '</tbody></table></div>';
+    '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">folder</th><th style="' + th + 'text-align:right;">files</th><th style="' + th + 'text-align:right;">size</th><th style="' + th + 'text-align:right;">in use</th><th style="' + th + 'text-align:right;">too new (left out)</th><th style="' + th + 'text-align:right;color:var(--highlight);">orphaned</th><th style="' + th + 'text-align:right;color:var(--highlight);">orphaned size</th><th style="' + th + 'text-align:right;color:var(--highlight);">ready to move</th><th style="' + th + 'text-align:right;">waiting</th></tr></thead><tbody>' +
+    (d.folders || []).map(function (f) { return '<tr><td style="' + td + '">' + _upEsc(f.label) + ' <span style="opacity:0.6;">' + _upEsc(f.prefix) + '</span></td><td style="' + tdr + '">' + f.listed + '</td><td style="' + tdr + '">' + _upBytes(f.listed_bytes) + '</td><td style="' + tdr + '">' + f.in_use + '</td><td style="' + tdr + '">' + f.recent + ' <span style="opacity:0.6;">(' + (f.min_age_days >= 1 ? (f.min_age_days + (f.min_age_days === 1 ? ' day' : ' days')) : '1 day') + ')</span></td><td style="' + tdr + 'color:var(--highlight);">' + f.unused + '</td><td style="' + tdr + 'color:var(--highlight);">' + _upBytes(f.unused_bytes) + '</td><td style="' + tdr + 'color:var(--highlight);">' + (f.ready || 0) + ' <span style="opacity:0.6;">(' + _upBytes(f.ready_bytes) + ')</span></td><td style="' + tdr + '">' + (f.waiting || 0) + ' <span style="opacity:0.6;">(under ' + (f.move_age_days || 30) + ' days)</span></td></tr>'; }).join('') +
+    '<tr><td style="' + td + 'font-weight:600;">Total</td><td style="' + tdr + 'font-weight:600;">' + d.listed + '</td><td style="' + tdr + 'font-weight:600;">' + _upBytes(d.listed_bytes) + '</td><td style="' + tdr + 'font-weight:600;">' + d.in_use + '</td><td style="' + tdr + 'font-weight:600;">' + d.recent + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + d.unused + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + _upBytes(d.unused_bytes) + '</td><td style="' + tdr + 'font-weight:600;color:var(--highlight);">' + (d.ready || 0) + ' <span style="opacity:0.6;">(' + _upBytes(d.ready_bytes) + ')</span></td><td style="' + tdr + 'font-weight:600;">' + (d.waiting || 0) + '</td></tr>' +
+    '</tbody></table></div>' +
+    (d.kept ? ('<div style="margin-top:6px;opacity:0.8;">' + d.kept + ' orphaned file' + (d.kept === 1 ? ' was' : 's were') + ' put back before, so ' + (d.kept === 1 ? 'it is' : 'they are') + ' never moved: counted as orphaned, not as ready or waiting.</div>') : '');   // v3.5.06
   var items = d.items || [];
   if (items.length) {
     h += '<div style="margin-top:8px;opacity:0.8;">Oldest ' + Math.min(200, items.length) + ' of ' + items.length + ' shown; the CSV has them all.</div>' +
       '<div style="overflow:auto;max-height:50vh;margin-top:6px;border:1px solid rgba(var(--accent-rgb),0.2);border-radius:6px;background:rgba(var(--panel-rgb),0.94);color-scheme:dark;font-size:12px;">' +
-      '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">folder</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th></tr></thead><tbody>' +
-      items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.folder || '') + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td></tr>'; }).join('') +
+      '<table style="border-collapse:collapse;width:100%;"><thead><tr><th style="' + th + '">file</th><th style="' + th + '">folder</th><th style="' + th + '">kind</th><th style="' + th + '">size</th><th style="' + th + '">stored</th><th style="' + th + '">moves</th></tr></thead><tbody>' +
+      items.slice(0, 200).map(function (it) { return '<tr><td style="' + td + '">' + _upEsc(it.key) + '</td><td style="' + td + '">' + _upEsc(it.folder || '') + '</td><td style="' + td + '">' + _upEsc(it.kind) + '</td><td style="' + td + '">' + _upBytes(it.size) + '</td><td style="' + td + '">' + _upEsc(String(it.last_modified).slice(0, 16).replace('T', ' ')) + '</td><td style="' + td + '">' + _upEsc(_upMoveWord(it)) + '</td></tr>'; }).join('') +
       '</tbody></table></div>';
     if (csv) csv.style.display = '';
   }
@@ -1978,7 +1984,7 @@ function renderFalPicsStatus(s) {
 
 function unusedPicsCsv() {
   var d = _unusedPics; if (!d || !d.items) return;
-  var rows = ['key,folder,kind,size_bytes,stored,env'].concat(d.items.map(function (it) { return [it.key, it.folder || '', it.kind, it.size, it.last_modified, d.env].map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? ('"' + v.replace(/"/g, '""') + '"') : v; }).join(','); }));
+  var rows = ['key,folder,kind,size_bytes,stored,env,moves'].concat(d.items.map(function (it) { return [it.key, it.folder || '', it.kind, it.size, it.last_modified, d.env, _upMoveWord(it)].map(function (v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? ('"' + v.replace(/"/g, '""') + '"') : v; }).join(','); }));
   var blob = new Blob([rows.join('\r\n') + '\r\n'], { type: 'text/csv' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

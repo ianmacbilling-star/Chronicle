@@ -139,9 +139,14 @@ function fileKind(key) {
   const m = String(key).replace(/^[^/]*\//, '').match(/^([A-Za-z]+)-/);
   return m ? m[1].toLowerCase() : 'other';
 }
+// v3.5.06 -- THE REPORT AND THE MOVE DRAW THE LINE AT DIFFERENT AGES (Ian, 2026-11-08: "if they are too new shouldn't
+// they be in the Too New column?"). The report calls a file orphaned after a day; Move to holding waits 30 days (print
+// PDFs 90). So each orphaned file is also sorted into ready (the next move would take it), waiting (younger than the
+// move's wait) or kept (put back before, never moved again; opts.keep is that list as a Set).
 async function orphanReport(db, opts) {
   opts = opts || {};
   const now = opts.now || Date.now();
+  const keep = (opts.keep instanceof Set) ? opts.keep : null;   // v3.5.06
   const lists = [];
   for (let i = 0; i < FOLDERS.length; i++) {   // listed BEFORE the database is read, as in unusedPictureReport
     const o = await storage.listObjects(FOLDERS[i].prefix);
@@ -151,19 +156,26 @@ async function orphanReport(db, opts) {
   const scan = await referencedKeys(db);
   const out = { env: process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'local', tables_read: scan.tables,
     saved_books: scan.savedBooks || 0, keys_mentioned: scan.refs.size, folders: [],
-    listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0, items: [] };
+    listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0,
+    ready: 0, ready_bytes: 0, waiting: 0, waiting_bytes: 0, kept: 0, kept_bytes: 0, items: [] };   // v3.5.06
   FOLDERS.forEach(function (f, i) {
     const minAge = opts.forMove ? f.moveMinAgeMs : f.minAgeMs;   // v3.2.74
-    const r = { prefix: f.prefix, label: f.label, min_age_days: Math.round(minAge / DAY_MS), listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0 };
+    const r = { prefix: f.prefix, label: f.label, min_age_days: Math.round(minAge / DAY_MS), listed: 0, listed_bytes: 0, in_use: 0, recent: 0, unused: 0, unused_bytes: 0,
+      move_age_days: Math.round(f.moveMinAgeMs / DAY_MS), ready: 0, ready_bytes: 0, waiting: 0, waiting_bytes: 0, kept: 0, kept_bytes: 0 };   // v3.5.06
     lists[i].forEach(function (o) {
       r.listed++; r.listed_bytes += o.size || 0;
       if (scan.refs.has(o.key)) { r.in_use++; return; }
       const t = Date.parse(o.lastModified);
       if (isNaN(t) || (now - t) < minAge) { r.recent++; return; }
       r.unused++; r.unused_bytes += o.size || 0;
-      out.items.push({ key: o.key, folder: f.prefix.slice(0, -1), kind: fileKind(o.key), size: o.size || 0, last_modified: o.lastModified });
+      // v3.5.06 -- which of the orphaned the next Move to holding would take: old enough for the move's own wait, and
+      // never put back (a file put back is on the keep list and is never moved again).
+      const state = (keep && keep.has(o.key)) ? 'kept' : ((now - t) >= f.moveMinAgeMs ? 'ready' : 'waiting');
+      r[state]++; r[state + '_bytes'] += o.size || 0;
+      out.items.push({ key: o.key, folder: f.prefix.slice(0, -1), kind: fileKind(o.key), size: o.size || 0, last_modified: o.lastModified,
+        move: state, ready_on: new Date(t + f.moveMinAgeMs).toISOString() });
     });
-    ['listed', 'listed_bytes', 'in_use', 'recent', 'unused', 'unused_bytes'].forEach(function (k) { out[k] += r[k]; });
+    ['listed', 'listed_bytes', 'in_use', 'recent', 'unused', 'unused_bytes', 'ready', 'ready_bytes', 'waiting', 'waiting_bytes', 'kept', 'kept_bytes'].forEach(function (k) { out[k] += r[k]; });
     out.folders.push(r);
   });
   out.items.sort(function (a, b) { return String(a.last_modified).localeCompare(String(b.last_modified)); });

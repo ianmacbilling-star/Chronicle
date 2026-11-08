@@ -2549,6 +2549,8 @@
           it never moves or deletes anything.
           (Old records like finished image jobs and debug logs don&rsquo;t count as use. Files from the last 24 hours are left
           out, because they may still be saving; print PDFs from the last 90 days, because an order can wait in the browser until it is paid.)
+          Move to holding waits longer, so orphaned is split in two: <strong>ready to move</strong> is what the next move would take
+          (30 days old; print PDFs 90), and <strong>waiting</strong> is younger than that.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
           <button class="btn btn-sm" onclick="unusedPicsRun()">Check for orphaned pictures and PDFs</button>

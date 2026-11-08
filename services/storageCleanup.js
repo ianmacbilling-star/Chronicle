@@ -291,4 +291,5 @@ async function emptyOld(days, now) {
 }
 
 module.exports = { status, run, runNow, maybeMonthly, getMode, setMode, deletionAllowed, holdingOk, summaryText, holdingSummary, heldCsv,
-  nameToKey, nameToKeys, restore, restoreInUse, emptyHolding, MIN_AGE_MS, MAX_UNUSED_SHARE, MAX_FOLDER_SHARE, HOLD_DAYS };
+  nameToKey, nameToKeys, restore, restoreInUse, emptyHolding, MIN_AGE_MS, MAX_UNUSED_SHARE, MAX_FOLDER_SHARE, HOLD_DAYS,
+  getKeep };   // v3.5.06 -- the report reads the same keep list the move does
