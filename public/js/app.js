@@ -42127,6 +42127,7 @@ function vlDraftFrom(ep) {
       return { ck: ++VL.ck, id: s.id, name: s.name || '', cut_style: s.cut_style || 'instant',
         start: w.start || '', actions: vlActionsText(w.actions || []), lines: (w.lines || []).map(function (l) { return { who: l.who || '', text: l.text || '', when: Number(l.when) || 0, off: !!l.off }; }),
         camera: w.camera || '', end: w.end || '', sounds: w.sounds || '', around: w.around || '', seconds: Number(w.seconds) || VL_SHOT_SECS, more: !!(w.sounds || w.around),
+        open: !!(VL.wordsOpen && VL.wordsOpen[s.id]),   // v3.5.21: the words fold away unless left open
         kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || ''), prev: k.prev_image_url || '' }; }) };
     }) };
   vlFitDurations(d, m);
@@ -42212,8 +42213,8 @@ function vlShotHTML(d, si, m, n0) {
     '</div>' +
     '<div class="vl-strip" style="' + VL_STRIP + '">' + cells.join('') + '</div>' +
     '<div id="vl-cast-' + si + '" class="vl-cast" style="' + VL_DESC + 'margin:6px 2px 0;">' + vlCastLineHTML(si) + '</div>' +
-    vlWordsHTML(d, si) +
-    '<div id="vl-chk-' + si + '" class="vl-checks" style="margin-top:6px;">' + vlChecksHTML(si) + '</div>' +
+    vlWordsBarHTML(si) +   // v3.5.21: the words fold into one line (Ian: "so the prompts don't take up so much space")
+    (s.open ? '<div id="vl-chk-' + si + '" class="vl-checks" style="margin-top:6px;">' + vlChecksHTML(si) + '</div>' + vlWordsHTML(d, si) : '') +
     '<div id="vl-livebtn-' + s.ck + '" style="margin-top:10px;"></div>' +   // v3.5.11: Generate take, bottom right (Ian); v3.5.13: the takes beside it
   '</div>';
 }
@@ -42971,7 +42972,8 @@ function vlShapeCheck(shotIdx, then) {
 // =================================================================================================
 var VL_SHOT_SECS = 8;
 var VL_STRIP = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:8px;align-items:start;';
-var VL_BOX_LABEL = 'display:block;font-size:12px;font-weight:600;color:var(--accent-pale);margin:10px 0 4px;';
+var VL_BOX_LABEL = 'display:block;font-size:12px;font-weight:600;color:var(--accent-pale);margin:8px 0 3px;';   // v3.5.21: tighter
+var VL_BOX_STYLE = 'min-height:0;padding:6px 10px;line-height:1.45;resize:vertical;overflow:hidden;';
 var VL_WARN = 'color:#e8a85a;font-size:12px;line-height:1.45;';
 function vlNewShot(kfs) {
   return { ck: ++VL.ck, id: null, name: '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false };
@@ -42989,7 +42991,7 @@ function vlModelOptions(ms, cur) {
 }
 function vlBoxHTML(id, label, value, hint, rows, extra) {
   return '<label style="' + VL_BOX_LABEL + '" for="' + id + '">' + label + '</label>' +
-    '<textarea id="' + id + '" class="narrative-inline-box vl-box" rows="' + (rows || 2) + '" style="min-height:0;" placeholder="' + escapeHtml(hint) + '" oninput="vlEdit()" onblur="vlFlushSave()"' + (extra || '') + '>' + escapeHtml(value || '') + '</textarea>';
+    '<textarea id="' + id + '" class="narrative-inline-box vl-box" rows="' + (rows || 1) + '" style="' + VL_BOX_STYLE + '" placeholder="' + escapeHtml(hint) + '" oninput="vlGrow(this);vlEdit()" onblur="vlFlushSave()"' + (extra || '') + '>' + escapeHtml(value || '') + '</textarea>';
 }
 function vlWordsHTML(d, si) {
   var s = d.shots[si], acts = vlActionsList(s.actions);
@@ -43004,21 +43006,21 @@ function vlWordsHTML(d, si) {
     '</div>';
   }).join('');
   var secs = []; for (var n = 4; n <= 15; n++) secs.push('<option value="' + n + '"' + (Number(s.seconds) === n ? ' selected' : '') + '>' + n + ' s</option>');
-  return '<div class="vl-words" style="margin-top:8px;">' +
-    vlBoxHTML('vl-st-' + si, 'How does the shot start?', s.start, 'Drel kneels over Ori on the ice; behind him Gubuk stands holding Emanon.', 2) +
-    vlBoxHTML('vl-ac-' + si, 'What do the characters do?', s.actions, '1. Drel presses a glowing diamond into Ori\'s chest.\n2. Gubuk carries Emanon out of frame to the right.', Math.max(3, acts.length + 1), ' onchange="vlActionsChanged(' + si + ')"') +
+  return '<div class="vl-words" style="margin-top:4px;">' +
+    vlBoxHTML('vl-st-' + si, 'How does the shot start?', s.start, 'Drel kneels over Ori on the ice; behind him Gubuk stands holding Emanon.', vlRowsFor(s.start)) +
+    vlBoxHTML('vl-ac-' + si, 'What do the characters do?', s.actions, '1. Drel presses a glowing diamond into Ori\'s chest.\n2. Gubuk carries Emanon out of frame to the right.', Math.max(2, vlRowsFor(s.actions)), ' onchange="vlActionsChanged(' + si + ')"') +
     '<label style="' + VL_BOX_LABEL + '">What do they say?</label>' +
     '<div id="vl-lines-' + si + '">' + lines + '</div>' +
     '<button type="button" class="narrative-regen-btn" style="margin-top:4px;" onclick="vlLineAdd(' + si + ')">+ Add a line</button>' +
-    vlBoxHTML('vl-ca-' + si, 'What does the camera do?', s.camera, 'Start close on Drel and Ori, then pan right to find Emanon.', 2) +
-    vlBoxHTML('vl-en-' + si, 'How does the shot end?', s.end, 'Emanon lies on the ice, head to the left; Drel kneels over him; Gubuk stands guard.', 2) +
+    vlBoxHTML('vl-ca-' + si, 'What does the camera do?', s.camera, 'Start close on Drel and Ori, then pan right to find Emanon.', vlRowsFor(s.camera)) +
+    vlBoxHTML('vl-en-' + si, 'How does the shot end?', s.end, 'Emanon lies on the ice, head to the left; Drel kneels over him; Gubuk stands guard.', vlRowsFor(s.end)) +
     '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
       '<label style="' + VL_BOX_LABEL + 'margin:0;" for="vl-se-' + si + '">How long?</label>' +
       '<select id="vl-se-' + si + '" class="form-input" style="width:auto;padding:4px 8px;font-size:13px;height:auto;" onchange="vlEdit()" onblur="vlFlushSave()">' + secs.join('') + '</select>' +
       '<button type="button" class="narrative-regen-btn vl-more" onclick="vlToggleMore(' + si + ')">' + (s.more ? '&#9662;' : '&#9656;') + ' Sound and surroundings</button>' +
     '</div>' +
-    (s.more ? vlBoxHTML('vl-so-' + si, 'What sounds do we hear?', s.sounds, 'Ice cracking, distant fire, a soft divine hum.', 2) +
-      vlBoxHTML('vl-ar-' + si, 'What is happening around them?', s.around, 'Smoke drifts across, the fires flicker.', 2) : '') +
+    (s.more ? vlBoxHTML('vl-so-' + si, 'What sounds do we hear?', s.sounds, 'Ice cracking, distant fire, a soft divine hum.', vlRowsFor(s.sounds)) +
+      vlBoxHTML('vl-ar-' + si, 'What is happening around them?', s.around, 'Smoke drifts across, the fires flicker.', vlRowsFor(s.around)) : '') +
   '</div>';
 }
 // The actions changed: the lines' When menus follow, without redrawing the shot (so the box clicked next keeps focus).
@@ -43122,6 +43124,7 @@ function vlRefreshChecks() {
   var d = VL.draft; if (!d) return;
   d.shots.forEach(function (s, si) {
     var c = document.getElementById('vl-chk-' + si); if (c) c.innerHTML = vlChecksHTML(si);
+    var sb = document.getElementById('vl-sum-' + si); if (sb) sb.innerHTML = vlWordsSummaryHTML(si);   // v3.5.21
     var a = document.getElementById('vl-cast-' + si); if (a) a.innerHTML = vlCastLineHTML(si);
   });
 }
@@ -43150,6 +43153,41 @@ function vlArchiveKf(url) {
     })
     .catch(function () { showError('Could not reach the server.'); });
 }
+
+// v3.5.21 -- THE WORDS FOLD AWAY (Ian, 2026-11-08: "you gotta figure out a way so the prompts don't take up so much
+// space. Maybe an accordion inside the shot panel"). A folded shot shows one line: the start and the end shortened, the
+// counts, the length and how many warnings it has; a click opens its boxes. Each shot opens on its own; the page
+// remembers which were left open while it is open (by shot id), not in the episode.
+function vlShort(t, n) { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).replace(/\s+\S*$/, '') + '...' : t; }
+function vlWordsSummaryHTML(si) {
+  var s = VL.draft && VL.draft.shots[si]; if (!s) return '';
+  var acts = vlActionsList(s.actions), lines = s.lines.filter(function (l) { return String(l.text || '').trim(); }).length, warn = vlChecks(si).length;
+  var st = vlShort(s.start, 70), en = vlShort(s.end, 70), first = vlShort(acts[0] || '', 80);
+  var gist = st ? escapeHtml(st) + (en ? ' &rarr; ' + escapeHtml(en) : '')
+    : en ? '... &rarr; ' + escapeHtml(en)
+    : escapeHtml(first || 'No words yet: open to write what happens');
+  return '<span style="flex:none;color:var(--accent-pale);font-weight:600;">' + (s.open ? '&#9662;' : '&#9656;') + ' &#9998; Words</span>' +
+    '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:italic;">' + gist + '</span>' +
+    '<span style="flex:none;">' + acts.length + ' action' + (acts.length === 1 ? '' : 's') + ' &middot; ' + lines + ' line' + (lines === 1 ? '' : 's') + ' &middot; ' + (Number(s.seconds) || VL_SHOT_SECS) + ' s' +
+      (warn ? ' &middot; <span class="vl-warn-count" style="' + VL_WARN + '">&#9888; ' + warn + '</span>' : '') + '</span>';
+}
+function vlWordsBarHTML(si) {
+  var s = VL.draft.shots[si];
+  return '<button type="button" id="vl-sum-' + si + '" class="vl-words-bar" aria-expanded="' + (s.open ? 'true' : 'false') + '" onclick="vlToggleWords(' + si + ')" title="' + (s.open ? 'Fold the words away' : 'Open the words of this shot') + '" ' +
+    'style="display:flex;gap:10px;align-items:center;width:100%;margin-top:8px;padding:7px 10px;background:rgba(var(--accent-rgb),0.06);border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;cursor:pointer;text-align:left;' + VL_DESC + '">' +
+    vlWordsSummaryHTML(si) + '</button>';
+}
+function vlToggleWords(si) {
+  vlReadForm();
+  var s = VL.draft && VL.draft.shots[si]; if (!s) return;
+  s.open = !s.open;
+  VL.wordsOpen = VL.wordsOpen || {};
+  if (s.id) VL.wordsOpen[s.id] = s.open;
+  vlRenderOpen(true);
+  if (s.open) { var el = document.getElementById('vl-st-' + si); if (el && !String(s.start || '').trim()) el.focus(); }
+}
+function vlRowsFor(text) { return Math.max(1, Math.min(8, String(text || '').split('\n').length + Math.floor(String(text || '').length / 140))); }
+function vlGrow(el) { if (!el) return; el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
 // =================================================================================================
 // v3.4.92 -- TD-933 build 2. MOVING A SESSION ON THE SESSIONS PAGE (Ian, 2026-11-07: ordered by date "is a
 // little hit and miss"). The Story Master gets two arrows and a gripper at the bottom right of each session

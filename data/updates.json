@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.21",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3521-fold-words",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: each shot's words fold into one line until opened.",
+        "detail": "Ian, 2026-11-08: \"you gotta figure out a way so the prompts don't take up so much space. Maybe an accordion inside the shot panel.\" Under a shot's pictures, one line: Words, the start and the end shortened (start -> end), the number of actions and lines, the length, and how many warnings it has. A click opens the shot's boxes (warnings first, then the boxes); another folds them. Each shot opens on its own and stays as left while the page is open; shots are folded when an episode opens and after the shot list is written. Generate take stays visible on a folded shot. The open boxes are tighter: one line each until typed into, growing as you type.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.20",
     "staged_on": "2026-11-08",
     "entries": [
