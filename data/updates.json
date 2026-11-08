@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.13",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3513-takes-at-foot",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: a shot's takes sit at its foot, under the keyframes, with Generate take at the right of that row.",
+        "detail": "Ian, 2026-11-08: 'The viewer should appear under the key frame images... down near the button.' The shot's title line stays at the top.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.12",
     "staged_on": "2026-11-08",
     "entries": [

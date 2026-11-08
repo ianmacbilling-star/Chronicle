@@ -42221,7 +42221,7 @@ function vlShotHTML(d, si, m, n0) {
   return '<div style="' + VL_SHOT + (si % 2 === 0 ? VL_SHOT_ODD : '') + '">' +
     '<div id="vl-live-' + s.ck + '"></div>' +
     '<div style="' + VL_PAIRS + '">' + cells.join('') + '</div>' +
-    '<div id="vl-livebtn-' + s.ck + '" style="display:flex;justify-content:flex-end;margin-top:10px;"></div>' +   // v3.5.11: Generate take, bottom right (Ian)
+    '<div id="vl-livebtn-' + s.ck + '" style="margin-top:10px;"></div>' +   // v3.5.11: Generate take, bottom right (Ian); v3.5.13: the takes beside it
   '</div>';
 }
 function vlCutMarkHTML(si) {
@@ -42534,12 +42534,20 @@ function vlTakeCardHTML(t, chosen, n) {
 }
 // v3.5.11 -- Ian, 2026-11-08: "Put the generate take button at the end of the take... bottom right corner." The shot's
 // bar (title, takes) stays at the top; its Generate take button sits at the shot's bottom right, after the last panel.
+// v3.5.13 -- Ian, 2026-11-08: "The viewer should appear under the key frame images... down near the button." The shot's
+// takes (the small players) sit at its foot, under the keyframes, with Generate take at the right end of that row.
 function vlShotBtnHTML(ep, ds, si) {
   var s = vlEpShot(ep, ds.id);
-  var making = (s ? (s.takes || []) : []).some(function (t) { return t.status === 'making'; });
-  return !ds.id ? '<button class="btn btn-sm" disabled>' + vlSpin(10) + ' Saving...</button>'
-    : making ? '<button class="btn btn-sm" disabled>' + vlSpin(10) + ' Being made</button>'
-    : '<button class="btn btn-sm btn-primary" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now">Generate take</button>';
+  var takes = s ? (s.takes || []) : [];
+  var making = takes.some(function (t) { return t.status === 'making'; });
+  var btn = !ds.id ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Saving...</button>'
+    : making ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Being made</button>'
+    : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now">Generate take</button>';
+  return '<div style="display:flex;gap:10px;align-items:flex-end;">' +
+    '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex:1;min-width:0;">' +
+      takes.map(function (t, i) { return vlTakeCardHTML(t, String(t.id) === String(s.chosen_take_id), i + 1); }).join('') + '</div>' +
+    '<div style="flex:none;margin-left:auto;">' + btn + '</div>' +
+  '</div>';
 }
 function vlLiveShotHTML(ep, ds, si, m) {
   var s = vlEpShot(ep, ds.id);
@@ -42548,8 +42556,7 @@ function vlLiveShotHTML(ep, ds, si, m) {
   return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
       '<div style="' + VL_TITLE + 'font-size:14px;">Shot ' + (si + 1) + '</div>' +
       '<span style="' + VL_DESC + 'flex:1;">' + ds.kfs.length + ' keyframe' + (ds.kfs.length === 1 ? '' : 's') + ' &middot; ' + secs + ' s &middot; one continuous camera run' + (takes.length ? ' &middot; ' + takes.length + ' take' + (takes.length === 1 ? '' : 's') : '') + '</span>' +
-    '</div>' +
-    (takes.length ? '<div style="display:flex;gap:8px;overflow-x:auto;margin-top:8px;padding-bottom:2px;">' + takes.map(function (t, i) { return vlTakeCardHTML(t, String(t.id) === String(s.chosen_take_id), i + 1); }).join('') + '</div>' : '');
+    '</div>';   // v3.5.13: the takes moved to the shot's foot (vlShotBtnHTML)
 }
 function vlEpVideoHTML(ep) {
   var shots = ep.shots || [];
@@ -42604,7 +42611,7 @@ function vlMakeShot(si) {
   if (!d || vlSlWriting(d.id)) return;
   var msg = document.getElementById('vl-msg');
   var ck = d.shots[si] && d.shots[si].ck;
-  var live = document.getElementById('vl-livebtn-' + ck), b = live && live.querySelector('button.btn');   // v3.5.11: the button's own place
+  var live = document.getElementById('vl-livebtn-' + ck), b = live && live.querySelector('button.vl-gen');   // v3.5.11: the button's own place
   if (b) { b.disabled = true; b.innerHTML = vlSpin(10) + ' Starting...'; }
   var undo = function () { VL.liveSig['shot-' + ck] = null; VL.liveSig['btn-' + ck] = null; vlRenderLive(); };
   vlAfterSave(msg, function () {
