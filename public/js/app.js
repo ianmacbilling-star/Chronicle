@@ -41925,6 +41925,8 @@ function adminBrandsSave(changed) {
 var VL_BOX = 'background:rgba(var(--panel-rgb),0.7);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);';
 var VL_SHOT = 'background:rgba(var(--panel-rgb),0.72);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:var(--radius-lg);padding:10px 12px 12px;';   // v3.5.08: more solid, so the page background no longer drowns the shading
 var VL_SHOT_ODD = 'background:linear-gradient(rgba(150,150,150,0.16),rgba(150,150,150,0.16)),rgba(var(--panel-rgb),0.72);';   // v3.5.07: shots 1, 3, 5... greyer (v3.5.08: a clear grey wash; Ian could not see 0.07)
+var VL_PAIRS = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:14px;margin-top:8px;align-items:stretch;';   // v3.5.12: two pairs to a row when wide
+var VL_PAIR = 'display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:6px;border:1px solid rgba(var(--accent-text-rgb),0.45);border-radius:var(--radius-lg);align-items:stretch;';   // v3.5.12: a picture and its box, locked together
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
 var VL = { models: null, episodes: [], openId: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, saving: false, savePending: false, waiters: [],
@@ -42158,7 +42160,7 @@ function vlKfCardHTML(d, si, ki, n) {
   var busy = !!VL.kfBusy[k.url];   // v3.5.09: being retouched
   return '<div class="storyboard-panel">' +
     '<div class="storyboard-panel-img" style="position:relative;">' +
-      '<img class="moment-img-generated" src="' + escapeHtml(k.url) + '" alt="" loading="lazy" style="cursor:default;' + (busy ? 'opacity:0.45;' : '') + '">' +
+      '<img class="moment-img-generated" src="' + escapeHtml(k.url) + '" alt="' + escapeHtml(label) + '" loading="lazy" title="Click to enlarge" onclick="openLightbox(this.src,this.alt)" style="cursor:zoom-in;' + (busy ? 'opacity:0.45;' : '') + '">' +   // v3.5.12: click to see it bigger, as on the Storyboard
       (busy ? '<div style="position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;pointer-events:none;">' + vlSpin(34) +
         '<div class="moment-title" style="color:var(--accent-pale);">Retouching...</div></div>' : '') +
       '<div class="panel-img-actions"' + (busy ? ' style="display:none;"' : '') + '>' +
@@ -42183,7 +42185,7 @@ function vlMoveCardHTML(d, si, ki, m, n) {
   var s = d.shots[si], k = s.kfs[ki], single = s.kfs.length === 1;
   var after = !single && ki === s.kfs.length - 1;   // v3.5.07: the optional move after the last keyframe
   var head = single ? '&#127916; This keyframe comes alive' : after ? '&#127916; After keyframe ' + n + ' (optional): until the cut' : '&#127916; Keyframe ' + n + ' &rarr; ' + (n + 1);
-  return '<div class="narrative-panel">' +
+  return '<div class="narrative-panel" style="height:100%;box-sizing:border-box;">' +   // v3.5.12: as tall as its picture
     '<div class="narrative-block-header">' +
       '<span>' + head + '</span>' +
       '<span style="display:inline-flex;gap:4px;align-items:center;">' +
@@ -42202,18 +42204,23 @@ function vlMoveCardHTML(d, si, ki, m, n) {
 }
 function vlShotHTML(d, si, m, n0) {
   var s = d.shots[si];
+  // v3.5.12 -- Ian, 2026-11-08: a picture and the box to its right are locked together, so show it: each pair in one
+  // unit with a thin light border (unlike the Storyboard's free panels), two units to a row on a wide screen, the box
+  // as tall as its picture.
   var cells = [];
   for (var ki = 0; ki < s.kfs.length; ki++) {
-    cells.push(vlKfCardHTML(d, si, ki, n0 + ki));
-    cells.push(vlMoveCardHTML(d, si, ki, m, n0 + ki));   // v3.5.07: the last keyframe has its (optional) after box too
+    cells.push('<div class="vl-pair" style="' + VL_PAIR + '">' +
+      vlKfCardHTML(d, si, ki, n0 + ki) +
+      vlMoveCardHTML(d, si, ki, m, n0 + ki) +   // v3.5.07: the last keyframe has its (optional) after box too
+    '</div>');
   }
-  cells.push('<div class="storyboard-panel" style="cursor:pointer;" onclick="vlChoose(\'add:' + si + '\')" title="Add a keyframe from the Archive at the end of this shot">' +
+  cells.push('<div class="storyboard-panel" style="cursor:pointer;align-self:start;" onclick="vlChoose(\'add:' + si + '\')" title="Add a keyframe from the Archive at the end of this shot">' +
     '<div class="storyboard-panel-img"><div class="moment-img-placeholder" style="min-height:120px;">' +
       '<div style="font-size:26px;color:var(--accent-bright);">+</div><div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.6);">Add a keyframe to shot ' + (si + 1) + '</div>' +
     '</div></div></div>');
   return '<div style="' + VL_SHOT + (si % 2 === 0 ? VL_SHOT_ODD : '') + '">' +
     '<div id="vl-live-' + s.ck + '"></div>' +
-    '<div class="panels-grid" style="margin-top:8px;">' + cells.join('') + '</div>' +
+    '<div style="' + VL_PAIRS + '">' + cells.join('') + '</div>' +
     '<div id="vl-livebtn-' + s.ck + '" style="display:flex;justify-content:flex-end;margin-top:10px;"></div>' +   // v3.5.11: Generate take, bottom right (Ian)
   '</div>';
 }

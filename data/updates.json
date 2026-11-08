@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.12",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3512-locked-pairs",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: each picture and the box to its right sit in one unit with a thin light border, two units to a row; keyframes open bigger on click.",
+        "detail": "Ian, 2026-11-08: 'I want it obvious they are locked together. Unlike the storyboard panels.' Pictures and boxes a little smaller so two pairs fit a row (one on a narrow window); each box as tall as its picture. Clicking a keyframe opens it bigger, as on the Storyboard.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.11",
     "staged_on": "2026-11-08",
     "entries": [
