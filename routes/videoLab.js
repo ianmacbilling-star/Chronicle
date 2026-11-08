@@ -655,14 +655,41 @@ router.post('/cuts', requireAuth, requireVideo, async function (req, res) {
 });
 
 // Save a draft: name, overall prompt, model, sound, pictures in order and the prompts between them.
+// v3.4.99 -- STEPS TO THE DEBUG LOG (Ian, 2026-11-07: every save of a cut and Write the shot list failed on staging
+// with no reason shown; "spend some time writing some steps to the debug log"). Every refusal and failure of a cut's
+// save and of the shot list is written to the debug log (only for a user with Debug Mode on: logDebug checks) and to
+// the server log (always), with the reason and what was sent. Never awaited and never thrown: a log that fails costs
+// nothing. Does not change what any route does or answers.
+function vlDebug(userId, level, fn, message, detail) {
+  try {
+    require('./debug').logDebug(userId, { level: level, source: 'video', page: 'Video tab', fn: fn, message: String(message).slice(0, 500), detail: detail || null })
+      .catch(function () {});
+  } catch (e) {}
+}
+// One refusal: to the server log, to the debug log, and the same answer the route always gave.
+function vlRefuse(req, res, fn, status, error, detail) {
+  try { console.warn('[video-lab] ' + fn + ' refused (' + status + '): ' + error + (detail ? ' ' + JSON.stringify(detail).slice(0, 600) : '')); } catch (e) {}
+  vlDebug(req.session && req.session.userId, 'warn', fn, 'Refused (' + status + '): ' + error, detail);
+  return res.status(status).json({ error: error });
+}
+// What a save carried, in short (no picture addresses in full; the first 80 characters of each).
+function vlSaveSummary(b) {
+  b = b || {};
+  return { name: b.name != null ? String(b.name).slice(0, 120) : undefined, model: b.model, sound: b.sound, style: b.style,
+    overall_chars: b.overall_prompt != null ? String(b.overall_prompt).length : undefined,
+    pictures: Array.isArray(b.pictures) ? b.pictures.length : undefined, pairs: Array.isArray(b.pairs) ? b.pairs.length : undefined };
+}
+function vlShortUrl(u) { u = String(u || ''); return u.length > 80 ? u.slice(0, 80) + '...' : u; }
+
 router.put('/cuts/:id', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'PUT /api/video-lab/cuts/' + req.params.id;
   try {
     await ensureTables();
     const db = await getDb();
     const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
-    if (!(await canChange(req, cut))) return res.status(404).json({ error: 'Not found.' });
-    if (cut.status !== 'draft') return res.status(409).json({ error: 'This cut has been made; copy it to change its pictures.' });
-    if (await runningShotList(db, cut.id)) return res.status(409).json({ error: 'The shot list is being written; your changes can be made when it is done.' });   // v3.4.98
+    if (!(await canChange(req, cut))) return vlRefuse(req, res, FN, 404, 'Not found.', { found: !!cut, maker: cut ? cut.user_id : null, admin: !!req.vlAdmin });
+    if (cut.status !== 'draft') return vlRefuse(req, res, FN, 409, 'This cut has been made; copy it to change its pictures.', { status: cut.status });
+    if (await runningShotList(db, cut.id)) return vlRefuse(req, res, FN, 409, 'The shot list is being written; your changes can be made when it is done.');   // v3.4.98
     const b = req.body || {};
     const st = cutSettings(cut);
     if (b.overall_prompt != null) st.overall_prompt = String(b.overall_prompt).slice(0, 2000);
@@ -671,16 +698,19 @@ router.put('/cuts/:id', requireAuth, requireVideo, async function (req, res) {
     if (b.pairs != null) st.pairs = cleanPairs(b.pairs);
     if (b.pictures != null) {
       const pics = cleanPictures(b.pictures);
-      if (pics.some(function (p) { return !storage.isOurPublicUrl(p.url); })) return res.status(400).json({ error: 'Every picture must be a Campaignia picture.' });
-      if (!(await picturesAllowed(req, db, cut, pics.map(function (p) { return p.url; })))) return res.status(400).json({ error: 'Every picture must come from this campaign.' });
+      const notOurs = pics.map(function (p, i) { return { n: i + 1, source: p.source, url: vlShortUrl(p.url) }; }).filter(function (x, i) { return !storage.isOurPublicUrl(pics[i].url); });   // v3.4.99
+      if (notOurs.length) return vlRefuse(req, res, FN, 400, 'Every picture must be a Campaignia picture.', { sent: vlSaveSummary(b), not_campaignia: notOurs.slice(0, 10) });
+      if (!(await picturesAllowed(req, db, cut, pics.map(function (p) { return p.url; })))) return vlRefuse(req, res, FN, 400, 'Every picture must come from this campaign.', { sent: vlSaveSummary(b) });
       await writePictures(db, cut.id, pics);
     }
     const name = b.name != null ? (cleanName(b.name) || cut.name) : cut.name;
     const style = (b.style != null && VIDEO_STYLES.some(function (s) { return s.key === b.style; })) ? b.style : cut.style;   // v3.4.98
     await db.prepare('UPDATE video_projects SET name = ?, settings = ?, style = ?, updated_at = NOW() WHERE id = ?').run(name, JSON.stringify(st), style, cut.id);
+    vlDebug(req.session.userId, 'info', FN, 'Saved the cut', { sent: vlSaveSummary(b) });   // v3.4.99
     res.json({ cut: await loadCut(db, cut.id) });
   } catch (e) {
-    console.error('[video-lab] save cut error:', e && e.message);
+    console.error('[video-lab] save cut error:', e && e.message, e && e.stack);
+    vlDebug(req.session && req.session.userId, 'error', FN, 'Save failed: ' + (e && e.message), { sent: vlSaveSummary(req.body), code: e && e.code, stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });   // v3.4.99
     res.status(500).json({ error: 'Could not save the cut.' });
   }
 });
@@ -1066,23 +1096,28 @@ async function runShotList(jobId, cutId, userId, ctx, prices, key) {
   const db = await getDb();
   let inTok = 0, outTok = 0, result = null, lastErr = '';
   try {
+    const JFN = 'shot list job ' + jobId + ' (cut ' + cutId + ')';   // v3.4.99: each step to the debug log
     const images = [];
     for (let i = 0; i < ctx.pictures.length; i++) images.push(i < SL_MAX_IMAGES ? await pictureForModel(ctx.pictures[i].url) : null);
+    vlDebug(userId, 'info', JFN, 'Pictures read for the writer: ' + images.filter(Boolean).length + ' of ' + ctx.pictures.length,
+      { unread: ctx.pictures.map(function (p, i) { return images[i] ? null : { n: p.n, url: vlShortUrl(p.url) }; }).filter(Boolean).slice(0, 20) });
     const req = shotListRequest(ctx, images);
     for (let attempt = 1; attempt <= 2 && !result; attempt++) {
       const r = await callShotListModel(key, req);
       inTok += Number((r.usage && r.usage.input_tokens) || 0); outTok += Number((r.usage && r.usage.output_tokens) || 0);
-      if (r.error) { lastErr = r.error; continue; }
+      if (r.error) { lastErr = r.error; vlDebug(userId, 'warn', JFN, 'Call ' + attempt + ' to the writer failed: ' + r.error, { usage: r.usage }); continue; }
       const p = parseShotList(r.text, ctx);
-      if (p.error) { lastErr = (r.truncated ? 'it ran out of room' : p.error); continue; }
+      if (p.error) { lastErr = (r.truncated ? 'it ran out of room' : p.error); vlDebug(userId, 'warn', JFN, 'Call ' + attempt + ': the reply did not pass the checks (' + lastErr + ')', { usage: r.usage, truncated: !!r.truncated, reply_start: String(r.text || '').slice(0, 600) }); continue; }
+      vlDebug(userId, 'info', JFN, 'Call ' + attempt + ': ' + p.shots.length + ' shot(s) read', { usage: r.usage });
       result = p;
     }
-  } catch (e) { lastErr = (e && e.message) || 'unknown error'; }
+  } catch (e) { lastErr = (e && e.message) || 'unknown error'; vlDebug(userId, 'error', 'shot list job ' + jobId, 'The job threw: ' + lastErr, { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' }); }
   const usd = Math.round(usdFor(prices, inTok, outTok) * 10000) / 10000;
   if (!result) {
     await db.prepare("UPDATE video_shotlist_jobs SET status = 'error', error = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, finished_at = NOW() WHERE id = ? AND status = 'running'")
       .run(('The shot list came back incomplete (' + lastErr + '). Nothing was charged; try again.').slice(0, 1000), inTok, outTok, usd, jobId);
     console.error('[video-lab] shot list job ' + jobId + ' failed: ' + lastErr + ' ($' + usd + ' to Campaignia)');
+    vlDebug(userId, 'error', 'shot list job ' + jobId, 'Failed after two tries: ' + lastErr, { input_tokens: inTok, output_tokens: outTok, cost_usd: usd });   // v3.4.99
     return;
   }
   const charge = tokensFor(prices, usd);
@@ -1103,7 +1138,7 @@ async function runShotList(jobId, cutId, userId, ctx, prices, key) {
     await tx.prepare('UPDATE video_projects SET settings = ?, shot_list = ?, style = ?, updated_at = NOW() WHERE id = ?').run(JSON.stringify(st), JSON.stringify(shotList), ctx.style.key, cutId);
     filled = true;
   });
-  if (!filled) { console.log('[video-lab] shot list job ' + jobId + ': not filled (cut changed, deleted or job interrupted); nothing charged'); return; }
+  if (!filled) { console.log('[video-lab] shot list job ' + jobId + ': not filled (cut changed, deleted or job interrupted); nothing charged'); vlDebug(userId, 'warn', 'shot list job ' + jobId, 'Not filled (the cut changed, was deleted, or the job was interrupted); nothing charged'); return; }
   let charged = 0;
   try {
     const tokens = require('./tokens');
@@ -1115,18 +1150,20 @@ async function runShotList(jobId, cutId, userId, ctx, prices, key) {
   } catch (e) { console.error('[video-lab] shot list charge failed:', e && e.message); }
   await db.prepare('UPDATE video_shotlist_jobs SET tokens_charged = ? WHERE id = ?').run(charged, jobId);
   console.log('[video-lab] shot list job ' + jobId + ' for cut ' + cutId + ': ' + result.shots.length + ' shot(s), ' + inTok + ' in / ' + outTok + ' out, $' + usd + ', ' + charged + ' token(s)');
+  vlDebug(userId, 'info', 'shot list job ' + jobId, 'Boxes filled: ' + result.shots.length + ' shot(s), ' + charged + ' token(s) charged', { input_tokens: inTok, output_tokens: outTok, cost_usd: usd, worked_out: charge });   // v3.4.99
 }
 
 // The press. Answers at once with the job; the tab asks GET below until it is done.
 router.post('/cuts/:id/shot-list', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/cuts/' + req.params.id + '/shot-list';   // v3.4.99
   try {
     await ensureTables();
     const db = await getDb();
     const cut = await db.prepare("SELECT * FROM video_projects WHERE id = ? AND kind = 'cut'").get(parseInt(req.params.id, 10));
-    if (!(await canChange(req, cut))) return res.status(404).json({ error: 'Not found.' });
-    if (cut.status !== 'draft') return res.status(409).json({ error: 'This cut has been made; copy it to write a new shot list.' });
+    if (!(await canChange(req, cut))) return vlRefuse(req, res, FN, 404, 'Not found.', { found: !!cut, maker: cut ? cut.user_id : null, admin: !!req.vlAdmin });
+    if (cut.status !== 'draft') return vlRefuse(req, res, FN, 409, 'This cut has been made; copy it to write a new shot list.', { status: cut.status });
     const key = process.env.ANTHROPIC_API_KEY;
-    if (!key) return res.status(500).json({ error: 'The writer is not set up on this server (ANTHROPIC_API_KEY).' });
+    if (!key) return vlRefuse(req, res, FN, 500, 'The writer is not set up on this server (ANTHROPIC_API_KEY).');
     const b = req.body || {};
     let c = cut;
     if (b.style != null && VIDEO_STYLES.some(function (s) { return s.key === b.style; }) && b.style !== cut.style) {
@@ -1134,15 +1171,16 @@ router.post('/cuts/:id/shot-list', requireAuth, requireVideo, async function (re
       c = Object.assign({}, cut, { style: b.style });
     }
     const ctx = await shotListContext(db, c);
-    if (ctx.pictures.length < 2) return res.status(400).json({ error: 'A cut needs two pictures at least.' });
+    if (ctx.pictures.length < 2) return vlRefuse(req, res, FN, 400, 'A cut needs two pictures at least.', { pictures: ctx.pictures.length });
     const prices = await shotListPrices(db);
     const est = estimateShotList(ctx, prices);
     const bal = await require('./tokens').getBalance(req.session.userId);
+    vlDebug(req.session.userId, 'info', FN, 'Shot list asked for', { style: ctx.style.key, model: ctx.modelKey, pictures: ctx.pictures.length, story_chars: ctx.story.text.length, cast: ctx.cast.length, art_style: ctx.artStyle, estimate: est, balance: bal.total, prices: prices });   // v3.4.99
     if (bal.total < est.tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'Writing this shot list costs about ' + est.tokens + ' token' + (est.tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
     await retireLostJobs(db, cut.id);
     const ins = await db.prepare("INSERT INTO video_shotlist_jobs (cut_id, user_id, status, style, model, boot_id, est_tokens) VALUES (?, ?, 'running', ?, ?, ?, ?) ON CONFLICT (cut_id) WHERE status = 'running' DO NOTHING")
       .run(cut.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, est.tokens);
-    if (!ins.lastInsertRowid) return res.status(409).json({ error: 'A shot list is already being written for this cut.' });
+    if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'A shot list is already being written for this cut.');
     const job = await db.prepare('SELECT * FROM video_shotlist_jobs WHERE id = ?').get(ins.lastInsertRowid);
     res.json({ job: jobView(job), estimate: est });
     runShotList(job.id, cut.id, req.session.userId, ctx, prices, key).catch(async function (e) {
@@ -1150,7 +1188,8 @@ router.post('/cuts/:id/shot-list', requireAuth, requireVideo, async function (re
       try { await db.prepare("UPDATE video_shotlist_jobs SET status = 'error', error = ?, finished_at = NOW() WHERE id = ? AND status = 'running'").run('Something went wrong writing it. Nothing was charged; try again.', job.id); } catch (e2) {}
     });
   } catch (e) {
-    console.error('[video-lab] shot list start error:', e && e.message);
+    console.error('[video-lab] shot list start error:', e && e.message, e && e.stack);
+    vlDebug(req.session && req.session.userId, 'error', FN, 'Could not start: ' + (e && e.message), { code: e && e.code, stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });   // v3.4.99
     if (!res.headersSent) res.status(500).json({ error: 'Could not start the shot list.' });
   }
 });
@@ -1169,6 +1208,7 @@ router.get('/cuts/:id/shot-list', requireAuth, requireVideo, async function (req
     res.json({ job: jobView(j), estimate: estimate, cut: (j && j.status !== 'running') ? await loadCut(db, cut.id) : null });
   } catch (e) {
     console.error('[video-lab] shot list read error:', e && e.message);
+    vlDebug(req.session && req.session.userId, 'error', 'GET /api/video-lab/cuts/' + req.params.id + '/shot-list', 'Read failed: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });   // v3.4.99
     res.status(500).json({ error: 'Could not read the shot list.' });
   }
 });
@@ -1389,5 +1429,6 @@ module.exports._ensureTables = ensureTables;
 module.exports._stopSweep = function () { if (_timer) clearInterval(_timer); _timer = null; };
 // v3.4.98 -- the shot list, for the batch tests
 module.exports.VIDEO_STYLES = VIDEO_STYLES;
+module.exports._vlDebug = { vlSaveSummary: vlSaveSummary, vlShortUrl: vlShortUrl };   // v3.4.99
 module.exports._shotList = { styleFor: styleFor, snapDuration: snapDuration, usdFor: usdFor, tokensFor: tokensFor, shotListPrices: shotListPrices, estimateShotList: estimateShotList,
   shotListContext: shotListContext, shotListRequest: shotListRequest, parseShotList: parseShotList, shotBoxText: shotBoxText, runShotList: runShotList, retireLostJobs: retireLostJobs, BOOT: SL_BOOT };

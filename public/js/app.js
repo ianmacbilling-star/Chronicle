@@ -42118,21 +42118,33 @@ function vlFlushSave() {
 function vlSave(then) {
   var d = VL.draft;
   if (!d) { if (then) then(true); return; }
+  VL.saveError = '';   // v3.4.99: the server's reason when a save is refused, shown by Write the shot list
   var body = { name: d.name, overall_prompt: d.overall, model: d.model, sound: d.sound, style: d.style,   // v3.4.98 style
     pictures: d.pics.map(function (p) { return { url: p.url, source: p.source, moment_id: p.moment_id, archive_id: p.archive_id, label: p.label }; }),
     pairs: d.pairs.map(function (p) { return { prompt: p.prompt || '', duration: String(p.duration || '') }; }) };
   var id = d.id;
   fetch('/api/video-lab/cuts/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (r) { return r.text().then(function (s) { var j = null; try { j = JSON.parse(s); } catch (e) { j = null; } return { ok: r.ok, j: j, status: r.status, raw: s }; }); })   // v3.4.99: a reply that is not JSON is read too
     .then(function (res) {
       var el = document.getElementById('vl-saved');
-      if (!res.ok || !res.j || !res.j.cut) { if (el) el.textContent = (res.j && res.j.error) || 'Not saved.'; if (then) then(false); return; }
+      if (!res.ok || !res.j || !res.j.cut) {
+        VL.saveError = (res.j && res.j.error) || (res.j ? 'the server said no' : 'the server answered ' + res.status + ' without a reason');
+        if (el) el.textContent = 'Not saved: ' + VL.saveError;
+        cgLogClient({ url: '/api/video-lab/cuts/' + id, fn: 'vlSave', kind: 'video-save', status: res.status, message: 'Saving the cut failed: ' + VL.saveError,
+          bodySnippet: JSON.stringify({ name: body.name, model: body.model, sound: body.sound, style: body.style, pictures: body.pictures.length, pairs: body.pairs.length, reply: String(res.raw || '').slice(0, 200) }) });
+        if (then) then(false); return;
+      }
       for (var i = 0; i < VL.cuts.length; i++) if (String(VL.cuts[i].id) === String(id)) VL.cuts[i] = res.j.cut;
       if (el && VL.draft && String(VL.draft.id) === String(id)) el.textContent = 'Saved';
       vlRenderCuts();
       if (then) then(true);
     })
-    .catch(function () { var el = document.getElementById('vl-saved'); if (el) el.textContent = 'Not saved: could not reach the server.'; if (then) then(false); });
+    .catch(function (e) {
+      VL.saveError = 'could not reach the server';
+      var el = document.getElementById('vl-saved'); if (el) el.textContent = 'Not saved: could not reach the server.';
+      cgLogClient({ url: '/api/video-lab/cuts/' + id, fn: 'vlSave', kind: 'video-save', status: 0, message: 'Saving the cut: no answer (' + (e && e.message) + ')' });   // v3.4.99
+      if (then) then(false);
+    });
 }
 
 // ---- changing the pictures -------------------------------------------------------------------
@@ -42388,7 +42400,7 @@ function vlWriteShotList() {
     if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
     VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running' }, fresh: true });
     vlSave(function (saved) {
-      if (!saved) { VL.writing = null; vlRenderOpen(true); var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the cut, so nothing was written.'; return; }
+      if (!saved) { VL.writing = null; vlRenderOpen(true); var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the cut (' + (VL.saveError || 'no reason given') + '), so nothing was written.'; return; }   // v3.4.99: the reason
       vlRenderOpen(true);
       fetch('/api/video-lab/cuts/' + id + '/shot-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: d.style }) })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
@@ -42396,6 +42408,7 @@ function vlWriteShotList() {
           if (!res.ok || !res.j || !res.j.job) {
             VL.writing = null; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: null });
             vlRenderOpen(true);
+            if (!(res.j && res.j.error === 'INSUFFICIENT_TOKENS')) cgLogClient({ url: '/api/video-lab/cuts/' + id + '/shot-list', fn: 'vlWriteShotList', kind: 'video-shot-list', status: 0, message: 'Write the shot list was refused: ' + ((res.j && res.j.error) || 'no reason') });   // v3.4.99
             var me = document.getElementById('vl-sl-msg');
             if (me) { if (res.j && res.j.error === 'INSUFFICIENT_TOKENS') me.innerHTML = insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')); else me.textContent = (res.j && res.j.error) || 'Could not start the shot list.'; }
             return;

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.4.99",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3499-video-debug-log",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video tab: when a cut cannot be saved, the reason is shown beside the button and written to the debug log.",
+        "detail": "TD-090. On staging every save of a cut (its name, the model's own sound) and Write the shot list failed with no reason shown. Each refusal and failure of a cut's save and of the shot list now goes to the server log and, with Debug Mode on, to the debug log: the reason, what was sent, and any picture whose address is not a Campaignia one. A save reply that is not JSON (a gateway page) is named as such. The shot list job logs each step: pictures read, each call to the writer, the reply's first words when it fails the checks, the fill and the charge. Nothing else changes.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.98",
     "staged_on": "2026-11-07",
     "entries": [
