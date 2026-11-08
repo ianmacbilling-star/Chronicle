@@ -876,10 +876,15 @@ router.post('/episodes/:id/keyframe-retouch', requireAuth, requireVideo, async f
       const a = await db.prepare('SELECT shape, art_style FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(kf.archive_id, ep.campaign_id);
       if (a) { shape = a.shape || null; style = a.art_style || null; }
     }
+    // v3.5.10 -- Ian, 2026-11-08: "pass the current art style... of the version the episode is on". The version's own
+    // style, else its session's, else the campaign's (as the shot list reads it); the picture's own only when none is set.
+    const vs = await db.prepare('SELECT f.art_style_override AS fork_style, s.art_style AS session_style, c.art_style AS campaign_style FROM session_forks f JOIN sessions s ON s.id = f.session_id JOIN campaigns c ON c.id = s.campaign_id WHERE f.id = ?').get(ep.fork_id);
+    const versionStyle = vs ? String(vs.fork_style || vs.session_style || vs.campaign_style || '').trim() : '';
+    if (versionStyle) style = versionStyle;
     const out = await require('./images').startKeyframeRetouch(db, { userId: req.session.userId, campaignId: ep.campaign_id, episodeId: ep.id, imageUrl: url,
       momentId: kf.moment_id || null, shape: shape, style: style, instruction: b.instruction, markedUrl: b.marked_url, refName: b.ref_name });
     if (out.error) return res.status(out.error === 'INSUFFICIENT_TOKENS' ? 402 : 400).json(out);
-    vlDebug(req.session.userId, 'info', FN, 'Keyframe retouch started (job ' + out.job_id + ')', { url: vlShortUrl(url), moment_id: kf.moment_id, archive_id: kf.archive_id });
+    vlDebug(req.session.userId, 'info', FN, 'Keyframe retouch started (job ' + out.job_id + ')', { url: vlShortUrl(url), moment_id: kf.moment_id, archive_id: kf.archive_id, art_style: style });
     res.json({ job_id: out.job_id });
   } catch (e) {
     console.error('[video] keyframe retouch error:', e && e.message);

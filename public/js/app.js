@@ -41916,9 +41916,11 @@ function adminBrandsSave(changed) {
 // Every name here starts vl / VL; checked unused for v3.5.04 (the v3.4.86-v3.5.03 cuts block is replaced whole).
 // v3.5.07 -- Ian, 2026-11-08: the last keyframe of a shot gets an optional "After this keyframe" box (what happens after
 // that picture until the cut); "UnCut - Join with previous shot"; odd shots shaded greyer; Generate take / Generate all
-// shots. A keyframe's words belong to its ROLE: 'to' (a move to the next keyframe) or 'own' (the last keyframe's after
-// move, or a one-keyframe shot's only move). When a cut or a move changes a keyframe's role, its words are put aside
-// (k.other, on this page only) and the other role's words come back, so Cut here then UnCut gives the words back.
+// shots.
+// v3.5.10 -- Ian, 2026-11-08: moving pictures or Cut here "loses" the words (v3.5.07 put them aside when a keyframe's
+// role changed). Now a box belongs to the picture on its left and always keeps its words: Cut here leaves the box in the
+// shot it was cut from, as that shot's After box, and the new shot starts on the next picture; UnCut makes it the move
+// to the next picture again; a moved picture takes its box with it.
 // ============================================================
 var VL_BOX = 'background:rgba(var(--panel-rgb),0.7);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);';
 var VL_SHOT = 'background:rgba(var(--panel-rgb),0.72);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:var(--radius-lg);padding:10px 12px 12px;';   // v3.5.08: more solid, so the page background no longer drowns the shading
@@ -42118,21 +42120,10 @@ function vlDraftFrom(ep) {
     style: (vlStyle(ep.style) || vlStyle(VL.defaultStyle) || {}).key || 'living',
     shots: (ep.shots || []).map(function (s) {
       return { ck: ++VL.ck, id: s.id, cut_style: s.cut_style || 'instant',
-        kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || ''), other: '', prev: k.prev_image_url || '' }; }) };
+        kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || ''), prev: k.prev_image_url || '' }; }) };
     }) };
   vlFitDurations(d, m);
-  vlRoles(d);
   return d;
-}
-// v3.5.07 -- each keyframe's role from where it sits; a keyframe whose role changed swaps its words with the ones put aside.
-function vlRoles(d) {
-  d.shots.forEach(function (s) {
-    s.kfs.forEach(function (k, i) {
-      var role = (i < s.kfs.length - 1) ? 'to' : 'own';
-      if (k.role && k.role !== role) { var t = k.prompt || ''; k.prompt = k.other || ''; k.other = t; }
-      k.role = role;
-    });
-  });
 }
 function vlFitDurations(d, m) {
   if (!m) return;
@@ -42308,7 +42299,6 @@ function vlEdit(structural) {
 // No puts the episode back as the server has it.
 function vlStructural() {
   var d = VL.draft, ep = d ? vlFindEp(d.id) : null;
-  if (d) vlRoles(d);
   var go = function () {
     vlRenderOpen(true);
     if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
@@ -42446,7 +42436,7 @@ function vlPick(which, id) {
   } else {
     var s = d.shots[Number(p[0])], k = s && s.kfs[Number(p[1])];
     if (!k) return;
-    kf.prompt = k.prompt; kf.duration = k.duration; kf.other = k.other || ''; kf.role = k.role;   // the move's words stay with its place
+    kf.prompt = k.prompt; kf.duration = k.duration;   // the move's words stay with its place
     s.kfs[Number(p[1])] = kf;
   }
   vlStructural();

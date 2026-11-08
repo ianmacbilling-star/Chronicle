@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.10",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3510-boxes-keep-words",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video: moving pictures or Cut here no longer hides a box's words; a keyframe retouch uses the version's art style.",
+        "detail": "Ian, 2026-11-08: moving panels or Cut here lost the prompt text (v3.5.07 put a box's words aside when its keyframe's role changed). Now a box belongs to the picture on its left and always keeps its words: Cut here leaves it in the shot it was cut from, as that shot's After box, and the new shot starts on the next picture; UnCut makes it the move to the next picture again; a moved picture takes its box with it. Ian: 'pass the current art style to the image that is getting retouched... of the version the episode is on': the version's own art style, else its session's, else the campaign's.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.09",
     "staged_on": "2026-11-08",
     "entries": [
