@@ -305,7 +305,7 @@ function ensureTables() {
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS name TEXT');   // v3.5.15: a shot's own name
     // v3.5.19 -- a shot described in plain words, one set per shot (VIDEO_REFERENCE_SHOTS_SPEC section 2). actions and
     // lines are JSON; actions NULL means the shot was never saved this way (its words are still on its keyframes).
-    for (const c of ['start_text TEXT', 'actions TEXT', 'lines TEXT', 'camera TEXT', 'end_text TEXT', 'sounds TEXT', 'around TEXT', 'seconds INTEGER']) {
+    for (const c of ['start_text TEXT', 'actions TEXT', 'lines TEXT', 'camera TEXT', 'end_text TEXT', 'sounds TEXT', 'around TEXT', 'seconds INTEGER', 'refs TEXT']) {   // refs: v3.5.22
       await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS ' + c);
     }
     await db.exec('ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS episode_id INTEGER');
@@ -319,9 +319,9 @@ function ensureTables() {
 // What a shot will be made from now: the model, the sound, the overall direction and every keyframe with its move's
 // words and length. A take records the same signature, so a take made before an edit shows as out of date.
 function shotSig(ep, kfs, shot) {
-  const w = shot ? shotWords(shot) : null;
+  const w = shot ? shotWords(shot) : null, r = shot ? shotRefs(shot) : null;
   return shortSig(JSON.stringify([ep.model, !!ep.sound, String(ep.overall || '')].concat(kfs.map(function (k) { return [k.image_url, k.prompt || '', k.duration || '']; }))
-    .concat(w ? [w] : [])));   // v3.5.19: the shot's own words too
+    .concat(w ? [w] : []).concat(r ? [r] : [])));   // v3.5.19: the shot's own words too; v3.5.22: and its references
 }
 // v3.5.19 -- A SHOT IN PLAIN WORDS. A shot's words as stored (JSON in actions and lines), or null for a shot never saved
 // this way. lines: [{ who, text, when (1-based action number, or 0 for any time), off (heard off-screen) }].
@@ -382,7 +382,7 @@ async function loadEpisodes(db, where, params) {
   const castByVersion = {};
   for (const ep of eps) {
     const key = ep.fork_id + ':' + ep.campaign_id;
-    if (!castByVersion[key]) castByVersion[key] = (await castRefs(db, ep, true)).all.filter(function (c) { return c.name; }).map(function (c) { return { name: c.name, usable: !!c.usable, why_not: c.why_not || null }; });
+    if (!castByVersion[key]) castByVersion[key] = await refsPool(db, ep);   // v3.5.22: characters and assets
   }
   eps.forEach(function (ep) {
     ep.shots = shots.filter(function (s) { return s.episode_id === ep.id; });
@@ -392,6 +392,7 @@ async function loadEpisodes(db, where, params) {
       const w = shotWords(s);   // v3.5.19
       s.words = w || legacyWords(s.keyframes, MODELS[ep.model]);
       s.words_saved = !!w;
+      s.refs = shotRefs(s);   // v3.5.22: null = never chosen (the page starts from the characters named)
       s.takes = takes.filter(function (t) { return t.shot_id === s.id; });
       s.takes.forEach(function (t) {
         t.moves = moves.filter(function (m) { return m.take_id === t.id; });
@@ -399,7 +400,9 @@ async function loadEpisodes(db, where, params) {
       });
     });
     const cs = chosenSig(ep.shots);
-    ep.cast = castByVersion[ep.fork_id + ':' + ep.campaign_id] || [];   // v3.5.19: who can be sent as a reference (the page's "Also sent")
+    const pool = castByVersion[ep.fork_id + ':' + ep.campaign_id] || { characters: [], assets: [] };
+    ep.cast = pool.characters;   // v3.5.19: who can be sent as a reference; v3.5.22: with id and picture
+    ep.assets = pool.assets;     // v3.5.22
     ep.archived = archivedBy[ep.id] || [];   // v3.5.20: the pictures of this episode already in the campaign's Archive
     ep.video_current = !!(ep.video_url && ep.video_sig === cs);
   });
@@ -539,10 +542,12 @@ async function writeShots(tx, ep, shotsIn) {
       if (s.name === undefined) await tx.prepare('UPDATE shots SET position = ?, cut_style = ? WHERE id = ?').run(pos, s.cut_style, sid);   // a save that sends no name (a page from before v3.5.15) keeps it
       else await tx.prepare('UPDATE shots SET position = ?, cut_style = ?, name = ? WHERE id = ?').run(pos, s.cut_style, s.name || null, sid);
       if (s.words) await writeWords(tx, sid, s.words);   // v3.5.19 (a save without words keeps them)
+      if (s.refs) await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(s.refs), sid);   // v3.5.22
     } else {
       const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style, name) VALUES (?, ?, ?, ?)').run(ep.id, pos, s.cut_style, s.name || null);
       sid = r.lastInsertRowid;
       if (s.words) await writeWords(tx, sid, s.words);
+      if (s.refs) await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(s.refs), sid);
     }
     keep[sid] = true;
     for (let i = 0; i < s.keyframes.length; i++) {
@@ -598,7 +603,7 @@ function cleanShots(list, m) {
     const room = MAX_KEYFRAMES - n;
     if (room <= 0 || !kfs.length) return;
     n += Math.min(room, kfs.length);
-    out.push({ id: parseInt(s.id, 10) || null, words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
+    out.push({ id: parseInt(s.id, 10) || null, refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
 }
@@ -722,7 +727,7 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
         const w = s.words || {};
-        return { name: s.name, cut_style: s.cut_style, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+        return { name: s.name, cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m));
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -821,8 +826,11 @@ function shotScript(ep, w, pics) {
   const out = [];
   out.push('One continuous shot, no cuts. Keep every character looking exactly the same from start to finish.');
   if (pics) {
-    pics.cast.forEach(function (c) { out.push('@Image' + c.n + ' is ' + c.name + ': ' + c.name + '\'s face, hair, build, clothes and gear must match @Image' + c.n + ' whenever ' + c.name + ' is on screen.'); });
-    if (pics.cast.length) out.push('If a scene picture shows a character differently, follow the character\'s own picture.');
+    pics.cast.forEach(function (c) {
+      if (c.kind === 'asset') out.push('@Image' + c.n + ' is ' + c.name + ': it must look like @Image' + c.n + ' whenever it is on screen.');   // v3.5.22
+      else out.push('@Image' + c.n + ' is ' + c.name + ': ' + c.name + '\'s face, hair, build, clothes and gear must match @Image' + c.n + ' whenever ' + c.name + ' is on screen.');
+    });
+    if (pics.cast.length) out.push('If a scene picture shows a character or thing differently, follow its own picture.');
     if (pics.scene.length) out.push('@Image' + pics.scene[0] + ' is how the shot opens: start the video looking like it, in its art style.');
     if (pics.scene.length > 1) out.push(pics.scene.slice(1).map(function (n) { return '@Image' + n; }).join(', ') + (pics.scene.length === 2 ? ' shows' : ' show') +
       ' the place, the light and who is there. Do not copy poses, positions or which way anyone faces from ' + (pics.scene.length === 2 ? 'it' : 'them') + '.');
@@ -858,13 +866,13 @@ function namedCast(text, cast, room) {
   return people;
 }
 // A reference shot in plain words: one move; the cast named first (they win), then up to 5 scene pictures.
-function planReferenceWords(ep, kfs, w, shotNo, cast) {
+function planReferenceWords(ep, kfs, w, shotNo, pool, refs) {
   const m = MODELS[ep.model];
   if (!kfs.length) return { error: 'Shot ' + shotNo + ' has no pictures.' };
   if (!wordsHaveContent(ep, w)) return { error: 'Shot ' + shotNo + ' needs words: say what the characters do, or how the shot starts.' };
   const scenePics = kfs.slice(0, REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });
-  const people = namedCast(wordsText(ep, w), cast, REF_MAX_IMAGES - scenePics.length);
-  const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1 }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };
+  const people = refsToSend(ep, w, refs, pool, REF_MAX_IMAGES - scenePics.length);   // v3.5.22: the shot's references
+  const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1, kind: p.kind }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };
   return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics), duration: String(w.seconds),
     images: people.map(function (p) { return p.url; }).concat(scenePics), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
@@ -880,16 +888,18 @@ function planMovesWords(ep, kfs, w, shotNo) {
   for (let i = 0; i < n; i++) out.push({ position: i + 1, start: kfs[i].image_url, end: kfs.length === 1 ? null : kfs[i + 1].image_url, own: w.actions.join('\n'), full: full, duration: String(d) });
   return { moves: out, model: m };
 }
-function planShot(ep, kfs, shot, shotNo, cast) {
+function planShot(ep, kfs, shot, shotNo, pool) {
   const m = MODELS[ep.model], w = shotWords(shot);
-  if (w) return m && m.reference ? planReferenceWords(ep, kfs, w, shotNo, cast) : planMovesWords(ep, kfs, w, shotNo);
-  return m && m.reference ? planReference(ep, kfs, shotNo, cast) : planMoves(ep, kfs, shotNo);   // never saved in plain words (before v3.5.19)
+  pool = pool || { characters: [], assets: [] };
+  if (w) return m && m.reference ? planReferenceWords(ep, kfs, w, shotNo, pool, shotRefs(shot)) : planMovesWords(ep, kfs, w, shotNo);
+  return m && m.reference ? planReference(ep, kfs, shotNo, pool.characters.filter(function (c) { return c.usable; })) : planMoves(ep, kfs, shotNo);   // never saved in plain words (before v3.5.19)
 }
+function shotRefs(shot) { const r = parseJson(shot && shot.refs, null); return Array.isArray(r) ? cleanRefs(r) : null; }
 // The version's cast with their reference pictures (the version's own, else the character's).
 async function castRefs(db, ep, detail) {
   let rows = [];
   try {
-    rows = await db.prepare('SELECT ch.name, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id);
+    rows = await db.prepare('SELECT ch.id, ch.name, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id);
   } catch (e) {
     console.error('[video] cast references could not be read: ' + (e && e.message));
     rows = [];
@@ -898,7 +908,45 @@ async function castRefs(db, ep, detail) {
   const usable = rows.filter(function (c) { return c.url && storage.isOurPublicUrl(c.url); });
   if (!detail) return usable;
   // v3.5.18 -- for debug mode: every character, and why one is not usable
-  return { usable: usable, all: rows.map(function (c) { return { name: c.name, picture: c.url ? vlShortUrl(c.url) : null, usable: !!(c.url && storage.isOurPublicUrl(c.url)), why_not: !c.url ? 'no reference picture' : (!storage.isOurPublicUrl(c.url) ? 'not a Campaignia picture' : undefined) }; }) };
+  return { usable: usable, all: rows.map(function (c) { return { id: c.id, name: c.name, url: c.url && storage.isOurPublicUrl(c.url) ? c.url : null, picture: c.url ? vlShortUrl(c.url) : null, usable: !!(c.url && storage.isOurPublicUrl(c.url)), why_not: !c.url ? 'no reference picture' : (!storage.isOurPublicUrl(c.url) ? 'not a Campaignia picture' : undefined) }; }) };
+}
+// v3.5.22 -- THE REFERENCES A SHOT CAN SEND (Ian, 2026-11-08: "add the ability to add character and asset references... and
+// see the references that are already on that shot... just like we do on the Review tab, Storyboard and Image builder").
+// The version's characters (their version picture, else their own) and the campaign's assets; an asset whose picture was
+// refused by the rights check, or that is not a Campaignia picture, cannot be sent.
+async function refsPool(db, ep) {
+  const cast = await castRefs(db, ep, true);
+  let assets = [];
+  try {
+    assets = (await db.prepare("SELECT a.id, a.name, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS url FROM campaign_assets a LEFT JOIN image_rights r ON r.image_url = a.image_url AND r.verdict = 'reject' WHERE a.campaign_id = ? ORDER BY LOWER(a.name)").all(ep.campaign_id))
+      .map(function (a) { const ok = !!(a.url && storage.isOurPublicUrl(a.url)); return { id: a.id, name: a.name, url: ok ? a.url : null, usable: ok, why_not: ok ? null : (a.url ? 'not a Campaignia picture' : 'no usable picture') }; });
+  } catch (e) { console.error('[video] assets could not be read: ' + (e && e.message)); }
+  return { characters: cast.all.filter(function (c) { return c.name && c.id; }).map(function (c) { return { id: c.id, name: c.name, url: c.url || null, usable: !!c.usable, why_not: c.why_not || null }; }), assets: assets };
+}
+function cleanRefs(v) {
+  if (!Array.isArray(v)) return [];
+  const seen = {}, out = [];
+  v.forEach(function (r) {
+    const type = r && (r.type === 'asset' ? 'asset' : r.type === 'character' ? 'character' : null), id = r && parseInt(r.id, 10);
+    if (!type || !id || seen[type + id] || out.length >= 12) return;
+    seen[type + id] = true; out.push({ type: type, id: id });
+  });
+  return out;
+}
+// The pictures a shot's references send: the chosen ones (in their order), or, for a shot never given references, the
+// characters named in its words.
+function refsToSend(ep, w, refs, pool, room) {
+  pool = pool || { characters: [], assets: [] };
+  if (Array.isArray(refs)) {
+    const out = [];
+    refs.forEach(function (r) {
+      if (out.length >= room) return;
+      const it = (r.type === 'asset' ? pool.assets : pool.characters).filter(function (x) { return Number(x.id) === Number(r.id); })[0];
+      if (it && it.usable && it.url && !out.some(function (o) { return o.url === it.url; })) out.push({ name: String(it.name).trim(), url: it.url, kind: r.type });
+    });
+    return out;
+  }
+  return namedCast(wordsText(ep, w), pool.characters.filter(function (c) { return c.usable; }), room).map(function (p) { return { name: p.name, url: p.url, kind: 'character' }; });
 }
 // What one move sends to fal: each model names its pictures and its length its own way.
 function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
@@ -924,11 +972,12 @@ async function makeShot(db, req, ep, shot, shotNo) {
   const m = MODELS[ep.model];
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
   const cast = m && m.reference ? await castRefs(db, ep, true) : null;
-  const plan = planShot(ep, kfs, shot, shotNo, cast ? cast.usable : []);   // v3.5.16; v3.5.19: in plain words
+  const pool = m && m.reference ? await refsPool(db, ep) : null;   // v3.5.22
+  const plan = planShot(ep, kfs, shot, shotNo, pool);   // v3.5.16; v3.5.19: in plain words; v3.5.22: the shot's references
   // v3.5.18 -- what a Generate is about to send, for debug mode (Ian: "Put what you need to see in debug mode").
   vlDebug(req.session && req.session.userId, plan.error ? 'warn' : 'info', 'makeShot', 'Shot ' + shotNo + ' (shot ' + shot.id + ', episode ' + ep.id + '): model ' + ep.model + ' = ' +
     (m ? (m.reference ? 'REFERENCE mode' : 'KEYFRAME mode') : 'unknown model') + (plan.error ? '; refused: ' + plan.error : '; ' + plan.moves.length + ' move(s)'), {
-    model: ep.model, reference: !!(m && m.reference), keyframes: kfs.length,
+    model: ep.model, reference: !!(m && m.reference), keyframes: kfs.length, refs_chosen: shotRefs(shot),
     cast_in_version: cast ? cast.all : undefined,
     moves: plan.error ? undefined : plan.moves.map(function (x) {
       return { position: x.position, duration: x.duration, start: vlShortUrl(x.start), end: x.end ? vlShortUrl(x.end) : null,
@@ -1004,7 +1053,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id)) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
-      const p = planShot(ep, kfs, shots[i], i + 1, []);   // v3.5.16; v3.5.19
+      const p = planShot(ep, kfs, shots[i], i + 1, null);   // v3.5.16; v3.5.19
       if (p.error) return res.status(400).json({ error: p.error });
     }
     const errors = [];
@@ -1732,6 +1781,7 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
   const charge = tokensFor(prices, usd);
   const shotList = { style: ctx.style.key, model: ctx.modelKey, written_at: new Date().toISOString(), overall: result.overall, shots: result.shots };
   let filled = false, files = [];
+  const wpool = await refsPool(db, ctx.ep).catch(function () { return { characters: [], assets: [] }; });   // v3.5.22
   await db.transaction(async function (tx) {
     const claim = await tx.prepare("UPDATE episode_writer_jobs SET status = 'done', input_tokens = ?, output_tokens = ?, cost_usd = ?, finished_at = NOW() WHERE id = ? AND status = 'running'").run(inTok, outTok, usd, jobId);
     if (!claim.changes) return;
@@ -1747,7 +1797,9 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
     // v3.5.20 -- start over: the episode's shots are replaced by the writer's (their takes and files go; the start asked
     // first when there were any). The pictures keep their order, sources and Revert slots.
     const fresh = result.shots.map(function (sh) {
-      return { id: null, name: sh.name, cut_style: 'instant', words: sh.words, keyframes: sh.pictures.map(function (n) {
+      const named = namedCast(wordsText({ overall: result.overall }, sh.words), wpool.characters.filter(function (c) { return c.usable; }), 12);   // v3.5.22: the characters it names
+      const refs = named.map(function (p) { const c = wpool.characters.filter(function (x) { return x.name === p.name; })[0]; return c ? { type: 'character', id: c.id } : null; }).filter(Boolean);
+      return { id: null, name: sh.name, cut_style: 'instant', words: sh.words, refs: refs, keyframes: sh.pictures.map(function (n) {
         const k = pics[n - 1];
         return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: '', duration: k.duration, prev_url: k.prev_image_url || null };
       }) };

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.22",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3522-shot-halves",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: each shot is laid out in two halves, with its own character and asset references.",
+        "detail": "Ian, 2026-11-08: \"Divide the shot panel into two horizontal halves... each question on its own accordion panel on the left... On the right half the pictures from left to right... the Shot duration up on the same line with the shot's name... the small cut here button between each image... the generate take button on the bottom of the right half\"; \"add the ability to add character and asset references... and see the references that are already on that shot... just like the Review tab, Storyboard and Image builder\". Top line: Shot n, its name, How long? (4-15 s). Across the shot: References, Characters and Assets as chips (click to see, x to remove), + Add character / + Add asset pickers, how many of the 9 pictures go, and a hint with Add when a character with a picture is named in the words but not referenced (assets are added by hand). Left: one fold-out panel per question (start, what the characters do, what they say, camera, end, sound and surroundings); a closed panel shows its words greyed and its warnings as a count; shot-wide warnings sit above them. Right: the pictures left to right with a small round cut button in each gap, then the takes and Generate take. On a narrow screen the right half comes first. References are saved per shot and are exactly what a reference take sends (an asset is named as a thing that must look like its picture); a shot never given references starts from the characters named in its words; the shot list writer fills each shot's characters; Cut here keeps them on both shots and UnCut joins them; Copy carries them; changing them marks takes out of date. Replaces v3.5.21's folded Words line and the Also sent line.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.21",
     "staged_on": "2026-11-08",
     "entries": [
