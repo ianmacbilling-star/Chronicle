@@ -4391,6 +4391,7 @@ async function startKeyframeRetouch(db, o) {
     refs = combineRefs(cl.refs, al.refs); charText = cl.text; shape = moment.shape || shape;
     if (!style) style = moment.style || null;
   }
+  if (o.forceShape) shape = o.forceShape;   // v3.5.14 -- Expand on the Video tab: drawn wide (16:9) whatever shape the picture was
   let instr = instruction;
   if (instr.indexOf('{{REF:') !== -1) {
     instr = instr.replace(/\{\{REF:([^}]*)\}\}/g, function (m, nm) {

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.14",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3514-wide-video",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: every clip is made wide (16:9); a square or tall keyframe is flagged with Expand, and Generate warns before making a shot that has one.",
+        "detail": "Ian, 2026-11-08: a wide title picture and a tall Gubuk made a nearly square take; 'go with... whatever most non phone videos are made in now'; 'Option 1' (Expand); 'Generate should stop and ask and warn.' Every model that takes a shape is asked for 16:9 (Kling takes its shape from the picture). A keyframe under 1.25 wide-to-tall (square or tall; ordinary 4:3 panels pass) shows 'Tall picture: the video is wide' with Expand: one retouch that redraws it wide in its art style, the episode's copy only, with Revert. Generate take and Generate all shots name such pictures and ask: Cancel or Generate anyway.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.13",
     "staged_on": "2026-11-08",
     "entries": [

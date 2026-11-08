@@ -41931,7 +41931,7 @@ var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-fam
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
 var VL = { models: null, episodes: [], openId: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, saving: false, savePending: false, waiters: [],
   busy: false, styles: [], defaultStyle: 'living', writing: null, slTimer: null, sl: {}, liveSig: {}, ck: 0, saveError: '',
-  kfBusy: {}, kfDone: {} };   // v3.5.09: picture being retouched -> its job id; retouch jobs this page has seen to the end
+  kfBusy: {}, kfDone: {}, kfShape: {} };   // v3.5.14: kfShape: a picture's width / height, measured as it shows   // v3.5.09: picture being retouched -> its job id; retouch jobs this page has seen to the end
 
 function vlIsAdmin() { return !!(state.user && (state.user.is_admin || state.user.videoOn)); }   // v3.4.94: or the video switch is on
 
@@ -42160,9 +42160,10 @@ function vlKfCardHTML(d, si, ki, n) {
   var busy = !!VL.kfBusy[k.url];   // v3.5.09: being retouched
   return '<div class="storyboard-panel">' +
     '<div class="storyboard-panel-img" style="position:relative;">' +
-      '<img class="moment-img-generated" src="' + escapeHtml(k.url) + '" alt="' + escapeHtml(label) + '" loading="lazy" title="Click to enlarge" onclick="openLightbox(this.src,this.alt)" style="cursor:zoom-in;' + (busy ? 'opacity:0.45;' : '') + '">' +   // v3.5.12: click to see it bigger, as on the Storyboard
+      '<img class="moment-img-generated" src="' + escapeHtml(k.url) + '" alt="' + escapeHtml(label) + '" loading="lazy" title="Click to enlarge" onclick="openLightbox(this.src,this.alt)" onload="vlKfMeasure(this)" data-kfu="' + escapeHtml(k.url) + '" style="cursor:zoom-in;' + (busy ? 'opacity:0.45;' : '') + '">' +   // v3.5.12: click to see it bigger, as on the Storyboard
       (busy ? '<div style="position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;pointer-events:none;">' + vlSpin(34) +
         '<div class="moment-title" style="color:var(--accent-pale);">Retouching...</div></div>' : '') +
+      (busy ? '' : vlShapeTagHTML(k.url, si, ki)) +   // v3.5.14
       '<div class="panel-img-actions"' + (busy ? ' style="display:none;"' : '') + '>' +
         '<button type="button" class="panel-pill" onclick="vlRetouch(' + si + ',' + ki + ')" title="Change this keyframe with the Retouch window. Only this episode\'s copy changes; the storyboard is not touched.">Retouch</button>' +
         (k.prev ? '<button type="button" class="panel-pill" onclick="vlRevertKf(' + si + ',' + ki + ')" title="Back to the picture before the last retouch (free)">Revert</button>' : '') +
@@ -42606,9 +42607,10 @@ function vlAfterSave(msgEl, then, fail) {
     then();
   });
 }
-function vlMakeShot(si) {
+function vlMakeShot(si, checked) {
   var d = VL.draft;
   if (!d || vlSlWriting(d.id)) return;
+  if (!checked) { vlShapeCheck([si], function () { vlMakeShot(si, true); }); return; }   // v3.5.14: warn about pictures that are not wide
   var msg = document.getElementById('vl-msg');
   var ck = d.shots[si] && d.shots[si].ck;
   var live = document.getElementById('vl-livebtn-' + ck), b = live && live.querySelector('button.vl-gen');   // v3.5.11: the button's own place
@@ -42628,9 +42630,14 @@ function vlMakeShot(si) {
       .catch(function () { if (msg) msg.textContent = 'Could not reach the server.'; undo(); });
   }, undo);
 }
-function vlMakeAll() {
+function vlMakeAll(checked) {
   var d = VL.draft;
   if (!d || vlSlWriting(d.id)) return;
+  if (!checked) {   // v3.5.14: only the shots this will make (no made or making take yet)
+    var ep0 = vlFindEp(d.id), todo = [];
+    d.shots.forEach(function (ds, i) { var t = vlChosen(vlEpShot(ep0, ds.id) || {}); if (!t || (t.status !== 'done' && t.status !== 'making')) todo.push(i); });
+    vlShapeCheck(todo, function () { vlMakeAll(true); }); return;
+  }
   var msg = document.getElementById('vl-msg'), go = document.getElementById('vl-go');
   if (go) go.disabled = true;
   if (msg) msg.innerHTML = vlSpin(14) + ' Saving and sending to fal...';
@@ -42849,7 +42856,7 @@ function vlRetouchSend(t, instruction, snap, refName) {
   var marked = (typeof rgUploadMarked === 'function') ? rgUploadMarked(snap) : Promise.resolve(null);
   Promise.resolve(marked).then(function (markedUrl) {
     return fetch('/api/video-lab/episodes/' + t.episodeId + '/keyframe-retouch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_url: url, instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null }) });
+      body: JSON.stringify({ image_url: url, instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null, expand: !!t.expand }) });   // v3.5.14 expand
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
       var j = res.j || {};
@@ -42887,6 +42894,66 @@ function vlRevertKf(si, ki) {
   if (!k || !k.prev || VL.kfBusy[k.url]) return;
   var t = k.url; k.url = k.prev; k.prev = t;
   vlStructural();
+}
+
+// ---- one shape for every clip (v3.5.14) -------------------------------------------------------
+// Ian, 2026-11-08: a wide title picture and a tall Gubuk made a nearly square take. Every clip is now asked for wide
+// 16:9 (the server). A keyframe that is square or tall (width / height under 1.25; ordinary 4:3 panels pass, the model
+// only trims them a little) shows a tag with Expand: one retouch that redraws it wide in the art style, on the episode's
+// copy, with Revert. Generate warns before making a shot that has one.
+var VL_WIDE_MIN = 1.25;
+function vlShapeOf(ratio) { return ratio < 0.95 ? 'tall' : 'square'; }
+function vlNotWide(url) { var r = VL.kfShape[url]; return typeof r === 'number' && r < VL_WIDE_MIN; }
+function vlShapeTagHTML(url, si, ki) {
+  var bad = vlNotWide(url);
+  return '<div class="vl-shape-tag" style="position:absolute;left:6px;right:6px;bottom:6px;display:' + (bad ? 'flex' : 'none') + ';gap:6px;align-items:center;justify-content:space-between;' +
+      'background:rgba(0,0,0,0.72);border:1px solid rgba(var(--accent-rgb),0.6);border-radius:8px;padding:4px 6px 4px 9px;">' +
+    '<span class="vl-shape-words" style="font-size:11px;color:var(--accent-pale);">' + (bad ? vlShapeWords(url) : '') + '</span>' +
+    '<button type="button" class="btn btn-sm btn-primary" style="padding:2px 10px;font-size:11px;line-height:16px;flex:none;" onclick="vlExpand(' + si + ',' + ki + ')" title="Redraw this picture wide (16:9) in its art style, with more of the scene at the sides. One retouch; only this episode\'s copy changes; Revert brings it back.">Expand</button>' +
+  '</div>';
+}
+function vlShapeWords(url) { return (vlShapeOf(VL.kfShape[url]) === 'tall' ? 'Tall picture' : 'Square picture') + ': the video is wide'; }
+// The picture has shown: note its shape, and show or hide its tag (no redraw, so nothing being typed is lost).
+function vlKfMeasure(img) {
+  if (!img || !img.naturalWidth || !img.naturalHeight) return;
+  var url = img.getAttribute('data-kfu');
+  if (!url) return;
+  VL.kfShape[url] = img.naturalWidth / img.naturalHeight;
+  var wrap = img.parentNode, tag = wrap && wrap.querySelector('.vl-shape-tag');
+  if (!tag) return;
+  var bad = vlNotWide(url);
+  tag.style.display = bad ? 'flex' : 'none';
+  var w = tag.querySelector('.vl-shape-words'); if (w) w.textContent = bad ? vlShapeWords(url) : '';
+}
+function vlExpand(si, ki) {
+  vlReadForm();
+  var d = VL.draft, k = d && d.shots[si] && d.shots[si].kfs[ki];
+  if (!k || VL.kfBusy[k.url]) return;
+  var url = k.url, id = d.id;
+  uiConfirm('Expand this picture to wide (16:9)? It is redrawn wider in its art style, with more of the scene at the sides, so the video does not crop or reshape it. ' +
+    'This uses one retouch (the usual retouch price). Only this episode\'s copy changes, and Revert brings the original back.', { okText: 'Expand it' })
+    .then(function (yes) { if (yes) vlRetouchSend({ episodeId: id, url: url, expand: true }, '', null, null); });
+}
+// The keyframes of the given shots that are not wide: [{ n, label, shape }]. Pictures not yet shown are not counted.
+function vlShapeProblems(shotIdx) {
+  var d = VL.draft, out = [], n = 0;
+  if (!d) return out;
+  d.shots.forEach(function (s, si) {
+    s.kfs.forEach(function (k) {
+      n++;
+      if (shotIdx.indexOf(si) >= 0 && vlNotWide(k.url)) out.push({ n: n, shot: si + 1, label: k.source === 'title' ? 'Title picture' : (k.label || 'From the Archive'), shape: vlShapeOf(VL.kfShape[k.url]) });
+    });
+  });
+  return out;
+}
+// Ask before generating when a picture is not wide. then() runs on Generate anyway, or at once when all are wide.
+function vlShapeCheck(shotIdx, then) {
+  var bad = vlShapeProblems(shotIdx);
+  if (!bad.length) { then(); return; }
+  var list = bad.map(function (b) { return 'keyframe ' + b.n + ' (' + b.label + ', shot ' + b.shot + ') is ' + b.shape; }).join('; ');
+  uiConfirm('Not every picture is wide. The video is made wide (16:9), so the model will crop or reshape these: ' + list + '. ' +
+    'Press Expand on a picture first to redraw it wide, or generate anyway.', { title: 'Picture shapes', okText: 'Generate anyway' })
+    .then(function (yes) { if (yes) then(); });
 }
 
 // =================================================================================================

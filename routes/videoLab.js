@@ -68,18 +68,25 @@ async function canChange(req, p) {
 // Model table (fal's model pages, 2026-11-07). Prices are USD per second at 720p; "sound" is the model's own audio.
 // single: how a move of ONE keyframe is sent (no end picture). Seedance and Kling take the start picture alone on the
 // same endpoint; Veo's first-and-last-frame endpoint needs both, so a single keyframe goes to its image-to-video one.
+// v3.5.14 -- ONE SHAPE FOR EVERY CLIP (Ian, 2026-11-08: a wide title picture and a tall Gubuk made a nearly square take,
+// "the AI video engine is changing the shape"; "go with... whatever most non phone videos are made in now"): wide 16:9,
+// asked of every model that takes a shape (Kling takes its shape from the picture). A keyframe that is square or tall is
+// flagged on the tab, with Expand to redraw it wide, and Generate warns before making a shot that has one.
+const VIDEO_ASPECT = '16:9';
+const EXPAND_INSTRUCTION = 'Expand this picture into a wide 16:9 frame. Keep everything that is already in it exactly as it is: the same people, faces, clothes, poses, objects, light and art style. ' +
+  'Continue the scene naturally out to the left and right so it fills the wide frame, matching what is already there. Do not crop anyone, do not add new characters, and do not add any text.';
 const MODELS = {
   seedance2: {
     label: 'Seedance 2.0 (ByteDance)', endpoint: 'bytedance/seedance-2.0/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.3024, priceSound: 0.3024,
-    extra: { resolution: '720p', aspect_ratio: 'auto' }, promptRequired: true
+    extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
   },
   seedance2fast: {
     label: 'Seedance 2.0 Fast (ByteDance)', endpoint: 'bytedance/seedance-2.0/fast/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.2419, priceSound: 0.2419,
-    extra: { resolution: '720p', aspect_ratio: 'auto' }, promptRequired: true
+    extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
   },
   kling3std: {
     label: 'Kling 3.0 Standard (Kuaishou)', endpoint: 'fal-ai/kling-video/v3/standard/image-to-video',
@@ -91,7 +98,7 @@ const MODELS = {
     label: 'Veo 3.1 Fast (Google)', endpoint: 'fal-ai/veo3.1/fast/first-last-frame-to-video',
     start: 'first_frame_url', end: 'last_frame_url', durations: ['4', '6', '8'], defDuration: '8',
     durationValue: function (d) { return String(d) + 's'; }, price: 0.10, priceSound: 0.15,
-    extra: { resolution: '720p', aspect_ratio: 'auto' }, promptRequired: true,
+    extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true,
     single: { endpoint: 'fal-ai/veo3.1/fast/image-to-video', start: 'image_url' }
   }
 };
@@ -881,8 +888,11 @@ router.post('/episodes/:id/keyframe-retouch', requireAuth, requireVideo, async f
     const vs = await db.prepare('SELECT f.art_style_override AS fork_style, s.art_style AS session_style, c.art_style AS campaign_style FROM session_forks f JOIN sessions s ON s.id = f.session_id JOIN campaigns c ON c.id = s.campaign_id WHERE f.id = ?').get(ep.fork_id);
     const versionStyle = vs ? String(vs.fork_style || vs.session_style || vs.campaign_style || '').trim() : '';
     if (versionStyle) style = versionStyle;
+    // v3.5.14 -- Expand: the same retouch, with our own words, drawn wide (16:9) whatever shape the picture was.
+    const expand = !!b.expand;
     const out = await require('./images').startKeyframeRetouch(db, { userId: req.session.userId, campaignId: ep.campaign_id, episodeId: ep.id, imageUrl: url,
-      momentId: kf.moment_id || null, shape: shape, style: style, instruction: b.instruction, markedUrl: b.marked_url, refName: b.ref_name });
+      momentId: kf.moment_id || null, shape: shape, style: style, forceShape: expand ? 'wide' : null,
+      instruction: expand ? EXPAND_INSTRUCTION : b.instruction, markedUrl: expand ? null : b.marked_url, refName: expand ? null : b.ref_name });
     if (out.error) return res.status(out.error === 'INSUFFICIENT_TOKENS' ? 402 : 400).json(out);
     vlDebug(req.session.userId, 'info', FN, 'Keyframe retouch started (job ' + out.job_id + ')', { url: vlShortUrl(url), moment_id: kf.moment_id, archive_id: kf.archive_id, art_style: style });
     res.json({ job_id: out.job_id });
@@ -1595,6 +1605,7 @@ startSweep();
 
 module.exports = router;
 module.exports.MODELS = MODELS;
+module.exports.VIDEO_ASPECT = VIDEO_ASPECT;
 module.exports.VIDEO_STYLES = VIDEO_STYLES;
 module.exports.estCost = estCost;
 module.exports.buildInput = buildInput;
