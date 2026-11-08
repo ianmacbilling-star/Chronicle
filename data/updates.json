@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.08",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3508-shot-shading",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video: odd shots now clearly greyer than even ones.",
+        "detail": "Ian, 2026-11-08: 'I'm not seeing any differences in the background color of the odd and even shots.' The page background showed through the shot boxes and drowned the v3.5.07 shading; the boxes are more solid now and odd shots carry a clear grey wash.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.07",
     "staged_on": "2026-11-08",
     "entries": [

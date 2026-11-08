@@ -41910,8 +41910,8 @@ function adminBrandsSave(changed) {
 // (k.other, on this page only) and the other role's words come back, so Cut here then UnCut gives the words back.
 // ============================================================
 var VL_BOX = 'background:rgba(var(--panel-rgb),0.7);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:var(--radius-lg);';
-var VL_SHOT = 'background:rgba(var(--panel-rgb),0.35);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:var(--radius-lg);padding:10px 12px 12px;';
-var VL_SHOT_ODD = 'background:linear-gradient(rgba(var(--accent-text-rgb),0.07),rgba(var(--accent-text-rgb),0.07)),rgba(var(--panel-rgb),0.35);';   // v3.5.07: shots 1, 3, 5... a little greyer
+var VL_SHOT = 'background:rgba(var(--panel-rgb),0.72);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:var(--radius-lg);padding:10px 12px 12px;';   // v3.5.08: more solid, so the page background no longer drowns the shading
+var VL_SHOT_ODD = 'background:linear-gradient(rgba(150,150,150,0.16),rgba(150,150,150,0.16)),rgba(var(--panel-rgb),0.72);';   // v3.5.07: shots 1, 3, 5... greyer (v3.5.08: a clear grey wash; Ian could not see 0.07)
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
 var VL = { models: null, episodes: [], openId: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, saving: false, savePending: false, waiters: [],
