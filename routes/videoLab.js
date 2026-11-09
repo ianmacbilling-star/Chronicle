@@ -313,6 +313,9 @@ function ensureTables() {
       await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS ' + c);
     }
     await db.exec('ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS episode_id INTEGER');
+    // v3.5.34 -- TD-1115: a shot's own video mode ('' = the episode's model, 'reference', 'keyframes') and its pre-production check.
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS mode TEXT');
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS precheck TEXT');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_image_jobs_episode ON image_jobs(episode_id)');
   })();
   _tablesReady.catch(function () { _tablesReady = null; });
@@ -322,10 +325,21 @@ function ensureTables() {
 // ---- reading an episode ----------------------------------------------------------------------
 // What a shot will be made from now: the model, the sound, the overall direction and every keyframe with its move's
 // words and length. A take records the same signature, so a take made before an edit shows as out of date.
+// v3.5.34 -- TD-1115. A SHOT'S VIDEO MODE (Ian, 2026-11-09: "that video mode option at the top of the shot in a drop down").
+// '' follows the episode's model. 'reference' / 'keyframes' pick the matching model: the episode's own when it is of that
+// kind, else Seedance 2.0 of the same speed (Kling and Veo have no reference model: Seedance 2.0 Fast).
+function shotMode(shot) { const m = String((shot && shot.mode) || ''); return m === 'reference' || m === 'keyframes' ? m : ''; }
+function shotModelKey(epModel, mode) {
+  const key = MODELS[epModel] ? epModel : DEFAULT_MODEL, m = MODELS[key];
+  if (mode === 'reference' && !m.reference) return key === 'seedance2' ? 'seedance2ref' : 'seedance2reffast';
+  if (mode === 'keyframes' && m.reference) return key === 'seedance2ref' ? 'seedance2' : 'seedance2fast';
+  return key;
+}
+function epForShot(ep, shot) { const k = shotModelKey(ep.model, shotMode(shot)); return k === ep.model ? ep : Object.assign({}, ep, { model: k }); }
 function shotSig(ep, kfs, shot) {
   const w = shot ? shotWords(shot) : null, r = shot ? shotRefs(shot) : null;
   return shortSig(JSON.stringify([ep.model, !!ep.sound, String(ep.overall || '')].concat(kfs.map(function (k) { return [k.image_url, k.prompt || '', k.duration || '']; }))
-    .concat(w ? [w] : []).concat(r ? [r] : [])));   // v3.5.19: the shot's own words too; v3.5.22: and its references
+    .concat(w ? [w] : []).concat(r ? [r] : []).concat(shot && shotMode(shot) ? ['mode:' + shotMode(shot)] : [])));   // v3.5.19: the shot's own words too; v3.5.22: and its references; v3.5.34: its mode, when set
 }
 // v3.5.19 -- A SHOT IN PLAIN WORDS. A shot's words as stored (JSON in actions and lines), or null for a shot never saved
 // this way. lines: [{ who, text, when (1-based action number, or 0 for any time), off (heard off-screen) }].
@@ -397,6 +411,10 @@ async function loadEpisodes(db, where, params) {
       s.words = w || legacyWords(s.keyframes, MODELS[ep.model]);
       s.words_saved = !!w;
       s.refs = shotRefs(s);   // v3.5.22: null = never chosen (the page starts from the characters named)
+      s.mode = shotMode(s);   // v3.5.34
+      s.model_used = shotModelKey(ep.model, s.mode);
+      s.precheck = parseJson(s.precheck, null);
+      if (s.precheck && typeof s.precheck === 'object') s.precheck.stale = s.precheck.sig !== s.sig; else s.precheck = null;
       s.takes = takes.filter(function (t) { return t.shot_id === s.id; });
       s.takes.forEach(function (t) {
         t.moves = moves.filter(function (m) { return m.take_id === t.id; });
@@ -547,11 +565,13 @@ async function writeShots(tx, ep, shotsIn) {
       else await tx.prepare('UPDATE shots SET position = ?, cut_style = ?, name = ? WHERE id = ?').run(pos, s.cut_style, s.name || null, sid);
       if (s.words) await writeWords(tx, sid, s.words);   // v3.5.19 (a save without words keeps them)
       if (s.refs) await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(s.refs), sid);   // v3.5.22
+      if (s.mode !== undefined) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode || null, sid);   // v3.5.34
     } else {
       const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style, name) VALUES (?, ?, ?, ?)').run(ep.id, pos, s.cut_style, s.name || null);
       sid = r.lastInsertRowid;
       if (s.words) await writeWords(tx, sid, s.words);
       if (s.refs) await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(s.refs), sid);
+      if (s.mode) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode, sid);   // v3.5.34
     }
     keep[sid] = true;
     for (let i = 0; i < s.keyframes.length; i++) {
@@ -607,7 +627,7 @@ function cleanShots(list, m) {
     const room = MAX_KEYFRAMES - n;
     if (room <= 0 || !kfs.length) return;
     n += Math.min(room, kfs.length);
-    out.push({ id: parseInt(s.id, 10) || null, refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
+    out.push({ id: parseInt(s.id, 10) || null, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
 }
@@ -731,7 +751,7 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
         const w = s.words || {};
-        return { name: s.name, cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+        return { name: s.name, mode: s.mode || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m));
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -1014,7 +1034,8 @@ async function takesFull(db, shotId) {
   const c = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ?').get(shotId);
   return Number(c && c.n) >= MAX_TAKES;
 }
-async function makeShot(db, req, ep, shot, shotNo) {
+async function makeShot(db, req, ep0, shot, shotNo) {
+  const ep = epForShot(ep0, shot);   // v3.5.34: the shot's own mode
   const m = MODELS[ep.model];
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
   const cast = m && m.reference ? await castRefs(db, ep, true) : null;
@@ -1038,7 +1059,7 @@ async function makeShot(db, req, ep, shot, shotNo) {
   const cost = Math.round(plan.moves.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
   const directions = JSON.stringify({ overall: ep.overall || '', style: ep.style, moves: plan.moves.map(function (x) { return { own: x.own, duration: x.duration, images: x.images || undefined, cast: x.cast || undefined }; }) });
   const ins = await db.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, est_cost_usd) VALUES (?, ?, ?, 'making', ?, ?, ?, ?, ?) ON CONFLICT (shot_id) WHERE status = 'making' DO NOTHING")
-    .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep, kfs, shot), directions, cost);
+    .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep0, kfs, shot), directions, cost);   // v3.5.34: signed as the episode reads it
   if (!ins.lastInsertRowid) return { status: 409, error: 'Shot ' + shotNo + ' is already being made.' };
   const takeId = ins.lastInsertRowid;
   await db.prepare('UPDATE shots SET chosen_take_id = ? WHERE id = ?').run(takeId, shot.id);
@@ -1099,7 +1120,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id)) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
-      const p = planShot(ep, kfs, shots[i], i + 1, null);   // v3.5.16; v3.5.19
+      const p = planShot(epForShot(ep, shots[i]), kfs, shots[i], i + 1, null);   // v3.5.16; v3.5.19; v3.5.34: the shot's mode
       if (p.error) return res.status(400).json({ error: p.error });
     }
     const errors = [];
@@ -1974,7 +1995,7 @@ async function runningWriter(db, episodeId) {
 }
 function jobView(j) {
   if (!j) return null;
-  return { id: j.id, kind: j.kind === 'shots' ? 'shots' : 'notes', status: j.status, error: j.error || null, tokens_charged: j.tokens_charged || 0, style: j.style, started_at: j.started_at, finished_at: j.finished_at };
+  return { id: j.id, kind: j.kind === 'shots' ? 'shots' : (j.kind === 'precheck' ? 'precheck' : 'notes'), status: j.status, error: j.error || null, tokens_charged: j.tokens_charged || 0, style: j.style, started_at: j.started_at, finished_at: j.finished_at };
 }
 async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
   const db = await getDb();
@@ -2209,10 +2230,278 @@ router.get('/episodes/:id/shot-list', requireAuth, requireVideo, async function 
       const ctx = await shotListContext(db, ep);
       if (ctx.pictures.length) { const pr = await shotListPrices(db); estimate = estimateShotList(withMode(ctx, 'notes'), pr); estimateShots = estimateShotList(withMode(ctx, 'shots'), pr); }
     } catch (e) { estimate = null; estimateShots = null; }
-    res.json({ job: jobView(j), estimate: estimate, estimate_shots: estimateShots, episode: (j && j.status !== 'running') ? await loadEpisode(db, ep.id) : null });
+    let estimatePrecheck = null;
+    try { estimatePrecheck = { tokens: await precheckTokens(db) }; } catch (e) { estimatePrecheck = null; }   // v3.5.34
+    res.json({ job: jobView(j), estimate: estimate, estimate_shots: estimateShots, estimate_precheck: estimatePrecheck, episode: (j && j.status !== 'running') ? await loadEpisode(db, ep.id) : null });
   } catch (e) {
     console.error('[video] shot list read error:', e && e.message);
     res.status(500).json({ error: 'Could not read the shot list.' });
+  }
+});
+
+// =================================================================================================
+// v3.5.34 -- TD-1115. THE PRE-PRODUCTION CHECK (spec: claude/PREPRODUCTION_CHECK_SPEC.md). Ian, 2026-11-09: "Couldn't the AI
+// see this in a much cheaper pass and warn about it before spending 5 dollars on a video". Order of work: Create Shots,
+// Director's Notes, Pre-production check; it can run at any time. The Director looks at every shot (its pictures, words,
+// references and mode) with the story, and says per shot which mode suits it and what will go wrong, each with a fix where
+// there is one. The pictures' shape is measured here, exactly. Stored on each shot (shots.precheck) with the shot's
+// signature, so a shot changed since shows its findings as out of date. 1 token (app_settings.video_precheck_tokens),
+// charged only once the findings are saved. Runs as a Director job (kind 'precheck'), one at a time with the others.
+// =================================================================================================
+const PC_KINDS = ['gap', 'mode', 'continuity', 'words', 'reference', 'style', 'aspect', 'other'];
+const PC_BOXES = ['start', 'actions', 'camera', 'end', 'sounds', 'around'];
+const PC_MAX_FINDINGS = 8;
+const PC_WIDE = 1.6;   // a picture narrower than this (width / height) is not wide: the video is 16:9
+async function precheckTokens(db) {
+  let v = null;
+  try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_precheck_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
+  return (Number.isFinite(v) && v >= 1) ? v : 1;
+}
+// A picture for the Director (512 px JPEG) and its real shape.
+async function pcShape(url) {
+  try {
+    if (!url || !storage.isOurPublicUrl(url)) return null;
+    const axios = require('axios'), sharp = require('sharp');
+    const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000, maxContentLength: 25 * 1024 * 1024, maxBodyLength: 25 * 1024 * 1024 });
+    const buf = Buffer.from(resp.data);
+    const meta = await sharp(buf).rotate().metadata();
+    const out = await sharp(buf).rotate().resize({ width: SL_IMAGE_PX, height: SL_IMAGE_PX, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 72 }).toBuffer();
+    let w = meta.width || 0, h = meta.height || 0;
+    if (meta.orientation && meta.orientation >= 5) { const x = w; w = h; h = x; }
+    return { b64: out.toString('base64'), w: w, h: h };
+  } catch (e) {
+    console.warn('[video] pre-production check: could not read a picture (' + (e && e.message) + ')');
+    return null;
+  }
+}
+async function precheckContext(db, ep) {
+  const ctx = await shotListContext(db, ep);
+  const pool = await refsPool(db, ep).catch(function () { return { characters: [], assets: [] }; });
+  ctx.mode = 'precheck';
+  ctx.sig = cutSig(ctx.shots);
+  ctx.pool = pool;
+  ctx.info = ctx.shots.map(function (s) {
+    const w = shotWords(s) || legacyWords(s.keyframes, MODELS[ep.model]);
+    const key = shotModelKey(ep.model, shotMode(s)), mm = MODELS[key];
+    return { id: s.id, name: s.name || '', words: w, refs: refsToSend(ep, w, shotRefs(s), pool, 12).map(function (p) { return p.name; }),
+      mode: mm.reference ? 'reference' : 'keyframes', modeSet: shotMode(s), model: mm.label + (mm.reference ? ' (Reference)' : ' (Keyframes)') };
+  });
+  return ctx;
+}
+function precheckRequest(ctx, images) {
+  const N = ctx.pictures.length;
+  const system = directorHead(ctx) +
+    'YOUR JOB NOW: THE PRE-PRODUCTION CHECK. The shots, their words and their pictures are ready. Every take costs real money, so before any video is made, look at each shot and say plainly what will go wrong and how to fix it. Only real problems: if a shot is fine, say nothing about it.\n\n' +
+    'THE TWO VIDEO MODES\n' +
+    '- REFERENCE: the model is given the shot\'s pictures and the cast\'s reference pictures as references and directs the shot itself from the words. The first picture is how it opens; later pictures only show the place, the light and who is there. Best when the pictures disagree on place, poses, facing or who is where.\n' +
+    '- KEYFRAMES: the video moves from each picture EXACTLY to the next one, morphing the first into the second. Best only when neighbouring pictures match closely: the same place, the same people in nearly the same poses and positions, a small change. When neighbouring pictures differ in place, in someone\'s pose or facing (a man carried with his head to the left in one picture and lying with his head to the right in the next), in who is holding what, or in who is where, a Keyframes take morphs nonsense.\n\n' +
+    'WHAT TO LOOK FOR, SHOT BY SHOT\n' +
+    '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
+    '2. gap: the story says something happens that the video must show and no picture covers (between two pictures of a shot, or between two shots). Read the story: if it explains a change (someone healed in turn, a later moment), that is not a mistake, but the video still has to get from one picture to the next. Suggest the missing picture: say after which picture number it goes and describe it in one or two sentences.\n' +
+    '3. continuity: a person or prop that appears from nowhere, someone who leaves and is needed again in the same shot (a cut is the reliable fix), a change of place inside one shot.\n' +
+    '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end. Offer replacement words for the one box to change.\n' +
+    '5. reference: someone clearly on screen who is not among the references sent.\n' +
+    '6. style: a picture that does not look like the version\'s art style' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' or like the other pictures.\n\n' +
+    'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
+    'ANSWER WITH ONLY THIS JSON, no other text:\n' +
+    '{"shots": [{"shot": 1, "mode": "reference", "mode_why": "...", "findings": [{"kind": "gap", "text": "...", "fix": {"type": "add_picture", "after_picture": 3, "describe": "..."}}]}]}\n' +
+    'One entry per shot, ' + ctx.shots.length + ' in all, in order. "kind" is one of: gap, mode, continuity, words, reference, style, other. "fix" is optional and is one of:\n' +
+    '{"type": "words", "box": "start|actions|camera|end|sounds|around", "text": "the whole new text of that box (for actions, one action per line)"}\n' +
+    '{"type": "add_reference", "name": "a character\'s exact name"}\n' +
+    '{"type": "mode", "mode": "reference|keyframes"}\n' +
+    '{"type": "add_picture", "after_picture": <picture number>, "describe": "what the missing picture shows"}';
+  const content = [];
+  const head = [];
+  head.push('EPISODE: ' + String(ctx.ep.name || '') + (ctx.sessionName ? ' (session "' + ctx.sessionName + '")' : '') + '.');
+  if (ctx.artStyle) head.push('THE VERSION\'S ART STYLE: ' + ctx.artStyle + '.');
+  head.push('THE STYLE OF THIS VIDEO: ' + ctx.style.label + '. ' + ctx.style.instructions);
+  if (ctx.story.text) head.push('\nTHE STORY OF THIS SESSION' + (ctx.story.trimmed ? ' (its start)' : '') + ':\n' + ctx.story.text);
+  if (ctx.cast.length) {
+    head.push('\nTHE CAST:');
+    ctx.cast.forEach(function (c) { head.push('- ' + String(c.name || '').trim() + (c.cls ? ', ' + String(c.cls).trim() : '') + (c.description ? ': ' + String(c.description).replace(/\s+/g, ' ').trim().slice(0, 300) : '')); });
+  }
+  const sent = images.filter(Boolean).length;
+  head.push('\nTHE SHOTS, IN ORDER (' + ctx.shots.length + ' shots, ' + N + ' pictures numbered across the episode)' + (sent < N ? '. Only ' + sent + ' pictures are shown; the others are described in words only.' : '.'));
+  content.push({ type: 'text', text: head.join('\n') });
+  let n = 0;
+  ctx.shots.forEach(function (s, si) {
+    const inf = ctx.info[si], w = inf.words, first = n + 1, last = n + s.keyframes.length;
+    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '. Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
+    lines.push('References sent: ' + (inf.refs.length ? inf.refs.join(', ') : 'none') + '.');
+    lines.push('start: ' + (w.start || '(empty)'));
+    lines.push('actions: ' + (w.actions.length ? w.actions.map(function (a, i) { return (i + 1) + '. ' + a; }).join(' ') : '(empty)'));
+    if (w.lines.length) lines.push('lines: ' + w.lines.map(function (l) { return (String(l.who || '').trim() || 'a voice off-screen') + (l.off ? ' (off-screen)' : '') + ': "' + l.text + '"' + (l.when ? ' during action ' + l.when : ''); }).join('; '));
+    lines.push('camera: ' + (w.camera || '(empty)'));
+    lines.push('end: ' + (w.end || '(empty)'));
+    if (w.sounds) lines.push('sounds: ' + w.sounds);
+    if (w.around) lines.push('around: ' + w.around);
+    content.push({ type: 'text', text: lines.join('\n') });
+    s.keyframes.forEach(function () {
+      const p = ctx.pictures[n];
+      content.push({ type: 'text', text: 'Picture ' + (n + 1) + '. ' + p.words });
+      if (images[n]) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: images[n] } });
+      n++;
+    });
+  });
+  content.push({ type: 'text', text: 'Now the pre-production check for these ' + ctx.shots.length + ' shots, as JSON.' });
+  return { system: system, content: content, max_tokens: Math.min(12000, 1200 + ctx.shots.length * 700) };
+}
+function pcText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }
+function parsePrecheck(raw, ctx) {
+  const j = readJson(raw);
+  if (!j || !Array.isArray(j.shots)) return { error: 'no shots in the answer' };
+  const N = ctx.pictures.length, names = {};
+  (ctx.pool.characters || []).concat(ctx.pool.assets || []).forEach(function (c) { if (c && c.name) names[String(c.name).trim().toLowerCase()] = String(c.name).trim(); });
+  const out = ctx.shots.map(function () { return null; });
+  j.shots.forEach(function (x, i) {
+    if (!x) return;
+    const si = parseInt(x.shot, 10) >= 1 && parseInt(x.shot, 10) <= ctx.shots.length ? parseInt(x.shot, 10) - 1 : i;
+    if (si < 0 || si >= ctx.shots.length || out[si]) return;
+    const mode = x.mode === 'reference' || x.mode === 'keyframes' ? x.mode : null;
+    const findings = [];
+    (Array.isArray(x.findings) ? x.findings : []).forEach(function (f) {
+      if (!f || findings.length >= PC_MAX_FINDINGS) return;
+      const text = pcText(f.text, 500);
+      if (!text) return;
+      const kind = PC_KINDS.indexOf(f.kind) >= 0 && f.kind !== 'aspect' ? f.kind : 'other';
+      let fix = null;
+      const fx = f.fix;
+      if (fx && fx.type === 'words' && PC_BOXES.indexOf(fx.box) >= 0 && String(fx.text || '').trim()) fix = { type: 'words', box: fx.box, text: String(fx.text).replace(/\r\n?/g, '\n').trim().slice(0, 1500) };
+      else if (fx && fx.type === 'add_reference' && names[String(fx.name || '').trim().toLowerCase()]) fix = { type: 'add_reference', name: names[String(fx.name).trim().toLowerCase()] };
+      else if (fx && fx.type === 'mode' && (fx.mode === 'reference' || fx.mode === 'keyframes')) fix = { type: 'mode', mode: fx.mode };
+      else if (fx && fx.type === 'add_picture' && parseInt(fx.after_picture, 10) >= 1 && parseInt(fx.after_picture, 10) <= N) fix = { type: 'add_picture', after_picture: parseInt(fx.after_picture, 10), describe: pcText(fx.describe, 500) };
+      findings.push({ kind: kind, text: text, fix: fix });
+    });
+    out[si] = { mode: mode, mode_why: pcText(x.mode_why, 400), findings: findings };
+  });
+  const missing = out.filter(function (x) { return !x; }).length;
+  if (missing > Math.floor(ctx.shots.length / 2)) return { error: missing + ' of ' + ctx.shots.length + ' shots missing from the answer' };
+  return { shots: out.map(function (x) { return x || { mode: null, mode_why: '', findings: [] }; }) };
+}
+async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
+  const db = await getDb();
+  const JFN = 'Pre-production check job ' + jobId + ' (episode ' + episodeId + ')';
+  let inTok = 0, outTok = 0, result = null, lastErr = '';
+  const shapes = [];
+  try {
+    for (let i = 0; i < ctx.pictures.length; i++) shapes.push(await pcShape(ctx.pictures[i].url));
+    const images = shapes.map(function (s, i) { return s && i < SL_MAX_IMAGES ? s.b64 : null; });
+    const req = precheckRequest(ctx, images);
+    for (let attempt = 1; attempt <= 2 && !result; attempt++) {
+      const r = await callShotListModel(key, req);
+      inTok += Number((r.usage && r.usage.input_tokens) || 0); outTok += Number((r.usage && r.usage.output_tokens) || 0);
+      if (r.error) { lastErr = r.error; vlDebug(userId, 'warn', JFN, 'Call ' + attempt + ' failed: ' + r.error, { usage: r.usage }); continue; }
+      const p = parsePrecheck(r.text, ctx);
+      if (p.error) { lastErr = r.truncated ? 'it ran out of room' : p.error; vlDebug(userId, 'warn', JFN, 'Call ' + attempt + ': the reply did not pass the checks (' + lastErr + ')', { reply_start: String(r.text || '').slice(0, 600) }); continue; }
+      result = p;
+    }
+  } catch (e) { lastErr = (e && e.message) || 'unknown error'; vlDebug(userId, 'error', JFN, 'The job threw: ' + lastErr, { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' }); }
+  const usd = Math.round(usdFor(prices, inTok, outTok) * 10000) / 10000;
+  if (!result) {
+    await db.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, finished_at = NOW() WHERE id = ? AND status = 'running'")
+      .run(('The pre-production check came back incomplete (' + lastErr + '). Nothing was charged; try again.').slice(0, 1000), inTok, outTok, usd, jobId);
+    console.error('[video] ' + JFN + ' failed: ' + lastErr + ' ($' + usd + ' to Campaignia)');
+    return;
+  }
+  // The shape of every picture, measured: one finding per shot listing the pictures that are not wide.
+  let n = 0;
+  ctx.shots.forEach(function (s, si) {
+    const narrow = [];
+    s.keyframes.forEach(function () { const sh = shapes[n]; if (sh && sh.w && sh.h && sh.w / sh.h < PC_WIDE) narrow.push((n + 1) + ' (' + sh.w + ' x ' + sh.h + ')'); n++; });
+    if (narrow.length) result.shots[si].findings.unshift({ kind: 'aspect', text: (narrow.length === 1 ? 'Picture ' + narrow[0] + ' is not wide' : 'Pictures ' + narrow.join(', ') + ' are not wide') + '. The video is wide (16:9), so the model will crop or stretch ' + (narrow.length === 1 ? 'it' : 'them') + '. Use Expand on the picture to redraw it wide.', fix: null });
+  });
+  let filled = false;
+  await db.transaction(async function (tx) {
+    const claim = await tx.prepare("UPDATE episode_writer_jobs SET status = 'done', input_tokens = ?, output_tokens = ?, cost_usd = ?, finished_at = NOW() WHERE id = ? AND status = 'running'").run(inTok, outTok, usd, jobId);
+    if (!claim.changes) return;
+    const ep = await tx.prepare('SELECT * FROM episodes WHERE id = ? FOR UPDATE').get(episodeId);
+    const shots = ep ? await tx.prepare('SELECT * FROM shots WHERE episode_id = ? ORDER BY position, id').all(episodeId) : [];
+    const kfs = ep ? await tx.prepare('SELECT * FROM keyframes WHERE episode_id = ? ORDER BY shot_id, position, id').all(episodeId) : [];
+    shots.forEach(function (s) { s.keyframes = kfs.filter(function (k) { return k.shot_id === s.id; }); });
+    const live = shots.filter(function (s) { return s.keyframes.length; });
+    if (!ep || cutSig(live) !== ctx.sig) {
+      await tx.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ? WHERE id = ?").run('The shots changed while the Director was checking them. Nothing was charged; try again.', jobId);
+      return;
+    }
+    const at = new Date().toISOString();
+    for (let i = 0; i < live.length; i++) {
+      const r = result.shots[i];
+      const pc = { sig: shotSig(ep, live[i].keyframes, live[i]), at: at, mode: r.mode, mode_why: r.mode_why,
+        findings: r.findings.map(function (f, k) { return { id: k + 1, kind: f.kind, text: f.text, fix: f.fix, done: false }; }) };
+      await tx.prepare('UPDATE shots SET precheck = ? WHERE id = ?').run(JSON.stringify(pc), live[i].id);
+    }
+    filled = true;
+  });
+  if (!filled) { vlDebug(userId, 'warn', JFN, 'Not saved (the shots changed, the episode was deleted, or the job was interrupted); nothing charged'); return; }
+  let charged = 0;
+  try {
+    const tk = require('./tokens');
+    const bal = await tk.getBalance(userId);
+    charged = Math.min(tokens, Math.max(0, bal.total));
+    if (charged > 0) await tk.spendTokens(userId, charged, { source: 'video_precheck', event_type: 'generation_spend', related_campaign_id: ctx.ep.campaign_id });
+    await tk.recordGeneration(userId, { event_type: 'video_precheck', tokens_redeemed: charged, quantity: ctx.shots.length, unit: 'shots', model: require('../config/models').TEXT_MODEL, related_campaign_id: ctx.ep.campaign_id, related_session_id: ctx.ep.session_id, cost_usd: usd });
+  } catch (e) { console.error('[video] pre-production check charge failed:', e && e.message); }
+  await db.prepare('UPDATE episode_writer_jobs SET tokens_charged = ? WHERE id = ?').run(charged, jobId);
+  const count = result.shots.reduce(function (t, s) { return t + s.findings.length; }, 0);
+  console.log('[video] ' + JFN + ': ' + count + ' finding(s) on ' + result.shots.length + ' shot(s), ' + inTok + ' in / ' + outTok + ' out, $' + usd + ', ' + charged + ' token(s)');
+  vlDebug(userId, 'info', JFN, count + ' finding(s), ' + charged + ' token(s) charged', { input_tokens: inTok, output_tokens: outTok, cost_usd: usd,
+    shots: result.shots.map(function (s) { return { mode: s.mode, findings: s.findings.map(function (f) { return f.kind + (f.fix ? '+' + f.fix.type : ''); }) }; }) });
+}
+router.post('/episodes/:id/precheck', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/episodes/' + req.params.id + '/precheck';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!(await canChange(req, ep))) return vlRefuse(req, res, FN, 404, 'Not found.', { found: !!ep, admin: !!req.vlAdmin });
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return vlRefuse(req, res, FN, 500, 'The Director is not set up on this server (ANTHROPIC_API_KEY).');
+    const ctx = await precheckContext(db, ep);
+    if (!ctx.pictures.length) return vlRefuse(req, res, FN, 400, 'This episode has no keyframes.');
+    const tokens = await precheckTokens(db);
+    const bal = await require('./tokens').getBalance(req.session.userId);
+    if (bal.total < tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'The pre-production check costs ' + tokens + ' token' + (tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
+    await retireLostJobs(db, ep.id);
+    const ins = await db.prepare("INSERT INTO episode_writer_jobs (episode_id, user_id, status, style, model, boot_id, sig, est_tokens, kind) VALUES (?, ?, 'running', ?, ?, ?, ?, ?, 'precheck') ON CONFLICT (episode_id) WHERE status = 'running' DO NOTHING")
+      .run(ep.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, ctx.sig, tokens);
+    if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'The Director is already working on this episode.');
+    const job = await db.prepare('SELECT * FROM episode_writer_jobs WHERE id = ?').get(ins.lastInsertRowid);
+    vlDebug(req.session.userId, 'info', FN, 'Pre-production check asked for', { shots: ctx.shots.length, keyframes: ctx.pictures.length, tokens: tokens, modes: ctx.info.map(function (x) { return x.mode; }) });
+    res.json({ job: jobView(job), estimate: { tokens: tokens } });
+    const prices = await shotListPrices(db);
+    runPrecheck(job.id, ep.id, req.session.userId, ctx, prices, key, tokens).catch(async function (e) {
+      console.error('[video] pre-production check job ' + job.id + ' crashed:', e && e.message);
+      try { await db.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ?, finished_at = NOW() WHERE id = ? AND status = 'running'").run('Something went wrong checking it. Nothing was charged; try again.', job.id); } catch (e2) {}
+    });
+  } catch (e) {
+    console.error('[video] pre-production check start error:', e && e.message, e && e.stack);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not start the pre-production check.' });
+  }
+});
+// A finding dealt with: its fix used, or dismissed. resig: the shot was just changed by that fix, so the check is signed
+// again to the shot as it is now and the other findings stay current.
+router.post('/shots/:id/precheck-done', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(parseInt(req.params.id, 10));
+    const ep = shot ? await db.prepare('SELECT * FROM episodes WHERE id = ?').get(shot.episode_id) : null;
+    if (!ep || !(await canChange(req, ep))) return res.status(404).json({ error: 'Not found.' });
+    const pc = parseJson(shot.precheck, null);
+    if (!pc || !Array.isArray(pc.findings)) return res.status(404).json({ error: 'This shot has not been checked.' });
+    const fid = parseInt((req.body || {}).finding, 10);
+    const f = pc.findings.filter(function (x) { return Number(x.id) === fid; })[0];
+    if (!f) return res.status(404).json({ error: 'That finding is not on this shot.' });
+    f.done = (req.body || {}).undo === true ? false : true;
+    if ((req.body || {}).resig === true) {
+      const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
+      pc.sig = shotSig(ep, kfs, shot);
+    }
+    await db.prepare('UPDATE shots SET precheck = ? WHERE id = ?').run(JSON.stringify(pc), shot.id);
+    res.json({ episode: await loadEpisode(db, ep.id) });
+  } catch (e) {
+    console.error('[video] pre-production finding error:', e && e.message);
+    res.status(500).json({ error: 'Could not save it.' });
   }
 });
 
@@ -2230,5 +2519,6 @@ module.exports._sweep = sweep;
 module.exports._stopSweep = function () { if (_timer) clearInterval(_timer); _timer = null; };
 module.exports._internals = { finishMove: finishMove, takeStatus: takeStatus, finishTakeMerge: finishTakeMerge, maybeJoinEpisode: maybeJoinEpisode, finishEpisodeJoin: finishEpisodeJoin,
   loadEpisode: loadEpisode, planMoves: planMoves, cleanShots: cleanShots, writeShots: writeShots, shotSig: shotSig, makeShot: makeShot, vlSaveSummary: vlSaveSummary };
+module.exports._precheck = { shotMode: shotMode, shotModelKey: shotModelKey, epForShot: epForShot, precheckTokens: precheckTokens, precheckContext: precheckContext, precheckRequest: precheckRequest, parsePrecheck: parsePrecheck, runPrecheck: runPrecheck, pcShape: pcShape };
 module.exports._shotList = { styleFor: styleFor, snapDuration: snapDuration, usdFor: usdFor, tokensFor: tokensFor, shotListPrices: shotListPrices, estimateShotList: estimateShotList,
   shotListContext: shotListContext, shotListRequest: shotListRequest, parseShotList: parseShotList, moveBoxText: moveBoxText, runShotList: runShotList, retireLostJobs: retireLostJobs, BOOT: SL_BOOT, structureSig: structureSig };

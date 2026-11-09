@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.34",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3534-video-preproduction-check",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: the Pre-production check, and a video mode for each shot.",
+        "detail": "Ian, 2026-11-09 (admin only while the video switch is off). A third Director button, Pre-production check (1 token), after Create Shots and Director's Notes: before any video is made the Director looks at every shot with the story and gives each shot a to-do list (missing moments, pictures that are not wide or not in the art style, words that fight the pictures, missing references, Reference or Keyframes). Each shot has a Mode menu (Same as episode, Reference, Keyframes) and a to-do button at its top right that opens the list, with fixes: Use these words, Add a reference, Switch the mode, Add a picture here, Dismiss. The icons are off the Director's buttons. Spec: claude/PREPRODUCTION_CHECK_SPEC.md.",
+        "td": [
+          "TD-1115"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.33",
     "staged_on": "2026-11-09",
     "entries": [
