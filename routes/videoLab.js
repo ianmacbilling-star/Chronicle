@@ -671,7 +671,7 @@ router.put('/episodes/:id', requireAuth, requireVideo, async function (req, res)
     const id = parseInt(req.params.id, 10);
     const ep0 = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
     if (!(await canChange(req, ep0))) return vlRefuse(req, res, FN, 404, 'Not found.', { found: !!ep0, admin: !!req.vlAdmin });
-    if (await runningWriter(db, id)) return vlRefuse(req, res, FN, 409, 'The shot list is being written; your changes can be made when it is done.');
+    if (await runningWriter(db, id, true)) return vlRefuse(req, res, FN, 409, 'The shot list is being written; your changes can be made when it is done.');
     const model = (b.model != null && MODELS[b.model]) ? b.model : (MODELS[ep0.model] ? ep0.model : DEFAULT_MODEL);
     let shots = null;
     if (b.shots != null) {
@@ -1093,7 +1093,7 @@ router.post('/shots/:id/make', requireAuth, requireVideo, async function (req, r
     const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(parseInt(req.params.id, 10));
     const ep = shot ? await db.prepare('SELECT * FROM episodes WHERE id = ?').get(shot.episode_id) : null;
     if (!ep || !(await canChange(req, ep))) return res.status(404).json({ error: 'Not found.' });
-    if (await runningWriter(db, ep.id)) return res.status(409).json({ error: 'The shot list is being written; make the shot when it is done.' });
+    if (await runningWriter(db, ep.id, true)) return res.status(409).json({ error: 'The shot list is being written; make the shot when it is done.' });
     const r = await makeShot(db, req, ep, shot, shot.position);
     const out = await loadEpisode(db, ep.id);
     if (r.error) return res.status(r.status).json({ error: r.error, episode: out });
@@ -1111,7 +1111,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
     const db = await getDb();
     const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
     if (!ep || !(await canChange(req, ep))) return res.status(404).json({ error: 'Not found.' });
-    if (await runningWriter(db, ep.id)) return res.status(409).json({ error: 'The shot list is being written; make the shots when it is done.' });
+    if (await runningWriter(db, ep.id, true)) return res.status(409).json({ error: 'The shot list is being written; make the shots when it is done.' });
     const shots = await db.prepare('SELECT s.*, t.status AS chosen_status FROM shots s LEFT JOIN takes t ON t.id = s.chosen_take_id WHERE s.episode_id = ? ORDER BY s.position, s.id').all(ep.id);
     if (!shots.length) return res.status(400).json({ error: 'This episode has no keyframes.' });
     // Check every shot first, so a missing word in shot 5 does not leave shots 1 to 4 made and the rest not.
@@ -1345,7 +1345,7 @@ router.post('/takes/:id/retouch', requireAuth, requireVideo, async function (req
     if (!kind) return vlRefuse(req, res, FN, 400, 'Choose Small fix or Bigger change.');
     if (!text) return vlRefuse(req, res, FN, 400, 'Say what to change.');
     if (x.t.status !== 'done' || !x.t.video_url) return vlRefuse(req, res, FN, 409, 'Only a finished take can be retouched.');
-    if (await runningWriter(db, x.ep.id)) return vlRefuse(req, res, FN, 409, 'The Director is working on this episode; retouch the take when it is done.');
+    if (await runningWriter(db, x.ep.id, true)) return vlRefuse(req, res, FN, 409, 'The Director is working on this episode; retouch the take when it is done.');
     const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(x.t.shot_id);
     if (await takesFull(db, shot.id)) return vlRefuse(req, res, FN, 409, 'This shot already has ' + MAX_TAKES + ' takes. Delete one to make another.');
     const mvs = await db.prepare('SELECT duration FROM moves WHERE take_id = ?').all(x.t.id);
@@ -1989,9 +1989,11 @@ async function retireLostJobs(db, episodeId) {
     }
   }
 }
-async function runningWriter(db, episodeId) {
+// v3.5.37 (Ian, 2026-11-09): editsOk -- the Pre-production check only reads the shots, so saving, making and retouching
+// go on while it runs; only Create Shots and the Director's Notes (which rewrite the shots) lock the episode.
+async function runningWriter(db, episodeId, editsOk) {
   await retireLostJobs(db, episodeId);
-  return db.prepare("SELECT id FROM episode_writer_jobs WHERE episode_id = ? AND status = 'running' LIMIT 1").get(episodeId);
+  return db.prepare("SELECT id FROM episode_writer_jobs WHERE episode_id = ? AND status = 'running'" + (editsOk ? " AND kind IS DISTINCT FROM 'precheck'" : '') + ' LIMIT 1').get(episodeId);
 }
 function jobView(j) {
   if (!j) return null;
@@ -2280,6 +2282,7 @@ async function precheckContext(db, ep) {
   const pool = await refsPool(db, ep).catch(function () { return { characters: [], assets: [] }; });
   ctx.mode = 'precheck';
   ctx.sig = cutSig(ctx.shots);
+  ctx.shotSigs = ctx.shots.map(function (s) { return shotSig(ep, s.keyframes, s); });   // v3.5.37: the shots as checked; one edited meanwhile reads as changed since
   ctx.pool = pool;
   ctx.info = ctx.shots.map(function (s) {
     const w = shotWords(s) || legacyWords(s.keyframes, MODELS[ep.model]);
@@ -2431,16 +2434,23 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     const kfs = ep ? await tx.prepare('SELECT * FROM keyframes WHERE episode_id = ? ORDER BY shot_id, position, id').all(episodeId) : [];
     shots.forEach(function (s) { s.keyframes = kfs.filter(function (k) { return k.shot_id === s.id; }); });
     const live = shots.filter(function (s) { return s.keyframes.length; });
-    if (!ep || cutSig(live) !== ctx.sig) {
+    // v3.5.37: the episode stays open during the check, so a shot may have changed meanwhile. Each shot still there gets its
+    // findings, signed to the shot as it was checked (a changed one reads "Changed since the check"); a shot removed since
+    // gets none. Only when none of the checked shots is left does the check fail, with nothing charged.
+    const liveIds = {};
+    live.forEach(function (s) { liveIds[s.id] = true; });
+    const keep = [];
+    ctx.shots.forEach(function (s, i) { if (liveIds[s.id]) keep.push(i); });
+    if (!ep || !keep.length) {
       await tx.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ? WHERE id = ?").run('The shots changed while the Director was checking them. Nothing was charged; try again.', jobId);
       return;
     }
     const at = new Date().toISOString();
-    for (let i = 0; i < live.length; i++) {
-      const r = result.shots[i];
-      const pc = { sig: shotSig(ep, live[i].keyframes, live[i]), at: at, mode: r.mode, mode_why: r.mode_why,
+    for (let x = 0; x < keep.length; x++) {
+      const i = keep[x], r = result.shots[i];
+      const pc = { sig: ctx.shotSigs[i], at: at, mode: r.mode, mode_why: r.mode_why,
         findings: r.findings.map(function (f, k) { return { id: k + 1, kind: f.kind, text: f.text, fix: f.fix, done: false }; }) };
-      await tx.prepare('UPDATE shots SET precheck = ? WHERE id = ?').run(JSON.stringify(pc), live[i].id);
+      await tx.prepare('UPDATE shots SET precheck = ? WHERE id = ?').run(JSON.stringify(pc), ctx.shots[i].id);
     }
     filled = true;
   });

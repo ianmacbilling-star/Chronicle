@@ -42335,7 +42335,7 @@ function vlEditorHTML(ep) {
   var d = VL.draft, ms = VL.models || [];
   var m = vlModel(d.model);
   if (!m) return '<div style="' + VL_DESC + '">Could not load the model list.</div>';
-  var writing = vlSlWriting(ep.id);
+  var writing = vlSlWriting(ep.id), locked = vlSlLocked(ep.id);   // v3.5.37
   var parts = [], n = 1;
   for (var si = 0; si < d.shots.length; si++) {
     parts.push(vlShotHTML(d, si, m, n));   // v3.5.15: the cut is drawn on the shot's own top border
@@ -42356,21 +42356,22 @@ function vlEditorHTML(ep) {
         '<button class="btn btn-sm vl-pin-btn" style="margin-bottom:4px;display:inline-flex;align-items:center;gap:5px;' + (ep.pinned ? 'border-color:var(--accent-bright);color:var(--accent-bright);' : '') + '" onclick="vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')">' + _vpickPinSvg(!!ep.pinned) + '<span>' + (ep.pinned ? 'Pinned' : 'Pin this episode') + '</span></button>' +   // v3.5.17
         '<button type="button" class="modal-close" title="Close this episode and go back to the episode cards" style="margin-bottom:6px;margin-left:auto;" onclick="vlCloseEpisode()">&times;</button>' +   // v3.5.33
       '</div>' +
-      vlStyleRowHTML(d, writing) +
+      vlStyleRowHTML(d, writing, locked) +
       '<div id="vl-epnote" style="' + VL_DESC + 'margin-top:4px;"></div>' +   // v3.5.33: the old "The episode" box's line
     '</div>' +
     '<div id="vl-epvideo"></div>' +
     '<div class="narrative-panel" style="margin-bottom:14px;">' +
       '<div class="narrative-block-header"><span>&#9998; Overall direction: who, where, the mood. It goes into every shot.</span></div>' +
-      '<textarea class="narrative-inline-box" id="vl-overall"' + (writing ? ' disabled' : '') + ' maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
+      '<textarea class="narrative-inline-box" id="vl-overall"' + (locked ? ' disabled' : '') + ' maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
     '</div>' +
     '<style>' + VL_HALVES_CSS + '</style>' +   // v3.5.22
     '<datalist id="vl-cast-names">' + (ep.cast || []).map(function (c) { return '<option value="' + escapeHtml(c.name) + '">'; }).join('') + '</datalist>' +   // v3.5.19: who says a line
-    '<div id="vl-shots"' + (writing ? ' style="pointer-events:none;opacity:0.55;"' : '') + '>' + parts.join('') + '</div>' +
+    (locked ? '<div style="' + VL_WARN + 'margin:0 0 8px;">' + vlSpin(12) + ' The Director is writing these shots. You can edit them when it is done.</div>' : '') +   // v3.5.37
+    '<div id="vl-shots"' + (locked ? ' style="pointer-events:none;opacity:0.55;"' : '') + '>' + parts.join('') + '</div>' +
     '<div style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
       '<span id="vl-cost" style="' + VL_DESC + 'flex:1;min-width:200px;"></span>' +
       '<span id="vl-saved" style="' + VL_DESC + '"></span>' +
-      '<button class="btn btn-primary" id="vl-go" onclick="vlMakeAll()"' + (writing ? ' disabled' : '') + ' title="Generate a take of every shot that has no take yet">Generate all shots</button>' +
+      '<button class="btn btn-primary" id="vl-go" onclick="vlMakeAll()"' + (locked ? ' disabled' : '') + ' title="Generate a take of every shot that has no take yet">Generate all shots</button>' +
     '</div>' +
     '<div id="vl-msg" style="' + VL_DESC + 'margin-top:6px;"></div>' +
   '</div>';
@@ -42406,7 +42407,7 @@ function vlReadForm() {
   return d;
 }
 function vlEdit(structural) {
-  if (VL.draft && vlSlWriting(VL.draft.id)) return;
+  if (VL.draft && vlSlLocked(VL.draft.id)) return;   // v3.5.37: open during the Pre-production check
   vlReadForm();
   if (structural) { vlFitDurations(VL.draft, vlModel(VL.draft.model)); vlRenderOpen(true); }
   else vlRefreshChecks();   // v3.5.19
@@ -42625,6 +42626,22 @@ function vlJoinShots(si) {
 function vlStatusText(s) {
   return { queued: 'Waiting to send', running: 'Being made at fal', saving: 'Saving the clip', done: 'Done', error: 'Failed' }[s] || s;
 }
+// v3.5.37 -- a spinner for a filled (gold) button: drawn in the button's own ink.
+function vlBtnSpin() { return '<span class="vl-btn-spin" style="display:inline-block;width:14px;height:14px;border:2px solid rgba(var(--ink-rgb,22,14,6),0.25);border-top-color:currentColor;border-radius:50%;animation:momentBusySpin 0.8s linear infinite;vertical-align:-2px;"></span>'; }
+// v3.5.37 -- the pressed button turns at once, before the episode is saved (the save can take a moment); the others dim.
+// Returns a function that puts the buttons back if the Director does not start.
+function vlSlBtnBusy(mode) {
+  var ids = ['shots', 'notes', 'precheck'], kept = {};
+  ids.forEach(function (m) {
+    var b = document.getElementById('vl-sl-btn-' + m); if (!b) return;
+    kept[m] = { html: b.innerHTML, dis: b.disabled, st: b.getAttribute('style') || '' };
+    b.disabled = true;
+    if (m === mode) { b.style.opacity = '1'; b.style.cursor = 'progress'; b.innerHTML = vlBtnSpin() + ' Starting...'; }
+  });
+  return function () {
+    ids.forEach(function (m) { var b = document.getElementById('vl-sl-btn-' + m), k = kept[m]; if (!b || !k) return; b.innerHTML = k.html; b.disabled = k.dis; b.setAttribute('style', k.st); });
+  };
+}
 function vlSpin(px) {
   px = px || 18;
   return '<span style="display:inline-block;width:' + px + 'px;height:' + px + 'px;border:' + Math.max(2, Math.round(px / 9)) + 'px solid rgba(var(--accent-rgb),0.25);' +
@@ -42749,7 +42766,7 @@ function vlAfterSave(msgEl, then, fail) {
 }
 function vlMakeShot(si, checked) {
   var d = VL.draft;
-  if (!d || vlSlWriting(d.id)) return;
+  if (!d || vlSlLocked(d.id)) return;
   if (!checked) { vlShapeCheck([si], function () { vlMakeShot(si, true); }); return; }   // v3.5.14: warn about pictures that are not wide
   var msg = document.getElementById('vl-msg');
   var ck = d.shots[si] && d.shots[si].ck;
@@ -42772,7 +42789,7 @@ function vlMakeShot(si, checked) {
 }
 function vlMakeAll(checked) {
   var d = VL.draft;
-  if (!d || vlSlWriting(d.id)) return;
+  if (!d || vlSlLocked(d.id)) return;
   if (!checked) {   // v3.5.14: only the shots this will make (no made or making take yet)
     var ep0 = vlFindEp(d.id), todo = [];
     d.shots.forEach(function (ds, i) { var es = vlEpShot(ep0, ds.id) || {}, t = vlChosen(es); if ((!t || (t.status !== 'done' && t.status !== 'making')) && (es.takes || []).length < VL_MAX_TAKES) todo.push(i); });   // v3.5.15: not a shot with 3 takes
@@ -42960,6 +42977,10 @@ function vlStyle(key) {
   return null;
 }
 function vlSlWriting(id) { return VL.writing != null && String(VL.writing) === String(id); }
+// v3.5.37 (Ian, 2026-11-09: "LOCK on the first two buttons but leave Pre Prod check unlocked"): Create Shots and the
+// Director's Notes rewrite the shots, so the episode is locked while they run; the Pre-production check only reads them,
+// so everything stays open (a shot changed meanwhile reads "Changed since the check" when the findings land).
+function vlSlLocked(id) { return vlSlWriting(id) && vlSlKind(VL.sl[id]) !== 'precheck'; }
 function vlHasWords(d) { return !!(String(d.overall || '').trim() || d.shots.some(function (s) { return String(s.start || '').trim() || vlActionsList(s.actions).length || s.lines.length || String(s.camera || '').trim() || String(s.end || '').trim(); })); }   // v3.5.19
 // v3.5.23 -- THE DIRECTOR (Ian, 2026-11-08: "lets start the concept of our AI Director... like our AI Editor on books").
 // Two buttons: Create Shots plans the cuts; the Director's Notes write every box of the shots as they stand.
@@ -42967,28 +42988,37 @@ var VL_TIP_SHOTS = 'The Director reads your pictures in story order and divides 
 var VL_TIP_NOTES = 'The Director gives every shot its direction: how it opens, what the characters do and say, where the camera goes, how it ends, and the sound and surroundings, plus who appears in it. Your shots stay exactly as they are. Everything the Director writes is yours to change.';
 function vlSlKind(info) { var j = info && info.job; return (j && j.kind === 'shots') ? 'shots' : ((j && j.kind === 'precheck') ? 'precheck' : 'notes'); }   // v3.5.34: precheck
 var VL_TIP_PRECHECK = 'Before any video is made, the Director looks at every shot: its pictures, words, references and video mode, with the story. Each shot gets a to-do list: pictures that are not wide or not in the art style, moments the story needs that no picture shows, words that fight the pictures, and whether Reference or Keyframes suits it. Run it after the Director\'s Notes, and again any time.';
-function vlStyleRowHTML(d, writing) {
+function vlStyleRowHTML(d, writing, locked) {   // v3.5.37: locked (Create Shots or the Notes running), the buttons in #vl-sl-btns
   var ss = VL.styles || [];
   if (!ss.length) return '';
   var cur = vlStyle(d.style) || ss[0];
   var info = VL.sl[d.id] || {};
-  var kind = writing ? vlSlKind(info) : null;
-  // v3.5.24 -- filled like Generate Story, the price on the button itself, level with the Style menu (Ian, 2026-11-08).
-  function btn(mode, icon, label, busyLabel, tip, price) {   // v3.5.34: no icons (Ian); the third, Pre-production check
-    return '<button class="btn btn-primary" id="vl-sl-btn-' + mode + '" onclick="' + (mode === 'precheck' ? 'vlPrecheck()' : 'vlWriteShotList(\'' + mode + '\')') + '"' + (writing ? ' disabled' : '') + ' title="' + escapeHtml(tip) + '" style="white-space:nowrap;flex:none;">' +
-      (kind === mode ? vlSpin(12) + ' ' + busyLabel : (icon ? icon + ' ' : '') + label + ' <span id="vl-sl-price-' + mode + '">' + escapeHtml(price) + '</span>') + '</button>';
-  }
   return '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:8px;">' +
     '<div style="flex:1;min-width:220px;"><label class="form-label" for="vl-style">Style</label>' +
-      '<select id="vl-style" class="form-input" onchange="vlStyleChange()" onblur="vlFlushSave()"' + (writing ? ' disabled' : '') + '>' + ss.map(function (x) {
+      '<select id="vl-style" class="form-input" onchange="vlStyleChange()" onblur="vlFlushSave()"' + (locked ? ' disabled' : '') + '>' + ss.map(function (x) {
         return '<option value="' + escapeHtml(x.key) + '"' + (x.key === cur.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
       }).join('') + '</select></div>' +
-    btn('shots', '', 'Create Shots', 'The Director is planning the shots...', VL_TIP_SHOTS, vlSlPriceText(info, 'shots')) +
-    btn('notes', '', 'Director\'s Notes', 'The Director is writing the notes...', VL_TIP_NOTES, vlSlPriceText(info, 'notes')) +
-    btn('precheck', '', 'Pre-production check', 'The Director is checking the shots...', VL_TIP_PRECHECK, vlSlPriceText(info, 'precheck')) +
+    '<span id="vl-sl-btns" style="display:contents;">' + vlSlBtnsHTML(d, writing) + '</span>' +
   '</div>' +
   '<div id="vl-style-desc" style="' + VL_DESC + 'margin-top:6px;">' + escapeHtml(cur.description || '') + vlStyleHint(cur, d) + '</div>' +
   '<div id="vl-sl-msg" style="' + VL_DESC + 'margin-top:4px;">' + vlSlMsgHTML(info) + '</div>';
+}
+// The Director's three buttons (v3.5.37: their own function, so they can be drawn again without the editor).
+function vlSlBtnsHTML(d, writing) {
+  var info = VL.sl[d.id] || {};
+  var kind = writing ? vlSlKind(info) : null;
+  // v3.5.24 -- filled like Generate Story, the price on the button itself, level with the Style menu (Ian, 2026-11-08).
+  function btn(mode, icon, label, busyLabel, tip, price) {   // v3.5.34: no icons (Ian); the third, Pre-production check
+    // v3.5.37 (Ian, 2026-11-09: "progress spinners on main 3 buttons... something that tells us they are working"): the
+    // working button keeps full strength with a spinner in the button's own ink (a gold spinner on the gold button did
+    // not show, and disabled dimmed it to half).
+    var on = kind === mode;
+    return '<button class="btn btn-primary" id="vl-sl-btn-' + mode + '" onclick="' + (mode === 'precheck' ? 'vlPrecheck()' : 'vlWriteShotList(\'' + mode + '\')') + '"' + (writing ? ' disabled' : '') + ' title="' + escapeHtml(tip) + '" style="white-space:nowrap;flex:none;' + (on ? 'opacity:1;cursor:progress;' : '') + '">' +
+      (on ? vlBtnSpin() + ' ' + busyLabel : (icon ? icon + ' ' : '') + label + ' <span id="vl-sl-price-' + mode + '">' + escapeHtml(price) + '</span>') + '</button>';
+  }
+  return btn('shots', '', 'Create Shots', 'The Director is planning the shots...', VL_TIP_SHOTS, vlSlPriceText(info, 'shots')) +
+    btn('notes', '', 'Director\'s Notes', 'The Director is writing the notes...', VL_TIP_NOTES, vlSlPriceText(info, 'notes')) +
+    btn('precheck', '', 'Pre-production check', 'The Director is checking the shots...', VL_TIP_PRECHECK, vlSlPriceText(info, 'precheck'));
 }
 function vlStyleHint(st, d) {
   return (st && st.speech && d && !d.sound) ? escapeHtml(' Tick The model\'s own sound to hear the lines.') : '';
@@ -43041,8 +43071,9 @@ function vlWriteShotList(mode, chained) {
   var go = function () {
     var id = d.id;
     if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
+    var unbusy = vlSlBtnBusy(mode);   // v3.5.37
     vlSave(function (saved) {
-      if (!saved) { VL.chainNotes = null; var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so the Director did not start.'; return; }
+      if (!saved) { unbusy(); VL.chainNotes = null; var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so the Director did not start.'; return; }
       VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running', kind: mode }, fresh: true });
       vlRenderOpen(true);
       fetch('/api/video-lab/episodes/' + id + '/shot-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: d.style, mode: mode, replace_takes: mode === 'shots' && nTakes > 0 }) })
@@ -43096,7 +43127,15 @@ function vlSlPoll(id) {
         if (res.ok && j && j.status === 'running') { if (vlSlWriting(id)) vlSlPoll(id); return; }
         VL.sl[id] = { estimate: res.j && res.j.estimate, estimate_shots: res.j && res.j.estimate_shots, estimate_precheck: res.j && res.j.estimate_precheck, job: j, fresh: true };
         if (res.j && res.j.episode) vlPutEp(res.j.episode);
+        var wasCheck = vlSlWriting(id) && j && j.kind === 'precheck' && VL.draft && String(VL.draft.id) === String(id);   // v3.5.37
         if (vlSlWriting(id)) VL.writing = null;
+        if (wasCheck) {   // the check only read the shots: keep what is being typed; redraw the buttons and the to-do lists only
+          var bt = document.getElementById('vl-sl-btns'); if (bt) bt.innerHTML = vlSlBtnsHTML(VL.draft, false);
+          var sm = document.getElementById('vl-sl-msg'); if (sm) sm.innerHTML = vlSlMsgHTML(VL.sl[id]);
+          vlRenderList(); vlRenderLive();
+          if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+          return;
+        }
         if (VL.draft && String(VL.draft.id) === String(id)) VL.draft = null;
         var chain = String(VL.chainNotes) === String(id) && j && j.status === 'done' && j.kind === 'shots';   // v3.5.23: Create Shots first, then the notes
         if (String(VL.chainNotes) === String(id) && !chain) VL.chainNotes = null;
@@ -43641,7 +43680,7 @@ function vlPcMsg(t) { var m = document.getElementById('vl-todo-msg'); if (m) m.t
 // A fix changes the shot, saves it, then marks the finding done and signs the check to the shot as it is now.
 function vlPcApply(si, fid, change) {
   var d = VL.draft, s = d && d.shots[si];
-  if (!s || vlSlWriting(d.id)) return;
+  if (!s || vlSlLocked(d.id)) return;
   vlReadForm();
   change(s);
   var sid = s.id;
@@ -43728,8 +43767,9 @@ function vlPrecheck() {
   if (!vlKfCount(d)) { var m0 = document.getElementById('vl-sl-msg'); if (m0) m0.textContent = 'An episode needs one keyframe at least.'; return; }
   var id = d.id;
   if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
+  var unbusy = vlSlBtnBusy('precheck');   // v3.5.37
   vlSave(function (saved) {
-    if (!saved) { var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so the Director did not start.'; return; }
+    if (!saved) { unbusy(); var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so the Director did not start.'; return; }
     VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running', kind: 'precheck' }, fresh: true });
     vlRenderOpen(true);
     fetch('/api/video-lab/episodes/' + id + '/precheck', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })

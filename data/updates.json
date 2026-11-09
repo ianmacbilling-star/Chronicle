@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.37",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3537-video-director-spinners-open-check",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: spinners on the Director's buttons; the episode stays open during the Pre-production check.",
+        "detail": "Ian, 2026-11-09. The working Director button shows a visible spinner from the moment it is pressed (before, a gold spinner on the gold button, dimmed to half). Create Shots and Director's Notes still lock the shots, now with a line saying so. The Pre-production check no longer locks anything: the episode can be edited, shots made and takes retouched while it runs; when it lands, what is being typed is kept, and a shot changed meanwhile reads Changed since the check.",
+        "td": [
+          "TD-1115"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.36",
     "staged_on": "2026-11-09",
     "entries": [
