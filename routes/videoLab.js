@@ -303,7 +303,10 @@ function ensureTables() {
     // v3.5.09 -- Retouch on a keyframe: its one-step Revert slot, and the episode a retouch job belongs to.
     await db.exec('ALTER TABLE keyframes ADD COLUMN IF NOT EXISTS prev_image_url TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS name TEXT');   // v3.5.15: a shot's own name
-    await db.exec('ALTER TABLE episode_writer_jobs ADD COLUMN IF NOT EXISTS kind TEXT');   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
+    await db.exec('ALTER TABLE episode_writer_jobs ADD COLUMN IF NOT EXISTS kind TEXT');
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS source_take_id INTEGER');   // v3.5.26: a retouch of that take
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_text TEXT');
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');   // 'small' (Kling O1 Edit) or 'big' (Seedance 2.0)   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
     // v3.5.19 -- a shot described in plain words, one set per shot (VIDEO_REFERENCE_SHOTS_SPEC section 2). actions and
     // lines are JSON; actions NULL means the shot was never saved this way (its words are still on its keyframes).
     for (const c of ['start_text TEXT', 'actions TEXT', 'lines TEXT', 'camera TEXT', 'end_text TEXT', 'sounds TEXT', 'around TEXT', 'seconds INTEGER', 'refs TEXT']) {   // refs: v3.5.22
@@ -1272,6 +1275,103 @@ router.post('/episodes/:id/keyframe-flip', requireAuth, requireVideo, async func
   } catch (e) {
     console.error('[video] keyframe flip error:', e && e.message);
     if (!res.headersSent) res.status(500).json({ error: 'Could not flip the picture.' });
+  }
+});
+
+// v3.5.26 -- RETOUCH A TAKE (TD-1112; Ian, 2026-11-08: "we are going to need a retouch for sure so build it"; spec
+// claude/VIDEO_TAKE_RETOUCH_SPEC.md). A finished take is sent with the change asked for and, if chosen, some of the shot's
+// references; what comes back is a NEW take ("retouched from take n") so the original stays. Two sizes:
+//   small: Kling O1 Edit (Standard): keeps the motion and the sound exactly; clips of 3 to 10 s; up to 4 references.
+//   big:   Seedance 2.0 reference-to-video with the take as @Video1: redraws the clip, sound included; up to 15 s.
+// Made as a one-move take through the same fal queue, webhook and sweep as every take.
+const RETOUCH = {
+  small: { label: 'Small fix', endpoint: 'fal-ai/kling-video/o1/standard/video-to-video/edit', minSecs: 3, maxSecs: 10.05, maxRefs: 4 },
+  big: { label: 'Bigger change', endpoint: 'bytedance/seedance-2.0/reference-to-video', minSecs: 2, maxSecs: 15, maxRefs: 8 }
+};
+const RETOUCH_DURATIONS = [4, 5, 6, 8, 10, 12, 15];
+function retouchCost(kind, secs) {
+  if (kind === 'small') return Math.round(0.126 * secs * 10000) / 10000;   // fal: $0.126 per second
+  // fal: (h x w x (input + output seconds) x 24 / 1024) tokens at $0.0086016 per 1,000 with a video input (720p wide)
+  return Math.round((1280 * 720 * (secs * 2) * 24 / 1024) / 1000 * 0.0086016 * 10000) / 10000;
+}
+function takeSecs(moves) { return Math.round((moves || []).reduce(function (t, m) { return t + (parseFloat(m.duration) || 0); }, 0) * 100) / 100; }
+function retouchPrompt(kind, text, refs, sound) {
+  const out = [];
+  if (kind === 'small') {
+    out.push('Edit this video. Change only this: ' + text);
+    out.push('Keep everything else exactly as it is: the same motion, timing, framing, camera, characters, place and light.');
+    refs.forEach(function (r, i) { out.push('@Image' + (i + 1) + ' is ' + r.name + ': ' + r.name + ' must look like @Image' + (i + 1) + '.'); });
+  } else {
+    out.push('Recreate @Video1 exactly, shot for shot: the same motion, timing, framing, camera, characters, place and light. Change only this: ' + text);
+    refs.forEach(function (r, i) {
+      const n = '@Image' + (i + 1);
+      out.push(r.kind === 'asset' ? n + ' is ' + r.name + ': it must look like ' + n + ' whenever it is on screen.' : n + ' is ' + r.name + ': ' + r.name + '\'s face, hair, build, clothes and gear must match ' + n + ' whenever ' + r.name + ' is on screen.');
+    });
+    if (sound) out.push('Keep the same voices, words and sounds as @Video1; no one speaks who does not speak in @Video1.');
+  }
+  return out.join('\n');
+}
+router.post('/takes/:id/retouch', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/takes/' + req.params.id + '/retouch';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
+    if (!x.ep || !(await canChange(req, x.ep))) return vlRefuse(req, res, FN, 404, 'Not found.');
+    const b = req.body || {};
+    const kind = b.size === 'big' ? 'big' : b.size === 'small' ? 'small' : null;
+    const text = String(b.text || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+    if (!kind) return vlRefuse(req, res, FN, 400, 'Choose Small fix or Bigger change.');
+    if (!text) return vlRefuse(req, res, FN, 400, 'Say what to change.');
+    if (x.t.status !== 'done' || !x.t.video_url) return vlRefuse(req, res, FN, 409, 'Only a finished take can be retouched.');
+    if (await runningWriter(db, x.ep.id)) return vlRefuse(req, res, FN, 409, 'The Director is working on this episode; retouch the take when it is done.');
+    const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(x.t.shot_id);
+    if (await takesFull(db, shot.id)) return vlRefuse(req, res, FN, 409, 'This shot already has ' + MAX_TAKES + ' takes. Delete one to make another.');
+    const mvs = await db.prepare('SELECT duration FROM moves WHERE take_id = ?').all(x.t.id);
+    const secs = takeSecs(mvs);
+    const R = RETOUCH[kind];
+    if (secs < R.minSecs || secs > R.maxSecs) return vlRefuse(req, res, FN, 400, kind === 'small'
+      ? 'A Small fix works on takes of 3 to 10 seconds; this one is ' + secs + ' s. Use Bigger change.'
+      : 'This take is ' + secs + ' s; a retouch works on takes of up to 15 seconds.');
+    const hook = webhookUrl();
+    if (!hook) return vlRefuse(req, res, FN, 500, 'PUBLIC_BASE_URL is not set, so fal cannot report back.');
+    // the references: those asked for, checked against the version's cast and assets (rights, our storage)
+    const pool = await refsPool(db, x.ep);
+    const refs = Array.isArray(b.refs) ? refsToSend(x.ep, null, cleanRefs(b.refs), pool, R.maxRefs) : [];
+    const sound = !!x.t.sound;
+    const prompt = retouchPrompt(kind, text, refs, sound);
+    let input;
+    let duration = String(secs);
+    if (kind === 'small') {
+      input = { prompt: prompt, video_url: x.t.video_url, keep_audio: true };
+      if (refs.length) input.image_urls = refs.map(function (r) { return r.url; });
+    } else {
+      const d = RETOUCH_DURATIONS.reduce(function (best, v) { return Math.abs(v - secs) < Math.abs(best - secs) ? v : best; }, RETOUCH_DURATIONS[0]);
+      duration = String(d);
+      input = { prompt: prompt, video_urls: [x.t.video_url], resolution: '720p', aspect_ratio: VIDEO_ASPECT, duration: duration, generate_audio: sound };
+      if (refs.length) input.image_urls = refs.map(function (r) { return r.url; });
+    }
+    const cost = retouchCost(kind, secs);
+    const directions = JSON.stringify({ retouch: { from: x.t.id, kind: kind, text: text, refs: refs.map(function (r) { return r.name; }) } });
+    const ins = await db.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, est_cost_usd, source_take_id, retouch_text, retouch_kind) VALUES (?, ?, ?, 'making', ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (shot_id) WHERE status = 'making' DO NOTHING")
+      .run(x.ep.id, shot.id, req.session.userId, x.t.model, sound, x.t.sig, directions, cost, x.t.id, text, kind);
+    if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'A take of this shot is already being made.');
+    const takeId = ins.lastInsertRowid;
+    const mv = await db.prepare('INSERT INTO moves (take_id, episode_id, position, start_url, end_url, prompt, model, endpoint, duration, sound, status, est_cost_usd) VALUES (?, ?, 1, ?, NULL, ?, ?, ?, ?, ?, ?, ?)')
+      .run(takeId, x.ep.id, x.t.video_url, prompt, 'retouch-' + kind, R.endpoint, duration, sound, 'queued', cost);
+    vlDebug(req.session.userId, 'info', FN, 'Retouch of take ' + x.t.id + ' (' + R.label + ', ' + R.endpoint + ') as take ' + takeId, { kind: kind, seconds: secs, est_cost_usd: cost,
+      video: vlShortUrl(x.t.video_url), refs: refs.map(function (r) { return { name: r.name, kind: r.kind, url: vlShortUrl(r.url) }; }), input: Object.assign({}, input, { prompt: undefined }), prompt: prompt });
+    try {
+      const sub = await falClient().queue.submit(R.endpoint, { input: input, webhookUrl: hook });
+      await db.prepare("UPDATE moves SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, mv.lastInsertRowid);
+    } catch (e) {
+      await db.prepare("UPDATE moves SET status = 'error', error = ?, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(('fal refused it: ' + falErrorText(e)).slice(0, 1000), mv.lastInsertRowid);
+    }
+    await takeStatus(db, takeId);
+    res.json({ episode: await loadEpisode(db, x.ep.id), take: takeId });
+  } catch (e) {
+    console.error('[video] retouch take error:', falErrorText(e));
+    if (!res.headersSent) res.status(500).json({ error: 'Could not start the retouch: ' + falErrorText(e) });
   }
 });
 

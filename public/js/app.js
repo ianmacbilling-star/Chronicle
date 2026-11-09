@@ -42569,7 +42569,7 @@ function vlTakeProgress(t) {
   if (t.merge_status === 'running' || t.merge_status === 'saving') return 'Joining ' + mv.length + ' parts';
   return mv.length > 1 ? 'Making: ' + done + ' of ' + mv.length + ' parts' : 'Being made';
 }
-function vlTakeCardHTML(t, chosen, n) {
+function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
     ? '<video src="' + escapeHtml(t.video_url) + '" controls preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'
@@ -42582,7 +42582,8 @@ function vlTakeCardHTML(t, chosen, n) {
     '<div style="display:flex;gap:4px;align-items:center;margin-top:5px;flex-wrap:wrap;">' +
       '<button type="button" class="vl-pin vl-take-pin" title="' + (chosen ? 'Pinned: the take this shot uses in the episode' : 'Pin this take: use it in the episode') + '" ' + (t.status === 'done' && !chosen ? 'onclick="vlChooseTake(' + t.id + ')"' : 'disabled') +
         ' style="' + VL_PIN + 'cursor:' + (t.status === 'done' && !chosen ? 'pointer' : 'default') + ';color:' + (chosen ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.45)') + ';">' + _vpickPinSvg(chosen) + '</button>' +   // v3.5.17: the standard pin
-      '<span style="' + VL_DESC + 'flex:1;">Take ' + n + (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : '') + '</span>' +
+      '<span style="' + VL_DESC + 'flex:1;">Take ' + n + (t.source_take_id ? ' <span title="' + escapeHtml('Retouched: ' + (t.retouch_text || '')) + '">&middot; retouched from ' + (fromN ? 'take ' + fromN : 'a deleted take') + '</span>' : '') + (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : '') + '</span>' +
+      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + t.id + ')">Retouch</button>' : '') +   // v3.5.26
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download" title="Download this take">&#8681;</a>' : '') +
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
       (!making ? '<button type="button" class="narrative-regen-btn" title="Delete this take" onclick="vlDeleteTake(' + t.id + ')">&#10005;</button>' : '') +
@@ -42603,7 +42604,10 @@ function vlShotBtnHTML(ep, ds, si) {
     : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now">Generate take</button>';
   return '<div style="display:flex;gap:10px;align-items:flex-end;">' +
     '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex:1;min-width:0;">' +
-      takes.map(function (t, i) { return vlTakeCardHTML(t, String(t.id) === String(s.chosen_take_id), i + 1); }).join('') + '</div>' +
+      takes.map(function (t, i) {
+        var fi = -1; takes.forEach(function (o, j) { if (t.source_take_id && String(o.id) === String(t.source_take_id)) fi = j; });
+        return vlTakeCardHTML(t, String(t.id) === String(s.chosen_take_id), i + 1, fi >= 0 ? fi + 1 : 0);
+      }).join('') + '</div>' +
     '<div style="flex:none;margin-left:auto;">' + btn + '</div>' +
   '</div>';
 }
@@ -42725,6 +42729,105 @@ function vlDeleteTake(id) {
   uiConfirm('Delete this take? Its video is removed from storage. This cannot be undone.', { okText: 'Delete', danger: true }).then(function (yes) {
     if (yes) vlEpAct('/api/video-lab/takes/' + id, 'DELETE', 'Could not delete the take.');
   });
+}
+
+// ---- retouch a take (v3.5.26, TD-1112) ----------------------------------------------------------
+// Ian, 2026-11-08: "we are going to need a retouch for sure so build it". A window over the page: the take, what to
+// change, the shot's references to use, Small fix or Bigger change, the price. The result is a new take.
+var VL_RT = {
+  small: { label: 'Small fix', desc: 'Keeps the motion and the sound exactly. For removing or changing one thing, a look or the light. Takes of 3 to 10 seconds.', max: 10.05, min: 3, refs: 4 },
+  big: { label: 'Bigger change', desc: 'Redraws the clip from this take, sound included (voices may change). For changes to what happens. Takes of up to 15 seconds.', max: 15, min: 2, refs: 8 }
+};
+function vlTakeSecs(t) { return Math.round((t.moves || []).reduce(function (a, m) { return a + (parseFloat(m.duration) || 0); }, 0) * 100) / 100; }
+function vlRtCost(kind, secs) { return kind === 'small' ? 0.126 * secs : (1280 * 720 * secs * 2 * 24 / 1024) / 1000 * 0.0086016; }
+function vlRtFind(takeId) {
+  var d = VL.draft, ep = d && vlFindEp(d.id);
+  if (!ep) return null;
+  for (var i = 0; i < (ep.shots || []).length; i++) {
+    var ts = ep.shots[i].takes || [];
+    for (var j = 0; j < ts.length; j++) if (String(ts[j].id) === String(takeId)) {
+      var si = -1; d.shots.forEach(function (ds, k) { if (String(ds.id) === String(ep.shots[i].id)) si = k; });
+      return { ep: ep, s: ep.shots[i], t: ts[j], n: j + 1, si: si };
+    }
+  }
+  return null;
+}
+function vlRetouchTake(takeId) {
+  var f = vlRtFind(takeId);
+  if (!f || f.t.status !== 'done' || !f.t.video_url) return;
+  vlRtClose();
+  var secs = vlTakeSecs(f.t);
+  var refs = [];
+  ((f.si >= 0 && VL.draft.shots[f.si].refs) || []).forEach(function (r) { var it = vlPoolItem(r.type, r.id); if (it && it.usable && it.url) refs.push({ type: r.type, id: r.id, name: it.name }); });
+  var canSmall = secs >= VL_RT.small.min && secs <= VL_RT.small.max;
+  VL.rt = { id: takeId, secs: secs, size: canSmall ? 'small' : 'big', refs: refs, on: {} };
+  var opt = function (k) {
+    var o = VL_RT[k], ok = secs >= o.min && secs <= o.max;
+    return '<label class="vl-rt-size" style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;cursor:' + (ok ? 'pointer' : 'not-allowed') + ';' + (ok ? '' : 'opacity:0.5;') + '">' +
+      '<input type="radio" name="vl-rt-size" value="' + k + '"' + (VL.rt.size === k ? ' checked' : '') + (ok ? '' : ' disabled') + ' onchange="vlRtSize(\'' + k + '\')" style="margin-top:3px;">' +
+      '<span><b style="color:var(--accent-pale);">' + o.label + '</b><br><span style="' + VL_DESC + '">' + escapeHtml(o.desc) + (ok ? '' : ' This take is ' + secs + ' s.') + '</span></span></label>';
+  };
+  var box = document.createElement('div');
+  box.id = 'vl-rt-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Retouch take ' + f.n + '</div><button class="modal-close" onclick="vlRtClose()">&times;</button></div>' +
+    '<video src="' + escapeHtml(f.t.video_url) + '" controls preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>' +
+    '<label class="form-label" for="vl-rt-text" style="margin-top:10px;">What do you want to change?</label>' +
+    '<textarea id="vl-rt-text" class="form-textarea" style="min-height:80px;" placeholder="e.g. Remove the second figure in the background &middot; When the diamond touches Ori, she gasps and takes a big breath &middot; Make Gubuk\'s hair match his reference"></textarea>' +
+    '<div class="form-label" style="margin-top:10px;">References to use</div>' +
+    '<div id="vl-rt-refs" style="display:flex;gap:6px;flex-wrap:wrap;">' + (refs.length ? refs.map(function (r, i) {
+      return '<label class="review-chip' + (r.type === 'asset' ? ' review-chip-asset' : '') + '" style="cursor:pointer;"><input type="checkbox" class="vl-rt-ref" data-i="' + i + '" onchange="vlRtRef(' + i + ', this)" style="margin-right:4px;">' + escapeHtml(r.name) + '</label>';
+    }).join('') : '<span style="' + VL_DESC + '">This shot has no references with a picture. Add them to the shot\'s References to use them here.</span>') + '</div>' +
+    '<div id="vl-rt-refnote" style="' + VL_DESC + 'margin-top:4px;"></div>' +
+    '<div class="form-label" style="margin-top:10px;">How big a change?</div>' +
+    '<div style="display:flex;flex-direction:column;gap:6px;">' + opt('small') + opt('big') + '</div>' +
+    '<div id="vl-rt-msg" style="' + VL_DESC + 'margin-top:8px;"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:12px;"><span id="vl-rt-price" style="' + VL_DESC + 'margin-right:auto;"></span>' +
+      '<button class="btn btn-sm" onclick="vlRtClose()">Cancel</button><button class="btn btn-sm btn-primary" id="vl-rt-go" onclick="vlRtSend()">Retouch take</button></div>' +
+  '</div>';
+  box.addEventListener('click', function (e) { if (e.target === box) vlRtClose(); });
+  document.body.appendChild(box);
+  vlRtPaint();
+  var ta = document.getElementById('vl-rt-text'); if (ta) ta.focus();
+}
+function vlRtClose() { var b = document.getElementById('vl-rt-modal'); if (b && b.parentNode) b.parentNode.removeChild(b); VL.rt = null; }
+function vlRtSize(k) { if (!VL.rt) return; VL.rt.size = k; vlRtTrim(); vlRtPaint(); }
+function vlRtRef(i, el) { if (!VL.rt) return; VL.rt.on[i] = !!el.checked; vlRtTrim(i); vlRtPaint(); }
+// Keep the ticked references within what the chosen size can take (the one just ticked stays).
+function vlRtTrim(keep) {
+  var max = VL_RT[VL.rt.size].refs, on = Object.keys(VL.rt.on).filter(function (k) { return VL.rt.on[k]; }).map(Number);
+  var note = document.getElementById('vl-rt-refnote');
+  if (note) note.textContent = '';
+  while (on.length > max) {
+    var drop = on.filter(function (k) { return k !== keep; }).pop();
+    VL.rt.on[drop] = false; on = on.filter(function (k) { return k !== drop; });
+    var cb = document.querySelector('.vl-rt-ref[data-i="' + drop + '"]'); if (cb) cb.checked = false;
+    if (note) note.textContent = VL_RT[VL.rt.size].label + ' takes up to ' + max + ' references.';
+  }
+}
+function vlRtPaint() {
+  var p = document.getElementById('vl-rt-price');
+  if (p && VL.rt) p.textContent = 'About $' + vlRtCost(VL.rt.size, VL.rt.secs).toFixed(2) + ' at fal';
+}
+function vlRtSend() {
+  var r = VL.rt; if (!r) return;
+  var ta = document.getElementById('vl-rt-text'), text = ta ? String(ta.value || '').trim() : '';
+  var msg = document.getElementById('vl-rt-msg');
+  if (!text) { if (msg) msg.textContent = 'Say what to change first.'; if (ta) ta.focus(); return; }
+  var refs = r.refs.filter(function (x, i) { return r.on[i]; }).map(function (x) { return { type: x.type, id: x.id }; });
+  var go = document.getElementById('vl-rt-go'); if (go) { go.disabled = true; go.innerHTML = vlSpin(10) + ' Starting...'; }
+  fetch('/api/video-lab/takes/' + r.id + '/retouch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ size: r.size, text: text, refs: refs }) })
+    .then(function (res) { return res.json().then(function (j) { return { ok: res.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.episode) {
+        if (go) { go.disabled = false; go.textContent = 'Retouch take'; }
+        if (msg) msg.innerHTML = '<span style="color:var(--danger);">' + escapeHtml((res.j && res.j.error) || 'Could not start the retouch.') + '</span>';
+        return;
+      }
+      vlPutEp(res.j.episode); vlRtClose(); vlRenderList(); vlRenderLive();
+    })
+    .catch(function () { if (go) { go.disabled = false; go.textContent = 'Retouch take'; } if (msg) msg.textContent = 'Could not reach the server.'; });
 }
 
 function vlStartTimer() {

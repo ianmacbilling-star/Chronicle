@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.26",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3526-retouch-take",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Retouch a finished take, as a Small fix or a Bigger change; the result is a new take.",
+        "detail": "Ian, 2026-11-08: \"Is there a way to Retouch a video that is already built?\"; \"we are going to need a retouch for sure so build it. Then we can refine it as needed.\" Spec claude/VIDEO_TAKE_RETOUCH_SPEC.md. A Retouch button on every finished take opens a window: the take, What do you want to change?, the shot's references that have a picture (tick to use), and How big a change?: Small fix (fal-ai/kling-video/o1/standard/video-to-video/edit, keep_audio on: keeps the motion and the sound; takes of 3 to 10 s; up to 4 references; $0.126 a second) or Bigger change (bytedance/seedance-2.0/reference-to-video with the take as @Video1, generate_audio as the take; length snapped to 4/5/6/8/10/12/15 s; up to 8 references; priced on input plus output seconds). The price shows before sending. The result is a new take (\"Take 2 - retouched from take 1\") made through the same fal queue, webhook and sweep as every take; the pinned take stays pinned; it counts toward the shot's 10; it is out of date when its source is. Refused: a take not finished, a shot already making a take or at 10 takes, a length outside the size's range, no words; references are re-checked on the server. takes gains source_take_id, retouch_text, retouch_kind. Debug Mode logs the full input.",
+        "td": [
+          "TD-1112"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.25",
     "staged_on": "2026-11-08",
     "entries": [
