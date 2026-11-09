@@ -42715,6 +42715,7 @@ function vlRenderLive() {
   });
   vlSetLive(document.getElementById('vl-epvideo'), 'ep', vlEpVideoHTML(ep));
   vlSetLive(document.getElementById('vl-epnote'), 'note', vlEpNoteHTML(ep));   // v3.5.33
+  vlShapeTagsRefresh();   // v3.5.35
   if (vlBusyEp(ep)) vlStartTimer();
 }
 
@@ -43130,7 +43131,7 @@ function vlRetouchSend(t, instruction, snap, refName) {
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
       var j = res.j || {};
-      if (j.job_id && (res.ok || /already being retouched/.test(j.error || ''))) { vlKfFollow(t.episodeId, j.job_id, url); return; }
+      if (j.job_id && (res.ok || /already being retouched/.test(j.error || ''))) { if (t.onStarted) t.onStarted(); vlKfFollow(t.episodeId, j.job_id, url); return; }   // v3.5.35 onStarted
       if (j.error === 'INSUFFICIENT_TOKENS') { undo(insufficientTokensHtml(escapeHtml(j.message || 'You are out of tokens.'))); return; }
       undo(escapeHtml(j.message || j.error || 'Could not retouch the keyframe.'));
     })
@@ -43197,17 +43198,39 @@ function vlRevertKf(si, ki) {
 var VL_WIDE_MIN = 1.25;
 function vlShapeOf(ratio) { return ratio < 0.95 ? 'tall' : 'square'; }
 function vlNotWide(url) { var r = VL.kfShape[url]; return typeof r === 'number' && r < VL_WIDE_MIN; }
+// v3.5.35 (Ian, 2026-11-09): a picture the Pre-production check flagged (an open shape finding) shows the tag too, even
+// when it is nearly wide (4:3); and the tag follows the shot's own mode.
+function vlPcFlagged(url) {
+  var d = VL.draft, ep = d && vlFindEp(d.id), hit = false;
+  if (!ep) return false;
+  (ep.shots || []).forEach(function (es) {
+    var pc = es && es.precheck;
+    if (pc && !pc.stale) (pc.findings || []).forEach(function (f) { if (!f.done && f.fix && f.fix.type === 'expand' && f.fix.url === url) hit = true; });
+  });
+  return hit;
+}
+function vlTagged(url) { return vlNotWide(url) || vlPcFlagged(url); }
+function vlShotIsRef(si) {
+  var d = VL.draft, s = d && d.shots[si], mm = d && vlModel(d.model);
+  if (s && s.mode) return s.mode === 'reference';
+  return !!(mm && mm.reference);
+}
 function vlShapeTagHTML(url, si, ki) {
-  var mm = VL.draft && vlModel(VL.draft.model);
-  if (mm && mm.reference) return '';   // v3.5.20: reference pictures may be any shape, so no tag (Ian: the tags cluttered the pictures)
-  var bad = vlNotWide(url);
+  if (vlShotIsRef(si)) return '';   // v3.5.20: reference pictures may be any shape, so no tag (Ian: the tags cluttered the pictures); v3.5.35 the shot's mode
+  var bad = vlTagged(url);
   return '<div class="vl-shape-tag" style="position:absolute;left:6px;right:6px;bottom:6px;display:' + (bad ? 'flex' : 'none') + ';gap:6px;align-items:center;justify-content:space-between;' +
       'background:rgba(0,0,0,0.72);border:1px solid rgba(var(--accent-rgb),0.6);border-radius:8px;padding:4px 6px 4px 9px;">' +
     '<span class="vl-shape-words" style="font-size:11px;color:var(--accent-pale);">' + (bad ? vlShapeWords(url) : '') + '</span>' +
     '<button type="button" class="btn btn-sm btn-primary" style="padding:2px 10px;font-size:11px;line-height:16px;flex:none;" onclick="vlExpand(' + si + ',' + ki + ')" title="Redraw this picture wide (16:9) in its art style, with more of the scene at the sides. One retouch; only this episode\'s copy changes; Revert brings it back.">Expand</button>' +
   '</div>';
 }
-function vlShapeWords(url) { return (vlShapeOf(VL.kfShape[url]) === 'tall' ? 'Tall picture' : 'Square picture') + ': the video is wide'; }
+function vlShapeWords(url) {
+  var r = VL.kfShape[url];
+  if (typeof r === 'number' && r >= VL_WIDE_MIN) return 'Not quite wide: may be cropped';   // v3.5.35
+  return (vlShapeOf(r) === 'tall' ? 'Tall picture' : 'Square picture') + ': the video is wide';
+}
+// v3.5.35: show or hide every picture's tag as the check's findings change (no redraw).
+function vlShapeTagsRefresh() { Array.prototype.forEach.call(document.querySelectorAll('img[data-kfu]'), vlKfMeasure); }
 // The picture has shown: note its shape, and show or hide its tag (no redraw, so nothing being typed is lost).
 function vlKfMeasure(img) {
   if (!img || !img.naturalWidth || !img.naturalHeight) return;
@@ -43216,7 +43239,7 @@ function vlKfMeasure(img) {
   VL.kfShape[url] = img.naturalWidth / img.naturalHeight;
   var wrap = img.parentNode, tag = wrap && wrap.querySelector('.vl-shape-tag');
   if (!tag) return;
-  var bad = vlNotWide(url);
+  var bad = vlTagged(url);
   tag.style.display = bad ? 'flex' : 'none';
   var w = tag.querySelector('.vl-shape-words'); if (w) w.textContent = bad ? vlShapeWords(url) : '';
 }
@@ -43563,14 +43586,14 @@ function vlTodoPaint() {
   if (!s) { vlTodoClose(); return; }
   var pc = vlShotPc(si), quick = vlChecks(si);
   var B = 'btn btn-sm', rows = [];
-  var head = '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Shot ' + (si + 1) + (s.name ? ': ' + escapeHtml(s.name) : '') + ' &middot; to do</div><button class="modal-close" onclick="vlTodoClose()">&times;</button></div>';
+  var head = '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Shot ' + (si + 1) + (s.name ? ': ' + escapeHtml(s.name) : '') + ' &middot; to do</div><button class="modal-close" onclick="vlTodoClose()">&times;</button></div>' + vlTodoModeHTML(si);   // v3.5.35 the mode here too
   if (!pc) rows.push('<div style="' + VL_DESC + 'margin:10px 0;">This shot has not been checked. <b>Pre-production check</b>, at the top, has the Director look at every shot for 1 token.</div>');
   else {
     if (pc.stale) rows.push('<div style="' + VL_WARN + 'margin:10px 0;">The shot changed since the check. Run the Pre-production check again to be sure.</div>');
     var cur = s.mode || '', ep = vlFindEp(d.id), em = vlModel(d.model), curMode = cur || (em && em.reference ? 'reference' : 'keyframes');
-    if (pc.mode) rows.push('<div style="margin:10px 0;padding:8px 10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;">' +
+    if (pc.mode && pc.mode !== curMode) rows.push('<div style="margin:10px 0;padding:8px 10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;">' +   // v3.5.35 (Ian): only when the shot is not set that way
       '<div style="font-size:13px;color:var(--accent-pale);"><b>The Director recommends ' + (pc.mode === 'reference' ? 'Reference' : 'Keyframes') + '.</b> ' + escapeHtml(pc.mode_why || '') + '</div>' +
-      (pc.mode !== curMode ? '<div style="margin-top:6px;"><button class="' + B + '" onclick="vlPcSetMode(' + si + ',\'' + pc.mode + '\', null)">Switch this shot to ' + (pc.mode === 'reference' ? 'Reference' : 'Keyframes') + '</button></div>' : '<div style="' + VL_DESC + 'margin-top:4px;">This shot is set that way.</div>') + '</div>');
+      '</div>');   // v3.5.35: the button to the recommended mode is on the Mode line above
     var open = (pc.findings || []).filter(function (f) { return !f.done; }), done = (pc.findings || []).filter(function (f) { return f.done; });
     if (!open.length) rows.push('<div style="' + VL_DESC + 'margin:8px 0;">Nothing open from the Director.</div>');
     open.forEach(function (f) { rows.push(vlPcRowHTML(si, f, false)); });
@@ -43585,6 +43608,7 @@ function vlPcRowHTML(si, f, done) {
     if (x.type === 'words') { fixBtn = '<button class="' + B + '" onclick="vlPcWords(' + si + ',' + f.id + ')">Use these words</button>'; extra = '<div style="font-size:12px;margin-top:4px;padding:6px 8px;border-left:2px solid rgba(var(--accent-rgb),0.4);white-space:pre-wrap;color:var(--accent-pale);" data-no-words>' + escapeHtml(x.text) + '</div>'; }
     else if (x.type === 'add_reference') fixBtn = '<button class="' + B + '" onclick="vlPcRef(' + si + ',' + f.id + ')">Add ' + escapeHtml(x.name) + '</button>';
     else if (x.type === 'mode') fixBtn = '<button class="' + B + '" onclick="vlPcSetMode(' + si + ',\'' + x.mode + '\',' + f.id + ')">Switch to ' + (x.mode === 'reference' ? 'Reference' : 'Keyframes') + '</button>';
+    else if (x.type === 'expand') fixBtn = '<button class="' + B + '" onclick="vlPcExpand(' + si + ',' + f.id + ')" title="Redraw this picture wide (16:9) in its art style, with more of the scene at the sides. One retouch; only this episode\'s copy changes; Revert brings it back.">Expand picture ' + Number(x.picture) + '</button>';   // v3.5.35
     else if (x.type === 'add_picture') { fixBtn = '<button class="' + B + '" onclick="vlPcPicture(' + si + ',' + f.id + ')">Add a picture here</button>'; if (x.describe) extra = '<div style="font-size:12px;margin-top:4px;color:var(--accent-pale);" data-no-words>The missing picture: ' + escapeHtml(x.describe) + '</div>'; }
   }
   return '<div style="padding:8px 0;border-top:1px solid rgba(var(--accent-rgb),0.12);' + (done ? 'opacity:0.5;' : '') + '">' +
@@ -43626,6 +43650,38 @@ function vlPcRef(si, fid) {
   vlPcApply(si, fid, function (s) { s.refs = s.refs || []; if (!s.refs.some(function (r) { return r.type === type && Number(r.id) === Number(it.id); })) s.refs.push({ type: type, id: Number(it.id) }); });
 }
 function vlPcSetMode(si, mode, fid) { vlPcApply(si, fid, function (s) { s.mode = mode; }); }
+// v3.5.35 (Ian, 2026-11-09): Expand right from the to-do list. The finding is ticked off once the retouch has started.
+function vlPcExpand(si, fid) {
+  var f = vlPcFinding(si, fid), d = VL.draft, s = d && d.shots[si];
+  if (!f || !f.fix || f.fix.type !== 'expand' || !s) return;
+  vlReadForm();
+  var k = s.kfs.filter(function (x) { return x.url === f.fix.url; })[0];
+  if (!k) { vlPcMsg('That picture is no longer in this shot (it may have been expanded or swapped already).'); return; }
+  if (VL.kfBusy[k.url]) { vlPcMsg('That picture is already being retouched.'); return; }
+  var sid = vlShotIdAt(si), id = d.id;
+  uiConfirm('Expand picture ' + Number(f.fix.picture) + ' to wide (16:9)? It is redrawn wider in its art style, with more of the scene at the sides, so the video does not crop or reshape it. ' +
+    'This uses one retouch (the usual retouch price). Only this episode\'s copy changes, and Revert brings the original back.', { okText: 'Expand it' })
+    .then(function (yes) {
+      if (!yes) return;
+      vlPcMsg('Expanding picture ' + Number(f.fix.picture) + '...');
+      vlRetouchSend({ episodeId: id, url: k.url, expand: true, onStarted: function () { if (sid) vlPcDone(sid, fid, false); } }, '', null, null);
+    });
+}
+// v3.5.35 (Ian, 2026-11-09): the shot's mode in the to-do window, with one button to the recommended mode (no menu here).
+function vlTodoModeHTML(si) {
+  var d = VL.draft, s = d && d.shots[si]; if (!s) return '';
+  var em = vlModel(d.model), curMode = s.mode || (em && em.reference ? 'reference' : 'keyframes');
+  return '<div style="display:flex;gap:10px;align-items:center;margin:10px 0 0;flex-wrap:wrap;">' +
+    '<span style="' + VL_DESC + '" title="' + escapeHtml(VL_MODE_TIPS[curMode]) + '">Mode: <b>' + (curMode === 'reference' ? 'Reference' : 'Keyframes') + '</b>' + (s.mode ? '' : ' (same as episode)') + '</span>' + vlTodoRecHTML(si) + '</div>';
+}
+// v3.5.35 (Ian): one press sets the shot to the mode the Director recommends.
+function vlTodoRecHTML(si) {
+  var d = VL.draft, s = d && d.shots[si], pc = vlShotPc(si);
+  if (!s || !pc || !pc.mode) return '';
+  var em = vlModel(d.model), curMode = s.mode || (em && em.reference ? 'reference' : 'keyframes'), nm = pc.mode === 'reference' ? 'Reference' : 'Keyframes';
+  if (pc.mode === curMode) return '<span style="' + VL_DESC + '">&#10003; The recommended mode</span>';
+  return '<button type="button" class="btn btn-sm btn-primary" onclick="vlPcSetMode(' + si + ',\'' + pc.mode + '\', null)" title="' + escapeHtml(VL_MODE_TIPS[pc.mode]) + '">Use the recommended: ' + nm + '</button>';
+}
 function vlPcPicture(si, fid) {
   var f = vlPcFinding(si, fid), d = VL.draft;
   if (!f || !f.fix || !d) return;

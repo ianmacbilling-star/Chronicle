@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.35",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3535-video-shape-expand-borders",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: picture shapes in the Pre-production check with Expand in the to-do list; a recommended-mode button; visible borders on text boxes.",
+        "detail": "Ian, 2026-11-09. The Pre-production check flags each picture that is not wide, one finding per picture: under 1.25 (square or tall) the model will crop or stretch it, from 1.25 to 1.6 (about 4:3) it might. Shots in Reference mode are not flagged. Each finding has an Expand button in the to-do list (one retouch; the finding is ticked off once it starts), and a flagged picture shows its tag on the shot. The to-do window shows the shot's mode with one button to the Director's recommended mode (no menu there). App-wide: text boxes, text areas and menus on the dark panels have a clearly visible border (bright while typing), the story boxes too; the light panels keep theirs.",
+        "td": [
+          "TD-1115"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.34",
     "staged_on": "2026-11-09",
     "entries": [

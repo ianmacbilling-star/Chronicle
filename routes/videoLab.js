@@ -2252,6 +2252,7 @@ const PC_KINDS = ['gap', 'mode', 'continuity', 'words', 'reference', 'style', 'a
 const PC_BOXES = ['start', 'actions', 'camera', 'end', 'sounds', 'around'];
 const PC_MAX_FINDINGS = 8;
 const PC_WIDE = 1.6;   // a picture narrower than this (width / height) is not wide: the video is 16:9
+const PC_SURE = 1.25;   // v3.5.35: narrower than this the model will crop or stretch it (square or tall); between the two it might
 async function precheckTokens(db) {
   let v = null;
   try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_precheck_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
@@ -2403,12 +2404,23 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     console.error('[video] ' + JFN + ' failed: ' + lastErr + ' ($' + usd + ' to Campaignia)');
     return;
   }
-  // The shape of every picture, measured: one finding per shot listing the pictures that are not wide.
+  // The shape of every picture, measured. v3.5.35 (Ian, 2026-11-09): one finding per picture, each with Expand; under
+  // PC_SURE (square or tall, the same line as the tags on the pictures) the model will crop or stretch it, from there to
+  // PC_WIDE (about 4:3) it might ("this size picture didn't cause issues"). A shot made in Reference mode is not checked:
+  // reference pictures may be any shape.
   let n = 0;
   ctx.shots.forEach(function (s, si) {
-    const narrow = [];
-    s.keyframes.forEach(function () { const sh = shapes[n]; if (sh && sh.w && sh.h && sh.w / sh.h < PC_WIDE) narrow.push((n + 1) + ' (' + sh.w + ' x ' + sh.h + ')'); n++; });
-    if (narrow.length) result.shots[si].findings.unshift({ kind: 'aspect', text: (narrow.length === 1 ? 'Picture ' + narrow[0] + ' is not wide' : 'Pictures ' + narrow.join(', ') + ' are not wide') + '. The video is wide (16:9), so the model will crop or stretch ' + (narrow.length === 1 ? 'it' : 'them') + '. Use Expand on the picture to redraw it wide.', fix: null });
+    const isRef = !!(ctx.info[si] && ctx.info[si].mode === 'reference');
+    const found = [];
+    s.keyframes.forEach(function (k, ki) {
+      const sh = shapes[n]; n++;
+      if (isRef || !sh || !sh.w || !sh.h || sh.w / sh.h >= PC_WIDE) return;
+      const sure = sh.w / sh.h < PC_SURE;
+      found.push({ kind: 'aspect', text: 'Picture ' + n + ' (' + sh.w + ' x ' + sh.h + ') is ' + (sure ? 'not wide' : 'not quite wide') + '. The video is wide (16:9), so the model ' +
+        (sure ? 'will crop or stretch it. Expand redraws it wide.' : 'might crop or stretch it a little. Expand redraws it wide if the edges matter.'),
+        fix: { type: 'expand', url: k.image_url, picture: n, sure: sure } });
+    });
+    if (found.length) result.shots[si].findings = found.concat(result.shots[si].findings);
   });
   let filled = false;
   await db.transaction(async function (tx) {
