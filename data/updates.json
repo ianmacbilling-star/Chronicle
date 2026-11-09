@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.31",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3531-new-panel-limit-tip",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Panel: the button tells you how many panels your plan allows.",
+        "detail": "Ian, 2026-11-09. Hover over New Panel to see your plan's panel limit (the title picture does not count). At the limit the button is grey and says so, as before.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.30",
     "staged_on": "2026-11-09",
     "entries": [

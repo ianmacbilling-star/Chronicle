@@ -43702,7 +43702,7 @@ function npPaintCap() {
     Array.prototype.forEach.call(document.querySelectorAll('.np-btn'), function (b) {
       b.disabled = full;
       b.style.opacity = full ? '0.45' : '';
-      b.title = full ? 'Your plan’s panel limit is reached (' + state._npCap.cap + ' panels). Delete one to add another.' : 'Add a new panel right after this one';
+      b.title = full ? 'Your plan’s panel limit is reached (' + state._npCap.cap + ' panels). Delete one to add another.' : 'Add a new panel right after this one. Your plan allows up to ' + state._npCap.cap + ' panels.';   // v3.5.31 -- the plan's limit in the tip (Ian, 2026-11-09)
     });
   };
   if (state._npCap && state._npCap.key === key) { paint(); return; }
