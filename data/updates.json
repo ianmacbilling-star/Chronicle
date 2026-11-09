@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.44",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3544-video-kling-prompt-numbered-actions",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video: Kling O3 takes no longer fail on long words; a failed take says why; the actions box numbers itself.",
+        "detail": "Ian, 2026-11-09. Kling O3 refuses a prompt over 2500 characters, so its first take failed. Its script is now cut to fit: Sound first (unless the model's own sound is on), then Around them, then Overall, then the end at a full stop. A failed take now shows fal's own reason after 'A part of this take failed at fal'. In 'What do the characters do?', Enter starts the next numbered line and the lines are numbered again in order; an empty box starts at 1.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.43",
     "staged_on": "2026-11-09",
     "entries": [

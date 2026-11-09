@@ -127,7 +127,8 @@ const MODELS = {
     label: 'Kling O3 Standard', group: 'reference', endpoint: 'fal-ai/kling-video/o3/standard/reference-to-video', reference: true,
     durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.084, priceSound: 0.112,
-    extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4
+    extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4,
+    maxPrompt: 2500   // v3.5.44: fal refuses a Kling O3 prompt over 2500 characters (Ian's first take failed)
   }
 };
 const REF_MAX_IMAGES = 9;      // fal: up to 9 reference images
@@ -162,6 +163,14 @@ function falErrorText(e) {
   let detail = '';
   if (body) { try { detail = typeof body === 'string' ? body : JSON.stringify(body); } catch (_e) {} }
   return ((e.status ? e.status + ' ' : '') + (e.message || '') + (detail ? ' ' + detail : '')).trim().slice(0, 1000) || 'unknown error';
+}
+// v3.5.44 -- fal's reason in a few words: the "msg" fields of its answer when there are any (a 422 lists what it refused),
+// else the start of what it said.
+function falReason(text) {
+  const t = String(text || ''), msgs = [];
+  t.replace(/"msg"\s*:\s*"((?:[^"\\]|\\.)*)"/g, function (m0, m1) { if (msgs.indexOf(m1) < 0) msgs.push(m1); return m0; });
+  const r = msgs.length ? msgs.join('; ') : t;
+  return r.replace(/\s+/g, ' ').trim().slice(0, 300) || 'no reason given';
 }
 function cleanName(s) {
   s = String(s == null ? '' : s).replace(/[\u0000-\u001f]/g, ' ').trim();
@@ -1034,10 +1043,23 @@ function refsToSend(ep, w, refs, pool, room) {
   }
   return namedInShot(ep, w, pool.characters.filter(function (c) { return c.usable; }), room).map(function (p) { return { name: p.name, url: p.url, kind: 'character' }; });
 }
+// v3.5.44 -- a model with a prompt limit (Kling O3: 2500 characters) gets the script cut to fit: first the lines that
+// matter least to the picture (Sound, unless its own sound is on; Around them; Overall), then the end of the text at a
+// full stop. Without this fal refuses the whole take.
+function fitPrompt(p, max, sound) {
+  p = String(p || '');
+  if (!max || p.length <= max) return p;
+  let lines = p.split('\n');
+  const drop = (sound ? [] : [/^Sound:/]).concat([/^Around them:/, /^Overall:/]);
+  for (let i = 0; i < drop.length && lines.join('\n').length > max; i++) { const re = drop[i]; lines = lines.filter(function (l) { return !re.test(l); }); }
+  let out = lines.join('\n');
+  if (out.length > max) { out = out.slice(0, max); const k = Math.max(out.lastIndexOf('. '), out.lastIndexOf('.\n')); if (k > max * 0.6) out = out.slice(0, k + 1); }
+  return out;
+}
 // What one move sends to fal: each model names its pictures and its length its own way.
 function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
   const input = Object.assign({}, m.extra);
-  if (prompt) input.prompt = prompt;
+  if (prompt) input.prompt = m.maxPrompt ? fitPrompt(prompt, m.maxPrompt, sound) : prompt;   // v3.5.44
   let endpoint = m.endpoint;
   if (m.reference) input.image_urls = (images && images.length ? images : [startUrl]).slice(0, m.maxRefs || REF_MAX_IMAGES);   // v3.5.16; v3.5.42 the model's own limit
   else if (endUrl) { input[m.start] = startUrl; input[m.end] = endUrl; }
@@ -1492,11 +1514,12 @@ async function finishMove(mv, falResult, falError) {
 async function takeStatus(db, takeId) {
   const t = await db.prepare('SELECT * FROM takes WHERE id = ?').get(takeId);
   if (!t || t.status !== 'making') return;
-  const mvs = await db.prepare('SELECT id, status, video_url FROM moves WHERE take_id = ? ORDER BY position, id').all(takeId);
+  const mvs = await db.prepare('SELECT id, status, video_url, error FROM moves WHERE take_id = ? ORDER BY position, id').all(takeId);   // v3.5.44: error, for the take's message
   if (!mvs.length) return;
   if (mvs.some(function (m) { return m.status !== 'done' && m.status !== 'error'; })) return;
   if (mvs.some(function (m) { return m.status === 'error'; })) {
-    await db.prepare("UPDATE takes SET status = 'error', error = ?, finished_at = NOW(), updated_at = NOW() WHERE id = ? AND status = 'making'").run('A part of this take failed at fal.', takeId);
+    const bad = mvs.filter(function (m) { return m.status === 'error'; })[0];
+    await db.prepare("UPDATE takes SET status = 'error', error = ?, finished_at = NOW(), updated_at = NOW() WHERE id = ? AND status = 'making'").run(('A part of this take failed at fal' + (bad && bad.error ? ': ' + falReason(bad.error) : '.')).slice(0, 600), takeId);   // v3.5.44: fal's own reason
     return;
   }
   if (mvs.length === 1) {

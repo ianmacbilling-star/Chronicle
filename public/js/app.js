@@ -43369,6 +43369,27 @@ function vlRefsFromWords(ep, w) {
 function vlActionsList(text) {
   return String(text || '').split('\n').map(function (a) { return a.replace(/^\s*\d+\s*[.)]\s*/, '').trim(); }).filter(Boolean);
 }
+// v3.5.44 (Ian, 2026-11-09: "have it Automatically number when they type and hit enter. So it forces them to put the
+// actions in sequence"): Enter starts the next numbered line; every line is numbered again in order; an empty box starts at 1.
+function vlActRenumber(text, caretLine) {
+  var lines = String(text || '').split('\n'), pos = 0, caret = 0;
+  var out = lines.map(function (l, i) { var t = (i + 1) + '. ' + l.replace(/^\s*\d+\s*[.)]\s*/, ''); if (i < caretLine) pos += t.length + 1; if (i === caretLine) caret = pos + t.length; return t; });
+  return { text: out.join('\n'), caret: caret };
+}
+function vlActKey(e, ta) {
+  if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+  e.preventDefault();
+  var v = ta.value, a = ta.selectionStart, b = ta.selectionEnd;
+  var before = v.slice(0, a), after = v.slice(b).replace(/^\s*\d+\s*[.)]\s*/, '');
+  var line = before.split('\n').length;   // the new line's index
+  var r = vlActRenumber(before + '\n' + after, line);
+  var newLineStart = r.text.split('\n').slice(0, line).join('\n').length + 1;
+  ta.value = r.text;
+  var caret = newLineStart + String(line + 1).length + 2;
+  ta.setSelectionRange(caret, caret);
+  vlGrow(ta); vlEdit();
+}
+function vlActFocus(ta) { if (!String(ta.value || '').trim()) { ta.value = '1. '; ta.setSelectionRange(3, 3); } }
 function vlActionsText(list) { return (list || []).map(function (a, i) { return (i + 1) + '. ' + a; }).join('\n'); }
 // v3.5.39 (Ian, 2026-11-09: "in the model drop down... how many tokens each model costs per second at 8 cents a token"):
 // the fal price a second in tokens (cents per token from the server, 8 by default), one decimal; with sound when it costs more.
@@ -43453,7 +43474,7 @@ function vlPanelsHTML(d, si) {
   }).join('');
   var body = {
     start: vlBareBox('vl-st-' + si, s.start, 'Drel kneels over Ori on the ice; behind him Gubuk stands holding Emanon.', vlRowsFor(s.start)),
-    actions: vlBareBox('vl-ac-' + si, s.actions, '1. Drel presses a glowing diamond into Ori\'s chest.\n2. Gubuk carries Emanon out of frame to the right.', Math.max(2, vlRowsFor(s.actions)), ' onchange="vlActionsChanged(' + si + ')"'),
+    actions: vlBareBox('vl-ac-' + si, s.actions, '1. Drel presses a glowing diamond into Ori\'s chest.\n2. Gubuk carries Emanon out of frame to the right.', Math.max(2, vlRowsFor(s.actions)), ' onchange="vlActionsChanged(' + si + ')" onkeydown="vlActKey(event, this)" onfocus="vlActFocus(this)"'),
     lines: '<div id="vl-lines-' + si + '">' + lines + '</div><button type="button" class="narrative-regen-btn" style="margin-top:4px;" onclick="vlLineAdd(' + si + ')">+ Add a line</button>',
     camera: vlBareBox('vl-ca-' + si, s.camera, 'Start close on Drel and Ori, then pan right to find Emanon.', vlRowsFor(s.camera)),
     end: vlBareBox('vl-en-' + si, s.end, 'Emanon lies on the ice, head to the left; Drel kneels over him; Gubuk stands guard.', vlRowsFor(s.end)),
