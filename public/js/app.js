@@ -4267,6 +4267,7 @@ function sessionEditBlur() {
 }
 
 function selectSession(id) {
+  _sbSessWant = id;   // v3.5.32 -- TD-1118: an answer for a session you have since left is dropped
   // Clear previous session state
   state.moments = [];
   state.currentForkId = null;
@@ -4279,6 +4280,7 @@ function selectSession(id) {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      if (String(_sbSessWant) !== String(id)) return;   // v3.5.32 -- TD-1118
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
@@ -10708,12 +10710,14 @@ function regenNarrativeSection(type, panelIndex) {
 // in place. Used after image generation so new images appear without a reload.
 function refreshStoryboardImages() {
   if (!state.currentCampaign || !state.currentSession) return;
+  var _want = _sbWant();   // v3.5.32 -- TD-1118
   // Reload the CURRENT version's moments (forkQ keeps us on the player's own
   // version after generation — without it we fall back to the DM canonical).
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (!data || data.error) return;
+      if (!_sbStill(_want)) return;   // v3.5.32 -- TD-1118: you moved to another version or session meanwhile
       state.currentSession = data;
       if (typeof renderSessionEstablishing === 'function') renderSessionEstablishing(data);
       state.moments = data.moments || [];
@@ -19294,6 +19298,7 @@ async function deleteSession(id) {
 }
 
 function selectSession(id) {
+  _sbSessWant = id;   // v3.5.32 -- TD-1118: an answer for a session you have since left is dropped
   // Clear previous session state
   state.moments = [];
   state.currentForkId = null;
@@ -19306,6 +19311,7 @@ function selectSession(id) {
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + id + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      if (String(_sbSessWant) !== String(id)) return;   // v3.5.32 -- TD-1118
       state.currentSession = data;
       state.moments = data.moments || [];
       document.getElementById('session-detail-name').textContent = data.name;
@@ -23210,9 +23216,14 @@ function revertCharRef(charId) {
 function reloadSessionForFork() {
   if (!state.currentCampaign || !state.currentSession) return;
   var sid = state.currentSession.id;
+  var _want = _sbWant(), _seq = ++_sbReloadSeq;   // v3.5.32 -- TD-1118
   fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sid + forkQ())
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      // v3.5.32 -- TD-1118. ONLY THE NEWEST ANSWER FOR THE VERSION ON SCREEN IS DRAWN (Erin, 2026-11-09: the header said
+      // Order Test B and the board showed A's 19 pictures). A load for A still on its way when B was picked used to land
+      // after B's and paint A under B's name. Nothing is fetched twice; a late answer is simply not used.
+      if (_seq !== _sbReloadSeq || !_sbStill(_want)) return;
       state.currentSession = data;
       state.moments = data.moments || [];
       state.narrativeData = {
@@ -43836,3 +43847,8 @@ async function npSend() {
   if (src === 'review' && typeof loadReview === 'function') { try { loadReview(); } catch (e) {} }
   // v3.5.28 -- no picture step: the new panel lands, and Replace, Generate or Retouch it there (Ian, 2026-11-09).
 }
+
+// v3.5.32 -- TD-1118. Which session and version a board load asked for, so a late answer for another is dropped.
+var _sbSessWant = null, _sbReloadSeq = 0;
+function _sbWant() { return { sid: String(state.currentSession && state.currentSession.id), fork: String(state.currentForkId || '') }; }
+function _sbStill(w) { return !!(w && state.currentSession && String(state.currentSession.id) === w.sid && String(state.currentForkId || '') === w.fork); }

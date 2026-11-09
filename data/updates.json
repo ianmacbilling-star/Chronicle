@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.32",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3532-stale-board-after-switch",
+        "kind": "fix",
+        "public": true,
+        "summary": "Switching versions no longer leaves the previous version's panels on the Storyboard.",
+        "detail": "Testers, 2026-11-09. If a version was still loading when you picked another, its panels could arrive late and show under the new version's name until you reloaded. The Storyboard now only draws the version and session on screen. Nothing loads twice and nothing is slower.",
+        "td": [
+          "TD-1118"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.31",
     "staged_on": "2026-11-09",
     "entries": [
