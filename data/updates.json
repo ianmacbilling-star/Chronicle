@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.39",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3539-video-model-tokens",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: the model menu shows tokens a second; the cost line in tokens; the pictures/seconds/takes line gone from the shots.",
+        "detail": "Ian, 2026-11-09. Each video model in the menu shows what it costs in tokens a second (fal's price at 8 cents a token, app_settings shotlist_cents_per_token; with sound when that costs more). The cost line under the shots says tokens, not dollars. The line '3 pictures, 13 s, one continuous camera run, 5 of 10 takes' at the top of each shot is gone.",
+        "td": [
+          "TD-1116"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.38",
     "staged_on": "2026-11-09",
     "entries": [

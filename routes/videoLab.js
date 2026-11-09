@@ -508,14 +508,16 @@ function vlSaveSummary(b) {
 }
 
 // ---- the list, new, save ---------------------------------------------------------------------
-router.get('/models', requireAuth, requireVideo, function (req, res) {
+router.get('/models', requireAuth, requireVideo, async function (req, res) {
   const out = Object.keys(MODELS).map(function (k) {
     const m = MODELS[k];
     return { key: k, label: m.label, group: m.group || 'keyframes', reference: !!m.reference, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired };
   }).sort(function (a, b) { return (b.reference ? 1 : 0) - (a.reference ? 1 : 0); });   // v3.5.19: reference first
   const styles = VIDEO_STYLES.map(function (s) { return { key: s.key, label: s.label, description: s.description, speech: s.speech, defaultShot: s.defaultShot }; });
   vlDebug(req.session && req.session.userId, 'info', 'GET /api/video-lab/models', 'Models offered: ' + out.map(function (x) { return x.key; }).join(', '));   // v3.5.18
-  res.json({ models: out, webhook: !!webhookUrl(), styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES });
+  let cpt = SL_DEFAULTS.shotlist_cents_per_token;   // v3.5.39 (Ian, 2026-11-09): the model menu shows tokens a second
+  try { cpt = (await shotListPrices(await getDb())).shotlist_cents_per_token; } catch (e) { cpt = SL_DEFAULTS.shotlist_cents_per_token; }
+  res.json({ models: out, webhook: !!webhookUrl(), styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES, cents_per_token: cpt });
 });
 
 router.get('/episodes', requireAuth, requireVideo, async function (req, res) {

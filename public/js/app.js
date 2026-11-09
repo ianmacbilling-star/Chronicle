@@ -42049,7 +42049,7 @@ function vlOpen() {
   VL.liveSig = {};
   if (VL.models) vlLoadEpisodes(true);
   else fetch('/api/video-lab/models', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
-    VL.models = (d && d.models) || []; VL.webhook = !!(d && d.webhook);
+    VL.models = (d && d.models) || []; VL.webhook = !!(d && d.webhook); VL.cpt = (d && Number(d.cents_per_token) > 0) ? Number(d.cents_per_token) : 8;   // v3.5.39
     VL.styles = (d && d.styles) || []; if (d && d.defaultStyle) VL.defaultStyle = d.defaultStyle;
     vlLoadEpisodes(true);
   }).catch(function () { VL.models = []; vlLoadEpisodes(true); });
@@ -42453,7 +42453,7 @@ function vlShowCost() {
   if (!vlKfCount(d)) { el.textContent = 'An episode needs one keyframe at least.'; return; }
   var per = d.sound ? m.priceSound : m.price;
   var secs = d.shots.reduce(function (t, s) { return t + vlShotSecs(s, m); }, 0);
-  el.textContent = d.shots.length + ' shot' + (d.shots.length === 1 ? '' : 's') + ', ' + secs + ' seconds: about $' + (per * secs).toFixed(2) + ' at fal for one take of every shot';
+  el.textContent = d.shots.length + ' shot' + (d.shots.length === 1 ? '' : 's') + ', ' + secs + ' seconds: about ' + vlTok(per * secs) + ' tokens for one take of every shot';   // v3.5.39: tokens, not dollars
 }
 
 // ---- saving: one at a time -------------------------------------------------------------------
@@ -42703,7 +42703,7 @@ function vlLiveShotHTML(ep, ds, si, m) {
   var s = vlEpShot(ep, ds.id);
   var takes = s ? (s.takes || []) : [];
   var secs = vlShotSecs(ds, m);
-  return '<span style="' + VL_DESC + '">' + ds.kfs.length + ' picture' + (ds.kfs.length === 1 ? '' : 's') + ' &middot; ' + secs + ' s &middot; one continuous camera run' + (takes.length ? ' &middot; ' + takes.length + ' of ' + VL_MAX_TAKES + ' takes' : '') + '</span>';   // v3.5.13: the takes moved to the shot's foot; v3.5.15: the number and name are in vlShotHTML
+  return '';   // v3.5.39 (Ian, 2026-11-09): the line "3 pictures \u00b7 13 s \u00b7 one continuous camera run \u00b7 5 of 10 takes" is gone from the top of the shots (v3.5.13 had moved it there)
 }
 function vlEpVideoHTML(ep) {
   var shots = ep.shots || [];
@@ -43367,9 +43367,16 @@ function vlActionsList(text) {
   return String(text || '').split('\n').map(function (a) { return a.replace(/^\s*\d+\s*[.)]\s*/, '').trim(); }).filter(Boolean);
 }
 function vlActionsText(list) { return (list || []).map(function (a, i) { return (i + 1) + '. ' + a; }).join('\n'); }
+// v3.5.39 (Ian, 2026-11-09: "in the model drop down... how many tokens each model costs per second at 8 cents a token"):
+// the fal price a second in tokens (cents per token from the server, 8 by default), one decimal; with sound when it costs more.
+function vlTok(usd) { var t = Math.round(((Number(usd) || 0) * 100 / (VL.cpt || 8)) * 10) / 10; return (t % 1 === 0 ? String(t) : t.toFixed(1)); }
+function vlTokPerSec(m) {
+  var a = vlTok(m.price), b = vlTok(m.priceSound);
+  return a + ' token' + (a === '1' ? '' : 's') + ' a second' + (b !== a ? ' (' + b + ' with sound)' : '');
+}
 function vlModelOptions(ms, cur) {
   var ref = ms.filter(function (x) { return x.reference; }), kf = ms.filter(function (x) { return !x.reference; });
-  function opts(list) { return list.map(function (x) { return '<option value="' + x.key + '"' + (x.key === cur ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>'; }).join(''); }
+  function opts(list) { return list.map(function (x) { return '<option value="' + x.key + '"' + (x.key === cur ? ' selected' : '') + '>' + escapeHtml(x.label) + ' \u2014 ' + vlTokPerSec(x) + '</option>'; }).join(''); }   // v3.5.39 tokens a second
   if (!ref.length) return opts(ms);
   return '<optgroup label="Reference (recommended)">' + opts(ref) + '</optgroup>' + (kf.length ? '<optgroup label="Keyframes (exact frames)">' + opts(kf) + '</optgroup>' : '');
 }
