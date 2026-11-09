@@ -43375,14 +43375,15 @@ function vlTokPerSec(m) {
   return a + ' token' + (a === '1' ? '' : 's') + ' a second' + (b !== a ? ' (' + b + ' with sound)' : '');
 }
 // v3.5.41 (Ian, 2026-11-09: "put tool tips on the different models describing them"): one tip a model, on its line in the
-// menu and on the menu itself for the one chosen.
+// menu and on the menu itself for the one chosen. v3.5.42: the Keyframes ones say they take no reference pictures; Kling O3.
 var VL_MODEL_TIPS = {
   seedance2ref: 'Reference mode, best quality. The model is given the shot\'s pictures and the cast\'s reference pictures and directs the shot itself from your words: the first picture is how it opens, the others show who is there and the place. Copes well with big camera moves and changes of place. Its own sound costs nothing extra. Shots of 4 to 15 seconds.',
-  seedance2reffast: 'Reference mode, faster and cheaper. The same way of working as Seedance 2.0 (Reference) at a little lower quality: the one to try a shot out on. Its own sound costs nothing extra. Shots of 4 to 15 seconds.',
-  seedance2: 'Keyframes mode, best quality. The video moves from each picture exactly to the next, so it lands on your pictures\' framing. Best when neighbouring pictures match closely: the same place, similar poses. Square or tall pictures are cropped to wide, so Expand them first. Its own sound costs nothing extra. 4 to 15 seconds a move.',
-  seedance2fast: 'Keyframes mode, faster and cheaper. The same way of working as Seedance 2.0 (Keyframes) at a little lower quality. Square or tall pictures are cropped to wide, so Expand them first. Its own sound costs nothing extra. 4 to 15 seconds a move.',
-  kling3std: 'Keyframes mode, the cheapest. Moves from each picture to the next; best for small changes between pictures that match closely. Its own sound costs extra. 3 to 15 seconds a move.',
-  veo31fast: 'Keyframes mode, Google\'s Veo. Moves from each picture to the next, and can make a clip from a single picture. Short moves only: 4, 6 or 8 seconds. Its own sound costs extra.'
+  seedance2reffast: 'Reference mode, faster and cheaper. The same way of working as Seedance 2.0 (Reference) at a little lower quality. Its own sound costs nothing extra. Shots of 4 to 15 seconds.',
+  klingo3ref: 'Reference mode, the cheapest. The same way of working as the Seedance reference models: the shot\'s pictures and the cast\'s reference pictures guide it (up to 7 pictures, so 4 from the shot and 3 of the cast). Good for trying out your words before using a dearer model. Its own sound costs extra. Shots of 3 to 15 seconds.',
+  seedance2: 'Keyframes mode, best quality. The video moves from each picture exactly to the next, so it lands on your pictures\' framing. Best when neighbouring pictures match closely: the same place, similar poses. Square or tall pictures are cropped to wide, so Expand them first. Its own sound costs nothing extra. 4 to 15 seconds a move. It takes no reference pictures: the cast is not sent, so anyone the pictures do not show clearly may come out as someone else.',
+  seedance2fast: 'Keyframes mode, faster and cheaper. The same way of working as Seedance 2.0 (Keyframes) at a little lower quality. Square or tall pictures are cropped to wide, so Expand them first. Its own sound costs nothing extra. 4 to 15 seconds a move. It takes no reference pictures: the cast is not sent, so anyone the pictures do not show clearly may come out as someone else.',
+  kling3std: 'Keyframes mode, the cheapest of the Keyframes models. Moves from each picture to the next; best for small changes between pictures that match closely. Its own sound costs extra. 3 to 15 seconds a move. It takes no reference pictures: the cast is not sent, so anyone the pictures do not show clearly may come out as someone else.',
+  veo31fast: 'Keyframes mode, Google\'s Veo. Moves from each picture to the next, and can make a clip from a single picture. Short moves only: 4, 6 or 8 seconds. Its own sound costs extra. It takes no reference pictures: the cast is not sent, so anyone the pictures do not show clearly may come out as someone else.'
 };
 function vlModelOptions(ms, cur) {
   var ref = ms.filter(function (x) { return x.reference; }), kf = ms.filter(function (x) { return !x.reference; });

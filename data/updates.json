@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.42",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3542-video-kling-o3",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Kling O3 Standard, a cheap reference model; Keyframes tips say they take no reference pictures.",
+        "detail": "Ian, 2026-11-09: something cheaper to test words on that still handles the basics. Kling O3 Standard (fal-ai/kling-video/o3/standard/reference-to-video) joins the Reference group: the shot's pictures and the cast's reference pictures as @Image1..., at most 7 (4 from the shot, 3 of the cast), 3 to 15 s, $0.084 a second (about 1 token), $0.112 with its own sound. A shot set to Keyframes on a Kling O3 episode uses Kling 3.0 Standard, and the other way round. The tips of the Keyframes models now say they take no reference pictures.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.41",
     "staged_on": "2026-11-09",
     "entries": [

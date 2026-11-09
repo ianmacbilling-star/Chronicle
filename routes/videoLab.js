@@ -117,6 +117,17 @@ const MODELS = {
     durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.2419, priceSound: 0.2419,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
+  },
+  // v3.5.42 (Ian, 2026-11-09: "lets get this new Kling model in there. I need something cheaper to test out instructions
+  // with but that still handles our basic needs"). Kling O3 Standard, reference-to-video: the same way of working as
+  // Seedance's reference models (the shot's pictures and the cast as @Image1...), 3 to 15 s, $0.084 a second, $0.112
+  // with its own sound. At most 7 pictures in all (fal: elements + reference images + start image), so 4 scene pictures
+  // and the cast in the rest.
+  klingo3ref: {
+    label: 'Kling O3 Standard', group: 'reference', endpoint: 'fal-ai/kling-video/o3/standard/reference-to-video', reference: true,
+    durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.084, priceSound: 0.112,
+    extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4
   }
 };
 const REF_MAX_IMAGES = 9;      // fal: up to 9 reference images
@@ -332,8 +343,8 @@ function ensureTables() {
 function shotMode(shot) { const m = String((shot && shot.mode) || ''); return m === 'reference' || m === 'keyframes' ? m : ''; }
 function shotModelKey(epModel, mode) {
   const key = MODELS[epModel] ? epModel : DEFAULT_MODEL, m = MODELS[key];
-  if (mode === 'reference' && !m.reference) return key === 'seedance2' ? 'seedance2ref' : 'seedance2reffast';
-  if (mode === 'keyframes' && m.reference) return key === 'seedance2ref' ? 'seedance2' : 'seedance2fast';
+  if (mode === 'reference' && !m.reference) return key === 'seedance2' ? 'seedance2ref' : (key === 'kling3std' ? 'klingo3ref' : 'seedance2reffast');   // v3.5.42: Kling to Kling
+  if (mode === 'keyframes' && m.reference) return key === 'seedance2ref' ? 'seedance2' : (key === 'klingo3ref' ? 'kling3std' : 'seedance2fast');
   return key;
 }
 function epForShot(ep, shot) { const k = shotModelKey(ep.model, shotMode(shot)); return k === ep.model ? ep : Object.assign({}, ep, { model: k }); }
@@ -824,11 +835,11 @@ function planReference(ep, kfs, shotNo, cast) {
   const overall = String(ep.overall || '').trim();
   if (!steps.length && !overall) return { error: m.label + ' needs words for shot ' + shotNo + ', or an overall direction.' };
   secs = Math.max(REF_MIN_SECS, Math.min(REF_MAX_SECS, Math.round(secs)));
-  const pics = kfs.slice(0, REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });
+  const pics = kfs.slice(0, m.maxScene || REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });   // v3.5.42: a model's own limits
   const words = (overall + ' ' + steps.join(' ')).toLowerCase();
   const people = [];
   (cast || []).forEach(function (c) {
-    if (people.length >= REF_MAX_IMAGES - pics.length || !c.url || !c.name) return;
+    if (people.length >= (m.maxRefs || REF_MAX_IMAGES) - pics.length || !c.url || !c.name) return;
     if (people.some(function (p) { return p.name === c.name || p.url === c.url; })) return;
     const first = String(c.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9'-]/g, '');
     if (first.length >= 2 && new RegExp('(^|[^a-z0-9])' + first.replace(/[-']/g, '\\$&') + '([^a-z0-9]|$)').test(words)) people.push({ name: String(c.name).trim(), url: c.url });
@@ -939,8 +950,8 @@ function planReferenceWords(ep, kfs, w, shotNo, pool, refs) {
   const m = MODELS[ep.model];
   if (!kfs.length) return { error: 'Shot ' + shotNo + ' has no pictures.' };
   if (!wordsHaveContent(ep, w)) return { error: 'Shot ' + shotNo + ' needs words: say what the characters do, or how the shot starts.' };
-  const scenePics = kfs.slice(0, REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });
-  const people = refsToSend(ep, w, refs, pool, REF_MAX_IMAGES - scenePics.length);   // v3.5.22: the shot's references
+  const scenePics = kfs.slice(0, m.maxScene || REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });   // v3.5.42: a model's own limits
+  const people = refsToSend(ep, w, refs, pool, (m.maxRefs || REF_MAX_IMAGES) - scenePics.length);   // v3.5.22: the shot's references
   const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1, kind: p.kind }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };
   return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics), duration: String(w.seconds),
     images: people.map(function (p) { return p.url; }).concat(scenePics), cast: people.map(function (p) { return p.name; }) }], model: m };
@@ -1022,7 +1033,7 @@ function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
   const input = Object.assign({}, m.extra);
   if (prompt) input.prompt = prompt;
   let endpoint = m.endpoint;
-  if (m.reference) input.image_urls = (images && images.length ? images : [startUrl]).slice(0, REF_MAX_IMAGES);   // v3.5.16
+  if (m.reference) input.image_urls = (images && images.length ? images : [startUrl]).slice(0, m.maxRefs || REF_MAX_IMAGES);   // v3.5.16; v3.5.42 the model's own limit
   else if (endUrl) { input[m.start] = startUrl; input[m.end] = endUrl; }
   else if (m.single) { endpoint = m.single.endpoint; input[m.single.start] = startUrl; }
   else input[m.start] = startUrl;
