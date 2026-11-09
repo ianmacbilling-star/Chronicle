@@ -5508,7 +5508,9 @@ function renderReview(data) {
       : (canEditNarr ? '' : '<div class="review-nar-text review-nar-empty">No outline yet.</div>');
     return '<div class="review-nar ' + cls + '"' + (gapKey.indexOf('bridge:') === 0 ? (' data-fx-src="review" data-fx-t="b" data-fx-id="' + gapKey.slice(7) + '"') : '') + '>' +   // v3.4.37
       '<div class="review-nar-head"><div class="review-nar-label">' + safeLabel + '</div><div class="review-actions-inline">' + outBtn + dirBtn + '</div>' + narrMenu +
-        (gapKey.indexOf('bridge:') === 0 ? spaceControls('review', 'b', gapKey.slice(7)) : '') + '</div>' +   // v3.4.37
+        (gapKey.indexOf('bridge:') === 0 ? spaceControls('review', 'b', gapKey.slice(7)) : '') +   // v3.4.37
+        (!canEditNarr ? '' : gapKey.indexOf('bridge:') === 0 ? npBtnHtml('review', 'b', gapKey.slice(7), false) : gapKey === 'opening' ? npBtnHtml('review', 'o', null, true) :
+          gapKey.indexOf('between:') === 0 ? npBtnHtml('review', 'p', (panels[parseInt(gapKey.slice(8), 10)] || {}).moment_id, true) : '') + '</div>' +   // v3.5.27 -- TD-1117, never on the Closing
       ((brg && brg.stale) ? panelStaleNoteHtml() : '') +
       body +
     '</div>';
@@ -5600,6 +5602,7 @@ function renderReview(data) {
         castBadge + resetBtn + '<div class="review-actions-inline">' +
           (_isEstR && canEditNarr ? _tbChapterBtn(state.currentSession && state.currentSession.id, 'review-dir-btn', '\u270E Title Builder') : '') +
           pPromptBtn + pOutBtn + pDirBtn + '</div>' + pMenu + (_isEstR ? '' : spaceControls('review', 'p', mid)) +   // v3.4.37 -- TD-1107
+          (canEditNarr ? (_isEstR ? npBtnHtml('review', 'o', null, true) : npBtnHtml('review', 'p', mid, false)) : '') +   // v3.5.27 -- TD-1117
       '</div>' +
       (pOutText ? '<div class="review-nar-text" style="white-space:pre-wrap;margin-bottom:4px;">' + escapeHtmlReview(formatOutlineText(pOutText)) + '</div>' : '') +
       changeNote +
@@ -5621,6 +5624,7 @@ function renderReview(data) {
   html += narrRow('closing', fxRowLabel(_numsR.closing, 'Closing'), 'review-nar-close');
 
   list.innerHTML = html;
+  try { npPaintCap(); } catch (e) {}   // v3.5.27 -- TD-1117
 }
 
 // ============================================================
@@ -18566,7 +18570,7 @@ function renderStoryboard() {
     // direction editor patches narr-dir-text-* in place, so the element must exist to show a new direction.
     var dirBlock = '<div class="moment-prompt-wrap narr-dir-wrap" id="narr-dir-' + domKey + '">' +
       '<div class="moment-prompt-text narr-dir-text' + (dirText ? '' : ' narr-dir-empty') + '" id="narr-dir-text-' + domKey + '">' + dirBody + '</div>' +
-      (canEditNarr ? ('<div class="narr-tools-row">' + dirEditBtn + wtPillsHtml(gapKey, textareaId, label, regenCall) + '</div>') : '') +
+      (canEditNarr ? ('<div class="narr-tools-row"' + (npBoardBtn(id) ? ' style="flex-wrap:wrap;row-gap:4px;"' : '') + '>' + dirEditBtn + wtPillsHtml(gapKey, textareaId, label, regenCall) + npBoardBtn(id) + '</div>') : '') +   // v3.5.27 -- TD-1117: New Panel, on its own line at the right when the box is narrow
     '</div>';
     // When editable, every box auto-saves on input (so between-panel prose
     // persists too, not just opening/closing); otherwise it is read-only.
@@ -18641,6 +18645,7 @@ function renderStoryboard() {
     'Closing paragraph...', narrative.outro, 'regenNarrativeSection(\'closing\')', true));
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
+  try { npPaintCap(); } catch (e) {}   // v3.5.27 -- TD-1117: New Panel off at the plan's limit
   try { _panelBusyRepaint(); _panelJobsSync(); } catch (e) {}   // v3.2.91 -- TD-1025: the redraw just wiped every spinner; put back the ones still running
 }
 
@@ -43648,4 +43653,174 @@ function adminVideoSave(box) {
       say(res.j.on ? 'Video is on for everyone.' : 'Video is off: admins only.');
     })
     .catch(function () { if (box) box.checked = !on; say('Could not reach the server.'); });
+}
+
+// =====================================================================================================
+// v3.5.27 -- TD-1117. NEW PANEL → (claude/NEW_PANEL_SPEC.md). Ian, 2026-11-09: "New Panel ->" at the right of a
+// box's button row, on the Story page and on the Review rows; the new panel goes right after the space the button is on
+// ("Always one to the right"), never after the Closing. The window asks what happens there (required either way; saved
+// as the panel's Outline), the characters and assets in it, Write it for me (1 token: the AI writes everything, the
+// panel's story text too) or I'll write it myself, and where its picture comes from (the Archive, Generate, Later).
+// The server adds it in one transaction (POST .../moments/insert) and refuses past the plan's panel limit.
+// =====================================================================================================
+var NP = null;
+var NP_SHAPES = [['standard', 'Standard'], ['wide', 'Wide'], ['square', 'Square'], ['tall', 'Tall'], ['panoramic', 'Panoramic'], ['tower', 'Tower'], ['fullpage', 'Full page']];
+// The button. push: it starts the right-hand end of its row (margin-left:auto); otherwise it follows the move controls.
+function npBtnHtml(src, t, id, push) {
+  if (!(typeof forkOnScreenIsMine === 'function' && forkOnScreenIsMine())) return '';
+  if (t !== 'o' && (id == null || id === '')) return '';
+  var q = t === 'p' ? String(Number(id)) : t === 'b' ? ('\'' + String(id).replace(/[^a-z0-9]/gi, '') + '\'') : 'null';
+  return '<button type="button" class="wt-pill np-btn" data-np-src="' + src + '" title="Add a new panel right after this one" style="' + (push ? 'margin-left:auto;float:right;' : 'margin-left:6px;') + 'white-space:nowrap;"' +
+    ' onclick="event.stopPropagation();npOpen(\'' + src + '\',\'' + t + '\',' + q + ')">New Panel &rarr;</button>';
+}
+// The Story page's boxes: the Opening, a picture's own text, a bridge, an old-style gap (after its picture). Not the Closing.
+function npBoardBtn(boxId) {
+  var id = String(boxId || '');
+  if (id === 'narrative-opening') return npBtnHtml('board', 'o', null, true);
+  if (id.indexOf('narrative-moment-') === 0 || id.indexOf('narrative-between-') === 0) {
+    var m = (state.moments || [])[Number(id.replace(/^narrative-(moment|between)-/, ''))];
+    return m ? (m.kind === 'establishing' ? npBtnHtml('board', 'o', null, true) : npBtnHtml('board', 'p', m.id, true)) : '';
+  }
+  if (id.indexOf('narrative-bridge-') === 0) return npBtnHtml('board', 'b', id.replace('narrative-bridge-', ''), true);
+  return '';
+}
+// The plan's panel limit (the title picture not counted): the buttons go grey once the version has that many panels.
+function npCount() { return (state.moments || []).filter(function (m) { return m.kind !== 'establishing'; }).length; }
+function npPaintCap() {
+  if (!state.currentCampaign || !state.currentSession) return;
+  var key = state.currentCampaign.id + ':' + state.currentSession.id + ':' + (state.currentForkId || '');
+  var paint = function () {
+    var full = !!(state._npCap && state._npCap.key === key && npCount() >= state._npCap.cap);
+    Array.prototype.forEach.call(document.querySelectorAll('.np-btn'), function (b) {
+      b.disabled = full;
+      b.style.opacity = full ? '0.45' : '';
+      b.title = full ? 'Your plan’s panel limit is reached (' + state._npCap.cap + ' panels). Delete one to add another.' : 'Add a new panel right after this one';
+    });
+  };
+  if (state._npCap && state._npCap.key === key) { paint(); return; }
+  if (state._npCapAsk === key) return;
+  state._npCapAsk = key;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/new-panel-limit' + forkQ())
+    .then(function (r) { return r.json(); })
+    .then(function (d) { if (state._npCapAsk === key) state._npCapAsk = null; if (d && d.cap > 0) { state._npCap = { key: key, cap: Number(d.cap) }; paint(); } })
+    .catch(function () { if (state._npCapAsk === key) state._npCapAsk = null; });
+}
+function npClose() { var b = document.getElementById('np-modal'); if (b && b.parentNode) b.parentNode.removeChild(b); NP = null; }
+function npOpen(src, t, id) {
+  if (typeof _pmBusy !== 'undefined' && _pmBusy) return;
+  if (!state.currentCampaign || !state.currentSession) return;
+  if (state._npCap && npCount() >= state._npCap.cap) { showError('Your plan’s panel limit is reached (' + state._npCap.cap + ' panels). Delete a panel to add another.'); return; }
+  npClose();
+  NP = { src: src, after: { t: t, id: t === 'o' ? null : id }, mode: 'write', pic: 'archive', chars: {}, assets: {} };
+  var L = 'display:block;margin:12px 0 4px;font-size:12px;color:var(--accent-pale);';
+  var D = 'font-size:11px;line-height:1.4;color:rgba(var(--accent-text-rgb),0.6);';
+  var radio = function (name, val, label, desc, on) {
+    return '<label style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;cursor:pointer;">' +
+      '<input type="radio" name="' + name + '" value="' + val + '"' + (on ? ' checked' : '') + ' onchange="npPick(\'' + name + '\',\'' + val + '\')" style="margin-top:3px;">' +
+      '<span><b style="color:var(--accent-pale);">' + label + '</b>' + (desc ? '<br><span style="' + D + '">' + desc + '</span>' : '') + '</span></label>';
+  };
+  var box = document.createElement('div');
+  box.id = 'np-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:600px;width:100%;max-height:92vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="font-family:\'Cinzel\',serif;color:var(--accent);font-size:16px;flex:1;">New Panel</div><button class="modal-close" onclick="npClose()">&times;</button></div>' +
+    '<div style="' + D + 'margin-top:2px;">It goes right after the one you pressed New Panel on.</div>' +
+    '<label for="np-line" style="' + L + '">What happens here?</label>' +
+    '<textarea id="np-line" class="form-textarea" style="min-height:70px;" maxlength="1500" placeholder="e.g. Gubuk drags Emanon out of the snow and checks he is still breathing."></textarea>' +
+    '<div style="' + D + 'margin-top:2px;">Kept as this panel’s Narrative Outline: its text always covers it, now and when it is written again.</div>' +
+    '<div style="' + L + '">Characters in it</div><div id="np-chars" style="display:flex;gap:6px;flex-wrap:wrap;"><span style="' + D + '">Loading…</span></div>' +
+    '<div style="' + L + '">Assets in it</div><div id="np-assets" style="display:flex;gap:6px;flex-wrap:wrap;"><span style="' + D + '">Loading…</span></div>' +
+    '<div style="' + D + 'margin-top:4px;">Pick none to let the panel find them by name, as panels do.</div>' +
+    '<div style="' + L + '">Who writes it?</div><div style="display:flex;flex-direction:column;gap:6px;">' +
+      radio('np-mode', 'write', 'Write it for me (1 token)', 'Writes the title, the picture prompt, the shape and the panel’s story text, from what you wrote above.', true) +
+      radio('np-mode', 'own', 'I’ll write it myself', '', false) + '</div>' +
+    '<div id="np-own" style="display:none;">' +
+      '<label for="np-title" style="' + L + '">Title</label><input id="np-title" class="form-input" type="text" maxlength="64" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">' +
+      '<label for="np-prompt" style="' + L + '">Picture prompt</label><textarea id="np-prompt" class="form-textarea" style="min-height:70px;" placeholder="What the picture shows: who is where, doing what, the light and the mood. Name each character exactly."></textarea>' +
+      '<label for="np-desc" style="' + L + '">What the picture shows, in a line (optional)</label><input id="np-desc" class="form-input" type="text" maxlength="400" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">' +
+      '<label for="np-shape" style="' + L + '">Shape</label><select id="np-shape" class="form-input">' + NP_SHAPES.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + '</option>'; }).join('') + '</select>' +
+      '<label for="np-text" style="' + L + '">Story text (optional)</label><textarea id="np-text" class="form-textarea" style="min-height:70px;" placeholder="The words under the picture. Leave empty and use Regen later."></textarea>' +
+    '</div>' +
+    '<div style="' + L + '">Its picture</div><div style="display:flex;flex-direction:column;gap:6px;">' +
+      radio('np-pic', 'archive', 'From the Archive', 'Choose a picture you already have, an Image Builder picture for example.', true) +
+      radio('np-pic', 'generate', 'Generate it', 'Made from the picture prompt, at the usual picture price.', false) +
+      radio('np-pic', 'later', 'Later', 'The panel waits for Generate Images, Replace or Generate.', false) + '</div>' +
+    '<div id="np-msg" style="' + D + 'margin-top:10px;"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="npClose()">Cancel</button><button class="btn btn-sm btn-primary" id="np-go" onclick="npSend()">Add panel</button></div>' +
+  '</div>';
+  box.addEventListener('click', function (e) { if (e.target === box) npClose(); });
+  document.body.appendChild(box);
+  var ta = document.getElementById('np-line'); if (ta) ta.focus();
+  if (typeof _loadCastImages === 'function') _loadCastImages(npPaintRefs); else npPaintRefs();
+}
+function npPaintRefs() {
+  if (!NP) return;
+  var chip = function (kind, x) {
+    var on = NP[kind][String(x.id)];
+    return '<label class="review-chip' + (kind === 'assets' ? ' review-chip-asset' : '') + '" style="cursor:pointer;' + (on ? '' : 'opacity:0.6;') + '"><input type="checkbox" style="margin-right:4px;"' + (on ? ' checked' : '') +
+      ' onchange="npRef(\'' + kind + '\',' + Number(x.id) + ',this)">' + escapeHtml(kind === 'chars' && typeof charDisplayName === 'function' ? charDisplayName(x.name) : x.name) + '</label>';
+  };
+  var none = function (t) { return '<span style="font-size:11px;color:rgba(var(--accent-text-rgb),0.6);">' + t + '</span>'; };
+  var cs = (typeof _castCharRows !== 'undefined' && _castCharRows) ? _castCharRows : [];
+  if (typeof _castSessionIds !== 'undefined' && _castSessionIds !== null) cs = cs.filter(function (c) { return _castSessionIds[String(c.id)]; });
+  var as = (typeof _castAssetRows !== 'undefined' && _castAssetRows) ? _castAssetRows : [];
+  var ce = document.getElementById('np-chars'), ae = document.getElementById('np-assets');
+  if (ce) ce.innerHTML = cs.length ? cs.map(function (c) { return chip('chars', c); }).join('') : none('No characters in this session’s cast.');
+  if (ae) ae.innerHTML = as.length ? as.map(function (a) { return chip('assets', a); }).join('') : none('No assets in this campaign yet.');
+}
+function npRef(kind, id, el) { if (!NP) return; NP[kind][String(id)] = !!el.checked; if (el.parentNode) el.parentNode.style.opacity = el.checked ? '' : '0.6'; }
+function npPick(name, val) {
+  if (!NP) return;
+  if (name === 'np-mode') { NP.mode = val; var o = document.getElementById('np-own'); if (o) o.style.display = val === 'own' ? 'block' : 'none'; }
+  if (name === 'np-pic') NP.pic = val;
+}
+function npVal(id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
+async function npSend() {
+  if (!NP || (typeof _pmBusy !== 'undefined' && _pmBusy)) return;
+  var msg = document.getElementById('np-msg'), go = document.getElementById('np-go');
+  var say = function (h, field) { if (msg) msg.innerHTML = '<span style="color:var(--danger);">' + h + '</span>'; var f = field && document.getElementById(field); if (f) f.focus(); };
+  var body = { after: NP.after, line: npVal('np-line'), mode: NP.mode,
+    characters: Object.keys(NP.chars).filter(function (k) { return NP.chars[k]; }).map(Number),
+    assets: Object.keys(NP.assets).filter(function (k) { return NP.assets[k]; }).map(Number) };
+  if (!body.line) { say('Say what happens in the new panel first.', 'np-line'); return; }
+  if (NP.mode === 'own') {
+    body.title = npVal('np-title'); body.prompt = npVal('np-prompt'); body.description = npVal('np-desc'); body.text = npVal('np-text');
+    body.shape = npVal('np-shape') || 'standard';
+    if (!body.title) { say('Give the panel a title.', 'np-title'); return; }
+    if (!body.prompt) { say('Write the picture prompt, so its picture can be made.', 'np-prompt'); return; }
+  }
+  var pics = fxPics(NP.src === 'review' ? 'review' : 'board');
+  if (!pics.length) { say('Reload the page and try again.'); return; }
+  body.anchor = pics[0].id;
+  var pic = NP.pic, src = NP.src;
+  if (go) { go.disabled = true; go.innerHTML = NP.mode === 'write' ? 'Writing it…' : 'Adding…'; }
+  _pmBusy = true;
+  var d = null;
+  try {
+    await _pmFlushText();
+    var r = await fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + state.currentSession.id + '/moments/insert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    d = await r.json().catch(function () { return null; });
+  } catch (e) { d = { error: 'NET', message: 'Could not reach the server. Nothing was added.' }; }
+  finally { _pmBusy = false; }
+  if (!d || !d.success) {
+    if (go) { go.disabled = false; go.textContent = 'Add panel'; }
+    if (d && d.error === 'INSUFFICIENT_TOKENS') { if (msg) msg.innerHTML = insufficientTokensHtml(escapeHtml(d.message || 'You are out of tokens.')); return; }
+    say(escapeHtml((d && (d.message || d.error)) || 'The panel could not be added.'));
+    return;
+  }
+  npClose();
+  if (d.note) showAlert(d.note);
+  if (d.charged && typeof refreshTokenBalance === 'function') { try { refreshTokenBalance(); } catch (e) {} }
+  try { if (typeof wtClose === 'function') wtClose(); } catch (e) {}
+  if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
+  if (src === 'review' && typeof loadReview === 'function') { try { loadReview(); } catch (e) {} }
+  // The picture: once the page holds the new panel, open the Archive picker or start the picture.
+  if (pic === 'later' || !d.moment_id) return;
+  var tries = 0;
+  (function wait() {
+    var i = (state.moments || []).findIndex(function (m) { return String(m.id) === String(d.moment_id); });
+    if (i < 0) { if (++tries < 40) setTimeout(wait, 250); return; }
+    if (pic === 'archive' && typeof openReplacePicker === 'function') openReplacePicker('moment', state.moments[i].id);
+    else if (pic === 'generate' && typeof regenImage === 'function') regenImage(state.moments[i].id, i);
+  })();
 }

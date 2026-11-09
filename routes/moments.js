@@ -11,6 +11,8 @@ const { imageFileFilter, guardUpload } = require('../middleware/uploadGuard');
 const { demoteBuiltTitle } = require('../services/titleTarget');
 const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
 const panelOrder = require('../services/panelOrder');   // v3.4.32 -- TD-1107: moving and deleting panels
+const { getEffectiveTier, getMomentRange } = require('../middleware/tiers');   // v3.5.27 -- TD-1117: the plan's panel limit
+const { getBalance, spendTokens, recordGeneration } = require('./tokens');      // v3.5.27 -- Write it for me: 1 token
 
 // v3.0.507 -- ONE definition of the title cap, shared with routes/extract.js. A title typed by
 // hand must obey the same rule a generated one does, or the cap is decorative. Kept byte-identical
@@ -38,19 +40,8 @@ router.get('/', requireAuth, verifyCampaignMember, async function(req, res) {
   res.json(moments);
 });
 
-router.post('/', requireAuth, verifyCampaignDM, async function(req, res) {
-  const { title, description, type, prompt, panel_order } = req.body;
-  if (!title) return res.json({ error: 'Title required' });
-  const db = await getDb();
-  const now = new Date().toISOString();
-  // Deploy 4.0 — manual moments belong to the DM fork.
-  const dmForkId = await getOrCreateDmFork(db, req.params.sessionId, req.session.userId);
-  const result = await db.prepare(
-    'INSERT INTO moments (session_id, fork_id, title, description, type, prompt, panel_order, created_at, created_by) VALUES (?,?,?,?,?,?,?,?,?)'
-  ).run(req.params.sessionId, dmForkId, title, description || '', type || 'drama', prompt || '', panel_order || 0, now, req.session.userId);
-  const moment = await db.prepare('SELECT * FROM moments WHERE id=?').get(result.lastInsertRowid);
-  res.json(moment);
-});
+// v3.5.27 -- TD-1117: the old POST / (Story Master only, always the Canonical, no text block, never called by the page)
+// is gone; a new panel is added with POST /insert below, on your own version, as moves and deletes are.
 
 // v3.4.32 -- TD-1107. MOVE AND DELETE PANELS ON YOUR OWN VERSION (services/panelOrder.js has the rules).
 // Delete used to be Story-Master-only and never checked which version the panel was in; it now follows the rule for
@@ -89,6 +80,103 @@ router.delete('/:momentId', requireAuth, verifyCampaignMember, async function(re
     const out = await panelOrder.applyPanels(db, { forkId: own.forkId, sessionId: req.params.sessionId, deleteId: req.params.momentId });
     for (const u of out.release) { try { await releaseImage(db, u); } catch (_r) {} }   // only if nothing else uses the file
     res.json({ success: true, order: out.order });
+  } catch (e) { return _panelErr(res, e); }
+});
+
+// v3.5.27 -- TD-1117. NEW PANEL → (claude/NEW_PANEL_SPEC.md; Ian, 2026-11-09). A new picture panel right after the space
+// the page names: { anchor, after: {t:'o'} | {t:'p', id} | {t:'b', id}, line, characters, assets, mode, ... }.
+//   line: what the writer wants to happen there. Required either way; saved as the panel's Outline (REQUIRED CONTENT for
+//         its text), so Regen and Regenerate Narrative keep following it.
+//   mode 'write' (Write it for me, 1 token): the AI writes title, description, image prompt, shape and type, and then the
+//         panel's own text when the session has its narrative. Charged only when it all worked; a failed call adds nothing.
+//   mode 'own': title and picture prompt required; description (else the line), shape and text optional.
+// Refused past the plan's panel limit (Generate Story's own, the title picture not counted), on someone else's version,
+// and while a narrative or Generate Story is being written. The order, text blocks, outlines, Directions, Review lines and
+// character-change markers all follow in one transaction (services/panelOrder.js applyInsert).
+const NP_SHAPES = ['square', 'standard', 'wide', 'panoramic', 'tall', 'tower', 'fullpage'];
+// The plan's panel limit for this person here: Generate Story's own (getMomentRange, the effective tier).
+async function npCap(db, userId, campaignId, sessionId) {
+  const s = await db.prepare('SELECT transcript FROM sessions WHERE id = ? AND campaign_id = ?').get(sessionId, campaignId);
+  const words = String((s && s.transcript) || '').split(/\s+/).filter(Boolean).length;
+  return Number(getMomentRange(await getEffectiveTier(userId, campaignId), words)) || 0;
+}
+router.get('/new-panel-limit', requireAuth, verifyCampaignMember, async function (req, res) {
+  try {
+    const db = await getDb();
+    const forkId = await getViewableForkId(db, req.params.sessionId, req.session.userId, req.query.fork_id);
+    if (!forkId) return res.status(403).json({ error: 'Fork not viewable' });
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM moments WHERE fork_id = ? AND COALESCE(kind, 'normal') <> 'establishing'").get(forkId);
+    res.json({ cap: await npCap(db, req.session.userId, req.params.campaignId, req.params.sessionId), count: Number(n && n.n) || 0 });
+  } catch (e) { res.status(500).json({ error: 'FAILED' }); }
+});
+function npStr(v, max) { return String(v == null ? '' : v).replace(/\r\n/g, '\n').trim().slice(0, max); }
+function npIds(v) { return (Array.isArray(v) ? v : []).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return x > 0; }); }
+router.post('/insert', requireAuth, verifyCampaignMember, async function (req, res) {
+  const b = req.body || {};
+  const userId = req.session.userId;
+  try {
+    const db = await getDb();
+    if (b.anchor == null) return res.status(400).json({ error: 'BAD_ORDER', message: 'No panel was named.' });
+    const own = await _ownForkOf(db, b.anchor, req.params.sessionId, userId);
+    if (own.error) return res.status(own.status).json({ error: own.error });
+    const after = b.after || {};
+    if (['o', 'p', 'b'].indexOf(after.t) < 0) return res.status(400).json({ error: 'BAD_SPOT', message: 'A new panel goes after a panel, a bridge or the Opening.' });
+    const line = npStr(b.line, 1500);
+    if (!line) return res.status(400).json({ error: 'NO_LINE', message: 'Say what happens in the new panel first.' });
+    const session = await db.prepare('SELECT * FROM sessions WHERE id = ? AND campaign_id = ?').get(req.params.sessionId, req.params.campaignId);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const cap = await npCap(db, userId, req.params.campaignId, req.params.sessionId);
+    const nNow = await db.prepare("SELECT COUNT(*) AS n FROM moments WHERE fork_id = ? AND COALESCE(kind, 'normal') <> 'establishing'").get(own.forkId);
+    if (Number(nNow && nNow.n) >= Number(cap)) return res.status(409).json({ error: 'CAP', message: 'This session already has ' + Number(nNow.n) + ' panels, your plan\u2019s limit. Delete one to add another.' });
+    // The cast: only this campaign's own characters and assets.
+    const wantC = npIds(b.characters), wantA = npIds(b.assets);
+    const chars = wantC.length ? await db.prepare('SELECT id, name FROM characters WHERE campaign_id = ?').all(req.params.campaignId) : [];
+    const assets = wantA.length ? await db.prepare('SELECT id, name FROM campaign_assets WHERE campaign_id = ?').all(req.params.campaignId) : [];
+    const refs = {
+      characters: chars.filter(function (c) { return wantC.indexOf(Number(c.id)) >= 0; }),
+      assets: assets.filter(function (a) { return wantA.indexOf(Number(a.id)) >= 0; })
+    };
+    const mode = b.mode === 'own' ? 'own' : 'write';
+    const nh = mode === 'write' ? require('./narrative').newPanel : null;
+    let row;
+    if (mode === 'own') {
+      const shape = NP_SHAPES.indexOf(String(b.shape || '')) >= 0 ? String(b.shape) : 'standard';
+      const title = capTitleForShape(npStr(b.title, 200), shape);
+      const prompt = npStr(b.prompt, 4000);
+      if (!title) return res.status(400).json({ error: 'NO_TITLE', message: 'Give the panel a title.' });
+      if (!prompt) return res.status(400).json({ error: 'NO_PROMPT', message: 'Write the picture prompt, so its picture can be made.' });
+      row = { title: title, description: npStr(b.description, 2000) || line, prompt: prompt, shape: shape, type: null, emphasis: null };
+    } else {
+      const bal = await getBalance(userId);
+      if (!(bal && Number(bal.total) >= 1)) return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'Write it for me uses 1 token, and you have none left.' });
+      const r = await nh.fields(db, req, session, own.forkId, { t: after.t, id: after.id }, line, refs);
+      if (r.error === 'STALE') return res.status(409).json({ error: 'STALE', message: 'That part of the story is not there any more. Reload and try again.' });
+      if (r.error) return res.json({ error: 'WRITE_FAILED', message: r.error + ' Nothing was added and nothing was charged.' });
+      row = Object.assign({}, r.fields, { title: capTitleForShape(r.fields.title, r.fields.shape) });
+    }
+    row.layout_meta = JSON.stringify({ prominence: 3, focal: 'center', crop_safe: true, group_break: false });
+    let out;
+    try {
+      out = await panelOrder.applyInsert(db, { forkId: own.forkId, sessionId: req.params.sessionId, after: { t: after.t, id: after.id }, row: row,
+        characters: refs.characters.map(function (c) { return Number(c.id); }), assets: refs.assets.map(function (a) { return Number(a.id); }),
+        outline: line, text: mode === 'own' ? npStr(b.text, 12000) : '', userId: userId, cap: cap });
+    } catch (e) { return _panelErr(res, e); }
+    let note = '', charged = 0;
+    if (mode === 'write') {
+      let tx;
+      try { tx = await nh.text(db, req, session, own.forkId, out.index); } catch (e) { tx = { error: 'The writing service could not be reached.' }; }
+      if (tx && tx.text) {
+        try { await panelOrder.applySetText(db, { forkId: own.forkId, sessionId: req.params.sessionId, momentId: out.added, text: tx.text }); }
+        catch (e) { tx = { error: 'not saved' }; }
+      }
+      if (tx && tx.error) note = 'The panel is in, but its story text could not be written. Press Regen on it to write it. Nothing was charged.';
+      else {
+        try { await spendTokens(userId, 1, { source: 'new_panel', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); charged = 1; }
+        catch (e) { console.error('[new panel] spend failed: ' + (e && e.message)); }
+        try { await recordGeneration(userId, { event_type: 'new_panel', tokens_redeemed: charged, quantity: 1, unit: 'panel', model: nh.model, related_campaign_id: req.params.campaignId, related_session_id: session.id }); } catch (e) {}
+      }
+    }
+    res.json({ success: true, moment_id: out.added, index: out.index, order: out.order, charged: charged, note: note });
   } catch (e) { return _panelErr(res, e); }
 });
 

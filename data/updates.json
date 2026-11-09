@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.27",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3527-new-panel",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Panel: add a picture panel anywhere in your story, right after the one you choose.",
+        "detail": "Under each box on the Story panels (and on each Review row), New Panel adds a picture panel right after it; never after the Closing. Say what happens there (kept as the panel's Narrative Outline), pick its characters and assets, then Write it for me (1 token: title, picture prompt, shape and the panel's story text) or write it yourself, and take its picture from the Archive, generate it, or leave it for later. Your plan's panel limit applies. Generate Story starts over and does not keep added panels.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.26",
     "staged_on": "2026-11-08",
     "entries": [
