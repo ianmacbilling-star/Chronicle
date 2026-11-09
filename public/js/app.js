@@ -42350,7 +42350,7 @@ function vlEditorHTML(ep) {
         '<div style="flex:2;min-width:220px;"><label class="form-label" for="vl-name">Name</label>' +
           '<input id="vl-name" class="form-input" type="text" maxlength="120" value="' + escapeHtml(d.name) + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true"></div>' +
         '<div style="flex:1;min-width:200px;"><label class="form-label" for="vl-model">Video model</label>' +
-          '<select id="vl-model" class="form-input" onchange="vlEdit(true)" onblur="vlFlushSave()">' + vlModelOptions(ms, m.key) + '</select></div>' +   // v3.5.19: grouped
+          '<select id="vl-model" class="form-input" title="' + escapeHtml(VL_MODEL_TIPS[m.key] || '') + '" onchange="this.title = VL_MODEL_TIPS[this.value] || \'\'; vlEdit(true)" onblur="vlFlushSave()">' + vlModelOptions(ms, m.key) + '</select></div>' +   // v3.5.19: grouped
         '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);padding-bottom:9px;cursor:pointer;">' +
           '<input id="vl-sound" type="checkbox" onchange="vlEdit()" onblur="vlFlushSave()"' + (d.sound ? ' checked' : '') + '> The model\'s own sound</label>' +
         '<button class="btn btn-sm vl-pin-btn" style="margin-bottom:4px;display:inline-flex;align-items:center;gap:5px;' + (ep.pinned ? 'border-color:var(--accent-bright);color:var(--accent-bright);' : '') + '" onclick="vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')">' + _vpickPinSvg(!!ep.pinned) + '<span>' + (ep.pinned ? 'Pinned' : 'Pin this episode') + '</span></button>' +   // v3.5.17
@@ -43374,9 +43374,19 @@ function vlTokPerSec(m) {
   var a = vlTok(m.price), b = vlTok(m.priceSound);
   return a + ' token' + (a === '1' ? '' : 's') + ' a second' + (b !== a ? ' (' + b + ' with sound)' : '');
 }
+// v3.5.41 (Ian, 2026-11-09: "put tool tips on the different models describing them"): one tip a model, on its line in the
+// menu and on the menu itself for the one chosen.
+var VL_MODEL_TIPS = {
+  seedance2ref: 'Reference mode, best quality. The model is given the shot\'s pictures and the cast\'s reference pictures and directs the shot itself from your words: the first picture is how it opens, the others show who is there and the place. Copes well with big camera moves and changes of place. Its own sound costs nothing extra. Shots of 4 to 15 seconds.',
+  seedance2reffast: 'Reference mode, faster and cheaper. The same way of working as Seedance 2.0 (Reference) at a little lower quality: the one to try a shot out on. Its own sound costs nothing extra. Shots of 4 to 15 seconds.',
+  seedance2: 'Keyframes mode, best quality. The video moves from each picture exactly to the next, so it lands on your pictures\' framing. Best when neighbouring pictures match closely: the same place, similar poses. Square or tall pictures are cropped to wide, so Expand them first. Its own sound costs nothing extra. 4 to 15 seconds a move.',
+  seedance2fast: 'Keyframes mode, faster and cheaper. The same way of working as Seedance 2.0 (Keyframes) at a little lower quality. Square or tall pictures are cropped to wide, so Expand them first. Its own sound costs nothing extra. 4 to 15 seconds a move.',
+  kling3std: 'Keyframes mode, the cheapest. Moves from each picture to the next; best for small changes between pictures that match closely. Its own sound costs extra. 3 to 15 seconds a move.',
+  veo31fast: 'Keyframes mode, Google\'s Veo. Moves from each picture to the next, and can make a clip from a single picture. Short moves only: 4, 6 or 8 seconds. Its own sound costs extra.'
+};
 function vlModelOptions(ms, cur) {
   var ref = ms.filter(function (x) { return x.reference; }), kf = ms.filter(function (x) { return !x.reference; });
-  function opts(list) { return list.map(function (x) { return '<option value="' + x.key + '"' + (x.key === cur ? ' selected' : '') + '>' + escapeHtml(x.label) + ' \u2014 ' + vlTokPerSec(x) + '</option>'; }).join(''); }   // v3.5.39 tokens a second
+  function opts(list) { return list.map(function (x) { return '<option value="' + x.key + '"' + (x.key === cur ? ' selected' : '') + (VL_MODEL_TIPS[x.key] ? ' title="' + escapeHtml(VL_MODEL_TIPS[x.key]) + '"' : '') + '>' + escapeHtml(x.label) + ' \u2014 ' + vlTokPerSec(x) + '</option>'; }).join(''); }   // v3.5.39 tokens a second; v3.5.41 the tips
   if (!ref.length) return opts(ms);
   return '<optgroup label="Reference (recommended)">' + opts(ref) + '</optgroup>' + (kf.length ? '<optgroup label="Keyframes (exact frames)">' + opts(kf) + '</optgroup>' : '');
 }

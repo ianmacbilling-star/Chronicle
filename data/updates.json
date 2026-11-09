@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.41",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3541-video-model-tips",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: a tip on each video model.",
+        "detail": "Ian, 2026-11-09. Each model in the Video model menu has a tip saying what it is for: Reference or Keyframes mode, best quality or faster and cheaper, how it uses the pictures, whether its own sound costs extra, and the lengths it allows. The menu's own tip follows the model chosen.",
+        "td": [
+          "TD-1116"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.40",
     "staged_on": "2026-11-09",
     "entries": [
