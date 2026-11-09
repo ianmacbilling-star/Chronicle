@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.47",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3547-video-exits-one-panel",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: someone told to leave the frame leaves all the way; one question panel open at a time.",
+        "detail": "Ian, 2026-11-09: a character told to leave often stopped at the edge. When an action or the End has someone leave the frame, the words sent now add a firm line (keep moving until completely out of frame, no part left in view, hold the empty frame for the last second) and, unless the End already says so, that the shot ends with them gone. A quick check warns when the shot is too short to get them out (about 2 seconds), and the Director's Notes and Pre-production check know the rule. On a shot, opening one question panel closes the others.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.46",
     "staged_on": "2026-11-09",
     "entries": [

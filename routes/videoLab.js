@@ -939,6 +939,23 @@ function voiceRules(w, onScreen) {
   if (!Object.keys(talkers).length) out.push('No one on screen speaks.');
   return out;
 }
+// v3.5.47 -- EXITS (Ian, 2026-11-09: "when I mention I want someone to leave the frame... It often stops before the leave
+// the frame entirely... can we do something so if we say they leave the frame that they leave all the way?"). An action
+// or End that has someone leave gets a firm line: completely out of frame before the shot ends, then the empty frame held.
+const EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|behind|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|view|sight|picture)|off[- ]?(screen|frame)|disappears?|disappearing|vanish(es|ing)?|is gone\b)/i;
+function hasExit(text) { return EXIT_RE.test(String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '')); }
+function exitLines(w, names) {
+  const acts = [];
+  w.actions.forEach(function (a, i) { if (hasExit(a)) acts.push(i + 1); });
+  const endExit = hasExit(w.end);
+  if (!acts.length && !endExit) return [];
+  const src = acts.map(function (n) { return w.actions[n - 1]; }).concat(endExit ? [w.end] : []).join(' ');
+  const who = (names || []).filter(function (nm, i, all) { return all.indexOf(nm) === i; }).filter(function (nm) { const f = firstName(nm); return f && new RegExp('(^|[^a-z])' + f.toLowerCase().replace(/[^a-z0-9]/g, '') + '([^a-z]|$)').test(src.toLowerCase()); });
+  const whom = who.length === 1 ? who[0] : 'whoever leaves';
+  const out = ['Leaving the frame' + (acts.length ? ' (action ' + acts.join(', ') + ')' : '') + ': ' + whom + ' must keep moving until completely out of frame, with no part of them left in view, well before the shot ends. Do not stop at the edge of the frame. Hold the empty frame for the last second.'];
+  if (!endExit) out.push('The shot ends with ' + (who.length === 1 ? who[0] : 'the one who left') + ' gone from the frame.');
+  return out;
+}
 function shotScript(ep, w, pics) {
   const out = [];
   out.push('One continuous shot, no cuts. Keep every character looking exactly the same from start to finish.');
@@ -967,8 +984,11 @@ function shotScript(ep, w, pics) {
     loose.forEach(function (l) { const t = sayLine(l, hearers); out.push(w.actions.length ? 'Then, ' + t + '.' : t.charAt(0).toUpperCase() + t.slice(1) + '.'); });
   }
   voiceRules(w, pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []).forEach(function (r) { out.push(r); });   // v3.5.25
+  const ex = exitLines(w, (ep.castNames || []).concat(pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []));   // v3.5.47
+  if (ex.length) out.push(ex[0]);
   if (w.camera) out.push('Camera: ' + w.camera);
   if (w.end) out.push('End: ' + w.end);
+  if (ex.length > 1) out.push(ex[1]);
   if (w.sounds) out.push('Sound: ' + w.sounds);
   if (w.around) out.push('Around them: ' + w.around);
   return out.join('\n').slice(0, 6000);
@@ -1117,6 +1137,7 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
   const cast = m && m.reference ? await castRefs(db, ep, true) : null;
   const pool = m && m.reference ? await refsPool(db, ep) : null;   // v3.5.22
+  try { ep.castNames = ((cast || await castRefs(db, ep, true)).all || []).map(function (c) { return c.name; }).filter(Boolean); } catch (e) { ep.castNames = []; }   // v3.5.47: who leaves, by name
   const plan = planShot(ep, kfs, shot, shotNo, pool);   // v3.5.16; v3.5.19: in plain words; v3.5.22: the shot's references
   // v3.5.18 -- what a Generate is about to send, for debug mode (Ian: "Put what you need to see in debug mode").
   vlDebug(req.session && req.session.userId, plan.error ? 'warn' : 'info', 'makeShot', 'Shot ' + shotNo + ' (shot ' + shot.id + ', episode ' + ep.id + '): model ' + ep.model + ' = ' +
@@ -1939,7 +1960,7 @@ function shotListRequest(ctx, images) {
       'FOR EACH SHOT write these, in plain words:\n' +
       '- name: 2 to 5 words naming the shot.\n' +
       '- start: who is where when the shot opens, and which way they face, and anything lying around that must stay in the shot (bodies, fallen weapons, props) as the shot\'s pictures show it: later pictures do not carry them (one to three sentences).\n' +
-      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning.\n' +
+      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning. When someone leaves the frame, say they walk completely out of frame and are gone, give that about 2 seconds, and make the end say the frame is empty of them.\n' +   // v3.5.47
       (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view; always name the speaker}. At most two short lines in a shot; an empty list when nobody should talk.\n'
         : '- lines: always an empty list in this style.\n') +
       '- camera: what the camera does. If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
@@ -2420,7 +2441,7 @@ function precheckRequest(ctx, images) {
     '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
     '2. gap: the story says something happens that the video must show and no picture covers (between two pictures of a shot, or between two shots). Read the story: if it explains a change (someone healed in turn, a later moment), that is not a mistake, but the video still has to get from one picture to the next. Suggest the missing picture: say after which picture number it goes and describe it in one or two sentences.\n' +
     '3. continuity: a person or prop that appears from nowhere, someone who leaves and is needed again in the same shot (a cut is the reliable fix), a change of place inside one shot.\n' +
-    '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end. Offer replacement words for the one box to change.\n' +
+    '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end, someone who must leave the frame with too little time left to get all the way out (they stop at the edge) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +
     '5. reference: someone clearly on screen who is not among the references sent.\n' +
     '6. style: a picture that does not look like the version\'s art style' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' or like the other pictures.\n\n' +
     'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +

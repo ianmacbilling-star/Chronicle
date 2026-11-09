@@ -43389,6 +43389,9 @@ function vlRefsFromWords(ep, w) {
   return ((ep && ep.cast) || []).filter(function (c) { return c.usable && vlNamed(c.name, text) && vo.indexOf(vlFirst(c.name)) < 0; }).map(function (c) { return { type: 'character', id: c.id }; });
 }
 // Actions are typed one per line ("1. ..." numbers optional) and kept as a list.
+// v3.5.47 -- the words that have someone leave the frame (the server's EXIT_RE, the same list).
+var VL_EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|behind|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|view|sight|picture)|off[- ]?(screen|frame)|disappears?|disappearing|vanish(es|ing)?|is gone\b)/i;
+function vlHasExit(text) { return VL_EXIT_RE.test(String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '')); }
 function vlActionsList(text) {
   return String(text || '').split('\n').map(function (a) { return a.replace(/^\s*\d+\s*[.)]\s*/, '').trim(); }).filter(Boolean);
 }
@@ -43477,6 +43480,7 @@ function vlTogglePanel(si, key) {
   s.op = s.op || {};
   s.op[key] = !s.op[key];
   VL.panelsOpen = VL.panelsOpen || {};
+  if (s.op[key]) Object.keys(s.op).forEach(function (k) { if (k !== key && s.op[k]) { s.op[k] = false; if (s.id) VL.panelsOpen[s.id + ':' + k] = false; } });   // v3.5.47 (Ian): one panel open at a time on a shot
   if (s.id) VL.panelsOpen[s.id + ':' + key] = s.op[key];
   vlRenderOpen(true);
   if (s.op[key]) { var el = document.querySelector('#vl-p-' + si + '-' + key + ' textarea, #vl-p-' + si + '-' + key + ' input'); if (el) el.focus(); }
@@ -43593,6 +43597,12 @@ function vlChecks(si) {
   });
   var secs = Number(s.seconds) || VL_SHOT_SECS;
   if (acts.length > Math.max(2, Math.floor(secs / 2.5))) out.push({ p: 'shot', t: 'That\'s ' + acts.length + ' actions for ' + secs + ' seconds. Consider a longer shot or a cut.' });
+  // v3.5.47 (Ian: someone told to leave stops at the edge): leaving needs about 2 seconds to get all the way out.
+  else acts.forEach(function (a, i) {
+    if (!vlHasExit(a) || secs >= acts.length * 2.5 + 2) return;
+    var ep1 = vlFindEp(VL.draft.id), who = ((ep1 && ep1.cast) || []).filter(function (c) { return vlNamed(c.name, a); }).map(function (c) { return String(c.name).trim().split(/\s+/)[0]; })[0] || 'Someone';
+    out.push({ p: 'actions', t: who + ' leaves in action ' + (i + 1) + '. Give them about 2 seconds to get all the way out of frame: make the shot longer or drop an action.' });
+  });
   var mm0 = vlModel(VL.draft.model), maxScene0 = (mm0 && mm0.reference && mm0.max_scene) || 5;   // v3.5.45
   if (s.kfs.length > maxScene0) out.push({ p: 'shot', t: 'Only the first ' + maxScene0 + ' pictures are sent. Cut this shot.' });
   s.lines.forEach(function (l) { if (String(l.text || '').trim() && !String(l.who || '').trim()) out.push({ p: 'lines', t: 'Who says "' + String(l.text).slice(0, 40) + '"? A line with no name is sent as a voice from off-screen; name the speaker so it is not given to someone on screen.' }); });   // v3.5.25
