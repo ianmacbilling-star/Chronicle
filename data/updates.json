@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.30",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3530-new-panel-spinner",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Panel: a spinner while your panel is being written or added.",
+        "detail": "Ian, 2026-11-09. After Add panel, the New Panel window shows the usual spinner (Writing or Adding) until the panel lands; the window cannot be closed or pressed again meanwhile. If the panel is refused, the spinner goes and the message shows as before.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.29",
     "staged_on": "2026-11-09",
     "entries": [

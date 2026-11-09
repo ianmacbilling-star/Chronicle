@@ -43809,6 +43809,10 @@ async function npSend() {
   body.anchor = pics[0].id;
   var src = NP.src;
   if (go) { go.disabled = true; go.innerHTML = NP.mode === 'write' ? 'Writing it…' : 'Adding…'; }
+  // v3.5.30 -- the standard spinner over the window while it works; it also stops clicks (Ian, 2026-11-09)
+  var spin = showBusyOverlay(document.getElementById('np-modal'), NP.mode === 'write' ? 'Writing' : 'Adding',
+    NP.mode === 'write' ? 'Writing the title, the picture prompt and the story text. This can take up to a minute.' : 'Adding your panel.');
+  if (spin) { spin.style.pointerEvents = 'auto'; spin.style.background = 'rgba(var(--panel-deep-rgb),0.85)'; }
   _pmBusy = true;
   var d = null;
   try {
@@ -43818,6 +43822,7 @@ async function npSend() {
   } catch (e) { d = { error: 'NET', message: 'Could not reach the server. Nothing was added.' }; }
   finally { _pmBusy = false; }
   if (!d || !d.success) {
+    if (spin && spin.parentNode) spin.parentNode.removeChild(spin);
     if (go) { go.disabled = false; go.textContent = 'Add panel'; }
     if (d && d.error === 'INSUFFICIENT_TOKENS') { if (msg) msg.innerHTML = insufficientTokensHtml(escapeHtml(d.message || 'You are out of tokens.')); return; }
     say(escapeHtml((d && (d.message || d.error)) || 'The panel could not be added.'));
