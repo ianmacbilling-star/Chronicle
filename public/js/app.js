@@ -18535,7 +18535,7 @@ function renderStoryboard() {
             ' data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"' +
             ' oninput="scheduleMomentTitleSave(' + m.id + ')" onblur="flushMomentTitleSave(' + m.id + ')" />'
           : '<span class="moment-title">' + escapeHtml(m.title || '') + '</span>') +
-        '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleLabel(m.style) : 'Unknown') + ', ' + (m.type ? ((typeLabel[m.type]||m.type) + ', ') : '') + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
+        '<span class="moment-meta-list">' + escapeHtml(m.style ? artStyleLabel(m.style) : (m.image ? 'Unknown' : 'Not drawn yet')) + ', ' + (m.type ? ((typeLabel[m.type]||m.type) + ', ') : '') + (_shapeVal.charAt(0).toUpperCase() + _shapeVal.slice(1)) + '</span>' +
         optsBtn +
       '</div>' +
       '<div class="moment-options" id="moment-options-' + m.id + '" style="display:none;"></div>' +
@@ -43746,7 +43746,7 @@ function npOpen(src, t, id) {
       radio('np-mode', 'own', 'I’ll write it myself', '', false) + '</div>' +
     '<div id="np-own" style="display:none;">' +
       '<label for="np-title" style="' + L + '">Title</label><input id="np-title" class="form-input" type="text" maxlength="64" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">' +
-      '<label for="np-prompt" style="' + L + '">Picture prompt</label><textarea id="np-prompt" class="form-textarea" style="min-height:70px;" placeholder="What the picture shows: who is where, doing what, the light and the mood. Name each character exactly."></textarea>' +
+      '<label for="np-prompt" style="' + L + '">Picture prompt (optional)</label><textarea id="np-prompt" class="form-textarea" style="min-height:70px;" placeholder="What the picture shows: who is where, doing what, the light and the mood. Name each character exactly. Leave empty to use what you wrote above."></textarea>' +
       '<label for="np-desc" style="' + L + '">What the picture shows, in a line (optional)</label><input id="np-desc" class="form-input" type="text" maxlength="400" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">' +
       '<label for="np-shape" style="' + L + '">Shape</label><select id="np-shape" class="form-input">' + NP_SHAPES.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + '</option>'; }).join('') + '</select>' +
       '<label for="np-text" style="' + L + '">Story text (optional)</label><textarea id="np-text" class="form-textarea" style="min-height:70px;" placeholder="The words under the picture. Leave empty and use Regen later."></textarea>' +
@@ -43789,7 +43789,12 @@ function npVal(id) { var el = document.getElementById(id); return el ? String(el
 async function npSend() {
   if (!NP || (typeof _pmBusy !== 'undefined' && _pmBusy)) return;
   var msg = document.getElementById('np-msg'), go = document.getElementById('np-go');
-  var say = function (h, field) { if (msg) msg.innerHTML = '<span style="color:var(--danger);">' + h + '</span>'; var f = field && document.getElementById(field); if (f) f.focus(); };
+  // v3.5.29 -- the dark dialogs' own error colour (--error-light), larger and bold, and the box it is about outlined (Erin, 2026-11-09: dark red was 2.09:1)
+  var say = function (h, field) {
+    if (msg) msg.innerHTML = '<span class="np-err" style="color:var(--error-light);font-size:13px;font-weight:600;">' + h + '</span>';
+    var f = field && document.getElementById(field);
+    if (f) { f.style.outline = '2px solid var(--error-light)'; f.style.outlineOffset = '1px'; f.addEventListener('input', function () { f.style.outline = ''; }, { once: true }); f.focus(); }
+  };
   var body = { after: NP.after, line: npVal('np-line'), mode: NP.mode,
     characters: Object.keys(NP.chars).filter(function (k) { return NP.chars[k]; }).map(Number),
     assets: Object.keys(NP.assets).filter(function (k) { return NP.assets[k]; }).map(Number), prominence: Number(npVal('np-prom')) || 3 };
@@ -43797,8 +43802,7 @@ async function npSend() {
   if (NP.mode === 'own') {
     body.title = npVal('np-title'); body.prompt = npVal('np-prompt'); body.description = npVal('np-desc'); body.text = npVal('np-text');
     body.shape = npVal('np-shape') || 'standard';
-    if (!body.title) { say('Give the panel a title.', 'np-title'); return; }
-    if (!body.prompt) { say('Write the picture prompt, so its picture can be made.', 'np-prompt'); return; }
+    if (!body.title) { say('Give the panel a title.', 'np-title'); return; }   // v3.5.29 -- the picture prompt is optional: left empty, the line is used
   }
   var pics = fxPics(NP.src === 'review' ? 'review' : 'board');
   if (!pics.length) { say('Reload the page and try again.'); return; }

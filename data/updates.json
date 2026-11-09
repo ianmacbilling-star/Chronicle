@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.29",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3529-new-panel-fixes",
+        "kind": "fix",
+        "public": true,
+        "summary": "New Panel: a readable message when something is missing, an optional picture prompt, and panels without a picture now say Not drawn yet.",
+        "detail": "Testers, 2026-11-09. The New Panel window's message is now light red and bold (it was dark red on near-black), and the box it is about is outlined. On I'll write it myself the picture prompt is optional: left empty, what you wrote in What happens here? is used. A panel with no picture yet reads Not drawn yet where it read Unknown (it is drawn in the version's art style like every panel). Write it for me now names in the picture prompt only the characters your line names, or exactly the ones you picked, so no one extra is drawn.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.28",
     "staged_on": "2026-11-09",
     "entries": [

@@ -1221,12 +1221,14 @@ Where the story comes together as alternating image panels and narrative.
   by name, like any panel), its **Prominence** (Minimize, Default or Maximize: how big it gets in the layouts), and who writes it:
   **Write it for me** (**1 token**: Campaignia writes the title, the picture prompt, the shape and the panel's story text
   in the version's narrative style — the text only once the session has its narrative) or **I'll write it myself** (a
-  title and a picture prompt are needed; a description, the shape and the story text are optional). The panel lands
+  title is needed; the picture prompt is optional — left empty, your **What happens here?** line is used — and so are a
+  description, the shape and the story text). The panel lands
   without a picture: give it one there with **Replace** (from the Archive, an Image Builder picture for example),
   **Regen**, or **Generate Images**. The new panel is then like every other:
   its text stays with its picture, it moves, prints and publishes with it, and Generate Images and Regenerate Narrative
   include it. **Your plan's panel limit applies** (the title picture does not count); at the limit the button is grey
-  until a panel is deleted. **Generate Story** starts over and does not keep added panels. If a written panel's story
+  until a panel is deleted. Until it has a picture, its line under the picture reads **Not drawn yet**; it is drawn in the
+  version's art style like every panel. **Generate Story** starts over and does not keep added panels. If a written panel's story
   text could not be written, the panel is still added, nothing is charged, and **Regen** writes its text.
 
 **Upload your own picture onto a panel.** In **Replace**, the **Upload your own** tab puts a picture

@@ -89,7 +89,7 @@ router.delete('/:momentId', requireAuth, verifyCampaignMember, async function(re
 //         its text), so Regen and Regenerate Narrative keep following it.
 //   mode 'write' (Write it for me, 1 token): the AI writes title, description, image prompt, shape and type, and then the
 //         panel's own text when the session has its narrative. Charged only when it all worked; a failed call adds nothing.
-//   mode 'own': title and picture prompt required; description (else the line), shape and text optional.
+//   mode 'own': title required; picture prompt (else the line, v3.5.29), description (else the line), shape and text optional.
 //   characters, assets: the cast (none = found by name); prominence 1 / 3 / 5 (v3.5.28, default 3).
 // Refused past the plan's panel limit (Generate Story's own, the title picture not counted), on someone else's version,
 // and while a narrative or Generate Story is being written. The order, text blocks, outlines, Directions, Review lines and
@@ -143,9 +143,8 @@ router.post('/insert', requireAuth, verifyCampaignMember, async function (req, r
     if (mode === 'own') {
       const shape = NP_SHAPES.indexOf(String(b.shape || '')) >= 0 ? String(b.shape) : 'standard';
       const title = capTitleForShape(npStr(b.title, 200), shape);
-      const prompt = npStr(b.prompt, 4000);
+      const prompt = npStr(b.prompt, 4000) || line;   // v3.5.29 -- optional: left empty, the writer's line is the picture prompt (Ian: option b)
       if (!title) return res.status(400).json({ error: 'NO_TITLE', message: 'Give the panel a title.' });
-      if (!prompt) return res.status(400).json({ error: 'NO_PROMPT', message: 'Write the picture prompt, so its picture can be made.' });
       row = { title: title, description: npStr(b.description, 2000) || line, prompt: prompt, shape: shape, type: null, emphasis: null };
     } else {
       const bal = await getBalance(userId);
