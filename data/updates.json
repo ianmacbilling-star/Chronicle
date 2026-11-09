@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.46",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3546-video-takes-in-tokens",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: takes and take retouches cost tokens.",
+        "detail": "Ian, 2026-11-09: 'start deducting tokens when actions are performed'; admins too; the episode join stays free. A take's price is fal's cost at 8 cents a token (app_settings shotlist_cents_per_token), rounded up, and shows on Generate take and in the take-retouch window. The balance, less what the person's takes still being made will cost, is checked before anything goes to fal; the tokens come off once, when the take arrives (source video_take); a take that fails costs nothing.",
+        "td": [
+          "TD-1116"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.45",
     "staged_on": "2026-11-09",
     "entries": [

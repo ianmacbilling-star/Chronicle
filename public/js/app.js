@@ -42444,6 +42444,25 @@ function vlMovesOf(s) {
   if (s.kfs.length === 1) return 1;
   return Math.max(0, s.kfs.length - 1) + (s.kfs.length > 1 && String(s.kfs[s.kfs.length - 1].prompt || '').trim() ? 1 : 0);   // v3.5.07: the after move when written
 }
+// v3.5.46 -- TAKES IN TOKENS (Ian, 2026-11-09). A take's price: fal's cost at VL.cpt cents a token, rounded up, for the
+// model the shot is made with (its own mode can switch it, as the server's shotModelKey does). The server is the judge.
+function vlTakeTok(usd) { return Math.max(1, Math.ceil((Number(usd) || 0) * 100 / (VL.cpt || 8) - 1e-9)); }
+function vlShotModelKey(d, ds) {
+  var key = d.model, m = vlModel(key), mode = ds && ds.mode;
+  if (!m) return key;
+  if (mode === 'reference' && !m.reference) return key === 'seedance2' ? 'seedance2ref' : (key === 'kling3std' ? 'klingo3ref' : 'seedance2reffast');
+  if (mode === 'keyframes' && m.reference) return key === 'seedance2ref' ? 'seedance2' : (key === 'klingo3ref' ? 'kling3std' : 'seedance2fast');
+  return key;
+}
+function vlShotTok(d, ds) {
+  var m = vlModel(vlShotModelKey(d, ds)) || vlModel(d.model);
+  if (!m) return 0;
+  return vlTakeTok((d.sound ? m.priceSound : m.price) * vlShotSecs(ds, m));
+}
+function vlTokErr(j, fallback) {   // the message for a refused take; out of tokens gets the Add tokens link
+  if (j && j.error === 'INSUFFICIENT_TOKENS') return insufficientTokensHtml(escapeHtml(j.message || 'You are out of tokens.'));
+  return escapeHtml((j && (j.message || j.error)) || fallback);
+}
 function vlShotSecs(s, m) { return Number(s.seconds) || VL_SHOT_SECS; }   // v3.5.19: one length per shot
 function vlShowCost() {
   var d = VL.draft, el = document.getElementById('vl-cost');
@@ -42689,7 +42708,7 @@ function vlShotBtnHTML(ep, ds, si) {
   var btn = !ds.id ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Saving...</button>'
     : making ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Being made</button>'
     : takes.length >= VL_MAX_TAKES ? '<span class="vl-full" style="' + VL_DESC + 'margin-right:8px;">' + VL_MAX_TAKES + ' takes max &mdash; delete one to make another.</span><button class="btn btn-sm vl-gen" disabled title="' + VL_MAX_TAKES + ' takes max: delete one to make another">Generate take</button>'   // v3.5.15
-    : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now">Generate take</button>';
+    : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now. The tokens come off when the take arrives; a take that fails costs nothing.">Generate take (' + vlShotTok(VL.draft, ds) + ' tokens)</button>';   // v3.5.46
   return '<div style="display:flex;gap:10px;align-items:flex-end;">' +
     '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex:1;min-width:0;">' +
       takes.map(function (t, i) {
@@ -42741,6 +42760,9 @@ function vlSetLive(el, key, html) {
 function vlRenderLive() {
   var d = VL.draft, ep = d ? vlFindEp(d.id) : null;
   if (!d || !ep) return;
+  var nDone = 0; (ep.shots || []).forEach(function (s) { (s.takes || []).forEach(function (t) { if (t.status === 'done') nDone++; }); });   // v3.5.46: a take landed -> its tokens came off
+  if (VL.doneSeen && VL.doneSeen.id === ep.id && nDone > VL.doneSeen.n && typeof refreshTokenBalance === 'function') refreshTokenBalance();
+  VL.doneSeen = { id: ep.id, n: nDone };
   (ep.retouching || []).forEach(function (r) { if (!VL.kfBusy[r.image_url] && !VL.kfDone[r.job_id]) vlKfFollow(ep.id, r.job_id, r.image_url); });   // v3.5.09 (never a job already seen to the end)
   var m = vlModel(d.model);
   d.shots.forEach(function (ds, si) {
@@ -42780,7 +42802,7 @@ function vlMakeShot(si, checked) {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (res.j && res.j.episode) vlPutEp(res.j.episode);
-        if (msg) msg.textContent = res.ok ? '' : ((res.j && res.j.error) || 'Could not start it.');
+        if (msg) msg.innerHTML = res.ok ? '' : vlTokErr(res.j, 'Could not start it.');   // v3.5.46
         VL.liveSig['shot-' + ck] = null; VL.liveSig['btn-' + ck] = null;
         vlRenderList(); vlRenderLive();
       })
@@ -42804,7 +42826,8 @@ function vlMakeAll(checked) {
       .then(function (res) {
         if (go) go.disabled = false;
         if (res.j && res.j.episode) vlPutEp(res.j.episode);
-        if (msg) msg.textContent = res.ok ? (res.j.made + ' shot' + (res.j.made === 1 ? '' : 's') + ' sent to fal. You can leave and come back.' + ((res.j.errors || []).length ? ' ' + res.j.errors[0] : '') + (res.j.note ? ' ' + res.j.note : '')) : ((res.j && res.j.error) || 'Could not start it.');
+        if (msg) msg.textContent = res.ok ? (res.j.made + ' shot' + (res.j.made === 1 ? '' : 's') + ' sent to fal. You can leave and come back.' + ((res.j.errors || []).length ? ' ' + res.j.errors[0] : '') + (res.j.note ? ' ' + res.j.note : '')) : '';
+        if (msg && !res.ok) msg.innerHTML = vlTokErr(res.j, 'Could not start it.');   // v3.5.46
         vlRenderList(); vlRenderLive();
       })
       .catch(function () { if (go) go.disabled = false; if (msg) msg.textContent = 'Could not reach the server.'; });
@@ -42907,7 +42930,7 @@ function vlRtTrim(keep) {
 }
 function vlRtPaint() {
   var p = document.getElementById('vl-rt-price');
-  if (p && VL.rt) p.textContent = 'About $' + vlRtCost(VL.rt.size, VL.rt.secs).toFixed(2) + ' at fal';
+  if (p && VL.rt) p.textContent = vlTakeTok(vlRtCost(VL.rt.size, VL.rt.secs)) + ' tokens, when the retouched take arrives';   // v3.5.46: tokens, not dollars
 }
 function vlRtSend() {
   var r = VL.rt; if (!r) return;
@@ -42921,7 +42944,7 @@ function vlRtSend() {
     .then(function (res) {
       if (!res.ok || !res.j || !res.j.episode) {
         if (go) { go.disabled = false; go.textContent = 'Retouch take'; }
-        if (msg) msg.innerHTML = '<span style="color:var(--danger);">' + escapeHtml((res.j && res.j.error) || 'Could not start the retouch.') + '</span>';
+        if (msg) msg.innerHTML = '<span style="color:var(--danger);">' + vlTokErr(res.j, 'Could not start the retouch.') + '</span>';   // v3.5.46
         return;
       }
       vlPutEp(res.j.episode); vlRtClose(); vlRenderList(); vlRenderLive();

@@ -146,6 +146,38 @@ function estCost(m, duration, sound) {
   const per = sound ? m.priceSound : m.price;
   return Math.round(per * Number(duration) * 10000) / 10000;
 }
+// v3.5.46 -- TAKES IN TOKENS (Ian, 2026-11-09: "start deducting tokens when actions are performed"; admins too; the
+// episode join stays free). A take's price is fal's cost at shotlist_cents_per_token (8 cents) a token, rounded up. The
+// balance is checked before anything goes to fal, less what the person's takes still being made will cost, and the
+// tokens come off when the video lands; a take that fails costs nothing.
+async function takeTokens(db, usd) {
+  const pr = await shotListPrices(db);
+  return Math.max(1, Math.ceil((Number(usd) || 0) * 100 / pr.shotlist_cents_per_token - 1e-9));
+}
+async function tokensFree(db, userId) {
+  const bal = await require('./tokens').getBalance(userId);
+  const r = await db.prepare("SELECT COALESCE(SUM(tokens), 0) AS n FROM takes WHERE user_id = ? AND status = 'making' AND tokens_charged IS NULL").get(userId);
+  return { total: Number(bal.total) || 0, held: Number(r && r.n) || 0, free: (Number(bal.total) || 0) - (Number(r && r.n) || 0) };
+}
+function tokensShort(need, f, what) {
+  return { status: 402, error: 'INSUFFICIENT_TOKENS', message: what + ' costs ' + need + ' token' + (need === 1 ? '' : 's') + ', but you have ' + f.free + (f.held ? ' free (' + f.held + ' are held for takes still being made)' : '') + '. Add tokens and try again.' };
+}
+async function chargeTake(db, takeId) {
+  const t = await db.prepare('SELECT t.id, t.user_id, t.tokens, t.episode_id, e.campaign_id, e.session_id FROM takes t JOIN episodes e ON e.id = t.episode_id WHERE t.id = ?').get(takeId);
+  if (!t || !t.tokens) return;
+  const claim = await db.prepare('UPDATE takes SET tokens_charged = 0 WHERE id = ? AND tokens_charged IS NULL').run(takeId);
+  if (!claim.changes) return;
+  let charged = 0;
+  try {
+    const tk = require('./tokens');
+    const bal = await tk.getBalance(t.user_id);
+    charged = Math.min(Number(t.tokens), Math.max(0, Number(bal.total) || 0));
+    if (charged > 0) await tk.spendTokens(t.user_id, charged, { source: 'video_take', event_type: 'generation_spend', related_campaign_id: t.campaign_id });
+    await tk.recordGeneration(t.user_id, { event_type: 'video_take', tokens_redeemed: charged, quantity: 1, unit: 'takes', model: 'video', related_campaign_id: t.campaign_id, related_session_id: t.session_id });
+    await db.prepare('UPDATE takes SET tokens_charged = ? WHERE id = ?').run(charged, takeId);
+    if (charged < Number(t.tokens)) console.warn('[video] take ' + takeId + ': balance covered ' + charged + ' of ' + t.tokens + ' token(s)');
+  } catch (e) { console.error('[video] take ' + takeId + ' charge failed:', e && e.message); }
+}
 function falClient() {
   const key = process.env.FAL_API_KEY;
   if (!key) throw new Error('FAL_API_KEY is not set');
@@ -333,7 +365,9 @@ function ensureTables() {
     await db.exec('DROP INDEX IF EXISTS idx_writer_one_running');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS source_take_id INTEGER');   // v3.5.26: a retouch of that take
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_text TEXT');
-    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');   // 'small' (Kling O1 Edit) or 'big' (Seedance 2.0)   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS tokens INTEGER');   // v3.5.46: the take's price in tokens (NULL: made before tokens)
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS tokens_charged INTEGER');   // v3.5.46: NULL until it lands and is charged   // 'small' (Kling O1 Edit) or 'big' (Seedance 2.0)   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
     // v3.5.19 -- a shot described in plain words, one set per shot (VIDEO_REFERENCE_SHOTS_SPEC section 2). actions and
     // lines are JSON; actions NULL means the shot was never saved this way (its words are still on its keyframes).
     for (const c of ['start_text TEXT', 'actions TEXT', 'lines TEXT', 'camera TEXT', 'end_text TEXT', 'sounds TEXT', 'around TEXT', 'seconds INTEGER', 'refs TEXT']) {   // refs: v3.5.22
@@ -1100,9 +1134,12 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   if (!hook) return { status: 500, error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' };
   const sound = !!ep.sound;
   const cost = Math.round(plan.moves.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
+  const tokens = await takeTokens(db, cost);   // v3.5.46
+  const tf = await tokensFree(db, req.session.userId);
+  if (tf.free < tokens) return tokensShort(tokens, tf, 'Shot ' + shotNo + '\u2019s take');
   const directions = JSON.stringify({ overall: ep.overall || '', style: ep.style, moves: plan.moves.map(function (x) { return { own: x.own, duration: x.duration, images: x.images || undefined, cast: x.cast || undefined }; }) });
-  const ins = await db.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, est_cost_usd) VALUES (?, ?, ?, 'making', ?, ?, ?, ?, ?) ON CONFLICT (shot_id) WHERE status = 'making' DO NOTHING")
-    .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep0, kfs, shot), directions, cost);   // v3.5.34: signed as the episode reads it
+  const ins = await db.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, est_cost_usd, tokens) VALUES (?, ?, ?, 'making', ?, ?, ?, ?, ?, ?) ON CONFLICT (shot_id) WHERE status = 'making' DO NOTHING")
+    .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep0, kfs, shot), directions, cost, tokens);   // v3.5.34: signed as the episode reads it; v3.5.46 tokens
   if (!ins.lastInsertRowid) return { status: 409, error: 'Shot ' + shotNo + ' is already being made.' };
   const takeId = ins.lastInsertRowid;
   await db.prepare('UPDATE shots SET chosen_take_id = ? WHERE id = ?').run(takeId, shot.id);
@@ -1139,7 +1176,7 @@ router.post('/shots/:id/make', requireAuth, requireVideo, async function (req, r
     if (await runningWriter(db, ep.id, true)) return res.status(409).json({ error: 'The shot list is being written; make the shot when it is done.' });
     const r = await makeShot(db, req, ep, shot, shot.position);
     const out = await loadEpisode(db, ep.id);
-    if (r.error) return res.status(r.status).json({ error: r.error, episode: out });
+    if (r.error) return res.status(r.status).json({ error: r.error, message: r.message, episode: out });   // v3.5.46 message
     res.json({ episode: out });
   } catch (e) {
     console.error('[video] make shot error:', falErrorText(e));
@@ -1159,13 +1196,18 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
     if (!shots.length) return res.status(400).json({ error: 'This episode has no keyframes.' });
     // Check every shot first, so a missing word in shot 5 does not leave shots 1 to 4 made and the rest not.
     const full = {};   // v3.5.15: shots that already have MAX_TAKES takes are skipped, and named
+    let need = 0;
     for (let i = 0; i < shots.length; i++) {
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id)) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
       const p = planShot(epForShot(ep, shots[i]), kfs, shots[i], i + 1, null);   // v3.5.16; v3.5.19; v3.5.34: the shot's mode
       if (p.error) return res.status(400).json({ error: p.error });
+      const pm = MODELS[epForShot(ep, shots[i]).model];   // v3.5.46: what they all cost together
+      need += await takeTokens(db, p.moves.reduce(function (t, x) { return t + estCost(pm, x.duration, !!ep.sound); }, 0));
     }
+    const tfAll = await tokensFree(db, req.session.userId);
+    if (need && tfAll.free < need) { const sh = tokensShort(need, tfAll, 'Making these shots'); return res.status(402).json({ error: sh.error, message: sh.message }); }
     const errors = [];
     let made = 0;
     for (let i = 0; i < shots.length; i++) {
@@ -1416,9 +1458,12 @@ router.post('/takes/:id/retouch', requireAuth, requireVideo, async function (req
       if (refs.length) input.image_urls = refs.map(function (r) { return r.url; });
     }
     const cost = retouchCost(kind, secs);
+    const tokens = await takeTokens(db, cost);   // v3.5.46
+    const tfR = await tokensFree(db, req.session.userId);
+    if (tfR.free < tokens) { const sh = tokensShort(tokens, tfR, 'This retouch'); return res.status(402).json({ error: sh.error, message: sh.message }); }
     const directions = JSON.stringify({ retouch: { from: x.t.id, kind: kind, text: text, refs: refs.map(function (r) { return r.name; }) } });
-    const ins = await db.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, est_cost_usd, source_take_id, retouch_text, retouch_kind) VALUES (?, ?, ?, 'making', ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (shot_id) WHERE status = 'making' DO NOTHING")
-      .run(x.ep.id, shot.id, req.session.userId, x.t.model, sound, x.t.sig, directions, cost, x.t.id, text, kind);
+    const ins = await db.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, est_cost_usd, source_take_id, retouch_text, retouch_kind, tokens) VALUES (?, ?, ?, 'making', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (shot_id) WHERE status = 'making' DO NOTHING")
+      .run(x.ep.id, shot.id, req.session.userId, x.t.model, sound, x.t.sig, directions, cost, x.t.id, text, kind, tokens);
     if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'A take of this shot is already being made.');
     const takeId = ins.lastInsertRowid;
     const mv = await db.prepare('INSERT INTO moves (take_id, episode_id, position, start_url, end_url, prompt, model, endpoint, duration, sound, status, est_cost_usd) VALUES (?, ?, 1, ?, NULL, ?, ?, ?, ?, ?, ?, ?)')
@@ -1525,6 +1570,7 @@ async function takeStatus(db, takeId) {
   }
   if (mvs.length === 1) {
     const r = await db.prepare("UPDATE takes SET video_url = ?, status = 'done', merge_status = 'single', finished_at = NOW(), updated_at = NOW() WHERE id = ? AND status = 'making'").run(mvs[0].video_url, takeId);
+    if (r.changes) await chargeTake(db, takeId);   // v3.5.46
     if (r.changes) await maybeJoinEpisode(db, t.episode_id);
     return;
   }
@@ -1556,6 +1602,7 @@ async function finishTakeMerge(t, falResult, falError) {
     const buf = await joinedVideo(falResult, t.merge_request_id);
     const stored = await storage.uploadFile(buf, 'ep-' + t.episode_id + '-take-' + t.id + '-' + Date.now() + '.mp4', 'video/mp4', 'video-lab');
     await db.prepare("UPDATE takes SET video_url = ?, merge_status = 'done', status = 'done', finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(stored, t.id);
+    await chargeTake(db, t.id);   // v3.5.46
     console.log('[video] take ' + t.id + ' joined: ' + buf.length + ' bytes');
     await maybeJoinEpisode(db, t.episode_id);
     return 'done';
