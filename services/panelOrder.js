@@ -268,6 +268,21 @@ async function applyLayout(db, opts, make) {
     if (expect.length !== got.length || expect.some(function (k, n) { return k !== got[n]; })) throw fail('STALE', 'The panels have changed since this page loaded. Reload and try again.', 409);
     if (items.length && items[0].t === 'b' && !(head && TITLE_BRIDGES)) throw fail('SPOT', 'A bridge cannot go before the first picture.', 409);
 
+    // v3.5.27 -- TD-1117. A NEW PANEL goes in here, in this same transaction, at the spot the page asked for: its row,
+    // its cast and its place in the order together, so a half-made panel is never stored.
+    let addId = null;
+    if (plan.add) {
+      const a = plan.add, r = a.row || {};
+      if (!(a.at >= 0 && a.at <= items.length)) throw fail('STALE', 'That part of the story is not there any more. Reload and try again.', 409);
+      const ins = await tx.prepare('INSERT INTO moments (session_id, fork_id, title, description, type, prompt, emphasis, shape, layout_meta, kind, panel_order, cast_explicit, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(sessionId, forkId, r.title, r.description || '', r.type || null, r.prompt || '', r.emphasis || null, r.shape || 'standard', r.layout_meta || null, 'normal', moments.length, !!((a.characters || []).length || (a.assets || []).length), new Date().toISOString(), a.userId);
+      addId = Number(ins.lastInsertRowid);
+      if (!(addId > 0)) throw fail('FAILED', 'The panel could not be added. Nothing was changed; please try again.', 500);
+      for (const cid of (a.characters || [])) await tx.prepare('INSERT INTO moment_characters (moment_id, character_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(addId, cid);
+      for (const aid of (a.assets || [])) await tx.prepare('INSERT INTO moment_assets (moment_id, asset_id) VALUES (?, ?) ON CONFLICT DO NOTHING').run(addId, aid);
+      items.splice(a.at, 0, { t: 'p', id: addId });
+    }
+
     // The new pictures, and the bridges after each.
     const bridgeById = {}, oldGapOf = {}, wasFirst = {};
     if (norm) norm.forEach(function (b, g) { b.bridges.forEach(function (x, k) { bridgeById[x.id] = x; oldGapOf[x.id] = g; if (k === 0) wasFirst[x.id] = true; }); });
@@ -297,7 +312,9 @@ async function applyLayout(db, opts, make) {
     let newSecs = null;
     if (norm) {
       newSecs = newIds.map(function (id, i) {
-        const s = Object.assign({}, norm[posOf[id]]);
+        // v3.5.27 -- a new panel's block starts with its own text (or none); setBefore puts text into a panel's block.
+        const s = (posOf[id] === undefined) ? { before: String((plan.add && plan.add.text) || ''), before_summary: '' } : Object.assign({}, norm[posOf[id]]);
+        if (plan.setBefore && plan.setBefore[id] !== undefined) s.before = String(plan.setBefore[id]);
         s.bridges = groups[i].map(function (x) { return Object.assign({}, x); });
         s.panel_index = i; s.moment_id = id;
         return derive(s, i, newIds, isTitle(kindOf[id]));
@@ -306,6 +323,7 @@ async function applyLayout(db, opts, make) {
     // v3.4.37 -- a bridge's Directions and outline live under its id and go with it; a deleted bridge's go with it.
     const dirs = pruneKeys(liftKeys(remapKeys(parseJson(fk && fk.narrative_directions, {}), oldToNew, gapMap), newSecs), newSecs);
     const outs = pruneKeys(liftKeys(remapKeys(parseJson(fk && fk.narrative_outlines, {}), oldToNew, gapMap), newSecs), newSecs);
+    if (addId !== null && String(plan.add.outline || '').trim()) outs['moment:' + newIndex[addId]] = String(plan.add.outline).trim();   // v3.5.27 -- what the writer wants to happen: REQUIRED CONTENT for its text
     // Generate Story's Review lines: the narration line follows its picture, the bridge line follows its bridge.
     let newOutline = null;
     const ol = parseJson(fk && fk.narrative_outline, null);
@@ -340,7 +358,7 @@ async function applyLayout(db, opts, make) {
       if (n !== o) await tx.prepare('UPDATE session_characters SET change_moment_index = ? WHERE id = ?').run(n, r.id);
     }
     const gone = (delId != null) ? moments.find(function (m) { return Number(m.id) === delId; }) : null;
-    return { order: newIds, items: items, release: gone ? [gone.image, gone.revert_image].filter(Boolean) : [] };
+    return { order: newIds, items: items, added: addId, index: addId !== null ? newIndex[addId] : null, release: gone ? [gone.image, gone.revert_image].filter(Boolean) : [] };
   });
 }
 
@@ -384,6 +402,37 @@ async function applyArrange(db, opts) {
     }
     if (!Array.isArray(opts.items)) throw fail('BAD_ORDER', 'No order was sent.', 400);
     return { items: opts.items };
+  });
+}
+
+// v3.5.27 -- TD-1117. NEW PANEL: a new picture right after the space the page names -- {t:'o'} the Opening, {t:'p', id} a
+// picture (before the bridges that follow it), {t:'b', id} a bridge -- never after the Closing (Ian, 2026-11-09: "Always
+// one to the right"). Everything goes in through applyLayout, so the order, the text blocks, the outlines and Directions
+// by position, Generate Story's Review lines and the character-change markers all follow, in one transaction.
+// opts: { forkId, sessionId, after, row, characters, assets, outline, text, userId, cap } -- cap is the plan's panel limit
+// (the title picture not counted), checked here inside the transaction.
+async function applyInsert(db, opts) {
+  return applyLayout(db, opts, function (ctx) {
+    const n = ctx.moments.filter(function (m) { return !isTitle(m); }).length;
+    if (opts.cap != null && n >= Number(opts.cap)) throw fail('CAP', 'This session already has ' + n + ' panels, your plan\u2019s limit. Delete one to add another.', 409);
+    const a = opts.after || {};
+    let at = -1;
+    if (a.t === 'o' || (a.t === 'p' && ctx.head && Number(a.id) === Number(ctx.head.id))) at = 0;
+    else if (a.t === 'p' || a.t === 'b') {
+      const want = a.t === 'p' ? Number(a.id) : String(a.id);
+      ctx.flat.forEach(function (it, k) { if (it.t === a.t && it.id === want) at = k + 1; });
+    }
+    if (at < 0) throw fail('STALE', 'That part of the story is not there any more. Reload and try again.', 409);
+    return { items: ctx.flat.slice(), add: { at: at, row: opts.row, characters: opts.characters, assets: opts.assets, outline: opts.outline, text: opts.text, userId: opts.userId } };
+  });
+}
+// v3.5.27 -- one picture's own text (the new panel's, written after it went in), through the same one place.
+async function applySetText(db, opts) {
+  return applyLayout(db, opts, function (ctx) {
+    if (!ctx.norm) throw fail('NO_TEXT', 'This session has no narrative yet.', 409);
+    if (!ctx.moments.some(function (m) { return Number(m.id) === Number(opts.momentId); })) throw fail('STALE', 'That panel is not there any more.', 409);
+    const sb = {}; sb[Number(opts.momentId)] = String(opts.text || '');
+    return { items: ctx.flat.slice(), setBefore: sb };
   });
 }
 
@@ -475,6 +524,6 @@ async function ensureIds(db, forkId) {
   return !!(r && r.changes);
 }
 
-module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyArrange, liftKeys, pruneKeys, gapView, readNorm, ensureIds,
+module.exports = { alignSections, stampSections, remapKeys, planOrder, applyPanels, applyArrange, applyInsert, applySetText, liftKeys, pruneKeys, gapView, readNorm, ensureIds,
 
   normBlocks, mergeSave, fromGenerated, flatten, derive, parseJson, TITLE_BRIDGES };

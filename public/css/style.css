@@ -110,6 +110,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   border-bottom:1px solid rgba(var(--accent-rgb),0.15);
   box-shadow:0 2px 12px rgba(0,0,0,0.4);
 }
+/* v3.5.03 -- the profile menu as far right as it can go (Ian, 2026-11-08): 16px on the right, where the admin debug
+   spot (#dbg-egg) is pinned. The tablet and phone sizes below set their own padding, as before. */
+.app-header{padding-right:16px;}
 .app-logo{
   height:44px;
   display:flex;align-items:center;gap:10px;
@@ -2330,6 +2333,7 @@ html.staging-env .app-logo-text{color:#2b1400;}
 /* Phone layout: compact header, stacked page headers, tighter padding. */
 @media (max-width: 640px) {
   .app-header { padding: 0 0.75rem; gap: 8px; }
+  #dbg-egg { right: 1px !important; width: 10px !important; }   /* v3.5.03 -- fits the phone's 12px padding, clear of the menu */
   .app-logo-text { display: none; }            /* keep just the logo mark */
   /* v3.0.796 -- TD-600. THE BUILD STAMP NEVER APPEARS ON A PHONE, admin or not. Ian: it takes up
      too much space on mobile. It lives inside .app-logo beside the wordmark, and the wordmark

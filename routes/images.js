@@ -1907,6 +1907,79 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
   }
 });
 
+// v3.5.24 -- FLIP (Ian, 2026-11-08: "Add an Option to the retouch drop down to flip the image from left to right...
+// basically mirror image it. It should work also in storyboard."). A mirror image of one of our pictures, made here: no
+// AI, no tokens, no job. The flipped copy keeps the source's rights verdict, as a retouch does. Shared by the story
+// panel route below and the Video tab's keyframes.
+async function mirrorPicture(url) {
+  const buf = await fetchFile(url);
+  if (!buf) { const e = new Error('Only a Campaignia picture can be flipped.'); e.userFacing = true; throw e; }
+  const sharp = require('sharp');
+  const meta = await sharp(buf).metadata();
+  let img = sharp(buf).flop(), ext = 'png', type = 'image/png';
+  if (meta.format === 'jpeg') { img = img.jpeg({ quality: 92 }); ext = 'jpg'; type = 'image/jpeg'; }
+  else if (meta.format === 'webp') { img = img.webp({ quality: 92 }); ext = 'webp'; type = 'image/webp'; }
+  else img = img.png();
+  const out = await img.toBuffer();
+  const newUrl = await uploadFile(out, 'flip-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext, type);
+  if (!newUrl) throw new Error('the flipped picture could not be stored');
+  try { await rightsCheck.inherit(url, newUrl); } catch (e) { console.error('flip: rights inherit failed:', e && e.message); }
+  return { url: newUrl, width: meta.width || null, height: meta.height || null };
+}
+
+// POST /api/images/flip-moment
+// A story panel mirrored left to right. The checks are the retouch's (owner, lock, title panel, a job in flight, the
+// rights check); the bookkeeping is the retouch webhook's: the picture it was goes into the one-step Revert slot, and a
+// picture leaving that slot is released.
+router.post('/flip-moment', requireAuth, async function(req, res) {
+  const db = await getDb();
+  const moment = await db.prepare(
+    'SELECT m.*, s.campaign_id AS campaign_id, sf.user_id AS fork_owner ' +
+    'FROM moments m JOIN sessions s ON m.session_id = s.id JOIN session_forks sf ON sf.id = m.fork_id WHERE m.id = ?'
+  ).get(req.body && req.body.moment_id);
+  if (!moment) return res.status(404).json({ error: 'Moment not found' });
+  const myRole = await getCampaignRole(req.session.userId, moment.campaign_id);
+  if (!myRole) return res.status(403).json({ error: 'Access denied' });
+  if (String(moment.fork_owner) !== String(req.session.userId)) return res.status(403).json({ error: 'You can only flip your own version' });
+  if (moment.locked) return res.json({ error: 'MOMENT_LOCKED', message: 'This panel is locked. Unlock it to flip.' });
+  if (!moment.image) return res.json({ error: 'This panel has no image to flip yet.' });
+  { const _busy = await pendingMomentJob(db, moment.id); if (_busy) return panelBusyReply(res, _busy, req.session.userId); }
+  if (await rightsCheck.refuseRejected(res, [moment.image], 'It can\u2019t be flipped. Replace it with a picture you have the rights to.')) return;
+  var _blt = null;
+  try { var _lm = moment.layout_meta ? (typeof moment.layout_meta === 'object' ? moment.layout_meta : JSON.parse(moment.layout_meta)) : {}; _blt = _lm && _lm.built_title; } catch (e) { _blt = null; }
+  if (_blt && _blt.url && String(_blt.url) === String(moment.image)) {
+    return res.json({ error: 'TITLE_PANEL', message: 'This panel holds a chapter title from the Title Builder. Open the Title Builder to change it.' });
+  }
+  try {
+    const prev = moment.image;
+    const m = await mirrorPicture(prev);
+    const now = new Date().toISOString();
+    // the panel may have changed while the picture was being flipped: only the picture that was flipped is replaced
+    const upd = await db.prepare('UPDATE moments SET image = ?, img_w = COALESCE(?, img_w), img_h = COALESCE(?, img_h), edited_at = ?, edited_by = ? WHERE id = ? AND image = ?')
+      .run(m.url, m.width, m.height, now, req.session.userId, moment.id, prev);
+    if (!upd || !upd.changes) { try { await releaseImage(db, m.url); } catch (e) {} return res.json({ error: 'The panel changed while it was being flipped. Try again.' }); }
+    const leaving = (moment.revert_image && moment.revert_image !== prev && moment.revert_image !== m.url) ? moment.revert_image : null;
+    await db.prepare('UPDATE moments SET revert_image = ?, revert_img_w = ?, revert_img_h = ? WHERE id = ?').run(prev, moment.img_w || null, moment.img_h || null, moment.id);
+    if (leaving) {
+      try {
+        const _dr = await db.prepare('SELECT layout_meta FROM moments WHERE id = ?').get(moment.id);
+        let _dm = null;
+        try { _dm = (_dr && _dr.layout_meta) ? (typeof _dr.layout_meta === 'object' ? _dr.layout_meta : JSON.parse(_dr.layout_meta)) : null; } catch (_pe) { _dm = null; }
+        if (_dm && typeof _dm === 'object' && !Array.isArray(_dm) && _dm.prev_shape && _dm.prev_shape.image === leaving) {
+          delete _dm.prev_shape;
+          await db.prepare('UPDATE moments SET layout_meta = ? WHERE id = ?').run(JSON.stringify(_dm), moment.id);
+        }
+      } catch (_de) { console.error('flip: clearing the old undo-slot record failed (the file is kept):', _de && _de.message); }
+      await releaseImage(db, leaving);
+    }
+    try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Retouch moment', fn: 'POST /flip-moment', message: 'Flipped moment ' + moment.id + ' left to right', detail: { moment_id: moment.id, from: prev, to: m.url } }); } catch (_le) {}
+    res.json({ success: true, image_url: m.url });
+  } catch (e) {
+    console.error('flip-moment error:', e && e.message);
+    res.json({ error: e && e.userFacing ? e.message : 'Could not flip the picture. Please try again.' });
+  }
+});
+
 // POST /api/images/revert-moment
 // One-deep undo of the last retouch/regenerate: restore the retained prior image
 // and release the current one. Free (no token spend). Owner-only, blocked when locked.
@@ -2368,7 +2441,7 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
       // v3.1.98 -- TD-979. A RETOUCH IS AN EDIT OF ITS SOURCE, and keeps the source's rejection, as a copy does
       // (inherit). The routes refuse a rejected source before charging; this is the net under them, so no edit
       // can ever turn a rejected picture into an unmarked one. Never throws.
-      if ((job.kind === 'retouch' || job.kind === 'asset_retouch') && job.prev_image && imageUrl) await rightsCheck.inherit(job.prev_image, imageUrl);
+      if ((job.kind === 'retouch' || job.kind === 'asset_retouch' || job.kind === 'keyframe') && job.prev_image && imageUrl) await rightsCheck.inherit(job.prev_image, imageUrl);   // v3.5.09: a video keyframe's retouch too
       // Measure the REAL pixel dimensions from the image bytes. nano-banana-2 returns null
       // width/height in its webhook, so without this the layout uses the nominal shape aspect
       // (e.g. every "Standard" panel treated as 4:3) -- and a portrait image forced into a 4:3
@@ -2561,13 +2634,25 @@ webhookRouter.post('/webhook/fal', async function(req, res) {
           }
           await logImageGeneration(db, job.user_id, 'builder_image', job.builder_image_id, null);
         }
+        // v3.5.09 -- TD-090. A KEYFRAME OF A VIDEO EPISODE (Retouch on the Video tab). Only the episode's own copy changes:
+        // every keyframe of that episode still showing the picture that was retouched takes the new one, and keeps the
+        // old one in its one-step Revert slot. The book, the storyboard and the Archive are not touched. (Keyframe rows
+        // are rewritten by each save, so they are found by episode and picture, not by id; the page also swaps the
+        // picture in when it sees the job done, so a save in the meantime cannot put the old one back for good.)
+        if (job.kind === 'keyframe' && job.episode_id) {
+          const _kr = await db.prepare('UPDATE keyframes SET image_url = ?, prev_image_url = ? WHERE episode_id = ? AND image_url = ?')
+            .run(imageUrl, job.prev_image, job.episode_id, job.prev_image);
+          await logImageGeneration(db, job.user_id, 'video_keyframe', job.episode_id, null);
+          try { await logDebug(job.user_id, { level: 'info', source: 'generation', page: 'Video tab', fn: 'webhook keyframe retouch', message: 'Keyframe retouched in episode ' + job.episode_id + ' (' + (_kr && _kr.changes) + ' keyframe(s) now show it)', detail: { episode_id: job.episode_id, image_url: imageUrl } }); } catch (_ke) {}
+        }
       const genSource = (job.kind === 'char_ref') ? 'character_reference'
         : (job.kind === 'session_ref') ? 'amendment_reference'
         : (job.kind === 'asset_ref') ? 'asset_reference'
         : (job.kind === 'asset_retouch') ? 'asset_retouch'
         : (job.kind === 'retouch') ? 'panel_retouch'
         : (job.kind === 'batch') ? 'panel_batch'
-        : (job.kind === 'builder') ? 'builder_image' : 'panel_regen';   // v3.3.71 -- TD-1080
+        : (job.kind === 'builder') ? 'builder_image'
+        : (job.kind === 'keyframe') ? 'video_keyframe_retouch' : 'panel_regen';   // v3.3.71 -- TD-1080; v3.5.09 keyframe
       if (job.cost && job.cost > 0) {
         await spendTokens(job.user_id, job.cost, { related_campaign_id: job.campaign_id, source: genSource, event_type: 'generation_spend' });
       }
@@ -4341,7 +4426,87 @@ router.delete('/builder/images/:id', requireAuth, async function (req, res) {
   } catch (e) { console.error('[image-builder] delete error:', e.message); res.json({ error: 'Could not delete the picture.' }); }
 });
 
+// v3.5.09 -- TD-090. RETOUCH ON A VIDEO KEYFRAME, started by routes/videoLab.js (which checks video access, the episode
+// and the picture first). The same retouch the Story panels use: the picture is Image 1; a keyframe from a storyboard
+// panel brings that panel's cast and assets as references (as retouch-moment gathers them); one from the Archive has
+// none. The reader's markers ride along (marked_url) and a picked reference narrows the payload (ref_name). The usual
+// retouch price, spent when the picture arrives (the 'keyframe' webhook branch). Returns { job_id } or { error }.
+async function startKeyframeRetouch(db, o) {
+  const fal_key = process.env.FAL_API_KEY;
+  if (!fal_key) return { error: 'Image generation is not configured. Please contact support.' };
+  const webhookUrl = falWebhookUrl();
+  if (!webhookUrl) return { error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' };
+  const instruction = String(o.instruction || '').trim();
+  if (!instruction) return { error: 'Describe the change you want.' };
+  const modelKey = await getSelectedModel(db);
+  const cost = await getTokenCost(modelKey);
+  if (!(await canAfford(o.userId, cost))) return { error: 'INSUFFICIENT_TOKENS', message: 'You\u2019re out of tokens. Add more to keep generating.' };
+  let refs = [], charText = '', shape = o.shape || null, style = o.style || null;   // shape: the Archive row's, for a picture from the Archive
+  const moment = o.momentId ? await db.prepare('SELECT m.*, s.campaign_id AS campaign_id FROM moments m JOIN sessions s ON s.id = m.session_id WHERE m.id = ?').get(o.momentId) : null;
+  if (moment && Number(moment.campaign_id) === Number(o.campaignId)) {
+    const chars = await db.prepare(
+      'SELECT ch.id AS character_id, ch.name, ch.cls, ch.description, ch.canonical_prompt, ch.canonical_reference_url, ' +
+      'sc.prompt AS snapshot_prompt, sc.reference_url AS snapshot_reference_url, ' +
+      'sc.change_note, sc.change_moment_index, sc.change_status ' +
+      'FROM characters ch ' +
+      'LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? ' +
+      'WHERE ch.campaign_id = ?'
+    ).all(moment.fork_id, o.campaignId);
+    await attachPriorReferences(db, chars, moment.session_id, o.campaignId, moment.fork_id);
+    const text = (moment.prompt || '') + ' ' + (moment.description || '') + ' ' + (moment.title || '');
+    let ec = null, ea = null;
+    if (moment.cast_explicit) {
+      ec = (await db.prepare('SELECT character_id FROM moment_characters WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.character_id; });
+      ea = (await db.prepare('SELECT asset_id FROM moment_assets WHERE moment_id = ?').all(moment.id)).map(function (r) { return r.asset_id; });
+    }
+    const cl = buildCharacterBlock(chars, text, moment.panel_order, ec);
+    const al = buildAssetBlock(await db.prepare(ASSET_REF_SQL).all(o.campaignId), text, ea);
+    refs = combineRefs(cl.refs, al.refs); charText = cl.text; shape = moment.shape || shape;
+    if (!style) style = moment.style || null;
+  }
+  // v3.5.24 -- the Video tab sends the shot's own references (Ian: "only the Shots References"), already resolved and
+  // checked there; they replace the panel's.
+  if (Array.isArray(o.refs)) {
+    refs = o.refs.filter(function (r) { return r && r.name && r.url && isOurPublicUrl(r.url); }).slice(0, MAX_PANEL_REFS)
+      .map(function (r) { return { name: String(r.name), url: r.url, isAsset: !!r.isAsset }; });
+    charText = '';
+  }
+  if (o.forceShape) shape = o.forceShape;   // v3.5.14 -- Expand on the Video tab: drawn wide (16:9) whatever shape the picture was
+  let instr = instruction;
+  if (instr.indexOf('{{REF:') !== -1) {
+    instr = instr.replace(/\{\{REF:([^}]*)\}\}/g, function (m, nm) {
+      const want = String(nm || '').trim().toLowerCase();
+      for (let i = 0; i < refs.length; i++) {
+        const rn = refs[i] && refs[i].name;
+        if (rn && String(rn).trim().toLowerCase() === want) return 'the single reference picture supplied with this request, which is the reference for ' + rn + ',';
+      }
+      return 'the supplied reference image for ' + nm;
+    });
+  }
+  const pick = String(o.refName || '').trim();
+  if (pick) {
+    const hit = refs.filter(function (x) { return x && x.name && String(x.name).trim().toLowerCase() === pick.toLowerCase(); })[0];
+    if (hit) instr = 'The character or object being corrected is ' + hit.name + '. The single reference picture supplied with this request is the reference for ' + hit.name +
+      ', and it is the only one supplied. Apply the change to ' + hit.name + ' and to no one else.\n\n' + instr;
+  }
+  const _rs = await resolveGenStyle(db, style, o.userId, o.campaignId);
+  if (_rs.locked) return { error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' };
+  let marked = String(o.markedUrl || '').trim();
+  if (marked && !isOurPublicUrl(marked)) marked = '';
+  const sub = await submitRetouch(o.imageUrl, instr, _rs.styleForGen, fal_key, webhookUrl, { refs: refs, text: charText }, shape, marked || null, (pick && refs.some(function (x) { return x && x.name && String(x.name).trim().toLowerCase() === pick.toLowerCase(); })) ? pick : null, false, null);
+  const now = new Date().toISOString();
+  const job = await db.prepare(
+    'INSERT INTO image_jobs (request_id, user_id, campaign_id, kind, status, model, style, cost, episode_id, prev_image, temp_inputs, created_at, updated_at) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(sub.request_id, o.userId, o.campaignId, 'keyframe', 'queued', sub.model, style, cost, o.episodeId, o.imageUrl, marked ? JSON.stringify([marked]) : null, now, now);
+  try { await logDebug(o.userId, { level: 'info', source: 'generation', page: 'Video tab', fn: 'POST keyframe retouch', message: 'Retouching a keyframe of episode ' + o.episodeId + ' (request ' + sub.request_id + ')',
+    detail: { instruction_raw: instruction, instruction_sent: instr, refs: refs.map(function (x) { return x && x.name; }), ref_name_picked: pick || null, marked_url: marked ? 'yes' : 'no', moment_id: o.momentId || null, style: style } }); } catch (_le) {}
+  return { job_id: job.lastInsertRowid, cost: cost };
+}
+
 module.exports = router;
+module.exports.startKeyframeRetouch = startKeyframeRetouch;   // v3.5.09 -- TD-090
+module.exports.mirrorPicture = mirrorPicture;   // v3.5.24 -- Flip, for the Video tab's keyframes
 module.exports.generateReferenceImage = generateReferenceImage;
 // v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.
 module.exports.charPromptWithHeight = charPromptWithHeight;

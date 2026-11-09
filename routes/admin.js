@@ -236,7 +236,9 @@ router.post('/debug-mode', requireAuth, requireAdmin, async function (req, res) 
 router.get('/unused-pictures', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();
-    const r = await require('../services/storageAudit').orphanReport(db);   // v3.2.73 -- every folder: pictures and PDFs
+    // v3.2.73 -- every folder: pictures and PDFs. v3.5.06 -- with the move's keep list, so ready to move matches the move.
+    const keep = new Set(await require('../services/storageCleanup').getKeep(db));
+    const r = await require('../services/storageAudit').orphanReport(db, { keep: keep });
     if (r.error) return res.json(r);
     res.json(r);
   } catch (e) {
@@ -246,6 +248,21 @@ router.get('/unused-pictures', requireAuth, requireAdmin, async function (req, r
 });
 
 // v3.2.72 -- the staging one-time move (v3.2.67, services/storageMove.js) is retired: staging moved 2026-10-24.
+
+// v3.5.01 -- Pictures still on fal (services/falCopy.js). Find: which rows of THIS database still point at a fal
+// address. Copy: each file once into this environment's own bucket, then those rows re-pointed (a background job,
+// with progress). The same copy runs nightly and before the monthly clean-up.
+router.get('/fal-pictures', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(await require('../services/falCopy').find(await getDb())); }
+  catch (e) { console.error('GET fal-pictures error:', e && e.message); res.status(500).json({ error: 'Could not look: ' + ((e && e.message) || 'unknown error') }); }
+});
+router.post('/fal-pictures/copy', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(require('../services/falCopy').startCopy(await getDb())); }
+  catch (e) { res.json({ error: (e && e.message) || 'error' }); }
+});
+router.get('/fal-pictures/status', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(require('../services/falCopy').status()); } catch (e) { res.status(500).json({ error: (e && e.message) || 'error' }); }
+});
 
 // v3.2.68 -- TD-1006. The monthly storage clean-up: status, its mode (off / report / hold) and Run now.
 // v3.2.69 -- Run now with move:true moves unused pictures to the holding bucket (nothing is deleted).

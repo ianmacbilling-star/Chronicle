@@ -129,8 +129,12 @@
     </div>
     <!-- v3.2.62 -- TD-996. An invisible spot to the right of the account button: seven clicks turn Debug Mode on or off
          for an admin (Ian, 2026-10-24), without going to the Account page. Nothing shows and nothing happens for
-         anyone else. No cursor change, no title, hidden from screen readers. -->
-    <span id="dbg-egg" onclick="cmpEggTap()" aria-hidden="true" style="display:inline-block;width:24px;height:30px;margin-left:-6px;margin-right:-12px;flex:0 0 auto;"></span>
+         anyone else. No cursor change, no title, hidden from screen readers.
+         v3.5.02 -- half as wide (Ian, 2026-11-08), taking the same room as before; and while Debug Mode is on, an admin
+         sees it (cmpEggShow): a small red bar, a click away from the debug panel.
+         v3.5.03 -- out of the row (Ian: "get rid of all the extra space around the debug button... the profile menu
+         shoved as far right as possible"): pinned in the header's right padding, which is 16px from v3.5.03. -->
+    <span id="dbg-egg" onclick="cmpEggTap()" aria-hidden="true" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);width:12px;height:30px;border-radius:4px;"></span>
   </div>
 </div>
 
@@ -1140,7 +1144,7 @@
         <div class="sess-tab" id="stab-review" onclick="switchSessionTab('review')">Review</div>
         <div class="sess-tab" id="stab-storyboard" onclick="switchSessionTab('storyboard')">Storyboard</div>
         <div class="sess-tab dm-only" id="stab-export" onclick="switchSessionTab('export')">Preview</div>
-        <div class="sess-tab" id="stab-videolab" onclick="switchSessionTab('videolab')" style="display:none;">Video Lab</div>
+        <div class="sess-tab" id="stab-videolab" onclick="switchSessionTab('videolab')" style="display:none;">Video</div>
         <button class="btn btn-sm" id="sess-nav-next" type="button" onclick="sessNavGo(1)"
                 style="margin-left:auto;align-self:center;padding:2px 10px;line-height:1.2;"
                 title="Next session">&#8250;</button>
@@ -2545,12 +2549,33 @@
           it never moves or deletes anything.
           (Old records like finished image jobs and debug logs don&rsquo;t count as use. Files from the last 24 hours are left
           out, because they may still be saving; print PDFs from the last 90 days, because an order can wait in the browser until it is paid.)
+          Move to holding waits longer, so orphaned is split in two: <strong>ready to move</strong> is what the next move would take
+          (30 days old; print PDFs 90), and <strong>waiting</strong> is younger than that.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
           <button class="btn btn-sm" onclick="unusedPicsRun()">Check for orphaned pictures and PDFs</button>
           <button class="btn btn-sm" id="unused-pics-csv" style="display:none;" onclick="unusedPicsCsv()">Download the list (CSV)</button>
         </div>
         <div id="unused-pics-out" style="margin-top:10px;font-size:13px;"></div>
+      </div>
+      <!-- v3.5.01 -- Pictures still on fal (Ian, 2026-11-08): right under the orphan check. -->
+      <div class="settings-section" id="fal-pics-section" style="display:none;margin-top:14px;">
+        <div class="settings-section-title">Pictures still on fal</div>
+        <div class="settings-section-desc">
+          Pictures whose address is still fal&rsquo;s, not ours. It happens when copying a new picture to our storage fails
+          (the picture keeps fal&rsquo;s address so it is not lost), and fal does not keep files for ever. Once a night, and
+          before the monthly clean-up, Campaignia copies them to this site&rsquo;s own storage by itself and emails you
+          if it did anything; these buttons do the same whenever you like.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+          <button class="btn btn-sm" onclick="falPicsFind()">Find pictures still on fal</button>
+          <span class="settings-section-desc" style="margin:0;">Only looks: lists them and where each is used. Changes nothing.</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+          <button class="btn btn-sm" id="fal-pics-copy-btn" onclick="falPicsCopyClick()">Copy them to our storage</button>
+          <span class="settings-section-desc" style="margin:0;">Copies each one to our storage and points every row that uses it at the copy. A picture fal no longer has is listed and left as it is.</span>
+        </div>
+        <div id="fal-pics-out" style="margin-top:10px;font-size:13px;"></div>
       </div>
       <!-- v3.2.68 -- TD-1006. The monthly clean-up of this environment's own bucket. v3.2.71 -- its own panel on Tools. -->
       <style>#cleanup-section .cu-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;} #cleanup-section .cu-row .settings-section-desc{margin:0;}</style>
@@ -3792,6 +3817,7 @@
       <select class="form-input" id="retouch-action" onchange="rgActionChange()" style="margin:10px 0 0;">
         <option value="">What are you changing?</option>
         <option value="none">I'll type it below</option>
+        <option value="flip">Flip it left to right (mirror image)</option>
         <option value="move">Move a character</option>
         <option value="add">Add a character</option>
         <option value="extra">Add a person or object</option>
@@ -3824,7 +3850,7 @@
     </div>
     <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-sm" onclick="closeRetouch()">Cancel</button>
-      <button class="btn btn-sm btn-primary" onclick="submitRetouch()">Retouch image</button>
+      <button class="btn btn-sm btn-primary" id="retouch-go-btn" onclick="submitRetouch()">Retouch image</button>
     </div>
   </div>
 </div>

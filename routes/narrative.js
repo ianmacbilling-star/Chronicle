@@ -2152,9 +2152,9 @@ function wtPrompt(tool, ctx, session, box, text, body) {
 }
 
 // v3.2.55 -- prompt is a string (Word) or the blocks wtMessage builds; the API takes either as the message content.
-async function wtCallModel(key, model, system, prompt, maxTokens) {
+async function wtCallModel(key, model, system, prompt, maxTokens, timeoutMs) {   // v3.5.27 -- timeoutMs: the New Panel calls share one request
   const ac = new AbortController();
-  const t = setTimeout(function () { try { ac.abort(); } catch (e) {} }, WRITING_TIMEOUT_MS);
+  const t = setTimeout(function () { try { ac.abort(); } catch (e) {} }, timeoutMs || WRITING_TIMEOUT_MS);
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -2410,5 +2410,109 @@ async function writingToolHandler(req, res) {
   result.uses_per_token = WRITING_USES_PER_TOKEN;
   res.json(result);
 }
+
+// =====================================================================================================
+// v3.5.27 -- TD-1117. NEW PANEL → "Write it for me" (claude/NEW_PANEL_SPEC.md). Two calls, both inside the one request
+// that adds the panel (routes/moments.js), each held well under Cloudflare's ~100 s together:
+//   npFields -- before the panel exists: from the writer's line, the panels either side and the story, the panel's
+//               title, description, image prompt (English always), shape, type and emphasis, as Generate Story writes them.
+//   npText   -- after it went in: its own story text, written exactly as Regen writes a Moment box (same rules, the
+//               version's narrative style, its outline -- the writer's line -- as REQUIRED CONTENT).
+// =====================================================================================================
+const NP_FIELDS_MS = 35 * 1000, NP_TEXT_MS = 50 * 1000;
+const NP_SHAPES = ['square', 'standard', 'wide', 'panoramic', 'tall', 'tower', 'fullpage'];
+const NP_TYPES = ['combat', 'drama', 'discovery', 'humor'];
+// Where the new panel goes, read against the version as it is now: the picture before it, the picture after it, and
+// the text that will sit just before it (a bridge's, or the picture's own).
+function npSpot(ctx, after) {
+  const ms = ctx.moments || [];
+  const a = after || {};
+  const head = (ms[0] && ms[0].kind === 'establishing') ? 0 : -1;
+  let prev = -1, next = -1, textBefore = '';
+  if (a.t === 'o' || (a.t === 'p' && head === 0 && String(ms[0].id) === String(a.id))) {
+    prev = head; next = head + 1;
+    textBefore = String(ctx.intro || '');
+  } else if (a.t === 'p') {
+    ms.forEach(function (m, i) { if (String(m.id) === String(a.id)) prev = i; });
+    if (prev < 0) return null;
+    next = prev + 1;
+    const blk = (ctx.sections || [])[prev];
+    textBefore = String((blk && blk.before) || '');
+  } else if (a.t === 'b') {
+    const g = wtGapOf(ctx, 'bridge:' + String(a.id));
+    if (g < 0) return null;
+    prev = g; next = g + 1;
+    const br = ((ctx.norm && ctx.norm[g]) ? ctx.norm[g].bridges : []).filter(function (x) { return x.id === String(a.id); })[0];
+    textBefore = String((br && br.text) || '');
+  } else return null;
+  return { prev: prev >= 0 ? ms[prev] : null, prevIndex: prev, next: (next >= 0 && next < ms.length) ? ms[next] : null, textBefore: textBefore.slice(0, 3000) };
+}
+function npPic(m, word) {
+  if (!m) return word === 'after' ? 'THE PICTURE AFTER IT: none -- the new panel is the last picture of the session.\n' : 'THE PICTURE BEFORE IT: none -- the new panel opens the session.\n';
+  return 'THE PICTURE ' + (word === 'after' ? 'AFTER' : 'BEFORE') + ' IT' + (m.kind === 'establishing' ? ' (the session\'s title picture)' : '') + ': "' + String(m.title || '') + '" -- ' + String(m.description || '') + '\n';
+}
+async function npFields(db, req, session, forkId, after, line, refs) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return { error: 'AI service not configured. Please contact support.' };
+  const ctx = await writingContext(db, req, session, forkId);
+  const spot = npSpot(ctx, after);
+  if (!spot) return { error: 'STALE' };
+  const bg = wtBackground(ctx, session);
+  const tr = String(session.transcript || '');
+  const window = tr.trim() ? wtTranscriptWindow(ctx, session, spot.prevIndex >= 0 ? ('moment:' + spot.prevIndex) : 'opening', 12000) : '';
+  const names = function (xs) { return (xs || []).map(function (x) { return x.name; }).filter(Boolean).join(', '); };
+  const prompt = wtMessage([bg.campaign, bg.session],
+    (window ? ('THE ORIGINAL STORY / SESSION TRANSCRIPT around this point (what actually happened):\n' + window + '\n\n') : '') +
+    npPic(spot.prev, 'before') + npPic(spot.next, 'after') +
+    (spot.textBefore.trim() ? ('THE STORY TEXT JUST BEFORE THE NEW PANEL:\n' + spot.textBefore + '\n') : '') + '\n' +
+    'WHAT THE WRITER WANTS TO HAPPEN IN THE NEW PANEL (this is the basis: follow it):\n' + line + '\n\n' +
+    (names(refs.characters) ? ('Characters the writer put in this panel (use these exact names): ' + names(refs.characters) + '\n') : '') +
+    (names(refs.assets) ? ('Places, items and supporting characters the writer put in this panel (use these exact names): ' + names(refs.assets) + '\n') : '') +
+    '\nYOUR ROLE: You plan ONE new panel for this illustrated story (a graphic novel), to sit between the picture before it and the picture after it. You always return valid JSON.\n' +
+    'Fill these fields:\n' +
+    '- "title": the panel\'s caption, a few words, at most 60 characters, in the same language as the story.\n' +
+    '- "description": 1-2 sentences, IN ENGLISH ALWAYS (internal, never shown to a reader): what this panel\'s picture shows and how it comes about.\n' +
+    '- "prompt": IN ENGLISH ALWAYS -- it is sent to an image model that reads English only, and the character names in it attach the right reference pictures, so never translate or inflect a name. Describe the SCENE ONLY in 2-3 sentences: composition, lighting, character positions, mood. Never name an art style, medium or rendering technique. ' +
+      'Refer to every known character BY THEIR EXACT NAME, never as "the warrior" or "a half-orc". Name ONLY the characters actually in the frame of this one shot. Never write a group term ("the party", "everyone", "they"): write the names of who is in the shot. Keep known characters\' descriptions lean -- what they are DOING (pose, action, expression) and any temporary state; their look comes from their reference picture. ' +
+      // v3.5.29 -- every character named in the prompt is drawn (the cast is matched by name), so no extras (Erin, 2026-11-09)
+      (names(refs.characters) ? ('The characters in this shot are exactly: ' + names(refs.characters) + '. Name no other character in the prompt.') : 'Name in the prompt ONLY the characters the writer\'s line names, plus any the line clearly needs in the shot; every character you name is drawn, so add no one else from the story.') + '\n' +
+    '- "shape": exactly one of square, standard, wide, panoramic, tall, tower, fullpage. standard is the default and most common; wide for a broad or action shot; panoramic only for a grand vista; square for an intimate close-up; tall for full-height framing; tower only for something towering or a great height; fullpage for a full-page splash.\n' +
+    '- "type": exactly one of combat, drama, discovery, humor.\n' +
+    '- "emphasis": only for combat, a punchy 1-3 word phrase that fits this moment; otherwise "".\n' +
+    'Stay true to the story and to what the writer asked for; keep the names exactly as written. ' + WT_RULES +
+    'Return ONLY valid JSON, no markdown: { "title": "...", "description": "...", "prompt": "...", "shape": "standard", "type": "drama", "emphasis": "" }');
+  const out = await wtCallModel(key, WRITING_MODEL, 'You plan panels for Campaignia, which turns stories into illustrated books. Follow the instructions at the end of the message exactly.', prompt, 1200, NP_FIELDS_MS);
+  if (out.error) return { error: out.error };
+  const p = out.truncated ? null : wtParseJson(out.text);
+  if (!p || typeof p !== 'object') return { error: 'The new panel came back in a form we could not read.' };
+  const f = {
+    title: wtStr(p.title, 200).replace(/\s+/g, ' ').trim(),
+    description: wtStr(p.description, 2000).trim(),
+    prompt: wtStr(p.prompt, 4000).trim(),
+    shape: NP_SHAPES.indexOf(String(p.shape || '').toLowerCase()) >= 0 ? String(p.shape).toLowerCase() : 'standard',
+    type: NP_TYPES.indexOf(String(p.type || '').toLowerCase()) >= 0 ? String(p.type).toLowerCase() : 'drama',
+    emphasis: wtStr(p.emphasis, 60).trim()
+  };
+  if (!f.title || !f.prompt) return { error: 'The new panel came back incomplete.' };
+  if (!f.description) f.description = line;
+  if (f.type !== 'combat') f.emphasis = '';
+  return { fields: f, usage: out.usage || {} };
+}
+// The new panel's own text, as Regen writes a Moment box. skip: no narrative yet (its box stays empty, like every
+// other panel's before Generate Narrative), Already Written, or no story to write from.
+async function npText(db, req, session, forkId, index) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return { error: 'AI service not configured.' };
+  const ctx = await writingContext(db, req, session, forkId);
+  if (!ctx.norm || ctx.narrStyleId === 'written' || !String(session.transcript || '').trim()) return { skip: true };
+  if (!(index >= 0 && index < ctx.moments.length) || ctx.moments[index].kind === 'establishing') return { error: 'STALE' };
+  const P = wtPrompt('regen', ctx, session, 'moment:' + index, '', {});
+  const out = await wtCallModel(key, WRITING_MODEL, P.system, P.prompt, P.max_tokens, NP_TEXT_MS);
+  if (out.error) return { error: out.error };
+  const text = wtCleanText(out.text);
+  if (!text || out.truncated) return { error: 'The panel\'s text came back incomplete.' };
+  return { text: text, usage: out.usage || {} };
+}
+router.newPanel = { fields: npFields, text: npText, model: WRITING_MODEL };
 
 module.exports = router;

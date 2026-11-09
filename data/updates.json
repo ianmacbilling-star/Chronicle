@@ -1,5 +1,614 @@
 [
   {
+    "version": "3.5.32",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3532-stale-board-after-switch",
+        "kind": "fix",
+        "public": true,
+        "summary": "Switching versions no longer leaves the previous version's panels on the Storyboard.",
+        "detail": "Testers, 2026-11-09. If a version was still loading when you picked another, its panels could arrive late and show under the new version's name until you reloaded. The Storyboard now only draws the version and session on screen. Nothing loads twice and nothing is slower.",
+        "td": [
+          "TD-1118"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.31",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3531-new-panel-limit-tip",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Panel: the button tells you how many panels your plan allows.",
+        "detail": "Ian, 2026-11-09. Hover over New Panel to see your plan's panel limit (the title picture does not count). At the limit the button is grey and says so, as before.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.30",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3530-new-panel-spinner",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Panel: a spinner while your panel is being written or added.",
+        "detail": "Ian, 2026-11-09. After Add panel, the New Panel window shows the usual spinner (Writing or Adding) until the panel lands; the window cannot be closed or pressed again meanwhile. If the panel is refused, the spinner goes and the message shows as before.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.29",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3529-new-panel-fixes",
+        "kind": "fix",
+        "public": true,
+        "summary": "New Panel: a readable message when something is missing, an optional picture prompt, and panels without a picture now say Not drawn yet.",
+        "detail": "Testers, 2026-11-09. The New Panel window's message is now light red and bold (it was dark red on near-black), and the box it is about is outlined. On I'll write it myself the picture prompt is optional: left empty, what you wrote in What happens here? is used. A panel with no picture yet reads Not drawn yet where it read Unknown (it is drawn in the version's art style like every panel). Write it for me now names in the picture prompt only the characters your line names, or exactly the ones you picked, so no one extra is drawn.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.28",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3528-new-panel-window",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Panel's window is simpler: characters, assets and prominence as on every panel, and no picture step.",
+        "detail": "The New Panel window now uses the same + Add character and + Add asset picker as every panel, adds Prominence (Minimize, Default or Maximize), and no longer asks about the picture: the panel lands, and Replace, Regen or Generate Images give it one there.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.27",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3527-new-panel",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Panel: add a picture panel anywhere in your story, right after the one you choose.",
+        "detail": "Under each box on the Story panels (and on each Review row), New Panel adds a picture panel right after it; never after the Closing. Say what happens there (kept as the panel's Narrative Outline), pick its characters and assets, then Write it for me (1 token: title, picture prompt, shape and the panel's story text) or write it yourself, and take its picture from the Archive, generate it, or leave it for later. Your plan's panel limit applies. Generate Story starts over and does not keep added panels.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.26",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3526-retouch-take",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Retouch a finished take, as a Small fix or a Bigger change; the result is a new take.",
+        "detail": "Ian, 2026-11-08: \"Is there a way to Retouch a video that is already built?\"; \"we are going to need a retouch for sure so build it. Then we can refine it as needed.\" Spec claude/VIDEO_TAKE_RETOUCH_SPEC.md. A Retouch button on every finished take opens a window: the take, What do you want to change?, the shot's references that have a picture (tick to use), and How big a change?: Small fix (fal-ai/kling-video/o1/standard/video-to-video/edit, keep_audio on: keeps the motion and the sound; takes of 3 to 10 s; up to 4 references; $0.126 a second) or Bigger change (bytedance/seedance-2.0/reference-to-video with the take as @Video1, generate_audio as the take; length snapped to 4/5/6/8/10/12/15 s; up to 8 references; priced on input plus output seconds). The price shows before sending. The result is a new take (\"Take 2 - retouched from take 1\") made through the same fal queue, webhook and sweep as every take; the pinned take stays pinned; it counts toward the shot's 10; it is out of date when its source is. Refused: a take not finished, a shot already making a take or at 10 takes, a length outside the size's range, no words; references are re-checked on the server. takes gains source_take_id, retouch_text, retouch_kind. Debug Mode logs the full input.",
+        "td": [
+          "TD-1112"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.25",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3525-voices",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: voices from off-screen stay off the faces on screen; 10 takes a shot; takes across the shot.",
+        "detail": "Ian, 2026-11-08, takes 11-13: a line ticked off-screen was still said by Gubuk on screen; a line with no name drew a second Gubuk to say it; \"Let's lift the limit on 3 takes\"; \"put the viewer below the Left hand side as well. To make more room for multiple\". The take that worked (episode 1 take 3) wrote the line as something Gubuk hears: \"Gubuk hears Drel yelling in the distance\". The script now does the same: \"As this happens, Gubuk hears Drel calling from off-screen, in the distance: '...' (Drel is not in this shot).\" (\"we hear\" when no one is on screen); a line with no name is such a voice, never \"Someone says\". Then each character on screen with no line \"does not speak; his mouth stays closed\", and \"No one on screen speaks.\" when no one on screen has a line. A speaker only heard off-screen is not sent as a reference picture, is not offered by the named-but-not-in-References hint, and what a line says no longer names anyone (\"Where is Emanon?\"); a speaker also seen doing something in the shot keeps their picture. A line with no Who is warned. The leave-and-return warning ignores a voice heard off-screen and an end that has them gone. Takes: 10 a shot (was 3); the takes and Generate take sit in a row across the whole shot under both halves. Director's Notes: the start names what lies around (bodies, fallen weapons, props) and every line names its speaker.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.24",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3524-flip-refs",
+        "kind": "feature",
+        "public": false,
+        "summary": "Retouch can flip a picture left to right; a video keyframe's Retouch uses its shot's references; the Director's buttons are filled with their price.",
+        "detail": "Ian, 2026-11-08: \"Add an Option to the retouch drop down to flip the image from left to right... basically mirror image it. It should work also in storyboard\"; \"when you open the retouch on a key Frame image in a shot... The references in that shot should show in the the Retouch modal to use\" (\"only the Shots References. They can add more and open again\"); \"Put the (1 token) on the buttons themselves... Fill these buttons in with yellow... Just like our Generate Story button\". Flip: a new first choice in Retouch's What are you changing? menu, on story panels and video keyframes (not Image Builder pictures). The server mirrors the picture with no AI and no tokens; the copy keeps the source's rights verdict. A story panel's old picture goes into its Revert slot as a retouch's does (owner, lock, title-panel, busy and rights checks as on Retouch; the picture leaving the slot is released); a keyframe's every copy in the episode takes the flip with the old one in Revert. The words box hides and the button reads Flip image. Keyframe Retouch: the reference menu lists the shot's References that have a picture; the server re-checks them and sends them in place of the panel's (Expand sends none). The Director's buttons are btn-primary, with (n tokens) on the button, level with the Style menu.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.23",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3523-director",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: the Director - Create Shots plans the cuts; Director's Notes writes every shot's direction.",
+        "detail": "Ian, 2026-11-08: \"we need to have two separate buttons at the top. 1. Create Cuts... 2. Build the Shot list... Then the AI can do the Shot list knowing what the cuts are\"; \"lets start the concept of our AI Director... like our AI Editor on books\"; \"Directors Notes!\". The single Write / Rewrite the shot list button becomes two, each with its price and tooltip. Create Shots: the Director reads the pictures in story order and divides them into shots of one to five pictures, named; nothing else is written. A planned shot with exactly the pictures of a shot already there is that shot and keeps its name, words, references, cut style and takes; other shots start empty, and shots that no longer exist go with their takes and files (asked first whenever there is more than one shot or any takes). The overall direction is not touched. Director's Notes: the Director sees the shots as they stand (SHOT n headers and CUT markers) and writes the overall direction and every box of every shot; the cuts never move, a name given by hand is kept, the references become the characters named, and takes stay, marked out of date. Pressed on an episode that is one shot of more than five pictures, it asks \"This episode isn't cut yet. Create Shots first?\" and then runs both. Progress and confirm wording speaks of the Director. Jobs record which button (episode_writer_jobs.kind); Create Shots is charged as video_shot_plan.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.22",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3522-shot-halves",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: each shot is laid out in two halves, with its own character and asset references.",
+        "detail": "Ian, 2026-11-08: \"Divide the shot panel into two horizontal halves... each question on its own accordion panel on the left... On the right half the pictures from left to right... the Shot duration up on the same line with the shot's name... the small cut here button between each image... the generate take button on the bottom of the right half\"; \"add the ability to add character and asset references... and see the references that are already on that shot... just like the Review tab, Storyboard and Image builder\". Top line: Shot n, its name, How long? (4-15 s). Across the shot: References, Characters and Assets as chips (click to see, x to remove), + Add character / + Add asset pickers, how many of the 9 pictures go, and a hint with Add when a character with a picture is named in the words but not referenced (assets are added by hand). Left: one fold-out panel per question (start, what the characters do, what they say, camera, end, sound and surroundings); a closed panel shows its words greyed and its warnings as a count; shot-wide warnings sit above them. Right: the pictures left to right with a small round cut button in each gap, then the takes and Generate take. On a narrow screen the right half comes first. References are saved per shot and are exactly what a reference take sends (an asset is named as a thing that must look like its picture); a shot never given references starts from the characters named in its words; the shot list writer fills each shot's characters; Cut here keeps them on both shots and UnCut joins them; Copy carries them; changing them marks takes out of date. Replaces v3.5.21's folded Words line and the Also sent line.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.21",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3521-fold-words",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: each shot's words fold into one line until opened.",
+        "detail": "Ian, 2026-11-08: \"you gotta figure out a way so the prompts don't take up so much space. Maybe an accordion inside the shot panel.\" Under a shot's pictures, one line: Words, the start and the end shortened (start -> end), the number of actions and lines, the length, and how many warnings it has. A click opens the shot's boxes (warnings first, then the boxes); another folds them. Each shot opens on its own and stays as left while the page is open; shots are folded when an episode opens and after the shot list is written. Generate take stays visible on a folded shot. The open boxes are tighter: one line each until typed into, growing as you type.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.20",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3520-writer-cuts",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Write the shot list plans the cuts and fills every box; pictures in a shot can be archived.",
+        "detail": "Ian, 2026-11-08: \"have it do the cuts then put the prompts in\"; \"the Rewrite shot list should basically start over and clear what's there\"; \"we need to give them the ability to Archive pics from the KeyFrames\". Write the shot list now sees every picture of the episode in order and plans the shots itself (runs of 1 to 5 pictures, cut where the place changes, time jumps or someone must leave and come back), names them, and fills each shot's start, actions, lines (who, during which action, off-screen), camera, end, sounds, surroundings and length. It starts over every time: the episode's shots are replaced (pictures keep their order, sources and Revert slots); if the episode has takes it says how many will be deleted and asks first, and it waits while a shot is being made. A plan that skips, repeats or reorders a picture, or puts more than 5 in a shot, changes nothing and charges nothing. Each picture card has Archive: the exact picture (retouched or not) is copied into the campaign's Archive as '<panel title> (video)' in the version's art style, with the archive cap and rights check; pressed again by its archiver it comes out. The Tall/Square picture tags and Expand no longer show on reference models.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.19",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3519-plain-words",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: each shot is described in plain-word boxes, and reference mode is the default.",
+        "detail": "Ian, 2026-11-08: \"instead of one prompt break it up into things users understand\" (claude/VIDEO_REFERENCE_SHOTS_SPEC.md). Each shot has one set of boxes instead of a box per picture: How does the shot start? / What do the characters do? (numbered) / What do they say? (who, the line, When, heard off-screen) / What does the camera do? / How does the shot end? / How long? (4 to 15 s), with sounds and surroundings under a toggle. Under the pictures: who is also sent as a character picture, and who cannot be and why. Plain-word checks warn about an action in the wrong box, someone who leaves and is needed again, too much for the length, more than 5 pictures, a line with no When, and no end. The server joins the boxes into one script: the named cast's pictures first (they win), the first picture as the opening, later pictures for place only (no poses), then start, actions with their lines, camera, end, sound, surroundings. Seedance 2.0 Fast (reference) is the default; the keyframe models are grouped as Keyframes (exact frames) and get the same script on every move. Old per-picture words show as the shot's actions until saved. The shot list writer fills the boxes from its answer until v3.5.20 writes them box by box.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.18",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3518-video-debug",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: debug mode shows what each Generate sends.",
+        "detail": "Ian, 2026-11-08, after two takes meant as reference tests came back as keyframe takes: \"Put what you need to see in debug mode.\" Each Generate writes one line: the episode's model and whether that is REFERENCE or KEYFRAME mode, each move's length, pictures and full words, the cast sent, and every character of the version with its reference picture and why one is not usable (none saved, or not a Campaignia picture). A save that changes the model says so (old -> new), and opening the Video tab lists the models the server offers.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.17",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3517-video-pins",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: the pin (as on the version picker and My Campaigns) replaces the stars on episodes and takes.",
+        "detail": "Ian, 2026-11-08: \"Shouldnt we replace the stars with our SOP Pins?\" The episode row, the Pin this episode button and each take now use _vpickPinSvg: filled when pinned, outline when not. A pinned take is the one the shot uses in the episode (Pinned: the take this shot uses in the episode / Pin this take: use it in the episode); one per shot, as the star was. The episode box says 'pinned take(s)' where it said 'chosen'.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.16",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3516-reference-test",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: two test models, Seedance 2.0 Reference and Seedance 2.0 Fast Reference, that make each shot as one clip directed from references instead of fixed keyframes.",
+        "detail": "Ian, 2026-11-08, after a take where Gubuk doubled and changed between two keyframes: 'Let's just try reference option... hard code that in for a second and let me test it.' With a Reference model chosen, a shot is one clip on fal's Seedance 2.0 reference-to-video: its first 5 keyframes (in order) and the reference pictures of the cast named in the shot's words or the overall direction (the version's own picture, else the character's; 9 pictures at most) are sent as @Image1... with words that name each one, then the boxes in order. Its length is the boxes' lengths added up, 4 to 15 seconds. The clip does not start or end exactly on the keyframes. Prices shown are the image-to-video ones until fal's are read.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.15",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3515-shot-names",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: shots can be named; a shot keeps at most 3 takes; the cut sits on the top border of the shot below it.",
+        "detail": "Ian, 2026-11-08: \"We do need the name on the shot\"; \"for now we limit them to 3 takes\"; the UnCut button \"right on the top border of the shot... So you know you mean the shot below the line\"; Delete \"actually deletes the take... no retrieval\". Each shot has a name box beside its number (one line, up to 120 characters; saved with the episode, kept by Copy; a new shot from Cut here starts unnamed, UnCut keeps the first shot's name). At 3 takes Generate take is closed with '3 takes max - delete one to make another'; the server refuses a 4th before anything is sent to fal, and Generate all shots skips full shots and names them. The cut label and UnCut sit in the middle of the lower shot's top border; the dashed line between shots is gone. Delete take (unchanged) asks, then removes the take, its moves and their files from storage.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.14",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3514-wide-video",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: every clip is made wide (16:9); a square or tall keyframe is flagged with Expand, and Generate warns before making a shot that has one.",
+        "detail": "Ian, 2026-11-08: a wide title picture and a tall Gubuk made a nearly square take; 'go with... whatever most non phone videos are made in now'; 'Option 1' (Expand); 'Generate should stop and ask and warn.' Every model that takes a shape is asked for 16:9 (Kling takes its shape from the picture). A keyframe under 1.25 wide-to-tall (square or tall; ordinary 4:3 panels pass) shows 'Tall picture: the video is wide' with Expand: one retouch that redraws it wide in its art style, the episode's copy only, with Revert. Generate take and Generate all shots name such pictures and ask: Cancel or Generate anyway.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.13",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3513-takes-at-foot",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: a shot's takes sit at its foot, under the keyframes, with Generate take at the right of that row.",
+        "detail": "Ian, 2026-11-08: 'The viewer should appear under the key frame images... down near the button.' The shot's title line stays at the top.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.12",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3512-locked-pairs",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: each picture and the box to its right sit in one unit with a thin light border, two units to a row; keyframes open bigger on click.",
+        "detail": "Ian, 2026-11-08: 'I want it obvious they are locked together. Unlike the storyboard panels.' Pictures and boxes a little smaller so two pairs fit a row (one on a narrow window); each box as tall as its picture. Clicking a keyframe opens it bigger, as on the Storyboard.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.11",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3511-generate-take-corner",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: Generate take sits at each shot's bottom right, after its last panel.",
+        "detail": "Ian, 2026-11-08: 'Put the generate take button at the end of the take... bottom right corner.' The shot's title and its takes stay at the top.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.10",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3510-boxes-keep-words",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video: moving pictures or Cut here no longer hides a box's words; a keyframe retouch uses the version's art style.",
+        "detail": "Ian, 2026-11-08: moving panels or Cut here lost the prompt text (v3.5.07 put a box's words aside when its keyframe's role changed). Now a box belongs to the picture on its left and always keeps its words: Cut here leaves it in the shot it was cut from, as that shot's After box, and the new shot starts on the next picture; UnCut makes it the move to the next picture again; a moved picture takes its box with it. Ian: 'pass the current art style to the image that is getting retouched... of the version the episode is on': the version's own art style, else its session's, else the campaign's.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.09",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3509-keyframe-retouch",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Retouch and Revert on every keyframe. Only the episode's copy changes; the storyboard is not touched.",
+        "detail": "Ian, 2026-11-08: 'put the retouch option on the keyframes'. The Story panels' Retouch window (markers, picked reference) on a keyframe; a keyframe from the storyboard brings that panel's cast and assets as references, one from the Archive its own shape and style. The usual retouch price, spent when the picture arrives, through the shared picture pipeline (routes/images.js: startKeyframeRetouch and a 'keyframe' webhook branch). Every keyframe of the episode showing the old picture takes the new one, with the old in a one-step Revert slot (free). Takes made from the old picture show out of date.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.08",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3508-shot-shading",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video: odd shots now clearly greyer than even ones.",
+        "detail": "Ian, 2026-11-08: 'I'm not seeing any differences in the background color of the odd and even shots.' The page background showed through the shot boxes and drowned the v3.5.07 shading; the boxes are more solid now and odd shots carry a clear grey wash.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.07",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3507-after-move-uncut",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: the last keyframe of a shot gets an optional After box (what happens after that picture until the cut); UnCut - Join with previous shot; odd shots shaded; Generate take and Generate all shots.",
+        "detail": "Ian, 2026-11-08: Gubuk hears Drel, looks around and runs off after his keyframe and before the cut. When the After box has words, the shot gets one more move that starts on that picture with no end picture; empty, nothing changes. The shot list writer may write an after move (from the last keyframe) and may give a voice from off screen ('Drel (off-screen)'). A keyframe's words follow its role, so Cut here puts the move words aside and UnCut brings them back. A change that would delete a shot's takes now shows the result behind its question.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.06",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3506-orphans-ready",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Orphaned pictures and PDFs now splits orphaned into ready to move (what Move to holding would take now) and waiting (younger than the move's 30 days; print PDFs 90).",
+        "detail": "Ian, 2026-11-08: 'if they are too new shouldn't they be in the Too New column?' The report calls a file orphaned after a day; the move waits 30 days. A headline line (ready / waiting), two new columns, a moves column on the oldest 200 and in the CSV (next move, from a date, or never for a file put back before). The keep list is read the same way the move reads it. The move itself is unchanged.",
+        "td": [
+          "TD-1006"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.05",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3505-shot-list-moves",
+        "kind": "fix",
+        "public": false,
+        "summary": "Write the shot list no longer fails on a long shot: the writer is told every move by name, and its answer is lined up by the keyframe each move starts on.",
+        "detail": "Ian, 2026-11-08: 'The shot list came back incomplete (shot 1 came back with 16 moves, not 15)'. A shot of 16 keyframes has 15 moves; the writer added one from the last keyframe. Each move now says which keyframe it starts on ('from'); a move from the last keyframe, or a second move from the same one, is dropped. Without 'from', one too many loses the last. A missing move still fails the list, and nothing is charged.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.04",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3504-video-episodes",
+        "kind": "feature",
+        "public": false,
+        "summary": "The Video tab is rebuilt as Episodes: an episode is shots joined by cuts; a shot is one continuous camera run through one or more keyframes; each shot can have several takes, one chosen.",
+        "detail": "Ian, 2026-11-08: 'Episode is made up of Shots... Each Shot can have multiple takes... Between each shot we should have a Cut'. New tables episodes, shots, keyframes, takes, moves and episode_writer_jobs; the old video tables are dropped once on first start (marker video_old_tables_dropped; Ian: no data to keep). Cut here splits a shot, Join removes a cut; Make this shot makes a take; the episode video joins the chosen takes with plain cuts. A one-keyframe shot brings that picture to life. The shot list writer is told where the cuts are. Saves go one at a time and the server locks the episode while it saves (the doubled-pictures bug). Cut styles, Final Cut and the Archive come in later builds.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.03",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3503-header-right-edge",
+        "kind": "fix",
+        "public": false,
+        "summary": "The account menu sits further right (16px from the edge); the admin debug bar sits in that strip and takes no room. The fal copy panel now follows a copy already running to its end.",
+        "detail": "Ian, 2026-11-08: get rid of the extra space around the debug button, the profile menu as far right as possible. The spot is pinned in the header's right padding. On the Tools panel, 'already running' used to stop asking for progress, so the end never showed; and a server with no record of the run (after a deploy) now says so and suggests Find.",
+        "td": [
+          "TD-996",
+          "TD-1003"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.02",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3502-debug-spot-visible",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admins: while Debug Mode is on, the hidden spot beside the account button shows as a small red bar (a click opens the debug panel). It is half as wide.",
+        "detail": "Ian, 2026-11-08. The page asks once after an admin signs in, and the bar follows every change to Debug Mode (with the red recording dot). Never shown to anyone who is not an admin. Turned off, it is invisible in the same room as before.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.01",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3501-pictures-still-on-fal",
+        "kind": "fix",
+        "public": false,
+        "summary": "Pictures that never reached our storage (still on fal) are now copied there: nightly, before the monthly clean-up, and from Dashboard > Tools.",
+        "detail": "When copying a new picture to our storage fails, the picture keeps fal's address so it is not lost; fal does not keep files for ever. On 21-22 October an R2 key problem left 18 storyboard pictures on staging that way, and a video cut made from them could not be saved. services/falCopy.js finds every fal address in this site's database, copies each file once into this site's own bucket (through the usual upload, so staging to staging's bucket and production to production's), and points every row that used it at the copy, one transaction per picture; the archive's source_url follows, so archived marks stay. A picture fal no longer has is listed and left alone; the rights verdict follows each copy. Logs, the rights record and video_shots.fal_video_url are not touched. Runs once a night after 3 am Eastern (an email only when it did something or something failed), at the start of the monthly clean-up, and from the new panel under the orphan check: Find (only looks) and Copy them to our storage.",
+        "td": [
+          "TD-1003"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.00",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3500-debug-spot-opens-panel",
+        "kind": "feature",
+        "public": false,
+        "summary": "Admins: while Debug Mode is on, one click on the hidden spot beside the account button opens My Account with the debug panel open.",
+        "detail": "Ian, 2026-11-08. While Debug Mode is off, seven clicks still turn it on; while it is on, turn it off from the panel.",
+        "td": [
+          "TD-996"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.99",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3499-video-debug-log",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video tab: when a cut cannot be saved, the reason is shown beside the button and written to the debug log.",
+        "detail": "TD-090. On staging every save of a cut (its name, the model's own sound) and Write the shot list failed with no reason shown. Each refusal and failure of a cut's save and of the shot list now goes to the server log and, with Debug Mode on, to the debug log: the reason, what was sent, and any picture whose address is not a Campaignia one. A save reply that is not JSON (a gateway page) is named as such. The shot list job logs each step: pictures read, each call to the writer, the reply's first words when it fails the checks, the fill and the charge. Nothing else changes.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.98",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3498-video-shot-list",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video tab: pick a style for each cut (Animated, Living Illustration, Documentary) and let Campaignia write the shot list.",
+        "detail": "TD-090, Video Phase 2 build 3. Write the shot list sends the version's story, the cut's pictures (small, as pictures and as words), the cast, the art style, the genre, the style's rules and the video model's lengths to the model that writes the story, and fills the overall direction and every shot box (action, camera, lines for Animated, sound, length). It runs as a job; the boxes wait while it is written; Rewrite asks first. Costs one token, or one per 8 cents of the real model cost when more, charged only when the boxes are filled; a refused or interrupted list costs nothing. The book's narrative is never changed. The clips themselves stay free.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.97",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3497-video-blur-save",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video tab: every field of a draft cut saves the moment you leave it, as well as while you type.",
+        "detail": "TD-090. Ian: make sure the fields save on blur. Name, video model, sound, overall direction, each shot box and each shot length now save at once when they lose focus (vlFlushSave), instead of only after the short pause while typing.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.96",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3496-video-version",
+        "kind": "fix",
+        "public": false,
+        "summary": "Picking another version while the Video tab is open now shows that version's cuts.",
+        "detail": "TD-090. Ian: switching versions did not load the cuts on the Video tab. onForkChange now reopens the tab when it is the one showing, and a draft typed a moment before is saved first.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.4.95",
+    "staged_on": "2026-11-07",
+    "entries": [
+      {
+        "id": "3495-video-cuts",
+        "kind": "feature",
+        "public": false,
+        "summary": "The Video Lab is now the Video tab: cuts made from the storyboard, laid out like the Storyboard, one pinned per version.",
+        "detail": "TD-090, Video Phase 2 build 2. New cut takes the version on screen and its storyboard pictures, title picture first (the Canonical one when the version has none). The open cut looks like the Storyboard: picture cards with a shot card between each pair, the overall direction above, theme colours only so it follows the brand. Move, Replace and Remove pictures, add any from the Archive, name it; a draft saves itself as you type. Generate makes the shots and joins them as the Lab did; a made cut plays full width with its shots underneath (Redo, Download), and Copy to a new cut starts a new draft from it. The star pins one cut per version. The Lab runs made on a session become cuts of its Canonical. Behind the video switch, admins always.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.4.94",
     "staged_on": "2026-11-07",
     "entries": [
