@@ -309,13 +309,19 @@ function ensureTables() {
     await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_takes_one_making ON takes(shot_id) WHERE status = 'making'");
     await db.exec('CREATE INDEX IF NOT EXISTS idx_moves_take ON moves(take_id, position)');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_moves_request ON moves(request_id)');
-    await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_writer_one_running ON episode_writer_jobs(episode_id) WHERE status = 'running'");
+    // v3.5.43: idx_writer_one_running (one job of any kind per episode) is replaced by the two lanes' indexes below
     await db.exec('CREATE INDEX IF NOT EXISTS idx_writer_episode ON episode_writer_jobs(episode_id, id)');
     // v3.5.09 -- Retouch on a keyframe: its one-step Revert slot, and the episode a retouch job belongs to.
     await db.exec('ALTER TABLE keyframes ADD COLUMN IF NOT EXISTS prev_image_url TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS name TEXT');   // v3.5.15: a shot's own name
     await db.exec('ALTER TABLE episode_writer_jobs ADD COLUMN IF NOT EXISTS kind TEXT');
     await db.exec('ALTER TABLE episode_writer_jobs ADD COLUMN IF NOT EXISTS shot_id INTEGER');   // v3.5.38: a check of one shot
+    // v3.5.43 (Ian, 2026-11-09: "multiple pre prod checks going at once for multiple shots"): two lanes. One episode-wide
+    // job (Create Shots, the Notes, the full check) at a time; checks of single shots side by side, one per shot. Which
+    // lane may start is decided in claimWriterJob under the episode's row lock; these indexes are the backstop.
+    await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_writer_one_running_ep ON episode_writer_jobs(episode_id) WHERE status = 'running' AND shot_id IS NULL");
+    await db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_writer_one_running_shot ON episode_writer_jobs(episode_id, shot_id) WHERE status = 'running' AND shot_id IS NOT NULL");
+    await db.exec('DROP INDEX IF EXISTS idx_writer_one_running');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS source_take_id INTEGER');   // v3.5.26: a retouch of that take
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_text TEXT');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');   // 'small' (Kling O1 Edit) or 'big' (Seedance 2.0)   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
@@ -2009,6 +2015,22 @@ async function runningWriter(db, episodeId, editsOk) {
   await retireLostJobs(db, episodeId);
   return db.prepare("SELECT id FROM episode_writer_jobs WHERE episode_id = ? AND status = 'running'" + (editsOk ? " AND kind IS DISTINCT FROM 'precheck'" : '') + ' LIMIT 1').get(episodeId);
 }
+// v3.5.43 -- start a Director job if its lane is free: an episode-wide job only when nothing runs; a check of one shot
+// only when no episode-wide job runs and that shot is not already being checked. Returns { id } or { busy: message }.
+async function claimWriterJob(db, epId, shotId, row) {
+  let out = null;
+  await db.transaction(async function (tx) {
+    await tx.prepare('SELECT id FROM episodes WHERE id = ? FOR UPDATE').get(epId);
+    const running = await tx.prepare("SELECT id, shot_id FROM episode_writer_jobs WHERE episode_id = ? AND status = 'running'").all(epId);
+    if (!shotId && running.length) { out = { busy: running.some(function (r) { return r.shot_id; }) ? 'The Director is checking shots on this episode. Try again when those checks are done.' : 'The Director is already working on this episode.' }; return; }
+    if (shotId && running.some(function (r) { return !r.shot_id; })) { out = { busy: 'The Director is already working on this episode.' }; return; }
+    if (shotId && running.some(function (r) { return Number(r.shot_id) === Number(shotId); })) { out = { busy: 'That shot is already being checked.' }; return; }
+    const ins = await tx.prepare("INSERT INTO episode_writer_jobs (episode_id, user_id, status, style, model, boot_id, sig, est_tokens, kind, shot_id) VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?, ?)")
+      .run(epId, row.user_id, row.style, row.model, SL_BOOT, row.sig, row.est_tokens, row.kind, shotId || null);
+    out = { id: ins.lastInsertRowid };
+  });
+  return out || { busy: 'The Director is already working on this episode.' };
+}
 function jobView(j) {
   if (!j) return null;
   return { id: j.id, kind: j.kind === 'shots' ? 'shots' : (j.kind === 'precheck' ? 'precheck' : 'notes'), status: j.status, error: j.error || null, tokens_charged: j.tokens_charged || 0, style: j.style, started_at: j.started_at, finished_at: j.finished_at, shot_id: j.shot_id || null };   // v3.5.38 shot_id
@@ -2218,10 +2240,9 @@ router.post('/episodes/:id/shot-list', requireAuth, requireVideo, async function
     vlDebug(req.session.userId, 'info', FN, (ctx.mode === 'shots' ? 'Create Shots' : 'Director\'s Notes') + ' asked for', { mode: ctx.mode, style: ctx.style.key, model: ctx.modelKey, shots: ctx.shots.length, keyframes: ctx.pictures.length, story_chars: ctx.story.text.length, cast: ctx.cast.length, estimate: est, balance: bal.total });
     if (bal.total < est.tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: (ctx.mode === 'shots' ? 'Create Shots' : 'The Director\u2019s Notes') + ' costs about ' + est.tokens + ' token' + (est.tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
     await retireLostJobs(db, ep.id);
-    const ins = await db.prepare("INSERT INTO episode_writer_jobs (episode_id, user_id, status, style, model, boot_id, sig, est_tokens, kind) VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?) ON CONFLICT (episode_id) WHERE status = 'running' DO NOTHING")
-      .run(ep.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, ctx.sig, est.tokens, ctx.mode);
-    if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'The Director is already working on this episode.');
-    const job = await db.prepare('SELECT * FROM episode_writer_jobs WHERE id = ?').get(ins.lastInsertRowid);
+    const cl = await claimWriterJob(db, ep.id, null, { user_id: req.session.userId, style: ctx.style.key, model: ctx.modelKey, sig: ctx.sig, est_tokens: est.tokens, kind: ctx.mode });   // v3.5.43
+    if (!cl.id) return vlRefuse(req, res, FN, 409, cl.busy);
+    const job = await db.prepare('SELECT * FROM episode_writer_jobs WHERE id = ?').get(cl.id);
     res.json({ job: jobView(job), estimate: est });
     runShotList(job.id, ep.id, req.session.userId, ctx, prices, key).catch(async function (e) {
       console.error('[video] shot list job ' + job.id + ' crashed:', e && e.message);
@@ -2240,7 +2261,11 @@ router.get('/episodes/:id/shot-list', requireAuth, requireVideo, async function 
     const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
     if (!ep || !(await canSee(req, ep))) return res.status(404).json({ error: 'Not found.' });
     await retireLostJobs(db, ep.id);
-    const j = await db.prepare('SELECT * FROM episode_writer_jobs WHERE episode_id = ? ORDER BY id DESC LIMIT 1').get(ep.id);
+    const j = await db.prepare('SELECT * FROM episode_writer_jobs WHERE episode_id = ? AND shot_id IS NULL ORDER BY id DESC LIMIT 1').get(ep.id);   // v3.5.43: the episode-wide lane
+    // v3.5.43: the checks of single shots, running or ended in the last 15 minutes (the latest per shot)
+    const ck = await db.prepare("SELECT * FROM episode_writer_jobs WHERE episode_id = ? AND shot_id IS NOT NULL AND (status = 'running' OR finished_at > NOW() - INTERVAL '15 minutes') ORDER BY id DESC").all(ep.id);
+    const seenShot = {}, checks = [];
+    ck.forEach(function (x) { if (seenShot[x.shot_id]) return; seenShot[x.shot_id] = true; checks.push(jobView(x)); });
     let estimate = null, estimateShots = null;
     try {
       const ctx = await shotListContext(db, ep);
@@ -2248,7 +2273,8 @@ router.get('/episodes/:id/shot-list', requireAuth, requireVideo, async function 
     } catch (e) { estimate = null; estimateShots = null; }
     let estimatePrecheck = null;
     try { estimatePrecheck = { tokens: await precheckTokens(db), shot_tokens: await precheckShotTokens(db) }; } catch (e) { estimatePrecheck = null; }   // v3.5.34; v3.5.38 shot_tokens
-    res.json({ job: jobView(j), estimate: estimate, estimate_shots: estimateShots, estimate_precheck: estimatePrecheck, episode: (j && j.status !== 'running') ? await loadEpisode(db, ep.id) : null });
+    res.json({ job: jobView(j), checks: checks, estimate: estimate, estimate_shots: estimateShots, estimate_precheck: estimatePrecheck,
+      episode: ((j && j.status !== 'running') || req.query.episode === '1') ? await loadEpisode(db, ep.id) : null });   // v3.5.43: ?episode=1 when a shot's check has ended
   } catch (e) {
     console.error('[video] shot list read error:', e && e.message);
     res.status(500).json({ error: 'Could not read the shot list.' });
@@ -2519,10 +2545,9 @@ router.post('/episodes/:id/precheck', requireAuth, requireVideo, async function 
     const bal = await require('./tokens').getBalance(req.session.userId);
     if (bal.total < tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: (shotId ? 'Checking a shot costs ' : 'The pre-production check costs ') + tokens + ' token' + (tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
     await retireLostJobs(db, ep.id);
-    const ins = await db.prepare("INSERT INTO episode_writer_jobs (episode_id, user_id, status, style, model, boot_id, sig, est_tokens, kind, shot_id) VALUES (?, ?, 'running', ?, ?, ?, ?, ?, 'precheck', ?) ON CONFLICT (episode_id) WHERE status = 'running' DO NOTHING")
-      .run(ep.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, ctx.sig, tokens, shotId);
-    if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'The Director is already working on this episode.');
-    const job = await db.prepare('SELECT * FROM episode_writer_jobs WHERE id = ?').get(ins.lastInsertRowid);
+    const cl = await claimWriterJob(db, ep.id, shotId, { user_id: req.session.userId, style: ctx.style.key, model: ctx.modelKey, sig: ctx.sig, est_tokens: tokens, kind: 'precheck' });   // v3.5.43
+    if (!cl.id) return vlRefuse(req, res, FN, 409, cl.busy);
+    const job = await db.prepare('SELECT * FROM episode_writer_jobs WHERE id = ?').get(cl.id);
     vlDebug(req.session.userId, 'info', FN, 'Pre-production check asked for', { only_shot: shotId, shots: ctx.shots.length, keyframes: ctx.pictures.length, tokens: tokens, modes: ctx.info.map(function (x) { return x.mode; }) });
     res.json({ job: jobView(job), estimate: { tokens: tokens } });
     const prices = await shotListPrices(db);

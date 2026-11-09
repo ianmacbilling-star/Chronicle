@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.43",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3543-video-checks-side-by-side",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: shots can be checked side by side.",
+        "detail": "Ian, 2026-11-09: several single-shot checks at once. The Director now has two lanes: one episode-wide job (Create Shots, the Notes, the full check) at a time, and single-shot checks side by side, one per shot. The three buttons at the top wait while shot checks run, and a shot check waits while an episode-wide job runs. Each check reports when it lands; a check still running after a reload is picked up. New indexes idx_writer_one_running_ep and idx_writer_one_running_shot replace idx_writer_one_running.",
+        "td": [
+          "TD-1115"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.42",
     "staged_on": "2026-11-09",
     "entries": [
