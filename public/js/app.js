@@ -41966,7 +41966,7 @@ var VL_SHOT_ODD = 'background:linear-gradient(rgba(150,150,150,0.16),rgba(150,15
 var VL_CUTMARK = 'position:absolute;top:0;left:50%;transform:translate(-50%,-50%);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px);padding:3px 10px;background:rgb(var(--panel-rgb));border:1px solid rgba(var(--accent-rgb),0.45);border-radius:999px;z-index:1;';   // v3.5.15
 var VL_SHOT_NAME = 'flex:0 1 320px;min-width:140px;padding:4px 8px;font-size:13px;height:auto;';   // v3.5.15
 var VL_PIN = 'background:none;border:none;cursor:pointer;line-height:0;padding:2px;display:inline-flex;align-items:center;';   // v3.5.17 (Ian: "replace the stars with our SOP Pins")
-var VL_MAX_TAKES = 3;   // v3.5.15: the server's MAX_TAKES
+var VL_MAX_TAKES = 10;   // v3.5.15: the server's MAX_TAKES (v3.5.25: 10)
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
 var VL = { models: null, episodes: [], openId: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, saving: false, savePending: false, waiters: [],
@@ -42260,9 +42260,11 @@ function vlShotHTML(d, si, m, n0) {
       '</div>' +
       '<div class="vl-right">' +
         '<div class="vl-strip" style="' + VL_STRIP + '">' + cells.join('') + '</div>' +
-        '<div id="vl-livebtn-' + s.ck + '" style="margin-top:10px;"></div>' +   // v3.5.11/13: the takes and Generate take, bottom right
       '</div>' +
     '</div>' +
+    // v3.5.25 -- the takes and Generate take across the whole shot, under both halves (Ian: "put the viewer below the
+    // Left hand side as well. To make more room for multiple").
+    '<div id="vl-livebtn-' + s.ck + '" class="vl-takes-row" style="margin-top:12px;"></div>' +
   '</div>';
 }
 function vlCutMarkHTML(si) {
@@ -43103,8 +43105,9 @@ function vlPanelsOpenFor(id) { var o = {}; if (id && VL.panelsOpen) VL_PANELS.fo
 // A shot never given references: the characters named in its words (as the server would send them).
 function vlRefsFromWords(ep, w) {
   w = w || {};
-  var text = [ep && ep.overall, w.start, (w.actions || []).join(' '), w.camera, w.end, w.sounds, w.around].concat((w.lines || []).map(function (l) { return l.who + ' ' + l.text; })).join(' ');
-  return ((ep && ep.cast) || []).filter(function (c) { return c.usable && vlNamed(c.name, text); }).map(function (c) { return { type: 'character', id: c.id }; });
+  var text = [ep && ep.overall, w.start, (w.actions || []).join(' '), w.camera, w.end, w.sounds, w.around].concat((w.lines || []).filter(function (l) { return !vlLineOff(l); }).map(function (l) { return l.who; })).join(' ');
+  var vo = vlVoiceOnly(w.lines || [], text);
+  return ((ep && ep.cast) || []).filter(function (c) { return c.usable && vlNamed(c.name, text) && vo.indexOf(vlFirst(c.name)) < 0; }).map(function (c) { return { type: 'character', id: c.id }; });
 }
 // Actions are typed one per line ("1. ..." numbers optional) and kept as a list.
 function vlActionsList(text) {
@@ -43229,9 +43232,20 @@ function vlJoinWords(a, b) {
   a.more = !!(a.sounds || a.around);
   (b.refs || []).forEach(function (r) { a.refs = a.refs || []; if (!a.refs.some(function (x) { return x.type === r.type && Number(x.id) === Number(r.id); })) a.refs.push({ type: r.type, id: r.id }); });   // v3.5.22
 }
-// The shot's words in one string, for matching names.
+// The shot's words in one string, for matching names. v3.5.25: what a line says names no one in the shot ("Where is
+// Emanon?"), and only the speakers seen on screen count (as the server matches them).
 function vlShotText(s) {
-  return [VL.draft ? VL.draft.overall : '', s.start, s.actions, s.camera, s.end, s.sounds, s.around].concat(s.lines.map(function (l) { return l.who + ' ' + l.text; })).join(' ');
+  return [VL.draft ? VL.draft.overall : '', s.start, s.actions, s.camera, s.end, s.sounds, s.around].concat(s.lines.filter(function (l) { return !vlLineOff(l); }).map(function (l) { return l.who; })).join(' ');
+}
+function vlLineOff(l) { return !!l.off || !String(l.who || '').trim(); }
+function vlFirst(n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
+// Who is only a voice in this shot (heard off-screen, never on screen): not in the shot, so never offered as a reference.
+function vlVoiceOnly(lines, text) {
+  var on = {}, off = {};
+  (lines || []).forEach(function (l) { var f = vlFirst(l.who); if (!f) return; if (vlLineOff(l)) off[f] = true; else on[f] = true; });
+  // still in the shot when the words have them DO something there (a sentence that is not about a voice)
+  var seen = String(text || '').split(/(?<=[.!?])\s+/).filter(function (x) { return !/voice|off[- ]screen/i.test(x); }).join(' ');
+  return Object.keys(off).filter(function (f) { return !on[f] && !vlNamed(f, seen); });
 }
 function vlNamed(name, text) {
   var first = String(name || '').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9'-]/g, '');
@@ -43241,6 +43255,8 @@ function vlNamed(name, text) {
 // "Also sent": the cast named in the shot whose reference pictures go with it (the server decides the same way).
 var VL_ACTION_WORDS = /\b(walk(s|ed|ing)?|carr(y|ies|ied|ying)|pull(s|ed|ing)?|press(es|ed|ing)?|run(s|ning)?|ran|kneel(s|ing)?|knelt|grab(s|bed|bing)?|throw(s|ing)?|threw|jump(s|ed|ing)?|pick(s|ed)? up|set(s)? (him|her|it|them) down|lift(s|ed|ing)?|draw(s|ing)? (his|her|a) |swing(s|ing)?|strike(s)?|hand(s|ed)? (him|her|it))\b/i;
 var VL_LEAVE_WORDS = /\b(out of (the )?frame|off[- ]screen|leaves|exits|walks off|runs off|walks away|runs away)\b/i;
+var VL_VOICE_OFF = /voice[^.]{0,40}off[- ]screen|off[- ]screen[^.]{0,20}voice/gi;   // v3.5.25
+var VL_GONE_WORDS = /\b(vanish(es|ing|ed)?|disappear(s|ing|ed)?|gone|leav(es|ing)|left|exit(s|ing|ed)?|out of (the )?frame|off[- ]screen|runs? off|walks? off|walks? away|runs? away|behind the)\b/i;   // v3.5.25
 // The free checks (spec section 6): plain-word warnings under the shot. They never stop Generate.
 function vlChecks(si) {
   var d = VL.draft, s = d && d.shots[si], ep = d && vlFindEp(d.id);
@@ -43248,16 +43264,19 @@ function vlChecks(si) {
   var out = [], acts = vlActionsList(s.actions), cast = (ep && ep.cast) || [];
   if (VL_ACTION_WORDS.test(String(s.sounds || '')) || VL_ACTION_WORDS.test(String(s.around || ''))) out.push({ p: 'more', t: 'Sound and surroundings has an action in it; move it to "What do the characters do?" or the model may ignore it.' });
   acts.forEach(function (a, i) {
+    a = a.replace(VL_VOICE_OFF, ' ');   // v3.5.25: "we only hear Drel's voice, from off-screen" is no one leaving
     if (!VL_LEAVE_WORDS.test(a)) return;
     cast.forEach(function (c) {
       if (!vlNamed(c.name, a)) return;
       var first = String(c.name).split(/\s+/)[0];
-      if (vlNamed(c.name, acts.slice(i + 1).join(' ') + ' ' + (s.end || ''))) out.push({ p: 'actions', t: first + ' leaves in action ' + (i + 1) + ' and is needed again in this shot. Cut here, or say in "What does the camera do?" how we find ' + first + ' again.' });
+      var endBack = vlNamed(c.name, s.end || '') && !VL_GONE_WORDS.test(String(s.end || ''));   // v3.5.25: an end that has them gone is not a return
+      if (vlNamed(c.name, acts.slice(i + 1).join(' ')) || endBack) out.push({ p: 'actions', t: first + ' leaves in action ' + (i + 1) + ' and is needed again in this shot. Cut here, or say in "What does the camera do?" how we find ' + first + ' again.' });
     });
   });
   var secs = Number(s.seconds) || VL_SHOT_SECS;
   if (acts.length > Math.max(2, Math.floor(secs / 2.5))) out.push({ p: 'shot', t: 'That\'s ' + acts.length + ' actions for ' + secs + ' seconds. Consider a longer shot or a cut.' });
   if (s.kfs.length > 5) out.push({ p: 'shot', t: 'Only the first 5 pictures are sent. Cut this shot.' });
+  s.lines.forEach(function (l) { if (String(l.text || '').trim() && !String(l.who || '').trim()) out.push({ p: 'lines', t: 'Who says "' + String(l.text).slice(0, 40) + '"? A line with no name is sent as a voice from off-screen; name the speaker so it is not given to someone on screen.' }); });   // v3.5.25
   if (acts.length >= 2) s.lines.forEach(function (l) { if (String(l.text || '').trim() && !l.when) out.push({ p: 'lines', t: 'When does ' + (String(l.who || '').trim() || 'someone') + ' say "' + String(l.text).slice(0, 40) + '"? Pick an action.' }); });
   if (s.kfs.length >= 2 && !String(s.end || '').trim()) out.push({ p: 'end', t: 'Say how the shot ends, so the later pictures don\'t decide it.' });
   var room = vlRefsRoom(si);
@@ -43304,7 +43323,7 @@ function vlRefsHTML(si) {
   var ch = [], as = [];
   (s.refs || []).forEach(function (r, i) { (r.type === 'asset' ? as : ch).push(chip(r, i)); });
   var named = ((ep && ep.cast) || []).filter(function (c) {
-    return c.usable && vlNamed(c.name, vlShotText(s)) && !(s.refs || []).some(function (r) { return r.type === 'character' && Number(r.id) === Number(c.id); });
+    return c.usable && vlNamed(c.name, vlShotText(s)) && vlVoiceOnly(s.lines, vlShotText(s)).indexOf(vlFirst(c.name)) < 0 && !(s.refs || []).some(function (r) { return r.type === 'character' && Number(r.id) === Number(c.id); });
   });
   var room = vlRefsRoom(si);
   return '<div class="review-row" style="align-items:center;gap:6px;"><span class="review-label">Characters</span>' + (ch.join('') || '<span class="review-none">none</span>') +

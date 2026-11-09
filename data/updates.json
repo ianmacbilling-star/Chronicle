@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.25",
+    "staged_on": "2026-11-08",
+    "entries": [
+      {
+        "id": "3525-voices",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: voices from off-screen stay off the faces on screen; 10 takes a shot; takes across the shot.",
+        "detail": "Ian, 2026-11-08, takes 11-13: a line ticked off-screen was still said by Gubuk on screen; a line with no name drew a second Gubuk to say it; \"Let's lift the limit on 3 takes\"; \"put the viewer below the Left hand side as well. To make more room for multiple\". The take that worked (episode 1 take 3) wrote the line as something Gubuk hears: \"Gubuk hears Drel yelling in the distance\". The script now does the same: \"As this happens, Gubuk hears Drel calling from off-screen, in the distance: '...' (Drel is not in this shot).\" (\"we hear\" when no one is on screen); a line with no name is such a voice, never \"Someone says\". Then each character on screen with no line \"does not speak; his mouth stays closed\", and \"No one on screen speaks.\" when no one on screen has a line. A speaker only heard off-screen is not sent as a reference picture, is not offered by the named-but-not-in-References hint, and what a line says no longer names anyone (\"Where is Emanon?\"); a speaker also seen doing something in the shot keeps their picture. A line with no Who is warned. The leave-and-return warning ignores a voice heard off-screen and an end that has them gone. Takes: 10 a shot (was 3); the takes and Generate take sit in a row across the whole shot under both halves. Director's Notes: the start names what lies around (bodies, fallen weapons, props) and every line names its speaker.",
+        "td": [
+          "TD-090"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.24",
     "staged_on": "2026-11-08",
     "entries": [

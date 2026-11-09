@@ -127,7 +127,7 @@ const MERGE_ENDPOINT = 'fal-ai/ffmpeg-api/merge-videos';   // joins clips in ord
 const MAX_KEYFRAMES = 60;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 const STUCK_MINUTES = 45;
-const MAX_TAKES = 3;   // v3.5.15 (Ian, 2026-11-08: "for now we limit them to 3 takes"): delete one to make another
+const MAX_TAKES = 10;   // v3.5.15 (Ian: "for now we limit them to 3 takes"); v3.5.25: 10 while Video is built out (Ian: "Let's lift the limit on 3 takes")
 const CUT_STYLES = ['instant'];   // this build makes plain cuts only; the styles come in their own build (spec section 4)
 
 function estCost(m, duration, sound) {
@@ -822,7 +822,36 @@ function planReference(ep, kfs, shotNo, cast) {
 }
 // v3.5.19 -- THE SCRIPT a shot in plain words becomes (VIDEO_REFERENCE_SHOTS_SPEC section 3). pics: { cast: [{ name, n }],
 // scene: [n...] } for a reference model (the @Image numbers), or null for a keyframe model (no picture lines).
-function sayLine(l) { return (l.who ? l.who + (l.off ? ' (off-screen)' : '') + ' says' : (l.off ? 'Someone off-screen says' : 'Someone says')) + ': "' + l.text + '"'; }
+// v3.5.25 -- A VOICE FROM OFF-SCREEN IS SAID TO BE ONE (takes 11-13: "(off-screen)" was ignored, and a line with no name
+// drew a second Gubuk to say it). A line with no name is a voice from off-screen too: never "Someone says".
+function lineOff(l) { return !!l.off || !String(l.who || '').trim(); }
+// v3.5.25 (Ian's take that worked, ep 1 take 3): the line written as something the one on screen HEARS, "Gubuk hears Drel
+// yelling in the distance". hearers: the characters on screen with no line of their own.
+function sayLine(l, hearers) {
+  const who = String(l.who || '').trim();
+  if (!lineOff(l)) return who + ' says: "' + l.text + '"';
+  const h = (hearers || []).filter(Boolean);
+  const subj = h.length ? (h.length === 1 ? h[0] + ' hears ' : h.slice(0, -1).join(', ') + ' and ' + h[h.length - 1] + ' hear ') : 'we hear ';
+  return who ? subj + who + ' calling from off-screen, in the distance: "' + l.text + '" (' + who + ' is not in this shot)' : subj + 'a voice calling from off-screen, in the distance: "' + l.text + '" (the speaker is not in this shot)';
+}
+function firstName(n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
+// Who is only a voice in this shot: an off-screen speaker with no line said on screen.
+function voiceOnly(w) {
+  const on = {}, off = {};
+  w.lines.forEach(function (l) { const f = firstName(l.who); if (!f) return; if (lineOff(l)) off[f] = true; else on[f] = true; });
+  return Object.keys(off).filter(function (f) { return !on[f]; });
+}
+// The rules that keep the voices off the faces we see: the characters on screen with no line of their own keep their
+// mouths shut.
+function voiceRules(w, onScreen) {
+  if (!w.lines.some(function (l) { return lineOff(l) && String(l.text || '').trim(); })) return [];
+  const talkers = {}, speakers = {};
+  w.lines.forEach(function (l) { speakers[firstName(l.who)] = true; if (!lineOff(l)) talkers[firstName(l.who)] = true; });
+  const out = [];
+  (onScreen || []).forEach(function (n) { if (!speakers[firstName(n)]) out.push(n + ' does not speak; ' + n + '\'s mouth stays closed.'); });
+  if (!Object.keys(talkers).length) out.push('No one on screen speaks.');
+  return out;
+}
 function shotScript(ep, w, pics) {
   const out = [];
   out.push('One continuous shot, no cuts. Keep every character looking exactly the same from start to finish.');
@@ -840,14 +869,17 @@ function shotScript(ep, w, pics) {
   if (overall) out.push('Overall: ' + overall);
   if (w.start) out.push('Start: ' + w.start);
   const loose = w.lines.filter(function (l) { return !l.when; });
+  const spk = {}; w.lines.forEach(function (l) { spk[firstName(l.who)] = true; });
+  const hearers = pics ? pics.cast.filter(function (c) { return c.kind !== 'asset' && !spk[firstName(c.name)]; }).map(function (c) { return c.name; }) : [];   // v3.5.25
   if (w.actions.length || loose.length) {
     out.push('What happens, in order:');
     w.actions.forEach(function (a, i) {
-      const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return 'As this happens, ' + sayLine(l) + '.'; });
+      const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return 'As this happens, ' + sayLine(l, hearers) + '.'; });
       out.push((i + 1) + '. ' + a + (said.length ? ' ' + said.join(' ') : ''));
     });
-    loose.forEach(function (l) { out.push((w.actions.length ? 'Then, ' : '') + sayLine(l) + '.'); });
+    loose.forEach(function (l) { const t = sayLine(l, hearers); out.push(w.actions.length ? 'Then, ' + t + '.' : t.charAt(0).toUpperCase() + t.slice(1) + '.'); });
   }
+  voiceRules(w, pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []).forEach(function (r) { out.push(r); });   // v3.5.25
   if (w.camera) out.push('Camera: ' + w.camera);
   if (w.end) out.push('End: ' + w.end);
   if (w.sounds) out.push('Sound: ' + w.sounds);
@@ -855,7 +887,17 @@ function shotScript(ep, w, pics) {
   return out.join('\n').slice(0, 6000);
 }
 function wordsHaveContent(ep, w) { return !!(String(ep.overall || '').trim() || w.start || w.actions.length || w.lines.length || w.camera || w.end); }
-function wordsText(ep, w) { return [ep.overall, w.start, w.actions.join(' '), w.camera, w.end, w.sounds, w.around].concat(w.lines.map(function (l) { return l.who + ' ' + l.text; })).join(' '); }
+// v3.5.25 -- for naming the cast: what a line SAYS names no one in the shot ("Where is Emanon?"), and only the speakers
+// seen on screen count.
+function wordsText(ep, w) { return [ep.overall, w.start, w.actions.join(' '), w.camera, w.end, w.sounds, w.around].concat(w.lines.filter(function (l) { return !lineOff(l); }).map(function (l) { return l.who; })).join(' '); }
+// The characters a shot's words name, less those who are only a voice in it (v3.5.25: they are not in the shot, so their
+// pictures are not sent).
+// A voice is still in the shot when the words have them DO something there (a sentence that is not about a voice).
+function namedInShot(ep, w, chars, room) {
+  const vo = voiceOnly(w);
+  const seen = wordsText(ep, w).split(/(?<=[.!?])\s+/).filter(function (x) { return !/voice|off[- ]screen/i.test(x); }).join(' ');
+  return namedCast(wordsText(ep, w), (chars || []).filter(function (c) { return vo.indexOf(firstName(c.name)) < 0 || namedCast(seen, [c], 1).length; }), room);
+}
 function namedCast(text, cast, room) {
   const words = String(text || '').toLowerCase(), people = [];
   (cast || []).forEach(function (c) {
@@ -947,7 +989,7 @@ function refsToSend(ep, w, refs, pool, room) {
     });
     return out;
   }
-  return namedCast(wordsText(ep, w), pool.characters.filter(function (c) { return c.usable; }), room).map(function (p) { return { name: p.name, url: p.url, kind: 'character' }; });
+  return namedInShot(ep, w, pool.characters.filter(function (c) { return c.usable; }), room).map(function (p) { return { name: p.name, url: p.url, kind: 'character' }; });
 }
 // What one move sends to fal: each model names its pictures and its length its own way.
 function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
@@ -1684,9 +1726,9 @@ function shotListRequest(ctx, images) {
       'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
       'FOR EACH SHOT write these, in plain words:\n' +
       '- name: 2 to 5 words naming the shot.\n' +
-      '- start: who is where when the shot opens, and which way they face (one or two sentences).\n' +
+      '- start: who is where when the shot opens, and which way they face, and anything lying around that must stay in the shot (bodies, fallen weapons, props) as the shot\'s pictures show it: later pictures do not carry them (one to three sentences).\n' +
       '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning.\n' +
-      (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view}. At most two short lines in a shot; an empty list when nobody should talk.\n'
+      (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view; always name the speaker}. At most two short lines in a shot; an empty list when nobody should talk.\n'
         : '- lines: always an empty list in this style.\n') +
       '- camera: what the camera does. If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
       '- end: who is where when the shot ends, and which way they face.\n' +
@@ -1881,7 +1923,7 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
       return;
     }
     function namedRefs(words) {   // v3.5.22: the characters the words name become the shot's references
-      const named = namedCast(wordsText({ overall: result.overall != null ? result.overall : ep.overall }, words), wpool.characters.filter(function (c) { return c.usable; }), 12);
+      const named = namedInShot({ overall: result.overall != null ? result.overall : ep.overall }, words, wpool.characters.filter(function (c) { return c.usable; }), 12);
       return named.map(function (p) { const c = wpool.characters.filter(function (x) { return x.name === p.name; })[0]; return c ? { type: 'character', id: c.id } : null; }).filter(Boolean);
     }
     function kfOut(k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt || '', duration: k.duration, prev_url: k.prev_image_url || null }; }
