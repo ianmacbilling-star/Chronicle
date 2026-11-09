@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.5.40",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3540-video-panels-picker",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: a shot's + Add character and + Add asset open the same picker as the panels.",
+        "detail": "Ian, 2026-11-09. The Video tab's own small list is gone: + Add character and + Add asset on a shot open the Review and Storyboard picker (this session's cast, the campaign's assets, the same tiles and the Characters tab note). Someone with no picture the video can send is refused with the reason.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.5.39",
     "staged_on": "2026-11-09",
     "entries": [

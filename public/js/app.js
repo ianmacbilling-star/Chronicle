@@ -43588,9 +43588,9 @@ function vlRefsHTML(si) {
   });
   var room = vlRefsRoom(si);
   return '<div class="review-row" style="align-items:center;gap:6px;"><span class="review-label">Characters</span>' + (ch.join('') || '<span class="review-none">none</span>') +
-      '<button type="button" class="review-add-btn" onclick="vlRefPicker(' + si + ',\'character\',this)">+ Add character</button>' +
+      '<button type="button" class="review-add-btn" onclick="vlRefPicker(' + si + ',\'character\')">+ Add character</button>' +
       '<span class="review-label" style="margin-left:10px;">Assets</span>' + (as.join('') || '<span class="review-none">none</span>') +
-      '<button type="button" class="review-add-btn" onclick="vlRefPicker(' + si + ',\'asset\',this)">+ Add asset</button>' +
+      '<button type="button" class="review-add-btn" onclick="vlRefPicker(' + si + ',\'asset\')">+ Add asset</button>' +
       '<span style="' + VL_DESC + 'margin-left:auto;">' + (m && m.reference ? room.sent + ' of 9 pictures sent' : 'Keyframe model: references are not sent') + '</span>' +
     '</div>' +
     (named.length ? '<div style="' + VL_WARN + 'margin-top:4px;">' + named.map(function (c) {
@@ -43829,24 +43829,21 @@ function vlRefRemove(si, i) {
   s.refs.splice(i, 1);
   vlRenderOpen(true); vlQueueSave();
 }
-function vlCloseRefPicker() { var o = document.getElementById('vl-ref-picker'); if (o) o.parentNode.removeChild(o); document.removeEventListener('mousedown', vlRefPickerAway, true); }
-function vlRefPickerAway(e) { var o = document.getElementById('vl-ref-picker'); if (o && !o.contains(e.target)) vlCloseRefPicker(); }
-function vlRefPicker(si, type, btn) {
-  vlCloseRefPicker();
+// v3.5.40 (Ian, 2026-11-09: "Just use the same character picker and same asset picker the storyboard and review tab use...
+// Scrap these and replace them with the ones we already have"): + Add character / + Add asset on a shot open the panels'
+// picker (castPickerShow: this session's cast, the campaign's assets, the same tiles). A pick the video cannot send (no
+// usable picture) is refused with the reason, as the old list showed it.
+function vlCloseRefPicker() { if (typeof closeCastPicker === 'function') closeCastPicker(); }
+function vlRefPicker(si, type) {
   var ep = VL.draft && vlFindEp(VL.draft.id), s = VL.draft && VL.draft.shots[si]; if (!ep || !s) return;
-  var have = {}; (s.refs || []).forEach(function (r) { if (r.type === type) have[r.id] = true; });
-  var list = ((type === 'asset' ? ep.assets : ep.cast) || []).filter(function (x) { return !have[x.id]; });
-  var o = document.createElement('div');
-  o.id = 'vl-ref-picker';
-  var r = btn.getBoundingClientRect();
-  o.style.cssText = 'position:fixed;z-index:9000;left:' + Math.max(8, Math.min(r.left, window.innerWidth - 300)) + 'px;top:' + (r.bottom + 4) + 'px;width:280px;max-height:340px;overflow:auto;background:rgb(var(--panel-rgb));border:1px solid rgba(var(--accent-rgb),0.5);border-radius:8px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,0.5);';
-  o.innerHTML = list.length ? list.map(function (x) {
-    return '<button type="button" class="vl-ref-opt" ' + (x.usable ? 'onclick="vlRefAdd(' + si + ',\'' + type + '\',' + x.id + ')"' : 'disabled') + ' style="display:flex;gap:8px;align-items:center;width:100%;padding:5px 6px;background:none;border:none;border-radius:6px;cursor:' + (x.usable ? 'pointer' : 'default') + ';text-align:left;color:inherit;' + (x.usable ? '' : 'opacity:0.5;') + '">' +
-      (x.url ? '<img src="' + escapeHtml(x.url) + '" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:4px;flex:none;">' : '<span style="width:34px;height:34px;flex:none;border-radius:4px;background:rgba(var(--accent-rgb),0.12);"></span>') +
-      '<span style="font-size:13px;">' + escapeHtml(x.name) + (x.usable ? '' : '<br><span style="font-size:11px;">' + escapeHtml(x.why_not || 'no picture') + '</span>') + '</span></button>';
-  }).join('') : '<div style="' + VL_DESC + 'padding:6px;">' + (type === 'asset' ? 'No more assets in this campaign.' : 'No more characters in this version.') + '</div>';
-  document.body.appendChild(o);
-  setTimeout(function () { document.addEventListener('mousedown', vlRefPickerAway, true); }, 0);
+  var have = {}; (s.refs || []).forEach(function (r) { if (r.type === type) have[String(r.id)] = true; });
+  _loadCastImages(function () {
+    castPickerShow(type, have, function (id) {
+      var it = ((type === 'asset' ? ep.assets : ep.cast) || []).filter(function (x) { return String(x.id) === String(id); })[0];
+      if (it && !it.usable) { showError(it.name + ' can\u2019t be sent to the video model (' + (it.why_not || 'no usable picture') + ').'); return; }
+      vlRefAdd(si, type, id);
+    });
+  });
 }
 function vlIsArchived(url) { var ep = VL.draft && vlFindEp(VL.draft.id); return !!(ep && (ep.archived || []).indexOf(url) >= 0); }
 function vlArchivePillHTML(url) {
