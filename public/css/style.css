@@ -3200,3 +3200,8 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .form-input:focus, .form-textarea:focus, .panel-dark .form-input:focus { border-color: var(--accent-bright); }
 .narrative-inline-box { border: 1px solid rgba(var(--accent-rgb),0.55); border-radius: var(--radius); }
 .narrative-inline-box:focus { border-color: var(--accent-bright); }
+
+/* v3.5.35 -- Edit in Image Builder on an archived picture (bottom left of the picture, like its neighbours). */
+.archive-ib-thumb{position:absolute;bottom:8px;left:8px;padding:3px 8px;font-size:11px;background:rgba(var(--glass-rgb),0.7);color:rgba(var(--accent-text-rgb),0.9);border:1px solid rgba(var(--accent-rgb),0.4);border-radius:6px;cursor:pointer;opacity:0;transition:opacity .15s;}
+.archive-card:hover .archive-ib-thumb{opacity:1;}
+.archive-ib-thumb:hover{background:rgba(var(--glass-rgb),0.9);color:var(--accent-bright);}

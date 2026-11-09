@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.5.36",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3536-archive-edit-in-image-builder",
+        "kind": "feature",
+        "public": true,
+        "summary": "Archive: Edit in Image Builder on any archived picture.",
+        "detail": "Ian, 2026-11-09. An archived picture has an Edit in Image Builder button (bottom left; Platinum campaigns, as the Image Builder). It makes a new Draft of yours in the Image Builder from the picture, with its name, prompt, art style and shape, and opens it with all the Builder's tools (Retouch, Regen, Edit Prompt, a title, Revert, Archive, Save as Asset). Opening it is free; a new copy every time; the archived picture is never changed. Brain updated.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.5.35",
     "staged_on": "2026-11-09",
     "entries": [

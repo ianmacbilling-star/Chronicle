@@ -4319,6 +4319,41 @@ router.post('/builder/images/:id/copy', requireAuth, async function (req, res) {
   } catch (e) { console.error('[image-builder] copy error:', e.message); res.json({ error: 'Could not copy the picture.' }); }
 });
 
+// v3.5.35 -- Edit in Image Builder (Ian, 2026-11-09: "a button on Archived pictures to allow editing in the image
+// builder... so it will open it in the image builder with all the tools there"; "new copy is right. copy everytime").
+// Any archived picture of the campaign becomes a new Image Builder Draft of the caller's: the picture as it is, its
+// name, prompt, art style and shape as the recipe. Free: nothing is drawn. The archived picture is never changed, and
+// the file is shared (releaseImage keeps a file any archive or builder row still names).
+function ibShapeOfDims(w, h) {
+  w = Number(w) || 0; h = Number(h) || 0;
+  if (!w || !h) return 'standard';
+  const r = w / h;
+  let best = 'standard', bd = Infinity;
+  Object.keys(IB_SHAPES).forEach(function (k) { const p = shapeAspectRatio(k).split(':'); const d = Math.abs(Math.log(r / (Number(p[0]) / Number(p[1])))); if (d < bd) { bd = d; best = k; } });
+  return best;
+}
+router.post('/builder/campaigns/:cid/from-archive', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const uid = req.session.userId, cid = parseInt(req.params.cid, 10);
+    const a = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(parseInt((req.body || {}).archive_id, 10) || 0, cid);
+    if (!a || !a.image_url) return res.status(404).json({ error: 'That picture is no longer in the Archive.' });
+    if (await rightsCheck.refuseRejected(res, [a.image_url], 'It can\u2019t be edited. Replace it with a picture you have the rights to.')) return;
+    const prompt = String(a.image_prompt || '').trim();
+    const name = String(a.title || 'Archived picture').trim().slice(0, IB_NAME_MAX) || 'Archived picture';
+    const description = (prompt || name).slice(0, IB_DESC_MAX);
+    const shape = IB_SHAPES[a.shape] ? a.shape : ibShapeOfDims(a.img_w, a.img_h);
+    const now = new Date().toISOString();
+    const ins = await db.prepare(
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, words, image_url, img_w, img_h, is_ready, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(cid, uid, name, description, null, shape, a.art_style || null, a.art_style_name || null, true, '{}', prompt || null, prompt ? prompt.slice(0, IB_WORDS_MAX) : null, a.image_url, a.img_w || null, a.img_h || null, false, now, now);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(ins.lastInsertRowid);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] from-archive error:', e.message); res.json({ error: 'Could not open the picture in the Image Builder.' }); }
+});
+
 // v3.3.82 -- Retouch a Builder picture, through the same submitRetouch the Story panels use: the picture is Image 1,
 // the recipe's references follow, the reader's markers ride along as a location diagram (marked_url), and a picked
 // reference narrows the payload to that one (ref_name). One token, spent when the picture arrives; the picture on

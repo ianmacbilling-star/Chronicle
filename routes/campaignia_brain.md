@@ -1758,6 +1758,13 @@ storyboard or from character creation. See each image full-size with details, an
   it, or drag a corner to frame just one part — a single item on a table, one building in a street —
   in any shape. Only the framed part becomes the asset; the archived picture is not changed, and it
   costs nothing.
+- **Edit in Image Builder** -- the button at the bottom left of an archived picture (anyone who can
+  use the Image Builder in the campaign: a Platinum campaign) opens a copy of it in the Image Builder
+  as a new Draft of yours, with all the Builder's tools: Retouch, Regen, Edit Prompt, a title, Revert,
+  Archive, Save as Asset. Its name, prompt, art style and shape come with it; Regen and Edit Prompt
+  redraw from that prompt, so an archived story panel comes back close to the original, not the same.
+  Opening it is free (each Regen or Retouch is a token). The archived picture is never changed: press
+  **Archive** in the Builder to add the new version beside it. It makes a new copy every time.
 
 **Asset & Archive limits:** both the Asset Library and the Archive have a per-campaign
 limit that scales with tier (higher tiers allow more); the live number comes from the
@@ -2404,6 +2411,7 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 - **"I want a wanted poster / letter / scroll my players can read."** Choose **In-world Handout**, type the words exactly in **Handout text**, pick a font and ink, and Generate. The words are laid on the paper afterwards, so they are always spelled right.
 - **"I want to share a picture with my group."** Press **Mark Ready**. Every member of the campaign then sees it in the Image Builder's **Gallery**.
 - **"I like someone else's picture and want my own version."** Open it in the Image Builder's Gallery and press **Make My Copy** (free). Change anything and press Generate or Regen.
+- **"I want to change an archived picture with the Image Builder's tools."** Press **Edit in Image Builder** on it in the Archive (Platinum campaigns). It opens as your own Draft; the archived picture stays as it is.
 - **"I want to use an Image Builder picture as my book cover."** Press **Archive** on it, then choose it from the Archive on the Prep & Preview cover picker.
 
 ---

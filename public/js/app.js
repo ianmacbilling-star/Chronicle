@@ -17701,6 +17701,7 @@ function renderArchiveGrid() {
     grid.innerHTML = '<div class="muted" style="padding:20px;">No archives match these filters.</div>';
     return;
   }
+  var canBuilder = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);   // v3.5.35 -- the Image Builder is Platinum (the server checks)
   grid.innerHTML = rows.map(function(a){
     var canDelete = isDM || (meId && a.archived_by === meId);
     var when = a.created_at ? new Date(a.created_at).toLocaleDateString() : '';
@@ -17722,6 +17723,7 @@ function renderArchiveGrid() {
         '<img loading="lazy" src="' + a.image_url + '" alt="' + escapeHtml(a.title || 'archived image') + '" onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
         promptBtn +
         (canAsset ? '<button class="archive-asset-thumb" onclick="openCopyToAssetModal(' + a.id + ')" title="Copy this image to Assets">&#43; Assets</button>' : '') +
+        (canBuilder ? '<button class="archive-ib-thumb" onclick="archEditInBuilder(' + a.id + ')" title="Open a copy of this picture in the Image Builder, with all its tools: Retouch, Regen, Edit Prompt, Title and more. Free; the archived picture stays as it is.">&#9998; Edit in Image Builder</button>' : '') +   // v3.5.35
         (canDelete ? '<button class="archive-del-thumb" onclick="deleteArchive(' + a.id + ')" title="Remove from Archive">&#10005; Remove</button>' : '') +
       '</div>' +
       '<div class="archive-meta">' +
@@ -40574,6 +40576,7 @@ function ibLoadGallery() {
       // v3.4.01 -- one of mine finished drawing since the last look: the token count at the top now, not 20 s later.
       var _wasBusy = {}; (IB.images || []).forEach(function (x) { if (ibBusy(x)) _wasBusy[x.id] = 1; });
       IB.images = d.images || []; IB.me = d.me;
+      if (IB.openAfter && ibImg(IB.openAfter)) { var _oa = IB.openAfter; IB.openAfter = null; IB.sig = ''; setTimeout(function () { ibOpen(_oa); }, 0); }   // v3.5.35 -- Edit in Image Builder
       var _landed = IB.images.some(function (x) { return _wasBusy[x.id] && !ibBusy(x) && String(x.user_id) === String(IB.me); });
       if (_landed && typeof refreshTokenBalance === 'function') { refreshTokenBalance(); setTimeout(refreshTokenBalance, 3000); }
       if (IB.refsPending && String(IB.viewId) === String(IB.refsPending) && !ibBusy(ibImg(IB.refsPending))) ibSyncRefs();   // v3.4.07 -- the list that waited
@@ -40684,6 +40687,21 @@ function ibArchiveBothText(what, a, b) {
   if (a.already) return 'The copy with ' + what + ' was already in ' + A + '; the clean copy is now archived.';
   if (b.already) return 'The clean copy was already in ' + A + '; the copy with ' + what + ' is now archived.';
   return 'Both copies are in ' + A + ', ready to use as a cover, title picture or replacement.';
+}
+// v3.5.35 (Ian, 2026-11-09) -- Edit in Image Builder, from an archived picture: the server makes a new Draft of yours
+// from it (free; the archived one is not changed) and the Builder opens on that campaign with it showing.
+function archEditInBuilder(archiveId) {
+  var c = state.currentCampaign; if (!c || !c.id) return;
+  fetch('/api/images/builder/campaigns/' + encodeURIComponent(c.id) + '/from-archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archive_id: archiveId }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.error === 'NOT_PLATINUM') { platinumGate('the Image Builder', d.message || 'The Image Builder is a Platinum feature.'); return; }
+      if (!d || !d.image) { showError((d && (d.message || d.error)) || 'Could not open the picture in the Image Builder.'); return; }
+      if (String(IB.cid) !== String(c.id)) { ibClearCampaign(); ibClearForm(true); IB.cid = c.id; IB.cname = c.name || ''; }
+      IB.openAfter = d.image.id;
+      openImageBuilder();
+    })
+    .catch(function () { showError('Connection error. Please try again.'); });
 }
 function ibCopy(id) {
   ibActMsg('');
