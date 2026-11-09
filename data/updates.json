@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.5.45",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3545-video-pictures-up",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: the pictures start right under a shot's top line; no 'N of 9 pictures sent'.",
+        "detail": "Ian, 2026-11-09. The 'N of 9 pictures sent' (or 'Keyframe model: references are not sent') line is gone, and a shot's Characters and Assets row moved to the top of its left half, so the pictures on the right start right under the shot's top line. The quick checks use the model's own picture limits (Kling O3: 7 in all, 4 from the shot).",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.5.44",
     "staged_on": "2026-11-09",
     "entries": [

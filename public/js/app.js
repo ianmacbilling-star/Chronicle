@@ -42310,9 +42310,9 @@ function vlShotHTML(d, si, m, n0) {
       '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +
       '<span id="vl-todo-' + s.ck + '" style="flex:none;margin-left:auto;">' + vlTodoBtnHTML(si) + '</span>' +   // v3.5.34
     '</div>' +
-    '<div id="vl-refs-' + si + '" class="vl-refs" style="margin-top:8px;">' + vlRefsHTML(si) + '</div>' +
     '<div class="vl-halves">' +
       '<div class="vl-left">' +
+        '<div id="vl-refs-' + si + '" class="vl-refs" style="margin-bottom:8px;">' + vlRefsHTML(si) + '</div>' +   // v3.5.45: in the left half, so the pictures start right under the top line
         '<div id="vl-chk-' + si + '" class="vl-checks">' + vlChecksHTML(si, 'shot') + '</div>' +
         vlPanelsHTML(d, si) +
       '</div>' +
@@ -43570,12 +43570,13 @@ function vlChecks(si) {
   });
   var secs = Number(s.seconds) || VL_SHOT_SECS;
   if (acts.length > Math.max(2, Math.floor(secs / 2.5))) out.push({ p: 'shot', t: 'That\'s ' + acts.length + ' actions for ' + secs + ' seconds. Consider a longer shot or a cut.' });
-  if (s.kfs.length > 5) out.push({ p: 'shot', t: 'Only the first 5 pictures are sent. Cut this shot.' });
+  var mm0 = vlModel(VL.draft.model), maxScene0 = (mm0 && mm0.reference && mm0.max_scene) || 5;   // v3.5.45
+  if (s.kfs.length > maxScene0) out.push({ p: 'shot', t: 'Only the first ' + maxScene0 + ' pictures are sent. Cut this shot.' });
   s.lines.forEach(function (l) { if (String(l.text || '').trim() && !String(l.who || '').trim()) out.push({ p: 'lines', t: 'Who says "' + String(l.text).slice(0, 40) + '"? A line with no name is sent as a voice from off-screen; name the speaker so it is not given to someone on screen.' }); });   // v3.5.25
   if (acts.length >= 2) s.lines.forEach(function (l) { if (String(l.text || '').trim() && !l.when) out.push({ p: 'lines', t: 'When does ' + (String(l.who || '').trim() || 'someone') + ' say "' + String(l.text).slice(0, 40) + '"? Pick an action.' }); });
   if (s.kfs.length >= 2 && !String(s.end || '').trim()) out.push({ p: 'end', t: 'Say how the shot ends, so the later pictures don\'t decide it.' });
   var room = vlRefsRoom(si);
-  if (room.over > 0) out.push({ p: 'shot', t: 'Only 9 pictures go with a shot: ' + room.over + ' reference' + (room.over === 1 ? '' : 's') + ' at the end of the list will be left out.' });
+  if (room.over > 0) out.push({ p: 'shot', t: 'Only ' + room.max + ' pictures go with a shot: ' + room.over + ' reference' + (room.over === 1 ? '' : 's') + ' at the end of the list will be left out.' });
   return out;
 }
 function vlChecksHTML(si, key) {
@@ -43605,8 +43606,9 @@ function vlRefsRoom(si) {
   var s = VL.draft.shots[si], m = vlModel(VL.draft.model);
   if (!m || !m.reference) return { sent: 0, over: 0 };
   var refs = (s.refs || []).filter(function (r) { var it = vlPoolItem(r.type, r.id); return it && it.usable; }).length;
-  var pics = Math.min(5, s.kfs.length);
-  return { refs: refs, pics: pics, sent: Math.min(9, refs + pics), over: Math.max(0, refs + pics - 9) };
+  var maxR = m.max_refs || 9, maxS = m.max_scene || 5;   // v3.5.45: the model's own limits (Kling O3: 7 and 4)
+  var pics = Math.min(maxS, s.kfs.length);
+  return { refs: refs, pics: pics, sent: Math.min(maxR, refs + pics), over: Math.max(0, refs + pics - maxR), max: maxR, maxScene: maxS };
 }
 function vlRefsHTML(si) {
   var d = VL.draft, s = d.shots[si], m = vlModel(d.model), ep = vlFindEp(d.id);
@@ -43621,12 +43623,11 @@ function vlRefsHTML(si) {
   var named = ((ep && ep.cast) || []).filter(function (c) {
     return c.usable && vlNamed(c.name, vlShotText(s)) && vlVoiceOnly(s.lines, vlShotText(s)).indexOf(vlFirst(c.name)) < 0 && !(s.refs || []).some(function (r) { return r.type === 'character' && Number(r.id) === Number(c.id); });
   });
-  var room = vlRefsRoom(si);
-  return '<div class="review-row" style="align-items:center;gap:6px;"><span class="review-label">Characters</span>' + (ch.join('') || '<span class="review-none">none</span>') +
+  // v3.5.45 (Ian, 2026-11-09): no "N of 9 pictures sent" line; the references sit at the top of the left half.
+  return '<div class="review-row" style="align-items:center;gap:6px;flex-wrap:wrap;"><span class="review-label">Characters</span>' + (ch.join('') || '<span class="review-none">none</span>') +
       '<button type="button" class="review-add-btn" onclick="vlRefPicker(' + si + ',\'character\')">+ Add character</button>' +
       '<span class="review-label" style="margin-left:10px;">Assets</span>' + (as.join('') || '<span class="review-none">none</span>') +
       '<button type="button" class="review-add-btn" onclick="vlRefPicker(' + si + ',\'asset\')">+ Add asset</button>' +
-      '<span style="' + VL_DESC + 'margin-left:auto;">' + (m && m.reference ? room.sent + ' of 9 pictures sent' : 'Keyframe model: references are not sent') + '</span>' +
     '</div>' +
     (named.length ? '<div style="' + VL_WARN + 'margin-top:4px;">' + named.map(function (c) {
       return escapeHtml(String(c.name).split(/\s+/)[0]) + ' is named but not in References. <button type="button" class="review-add-btn" onclick="vlRefAdd(' + si + ',\'character\',' + c.id + ')">Add</button>';
