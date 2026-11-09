@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.28",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3528-new-panel-window",
+        "kind": "feature",
+        "public": true,
+        "summary": "New Panel's window is simpler: characters, assets and prominence as on every panel, and no picture step.",
+        "detail": "The New Panel window now uses the same + Add character and + Add asset picker as every panel, adds Prominence (Minimize, Default or Maximize), and no longer asks about the picture: the panel lands, and Replace, Regen or Generate Images give it one there.",
+        "td": [
+          "TD-1117"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.27",
     "staged_on": "2026-11-09",
     "entries": [

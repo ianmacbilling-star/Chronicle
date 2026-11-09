@@ -90,6 +90,7 @@ router.delete('/:momentId', requireAuth, verifyCampaignMember, async function(re
 //   mode 'write' (Write it for me, 1 token): the AI writes title, description, image prompt, shape and type, and then the
 //         panel's own text when the session has its narrative. Charged only when it all worked; a failed call adds nothing.
 //   mode 'own': title and picture prompt required; description (else the line), shape and text optional.
+//   characters, assets: the cast (none = found by name); prominence 1 / 3 / 5 (v3.5.28, default 3).
 // Refused past the plan's panel limit (Generate Story's own, the title picture not counted), on someone else's version,
 // and while a narrative or Generate Story is being written. The order, text blocks, outlines, Directions, Review lines and
 // character-change markers all follow in one transaction (services/panelOrder.js applyInsert).
@@ -154,7 +155,8 @@ router.post('/insert', requireAuth, verifyCampaignMember, async function (req, r
       if (r.error) return res.json({ error: 'WRITE_FAILED', message: r.error + ' Nothing was added and nothing was charged.' });
       row = Object.assign({}, r.fields, { title: capTitleForShape(r.fields.title, r.fields.shape) });
     }
-    row.layout_meta = JSON.stringify({ prominence: 3, focal: 'center', crop_safe: true, group_break: false });
+    const prom = [1, 3, 5].indexOf(Number(b.prominence)) >= 0 ? Number(b.prominence) : 3;   // v3.5.28 -- Minimize / Default / Maximize, as a panel's options
+    row.layout_meta = JSON.stringify({ prominence: prom, focal: 'center', crop_safe: true, group_break: false });
     let out;
     try {
       out = await panelOrder.applyInsert(db, { forkId: own.forkId, sessionId: req.params.sessionId, after: { t: after.t, id: after.id }, row: row,

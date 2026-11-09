@@ -31367,10 +31367,17 @@ function openCastPicker(kind, momentId) {
 function _buildCastPicker(kind, momentId) {
   closeCastPicker();
   var p = _reviewPanel(momentId); if (!p) return;
+  var have = {};
+  ((kind === 'character') ? (p.characters || []) : (p.assets || [])).forEach(function(x){ have[String(x.id)] = true; });
+  castPickerShow(kind, have, function (id) { if (kind === 'character') castPickCharacter(momentId, id); else castPickAsset(momentId, id); });
+}
+// v3.5.28 -- TD-1117. THE PANEL'S PICKER, SHARED: New Panel opens this same window (Ian, 2026-11-09: "the character picker,
+// Asset picker I want are what's on the panels currently"). have: ids already in; onPick(id) is what a pick does.
+function castPickerShow(kind, have, onPick) {
+  closeCastPicker();
   var isChar = (kind === 'character');
   var ACAT = { location: 'Location', npc: 'Sup. Character / NPC', item: 'Item' };   // v3.0.848 -- SHORT: this map feeds prep-img-cap, a caption under a 120px thumbnail, where the full term runs to three lines
-  var have = {};
-  (isChar ? (p.characters || []) : (p.assets || [])).forEach(function(x){ have[String(x.id)] = true; });
+  have = have || {};
   // v3.0.881 -- TD-755. Fresh rows win; the cached master list is the fallback for
   // a failed fetch only. Tested against null, never falsiness: see _castCharRows.
   var src = isChar
@@ -31404,7 +31411,7 @@ function _buildCastPicker(kind, momentId) {
       else { imgEl.innerHTML = isChar ? '&#128100;' : '&#127991;'; }
       var cap = document.createElement('span'); cap.className = 'prep-img-cap'; cap.textContent = label;
       btn.appendChild(imgEl); btn.appendChild(cap);
-      btn.addEventListener('click', function(){ if (isChar) castPickCharacter(momentId, it.id); else castPickAsset(momentId, it.id); closeCastPicker(); });
+      btn.addEventListener('click', function(){ onPick(it.id); closeCastPicker(); });
       grid.appendChild(btn);
     });
   }
@@ -43659,8 +43666,9 @@ function adminVideoSave(box) {
 // v3.5.27 -- TD-1117. NEW PANEL → (claude/NEW_PANEL_SPEC.md). Ian, 2026-11-09: "New Panel ->" at the right of a
 // box's button row, on the Story page and on the Review rows; the new panel goes right after the space the button is on
 // ("Always one to the right"), never after the Closing. The window asks what happens there (required either way; saved
-// as the panel's Outline), the characters and assets in it, Write it for me (1 token: the AI writes everything, the
-// panel's story text too) or I'll write it myself, and where its picture comes from (the Archive, Generate, Later).
+// as the panel's Outline), the characters and assets in it and its prominence (v3.5.28: the rows a panel's options show),
+// Write it for me (1 token: the AI writes everything, the panel's story text too) or I'll write it myself. No picture
+// step (v3.5.28): it lands without one, and Replace, Generate and the rest work on it there.
 // The server adds it in one transaction (POST .../moments/insert) and refuses past the plan's panel limit.
 // =====================================================================================================
 var NP = null;
@@ -43711,7 +43719,7 @@ function npOpen(src, t, id) {
   if (!state.currentCampaign || !state.currentSession) return;
   if (state._npCap && npCount() >= state._npCap.cap) { showError('Your plan’s panel limit is reached (' + state._npCap.cap + ' panels). Delete a panel to add another.'); return; }
   npClose();
-  NP = { src: src, after: { t: t, id: t === 'o' ? null : id }, mode: 'write', pic: 'archive', chars: {}, assets: {} };
+  NP = { src: src, after: { t: t, id: t === 'o' ? null : id }, mode: 'write', chars: {}, assets: {} };
   var L = 'display:block;margin:12px 0 4px;font-size:12px;color:var(--accent-pale);';
   var D = 'font-size:11px;line-height:1.4;color:rgba(var(--accent-text-rgb),0.6);';
   var radio = function (name, val, label, desc, on) {
@@ -43726,11 +43734,13 @@ function npOpen(src, t, id) {
     '<div style="display:flex;align-items:center;gap:8px;"><div style="font-family:\'Cinzel\',serif;color:var(--accent);font-size:16px;flex:1;">New Panel</div><button class="modal-close" onclick="npClose()">&times;</button></div>' +
     '<div style="' + D + 'margin-top:2px;">It goes right after the one you pressed New Panel on.</div>' +
     '<label for="np-line" style="' + L + '">What happens here?</label>' +
-    '<textarea id="np-line" class="form-textarea" style="min-height:70px;" maxlength="1500" placeholder="e.g. Gubuk drags Emanon out of the snow and checks he is still breathing."></textarea>' +
+    '<textarea id="np-line" class="form-textarea" style="min-height:70px;" maxlength="1500" placeholder="e.g. Maya finds the old letter in the attic and reads it by the window."></textarea>' +
     '<div style="' + D + 'margin-top:2px;">Kept as this panel’s Narrative Outline: its text always covers it, now and when it is written again.</div>' +
-    '<div style="' + L + '">Characters in it</div><div id="np-chars" style="display:flex;gap:6px;flex-wrap:wrap;"><span style="' + D + '">Loading…</span></div>' +
-    '<div style="' + L + '">Assets in it</div><div id="np-assets" style="display:flex;gap:6px;flex-wrap:wrap;"><span style="' + D + '">Loading…</span></div>' +
-    '<div style="' + D + 'margin-top:4px;">Pick none to let the panel find them by name, as panels do.</div>' +
+    '<div style="margin-top:12px;">' +   // v3.5.28 -- the rows a panel's options show (Ian, 2026-11-09)
+      '<div class="review-row"><span class="review-label">Characters:</span> <span id="np-chars"><span class="review-none">none</span></span> <button type="button" class="review-add-btn" onclick="npPicker(\'chars\')">+ Add character</button></div>' +
+      '<div class="review-row"><span class="review-label">Assets:</span> <span id="np-assets"><span class="review-none">none</span></span> <button type="button" class="review-add-btn" onclick="npPicker(\'assets\')">+ Add asset</button></div>' +
+      '<div class="review-row"><span class="review-label">Prominence:</span> <select id="np-prom" class="moment-prom-select"><option value="1">Minimize</option><option value="3" selected>Default</option><option value="5">Maximize</option></select></div>' +
+    '</div>' +
     '<div style="' + L + '">Who writes it?</div><div style="display:flex;flex-direction:column;gap:6px;">' +
       radio('np-mode', 'write', 'Write it for me (1 token)', 'Writes the title, the picture prompt, the shape and the panel’s story text, from what you wrote above.', true) +
       radio('np-mode', 'own', 'I’ll write it myself', '', false) + '</div>' +
@@ -43741,10 +43751,6 @@ function npOpen(src, t, id) {
       '<label for="np-shape" style="' + L + '">Shape</label><select id="np-shape" class="form-input">' + NP_SHAPES.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + '</option>'; }).join('') + '</select>' +
       '<label for="np-text" style="' + L + '">Story text (optional)</label><textarea id="np-text" class="form-textarea" style="min-height:70px;" placeholder="The words under the picture. Leave empty and use Regen later."></textarea>' +
     '</div>' +
-    '<div style="' + L + '">Its picture</div><div style="display:flex;flex-direction:column;gap:6px;">' +
-      radio('np-pic', 'archive', 'From the Archive', 'Choose a picture you already have, an Image Builder picture for example.', true) +
-      radio('np-pic', 'generate', 'Generate it', 'Made from the picture prompt, at the usual picture price.', false) +
-      radio('np-pic', 'later', 'Later', 'The panel waits for Generate Images, Replace or Generate.', false) + '</div>' +
     '<div id="np-msg" style="' + D + 'margin-top:10px;"></div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="npClose()">Cancel</button><button class="btn btn-sm btn-primary" id="np-go" onclick="npSend()">Add panel</button></div>' +
   '</div>';
@@ -43753,26 +43759,31 @@ function npOpen(src, t, id) {
   var ta = document.getElementById('np-line'); if (ta) ta.focus();
   if (typeof _loadCastImages === 'function') _loadCastImages(npPaintRefs); else npPaintRefs();
 }
+// v3.5.28 -- the picked characters and assets as chips (x removes), as on a panel's options.
+function npRows(kind) { return kind === 'chars' ? ((typeof _castCharRows !== 'undefined' && _castCharRows) ? _castCharRows.filter(function (c) { return typeof _castSessionIds === 'undefined' || _castSessionIds === null || _castSessionIds[String(c.id)]; }) : []) : ((typeof _castAssetRows !== 'undefined' && _castAssetRows) ? _castAssetRows : []); }
 function npPaintRefs() {
   if (!NP) return;
-  var chip = function (kind, x) {
-    var on = NP[kind][String(x.id)];
-    return '<label class="review-chip' + (kind === 'assets' ? ' review-chip-asset' : '') + '" style="cursor:pointer;' + (on ? '' : 'opacity:0.6;') + '"><input type="checkbox" style="margin-right:4px;"' + (on ? ' checked' : '') +
-      ' onchange="npRef(\'' + kind + '\',' + Number(x.id) + ',this)">' + escapeHtml(kind === 'chars' && typeof charDisplayName === 'function' ? charDisplayName(x.name) : x.name) + '</label>';
-  };
-  var none = function (t) { return '<span style="font-size:11px;color:rgba(var(--accent-text-rgb),0.6);">' + t + '</span>'; };
-  var cs = (typeof _castCharRows !== 'undefined' && _castCharRows) ? _castCharRows : [];
-  if (typeof _castSessionIds !== 'undefined' && _castSessionIds !== null) cs = cs.filter(function (c) { return _castSessionIds[String(c.id)]; });
-  var as = (typeof _castAssetRows !== 'undefined' && _castAssetRows) ? _castAssetRows : [];
-  var ce = document.getElementById('np-chars'), ae = document.getElementById('np-assets');
-  if (ce) ce.innerHTML = cs.length ? cs.map(function (c) { return chip('chars', c); }).join('') : none('No characters in this session’s cast.');
-  if (ae) ae.innerHTML = as.length ? as.map(function (a) { return chip('assets', a); }).join('') : none('No assets in this campaign yet.');
+  ['chars', 'assets'].forEach(function (kind) {
+    var el = document.getElementById(kind === 'chars' ? 'np-chars' : 'np-assets'); if (!el) return;
+    var on = npRows(kind).filter(function (x) { return NP[kind][String(x.id)]; });
+    el.innerHTML = on.length ? on.map(function (x) {
+      return '<span class="review-chip' + (kind === 'assets' ? ' review-chip-asset' : '') + '">' + escapeHtml(kind === 'chars' && typeof charDisplayName === 'function' ? charDisplayName(x.name) : x.name) +
+        '<button type="button" class="review-chip-x" title="Remove" onclick="npUnpick(\'' + kind + '\',' + Number(x.id) + ')">\u00d7</button></span>';
+    }).join(' ') : '<span class="review-none">none</span>';
+  });
 }
-function npRef(kind, id, el) { if (!NP) return; NP[kind][String(id)] = !!el.checked; if (el.parentNode) el.parentNode.style.opacity = el.checked ? '' : '0.6'; }
+function npUnpick(kind, id) { if (!NP) return; delete NP[kind][String(id)]; npPaintRefs(); }
+// v3.5.28 -- + Add character / + Add asset open the panels' own picker (castPickerShow).
+function npPicker(kind) {
+  if (!NP) return;
+  var have = {}; Object.keys(NP[kind]).forEach(function (k) { if (NP[kind][k]) have[k] = true; });
+  castPickerShow(kind === 'chars' ? 'character' : 'asset', have, function (id) { if (NP) { NP[kind][String(id)] = true; npPaintRefs(); } });
+  // The picker's "Characters tab" link leaves for another tab: the New Panel window goes with it.
+  var lk = document.querySelector('#cast-pick-note a'); if (lk) lk.addEventListener('click', function () { npClose(); });
+}
 function npPick(name, val) {
   if (!NP) return;
   if (name === 'np-mode') { NP.mode = val; var o = document.getElementById('np-own'); if (o) o.style.display = val === 'own' ? 'block' : 'none'; }
-  if (name === 'np-pic') NP.pic = val;
 }
 function npVal(id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
 async function npSend() {
@@ -43781,7 +43792,7 @@ async function npSend() {
   var say = function (h, field) { if (msg) msg.innerHTML = '<span style="color:var(--danger);">' + h + '</span>'; var f = field && document.getElementById(field); if (f) f.focus(); };
   var body = { after: NP.after, line: npVal('np-line'), mode: NP.mode,
     characters: Object.keys(NP.chars).filter(function (k) { return NP.chars[k]; }).map(Number),
-    assets: Object.keys(NP.assets).filter(function (k) { return NP.assets[k]; }).map(Number) };
+    assets: Object.keys(NP.assets).filter(function (k) { return NP.assets[k]; }).map(Number), prominence: Number(npVal('np-prom')) || 3 };
   if (!body.line) { say('Say what happens in the new panel first.', 'np-line'); return; }
   if (NP.mode === 'own') {
     body.title = npVal('np-title'); body.prompt = npVal('np-prompt'); body.description = npVal('np-desc'); body.text = npVal('np-text');
@@ -43792,7 +43803,7 @@ async function npSend() {
   var pics = fxPics(NP.src === 'review' ? 'review' : 'board');
   if (!pics.length) { say('Reload the page and try again.'); return; }
   body.anchor = pics[0].id;
-  var pic = NP.pic, src = NP.src;
+  var src = NP.src;
   if (go) { go.disabled = true; go.innerHTML = NP.mode === 'write' ? 'Writing it…' : 'Adding…'; }
   _pmBusy = true;
   var d = null;
@@ -43814,13 +43825,5 @@ async function npSend() {
   try { if (typeof wtClose === 'function') wtClose(); } catch (e) {}
   if (typeof reloadSessionForFork === 'function') reloadSessionForFork();
   if (src === 'review' && typeof loadReview === 'function') { try { loadReview(); } catch (e) {} }
-  // The picture: once the page holds the new panel, open the Archive picker or start the picture.
-  if (pic === 'later' || !d.moment_id) return;
-  var tries = 0;
-  (function wait() {
-    var i = (state.moments || []).findIndex(function (m) { return String(m.id) === String(d.moment_id); });
-    if (i < 0) { if (++tries < 40) setTimeout(wait, 250); return; }
-    if (pic === 'archive' && typeof openReplacePicker === 'function') openReplacePicker('moment', state.moments[i].id);
-    else if (pic === 'generate' && typeof regenImage === 'function') regenImage(state.moments[i].id, i);
-  })();
+  // v3.5.28 -- no picture step: the new panel lands, and Replace, Generate or Retouch it there (Ian, 2026-11-09).
 }

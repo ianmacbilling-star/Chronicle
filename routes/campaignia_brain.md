@@ -1217,12 +1217,13 @@ Where the story comes together as alternating image panels and narrative.
   box on the Story panels (the Opening, a picture's text, a bridge — never the Closing), and at the right of each Review
   row, **New Panel →** adds a new picture panel **right after that one**. A window asks **What happens here?**
   (required: it becomes the panel's **Narrative Outline**, so its text always covers it, now and whenever it is written
-  again), the **characters and assets** in it (pick none and it finds them by name, like any panel), and who writes it:
+  again), its **Characters** and **Assets** (**+ Add character**, **+ Add asset**; leave them at none and it finds them
+  by name, like any panel), its **Prominence** (Minimize, Default or Maximize: how big it gets in the layouts), and who writes it:
   **Write it for me** (**1 token**: Campaignia writes the title, the picture prompt, the shape and the panel's story text
   in the version's narrative style — the text only once the session has its narrative) or **I'll write it myself** (a
-  title and a picture prompt are needed; a description, the shape and the story text are optional). Last, **its
-  picture**: **From the Archive** (any picture you have, an Image Builder picture for example), **Generate it** (the
-  usual picture price), or **Later** (Generate Images, Replace or Regen any time). The new panel is then like every other:
+  title and a picture prompt are needed; a description, the shape and the story text are optional). The panel lands
+  without a picture: give it one there with **Replace** (from the Archive, an Image Builder picture for example),
+  **Regen**, or **Generate Images**. The new panel is then like every other:
   its text stays with its picture, it moves, prints and publishes with it, and Generate Images and Regenerate Narrative
   include it. **Your plan's panel limit applies** (the title picture does not count); at the limit the button is grey
   until a panel is deleted. **Generate Story** starts over and does not keep added panels. If a written panel's story
