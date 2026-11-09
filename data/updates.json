@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.38",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3538-video-check-one-shot",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: check one shot (1 token); the full Pre-production check is 2 tokens.",
+        "detail": "Ian, 2026-11-09. Each shot has Check this shot (Recheck once checked), 1 token, beside its to-do button: the Director checks only that shot, with the story and the pictures either side of it, and only that shot's to-do list is replaced. The full check is now 2 tokens (real runs cost about 13-14 cents in AI); the prices are app_settings video_precheck_tokens and video_precheck_shot_tokens.",
+        "td": [
+          "TD-1115"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.37",
     "staged_on": "2026-11-09",
     "entries": [

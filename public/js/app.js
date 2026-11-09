@@ -42636,7 +42636,7 @@ function vlSlBtnBusy(mode) {
     var b = document.getElementById('vl-sl-btn-' + m); if (!b) return;
     kept[m] = { html: b.innerHTML, dis: b.disabled, st: b.getAttribute('style') || '' };
     b.disabled = true;
-    if (m === mode) { b.style.opacity = '1'; b.style.cursor = 'progress'; b.innerHTML = vlBtnSpin() + ' Starting...'; }
+    if (mode && m === mode) { b.style.opacity = '1'; b.style.cursor = 'progress'; b.innerHTML = vlBtnSpin() + ' Starting...'; }
   });
   return function () {
     ids.forEach(function (m) { var b = document.getElementById('vl-sl-btn-' + m), k = kept[m]; if (!b || !k) return; b.innerHTML = k.html; b.disabled = k.dis; b.setAttribute('style', k.st); });
@@ -43012,7 +43012,7 @@ function vlSlBtnsHTML(d, writing) {
     // v3.5.37 (Ian, 2026-11-09: "progress spinners on main 3 buttons... something that tells us they are working"): the
     // working button keeps full strength with a spinner in the button's own ink (a gold spinner on the gold button did
     // not show, and disabled dimmed it to half).
-    var on = kind === mode;
+    var on = kind === mode && !(info.job && info.job.shot_id);   // v3.5.38: checking one shot spins that shot's button
     return '<button class="btn btn-primary" id="vl-sl-btn-' + mode + '" onclick="' + (mode === 'precheck' ? 'vlPrecheck()' : 'vlWriteShotList(\'' + mode + '\')') + '"' + (writing ? ' disabled' : '') + ' title="' + escapeHtml(tip) + '" style="white-space:nowrap;flex:none;' + (on ? 'opacity:1;cursor:progress;' : '') + '">' +
       (on ? vlBtnSpin() + ' ' + busyLabel : (icon ? icon + ' ' : '') + label + ' <span id="vl-sl-price-' + mode + '">' + escapeHtml(price) + '</span>') + '</button>';
   }
@@ -43032,6 +43032,7 @@ function vlSlMsgHTML(info) {
   var j = info && info.job;
   if (!j || j.status === 'running' || !info.fresh) return '';
   if (j.kind === 'precheck') {   // v3.5.34
+    if (j.status === 'done' && j.shot_id) { var _n = vlShotNoOf(j.shot_id); return escapeHtml((_n ? 'Shot ' + _n : 'The shot') + ' is checked: ' + j.tokens_charged + ' token' + (j.tokens_charged === 1 ? '' : 's') + ' used. Its to-do button lists what to fix.'); }   // v3.5.38
     if (j.status === 'done') return escapeHtml('The pre-production check is in: ' + j.tokens_charged + ' token' + (j.tokens_charged === 1 ? '' : 's') + ' used. Each shot\'s to-do button, at its top right, lists what to fix.');
     return '<span style="color:var(--danger);">' + escapeHtml(j.error || 'The Director could not check the shots. Nothing was charged.') + '</span>';
   }
@@ -43617,13 +43618,28 @@ function vlTodoCount(si) {
   if (pc) n += (pc.findings || []).filter(function (f) { return !f.done; }).length;
   return n;
 }
+// v3.5.38 (Ian, 2026-11-09: "where the todo button is on the shots... give an option to recheck just that single shot"):
+// Check this shot / Recheck, 1 token, beside the to-do button. The Director checks that shot only, with the story and the
+// pictures either side of it; the other shots keep their lists.
+function vlShotNoOf(shotId) { var d = VL.draft, n = 0; if (d) d.shots.forEach(function (s, i) { if (!n && String(s.id) === String(shotId)) n = i + 1; }); return n; }
+function vlShotCheckBtnHTML(si) {
+  var d = VL.draft, s = d && d.shots[si];
+  if (!s || !s.id || !s.kfs.length) return '';
+  var info = VL.sl[d.id] || {}, j = info.job, writing = vlSlWriting(d.id);
+  var mine = writing && j && j.kind === 'precheck' && String(j.shot_id) === String(s.id);
+  var tk = (info.estimate_precheck && info.estimate_precheck.shot_tokens) || 1;
+  var label = mine ? vlSpin(12) + ' Checking...' : (vlShotPc(si) ? 'Recheck' : 'Check this shot') + ' (' + tk + ' token' + (tk === 1 ? '' : 's') + ')';
+  return '<button type="button" class="btn btn-sm vl-check-btn" id="vl-check-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;' + (mine ? 'opacity:1;cursor:progress;' : '') + '"' + (writing ? ' disabled' : '') +
+    ' title="The Director checks just this shot: its pictures, words, references and mode, with the story and the pictures either side of it. Its to-do list is replaced; the other shots keep theirs." onclick="vlPrecheck(' + si + ')">' + label + '</button>';
+}
 function vlTodoBtnHTML(si) {
   var pc = vlShotPc(si), n = vlTodoCount(si);
   var label, style = 'font-size:12px;padding:3px 10px;white-space:nowrap;';
   if (n) { label = '&#9888; ' + n + ' to do'; style += 'border-color:#e8a85a;color:#e8a85a;'; }
   else if (pc) label = pc.stale ? 'Changed since the check' : '&#10003; Ready';
   else label = 'Not checked';
-  return '<button type="button" class="btn btn-sm vl-todo-btn" style="' + style + '" title="This shot\'s to-do list: the pre-production check and the quick checks" onclick="vlTodoOpen(' + si + ')">' + label + '</button>';
+  return '<span style="display:inline-flex;gap:6px;align-items:center;">' + vlShotCheckBtnHTML(si) +   // v3.5.38
+    '<button type="button" class="btn btn-sm vl-todo-btn" style="' + style + '" title="This shot\'s to-do list: the pre-production check and the quick checks" onclick="vlTodoOpen(' + si + ')">' + label + '</button></span>';
 }
 function vlTodoClose() { var o = document.getElementById('vl-todo-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); }
 function vlTodoOpen(si) {
@@ -43760,19 +43776,23 @@ function vlPcDone(shotId, fid, resig, undo) {
     })
     .catch(function () { vlPcMsg('Could not reach the server.'); });
 }
-function vlPrecheck() {
+function vlPrecheck(si) {   // v3.5.38: si -- check that one shot
   var d = VL.draft;
+  var one = (typeof si === 'number' && d && d.shots[si]) ? d.shots[si] : null;
+  if (typeof si === 'number' && (!one || !one.id)) return;
   if (!d || VL.busy || vlSlWriting(d.id)) return;
   vlReadForm();
   if (!vlKfCount(d)) { var m0 = document.getElementById('vl-sl-msg'); if (m0) m0.textContent = 'An episode needs one keyframe at least.'; return; }
   var id = d.id;
   if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
-  var unbusy = vlSlBtnBusy('precheck');   // v3.5.37
+  var unbusy = vlSlBtnBusy(one ? null : 'precheck');
+  var cb = one ? document.getElementById('vl-check-' + one.ck) : null, cbWas = cb ? [cb.innerHTML, cb.getAttribute('style') || ''] : null;
+  if (cb) { cb.disabled = true; cb.style.opacity = '1'; cb.style.cursor = 'progress'; cb.innerHTML = vlSpin(12) + ' Starting...'; }   // v3.5.37
   vlSave(function (saved) {
-    if (!saved) { unbusy(); var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so the Director did not start.'; return; }
-    VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running', kind: 'precheck' }, fresh: true });
+    if (!saved) { unbusy(); if (cb && cbWas) { cb.innerHTML = cbWas[0]; cb.setAttribute('style', cbWas[1]); cb.disabled = false; } var m1 = document.getElementById('vl-sl-msg'); if (m1) m1.textContent = 'Could not save the episode (' + (VL.saveError || 'no reason given') + '), so the Director did not start.'; return; }
+    VL.writing = id; VL.sl[id] = Object.assign({}, VL.sl[id] || {}, { job: { status: 'running', kind: 'precheck', shot_id: one ? one.id : null }, fresh: true });
     vlRenderOpen(true);
-    fetch('/api/video-lab/episodes/' + id + '/precheck', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    fetch('/api/video-lab/episodes/' + id + '/precheck', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(one ? { shot_id: one.id } : {}) })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (!res.ok || !res.j || !res.j.job) {

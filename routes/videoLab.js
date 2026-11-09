@@ -304,6 +304,7 @@ function ensureTables() {
     await db.exec('ALTER TABLE keyframes ADD COLUMN IF NOT EXISTS prev_image_url TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS name TEXT');   // v3.5.15: a shot's own name
     await db.exec('ALTER TABLE episode_writer_jobs ADD COLUMN IF NOT EXISTS kind TEXT');
+    await db.exec('ALTER TABLE episode_writer_jobs ADD COLUMN IF NOT EXISTS shot_id INTEGER');   // v3.5.38: a check of one shot
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS source_take_id INTEGER');   // v3.5.26: a retouch of that take
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_text TEXT');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');   // 'small' (Kling O1 Edit) or 'big' (Seedance 2.0)   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
@@ -1997,7 +1998,7 @@ async function runningWriter(db, episodeId, editsOk) {
 }
 function jobView(j) {
   if (!j) return null;
-  return { id: j.id, kind: j.kind === 'shots' ? 'shots' : (j.kind === 'precheck' ? 'precheck' : 'notes'), status: j.status, error: j.error || null, tokens_charged: j.tokens_charged || 0, style: j.style, started_at: j.started_at, finished_at: j.finished_at };
+  return { id: j.id, kind: j.kind === 'shots' ? 'shots' : (j.kind === 'precheck' ? 'precheck' : 'notes'), status: j.status, error: j.error || null, tokens_charged: j.tokens_charged || 0, style: j.style, started_at: j.started_at, finished_at: j.finished_at, shot_id: j.shot_id || null };   // v3.5.38 shot_id
 }
 async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
   const db = await getDb();
@@ -2233,7 +2234,7 @@ router.get('/episodes/:id/shot-list', requireAuth, requireVideo, async function 
       if (ctx.pictures.length) { const pr = await shotListPrices(db); estimate = estimateShotList(withMode(ctx, 'notes'), pr); estimateShots = estimateShotList(withMode(ctx, 'shots'), pr); }
     } catch (e) { estimate = null; estimateShots = null; }
     let estimatePrecheck = null;
-    try { estimatePrecheck = { tokens: await precheckTokens(db) }; } catch (e) { estimatePrecheck = null; }   // v3.5.34
+    try { estimatePrecheck = { tokens: await precheckTokens(db), shot_tokens: await precheckShotTokens(db) }; } catch (e) { estimatePrecheck = null; }   // v3.5.34; v3.5.38 shot_tokens
     res.json({ job: jobView(j), estimate: estimate, estimate_shots: estimateShots, estimate_precheck: estimatePrecheck, episode: (j && j.status !== 'running') ? await loadEpisode(db, ep.id) : null });
   } catch (e) {
     console.error('[video] shot list read error:', e && e.message);
@@ -2258,6 +2259,12 @@ const PC_SURE = 1.25;   // v3.5.35: narrower than this the model will crop or st
 async function precheckTokens(db) {
   let v = null;
   try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_precheck_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
+  return (Number.isFinite(v) && v >= 1) ? v : 2;   // v3.5.38 (Ian, 2026-11-09): 2 tokens; a run costs about 13-14 cents
+}
+// v3.5.38 -- checking one shot (Ian: "each individual shot run 1 token"): app_settings video_precheck_shot_tokens, 1.
+async function precheckShotTokens(db) {
+  let v = null;
+  try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_precheck_shot_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
   return (Number.isFinite(v) && v >= 1) ? v : 1;
 }
 // A picture for the Director (512 px JPEG) and its real shape.
@@ -2307,9 +2314,10 @@ function precheckRequest(ctx, images) {
     '5. reference: someone clearly on screen who is not among the references sent.\n' +
     '6. style: a picture that does not look like the version\'s art style' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' or like the other pictures.\n\n' +
     'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
+    (ctx.only != null ? 'THIS TIME, CHECK ONLY SHOT ' + (ctx.only + 1) + '. The other shots are listed so you know what comes before and after it (the last picture of the shot before and the first of the shot after are shown): look at the cut into it and out of it, but report only on shot ' + (ctx.only + 1) + '.\n\n' : '') +   // v3.5.38
     'ANSWER WITH ONLY THIS JSON, no other text:\n' +
     '{"shots": [{"shot": 1, "mode": "reference", "mode_why": "...", "findings": [{"kind": "gap", "text": "...", "fix": {"type": "add_picture", "after_picture": 3, "describe": "..."}}]}]}\n' +
-    'One entry per shot, ' + ctx.shots.length + ' in all, in order. "kind" is one of: gap, mode, continuity, words, reference, style, other. "fix" is optional and is one of:\n' +
+    (ctx.only != null ? 'One entry only, for shot ' + (ctx.only + 1) + '. "kind" is one of' : 'One entry per shot, ' + ctx.shots.length + ' in all, in order. "kind" is one of') + ': gap, mode, continuity, words, reference, style, other. "fix" is optional and is one of:\n' +
     '{"type": "words", "box": "start|actions|camera|end|sounds|around", "text": "the whole new text of that box (for actions, one action per line)"}\n' +
     '{"type": "add_reference", "name": "a character\'s exact name"}\n' +
     '{"type": "mode", "mode": "reference|keyframes"}\n' +
@@ -2347,8 +2355,8 @@ function precheckRequest(ctx, images) {
       n++;
     });
   });
-  content.push({ type: 'text', text: 'Now the pre-production check for these ' + ctx.shots.length + ' shots, as JSON.' });
-  return { system: system, content: content, max_tokens: Math.min(12000, 1200 + ctx.shots.length * 700) };
+  content.push({ type: 'text', text: ctx.only != null ? 'Now the pre-production check for shot ' + (ctx.only + 1) + ' only, as JSON.' : 'Now the pre-production check for these ' + ctx.shots.length + ' shots, as JSON.' });
+  return { system: system, content: content, max_tokens: ctx.only != null ? 3000 : Math.min(12000, 1200 + ctx.shots.length * 700) };
 }
 function pcText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }
 function parsePrecheck(raw, ctx) {
@@ -2378,6 +2386,11 @@ function parsePrecheck(raw, ctx) {
     });
     out[si] = { mode: mode, mode_why: pcText(x.mode_why, 400), findings: findings };
   });
+  if (ctx.only != null) {   // v3.5.38: one shot -- its entry is all that counts (the shot number given, or the only entry)
+    if (!out[ctx.only] && j.shots.length === 1 && out.filter(Boolean).length === 1) { const k = out.findIndex(Boolean); out[ctx.only] = out[k]; out[k] = null; }
+    if (!out[ctx.only]) return { error: 'shot ' + (ctx.only + 1) + ' missing from the answer' };
+    return { shots: out.map(function (x, i) { return i === ctx.only ? x : { mode: null, mode_why: '', findings: [] }; }) };
+  }
   const missing = out.filter(function (x) { return !x; }).length;
   if (missing > Math.floor(ctx.shots.length / 2)) return { error: missing + ' of ' + ctx.shots.length + ' shots missing from the answer' };
   return { shots: out.map(function (x) { return x || { mode: null, mode_why: '', findings: [] }; }) };
@@ -2388,8 +2401,11 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
   let inTok = 0, outTok = 0, result = null, lastErr = '';
   const shapes = [];
   try {
-    for (let i = 0; i < ctx.pictures.length; i++) shapes.push(await pcShape(ctx.pictures[i].url));
-    const images = shapes.map(function (s, i) { return s && i < SL_MAX_IMAGES ? s.b64 : null; });
+    // v3.5.38: checking one shot, only its pictures and the two either side of it are fetched and shown
+    let lo = 0, hi = ctx.pictures.length - 1;
+    if (ctx.only != null) { let a = 0; for (let k = 0; k < ctx.only; k++) a += ctx.shots[k].keyframes.length; lo = Math.max(0, a - 1); hi = Math.min(ctx.pictures.length - 1, a + ctx.shots[ctx.only].keyframes.length); }
+    for (let i = 0; i < ctx.pictures.length; i++) shapes.push(i >= lo && i <= hi ? await pcShape(ctx.pictures[i].url) : null);
+    const images = shapes.map(function (s, i) { return s && (ctx.only != null || i < SL_MAX_IMAGES) ? s.b64 : null; });
     const req = precheckRequest(ctx, images);
     for (let attempt = 1; attempt <= 2 && !result; attempt++) {
       const r = await callShotListModel(key, req);
@@ -2417,7 +2433,7 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     const found = [];
     s.keyframes.forEach(function (k, ki) {
       const sh = shapes[n]; n++;
-      if (isRef || !sh || !sh.w || !sh.h || sh.w / sh.h >= PC_WIDE) return;
+      if (isRef || (ctx.only != null && si !== ctx.only) || !sh || !sh.w || !sh.h || sh.w / sh.h >= PC_WIDE) return;
       const sure = sh.w / sh.h < PC_SURE;
       found.push({ kind: 'aspect', text: 'Picture ' + n + ' (' + sh.w + ' x ' + sh.h + ') is ' + (sure ? 'not wide' : 'not quite wide') + '. The video is wide (16:9), so the model ' +
         (sure ? 'will crop or stretch it. Expand redraws it wide.' : 'might crop or stretch it a little. Expand redraws it wide if the edges matter.'),
@@ -2440,7 +2456,7 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     const liveIds = {};
     live.forEach(function (s) { liveIds[s.id] = true; });
     const keep = [];
-    ctx.shots.forEach(function (s, i) { if (liveIds[s.id]) keep.push(i); });
+    ctx.shots.forEach(function (s, i) { if (liveIds[s.id] && (ctx.only == null || i === ctx.only)) keep.push(i); });   // v3.5.38: one shot
     if (!ep || !keep.length) {
       await tx.prepare("UPDATE episode_writer_jobs SET status = 'error', error = ? WHERE id = ?").run('The shots changed while the Director was checking them. Nothing was charged; try again.', jobId);
       return;
@@ -2461,7 +2477,7 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     const bal = await tk.getBalance(userId);
     charged = Math.min(tokens, Math.max(0, bal.total));
     if (charged > 0) await tk.spendTokens(userId, charged, { source: 'video_precheck', event_type: 'generation_spend', related_campaign_id: ctx.ep.campaign_id });
-    await tk.recordGeneration(userId, { event_type: 'video_precheck', tokens_redeemed: charged, quantity: ctx.shots.length, unit: 'shots', model: require('../config/models').TEXT_MODEL, related_campaign_id: ctx.ep.campaign_id, related_session_id: ctx.ep.session_id, cost_usd: usd });
+    await tk.recordGeneration(userId, { event_type: 'video_precheck', tokens_redeemed: charged, quantity: ctx.only != null ? 1 : ctx.shots.length, unit: 'shots', model: require('../config/models').TEXT_MODEL, related_campaign_id: ctx.ep.campaign_id, related_session_id: ctx.ep.session_id, cost_usd: usd });
   } catch (e) { console.error('[video] pre-production check charge failed:', e && e.message); }
   await db.prepare('UPDATE episode_writer_jobs SET tokens_charged = ? WHERE id = ?').run(charged, jobId);
   const count = result.shots.reduce(function (t, s) { return t + s.findings.length; }, 0);
@@ -2480,15 +2496,21 @@ router.post('/episodes/:id/precheck', requireAuth, requireVideo, async function 
     if (!key) return vlRefuse(req, res, FN, 500, 'The Director is not set up on this server (ANTHROPIC_API_KEY).');
     const ctx = await precheckContext(db, ep);
     if (!ctx.pictures.length) return vlRefuse(req, res, FN, 400, 'This episode has no keyframes.');
-    const tokens = await precheckTokens(db);
+    // v3.5.38 (Ian, 2026-11-09): shot_id checks that one shot (1 token); none checks them all (2 tokens).
+    const shotId = parseInt((req.body || {}).shot_id, 10) || null;
+    if (shotId) {
+      ctx.only = ctx.shots.findIndex(function (s) { return Number(s.id) === shotId; });
+      if (ctx.only < 0) return vlRefuse(req, res, FN, 400, 'That shot has no keyframes, or is not in this episode.');
+    }
+    const tokens = shotId ? await precheckShotTokens(db) : await precheckTokens(db);
     const bal = await require('./tokens').getBalance(req.session.userId);
-    if (bal.total < tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'The pre-production check costs ' + tokens + ' token' + (tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
+    if (bal.total < tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: (shotId ? 'Checking a shot costs ' : 'The pre-production check costs ') + tokens + ' token' + (tokens === 1 ? '' : 's') + ', but you have ' + bal.total + '. Add tokens and try again.' });
     await retireLostJobs(db, ep.id);
-    const ins = await db.prepare("INSERT INTO episode_writer_jobs (episode_id, user_id, status, style, model, boot_id, sig, est_tokens, kind) VALUES (?, ?, 'running', ?, ?, ?, ?, ?, 'precheck') ON CONFLICT (episode_id) WHERE status = 'running' DO NOTHING")
-      .run(ep.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, ctx.sig, tokens);
+    const ins = await db.prepare("INSERT INTO episode_writer_jobs (episode_id, user_id, status, style, model, boot_id, sig, est_tokens, kind, shot_id) VALUES (?, ?, 'running', ?, ?, ?, ?, ?, 'precheck', ?) ON CONFLICT (episode_id) WHERE status = 'running' DO NOTHING")
+      .run(ep.id, req.session.userId, ctx.style.key, ctx.modelKey, SL_BOOT, ctx.sig, tokens, shotId);
     if (!ins.lastInsertRowid) return vlRefuse(req, res, FN, 409, 'The Director is already working on this episode.');
     const job = await db.prepare('SELECT * FROM episode_writer_jobs WHERE id = ?').get(ins.lastInsertRowid);
-    vlDebug(req.session.userId, 'info', FN, 'Pre-production check asked for', { shots: ctx.shots.length, keyframes: ctx.pictures.length, tokens: tokens, modes: ctx.info.map(function (x) { return x.mode; }) });
+    vlDebug(req.session.userId, 'info', FN, 'Pre-production check asked for', { only_shot: shotId, shots: ctx.shots.length, keyframes: ctx.pictures.length, tokens: tokens, modes: ctx.info.map(function (x) { return x.mode; }) });
     res.json({ job: jobView(job), estimate: { tokens: tokens } });
     const prices = await shotListPrices(db);
     runPrecheck(job.id, ep.id, req.session.userId, ctx, prices, key, tokens).catch(async function (e) {
