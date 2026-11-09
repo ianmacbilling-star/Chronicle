@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.33",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3533-video-episode-cards",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video tab: episodes as cards, and a tighter episode view.",
+        "detail": "Ian, 2026-11-09 (admin only while the video switch is off). No Video heading; a New episode card in place of the button; each episode is a big card with its pin, name, pictures, Completed or Not completed, its line, and Copy and Delete. Opening one fills the panel over the cards, with a close; the Copy and Delete buttons and the separate episode box are gone from it. Arriving opens the pinned episode, or the only one.",
+        "td": [
+          "TD-1114"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.32",
     "staged_on": "2026-11-09",
     "entries": [

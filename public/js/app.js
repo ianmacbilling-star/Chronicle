@@ -42022,18 +42022,12 @@ function vlOpen() {
   var fid = f ? f.fork_id : null;
   if (String(VL.sid) !== String(sid) || String(VL.fid) !== String(fid)) { vlFlushSave(); VL.sid = sid; VL.fid = fid; VL.episodes = []; VL.openId = null; VL.draft = null; }
   if (!sid || !fid) { host.innerHTML = '<div class="empty-state"><h3>Video</h3><p>Loading the versions of this session...</p></div>'; setTimeout(function () { if (vlFork()) vlOpen(); }, 800); return; }
+  // v3.5.33 -- TD-1114. EPISODES AS CARDS (Ian, 2026-11-09: "It takes up the whole screen before you even see a shot"). No
+  // heading (the tab says Video), a New episode card instead of the button, and an open episode fills the panel over the cards.
   host.innerHTML =
-    '<div class="storyboard-header" style="flex-wrap:wrap;gap:10px;">' +
-      '<div style="min-width:220px;flex:1;">' +
-        '<div style="' + VL_TITLE + '">Video</div>' +
-        '<div style="' + VL_DESC + 'margin-top:2px;">Episodes of <b style="color:var(--accent-pale);" data-no-words>' + escapeHtml(vlForkName(f)) + '</b>. An episode is the video of this session: ' +
-          'shots joined by cuts. A shot is one continuous camera run through one or more keyframes; each shot can have several takes. Pin the episode you like best. ' +
-          'Writing a shot list costs tokens; making the video is free for now.</div>' +
-      '</div>' +
-      '<button class="btn btn-primary btn-sm" id="vl-new-btn" onclick="vlNewEpisode()">+ New episode</button>' +
-    '</div>' +
     '<div id="vl-list"><div style="' + VL_DESC + '">' + vlSpin(14) + ' Loading the episodes...</div></div>' +
-    '<div id="vl-open" style="margin-top:18px;"></div>';
+    '<div id="vl-open"></div>';
+  if (!VL.openId) VL.autoOpen = true;   // arriving: open the pinned episode, or the only one
   VL.liveSig = {};
   if (VL.models) vlLoadEpisodes(true);
   else fetch('/api/video-lab/models', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
@@ -42076,6 +42070,11 @@ function vlLoadEpisodes(force) {
       if (!res.ok) { var h = document.getElementById('vl-list'); if (h) h.innerHTML = '<div style="' + VL_DESC + '">' + escapeHtml((res.j && res.j.error) || 'Could not load the episodes.') + '</div>'; return; }
       VL.episodes = (res.j && res.j.episodes) || [];
       if (VL.openId && !vlFindEp(VL.openId)) { VL.openId = null; VL.draft = null; force = true; }
+      if (VL.autoOpen) {   // v3.5.33 -- TD-1114 (Ian: "Open it if there is one... or if there is a pinned")
+        VL.autoOpen = false;
+        var _pick = VL.episodes.filter(function (e) { return e.pinned; })[0] || (VL.episodes.length === 1 ? VL.episodes[0] : null);
+        if (!VL.openId && _pick) { VL.openId = _pick.id; VL.draft = null; force = true; }
+      }
       vlRenderList();
       if (force) vlRenderOpen(true); else vlRenderLive();
     })
@@ -42099,11 +42098,9 @@ function vlEpChip(ep) {
   var t, style = '';
   if (vlBusyEp(ep)) t = vlSpin(9) + ' Being made';
   else if (ep.join_status === 'error') { t = 'Joining failed'; style = ' style="background:rgba(var(--danger-rgb),0.2);color:var(--danger);"'; }
-  else if (ep.video_url && ep.video_current) t = 'Video ready';
-  else if (ep.video_url) t = 'Video out of date';
-  else if (made) t = made + ' of ' + shots.length + ' shots made';
-  else t = 'Not made yet';
-  return '<span class="session-badge' + (made || ep.video_url ? '' : ' session-badge-draft') + '"' + style + '>' + t + '</span>';
+  else if (ep.video_url && ep.video_current) t = 'Completed';   // v3.5.33 -- Ian: "say not completed or completed"
+  else t = 'Not completed';
+  return '<span class="session-badge' + (ep.video_url && ep.video_current ? '' : ' session-badge-draft') + '"' + style + '>' + t + '</span>';
 }
 function vlEpSeconds(shots, m) {
   var secs = 0;
@@ -42118,64 +42115,80 @@ function vlRenderList() {
   var host = document.getElementById('vl-list');
   if (!host) { vlStopTimer(); return; }
   var es = VL.episodes || [];
-  if (!es.length) host.innerHTML = '<div class="empty-state" style="padding:2rem 1rem;"><h3>No episodes yet</h3><p>New episode takes this version\'s storyboard pictures, title picture first, as one shot. Add cuts to split it into shots.</p></div>';
-  else host.innerHTML = es.map(vlEpRowHTML).join('');
+  var f = vlFork();
+  // v3.5.33 -- TD-1114. The New episode card, like New campaign; its one line is what the old paragraph said (Ian: "Shrink it to one line").
+  var nw = '<div class="add-campaign-card" id="vl-new-btn" onclick="vlNewEpisode()" style="flex:0 1 240px;min-height:190px;padding:16px 18px;" ' +
+      'title="New episode takes this version\'s storyboard pictures, title picture first, as one shot. Create Shots splits it into shots.">' +
+    '<div class="plus">+</div><span style="font-size:15px;">New episode</span>' +
+    '<span style="font-size:12px;text-align:center;line-height:1.4;">The video of <b style="color:var(--accent-pale);" data-no-words>' + escapeHtml(vlForkName(f)) + '</b>: shots joined by cuts. Pin the one you like best.</span></div>';
+  host.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:stretch;">' + es.map(vlEpRowHTML).join('') + nw + '</div>';
+  vlShowMode();
   if (es.some(vlBusyEp)) vlStartTimer(); else vlStopTimer();
 }
 function vlEpRowHTML(ep) {
   var pics = [];
   (ep.shots || []).forEach(function (s) { (s.keyframes || []).forEach(function (k) { pics.push(k.image_url); }); });
   var shots = ep.shots || [];
-  var isOpen = String(VL.openId) === String(ep.id);
   var m = vlModel(ep.model);
   var secs = vlEpSeconds(shots, m);
   var st = vlStyle(ep.style);
   var meta = shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' &middot; ' + pics.length + ' keyframe' + (pics.length === 1 ? '' : 's') +
     (secs ? ' &middot; ' + secs + ' s' : '') + (m ? ' &middot; ' + escapeHtml(m.label) : '') + (st ? ' &middot; ' + escapeHtml(st.label) : '');
-  return '<div class="vl-ep-row" style="' + VL_BOX + 'padding:10px 12px;margin-bottom:10px;cursor:pointer;' +
-      (isOpen ? 'border-color:rgba(var(--accent-rgb),0.6);box-shadow:0 0 0 1px rgba(var(--accent-rgb),0.35);' : '') + '" onclick="vlOpenEpisode(' + ep.id + ')">' +
-    '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
+  // v3.5.33 -- TD-1114. A big card (Ian: "I don't see people having multiple episodes... so it can be big"): the pin, the name,
+  // Copy and Delete (moved here from the open episode), its string of pictures, and the line under it.
+  var MAXP = 10, show = pics.length > MAXP ? pics.slice(0, MAXP - 1) : pics, more = pics.length - show.length, cols = Math.max(8, show.length + (more ? 1 : 0));
+  return '<div class="vl-ep-row" title="Open this episode" style="' + VL_BOX + 'padding:14px 16px;cursor:pointer;flex:1 1 560px;min-width:0;" onclick="vlOpenEpisode(' + ep.id + ')">' +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">' +
       '<button type="button" title="' + (ep.pinned ? 'Pinned: the episode Final Cut will use for this version. Click to unpin.' : 'Pin this episode: the one Final Cut will use for this version') + '" ' +
         'onclick="event.stopPropagation(); vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')" ' +
         'class="vl-pin" style="' + VL_PIN + 'color:' + (ep.pinned ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.45)') + ';">' + _vpickPinSvg(!!ep.pinned) + '</button>' +   // v3.5.17: the standard pin, not a star
-      '<div style="display:flex;gap:3px;">' + pics.slice(0, 6).map(function (u) {
-        return '<img src="' + escapeHtml(u) + '" alt="" loading="lazy" style="width:52px;height:36px;object-fit:cover;border-radius:4px;border:1px solid rgba(var(--accent-rgb),0.15);">';
-      }).join('') + (pics.length > 6 ? '<span style="' + VL_DESC + 'align-self:center;">+' + (pics.length - 6) + '</span>' : '') + '</div>' +
-      '<div style="flex:1;min-width:180px;">' +
-        '<div class="moment-title" style="color:var(--accent-pale);margin-bottom:2px;" data-no-words>' + escapeHtml(ep.name || 'Episode') + (ep.pinned ? ' <span class="session-badge" style="margin-left:4px;">Pinned</span>' : '') + '</div>' +
-        '<div style="' + VL_DESC + '">' + vlEpChip(ep) + ' &nbsp;' + meta + '</div>' +
-      '</div>' +
+      '<div style="' + VL_TITLE + 'font-size:18px;flex:1;min-width:160px;" data-no-words>' + escapeHtml(ep.name || 'Episode') + (ep.pinned ? ' <span class="session-badge" style="margin-left:4px;vertical-align:middle;">Pinned</span>' : '') + '</div>' +
       (ep.video_url ? '<a class="btn btn-sm" href="/api/video-lab/episodes/' + ep.id + '/download" onclick="event.stopPropagation();">Download</a>' : '') +
       '<button class="btn btn-sm" title="A new episode with the same shots and words, without the takes" onclick="event.stopPropagation(); vlCopy(' + ep.id + ')">Copy</button>' +
       '<button class="btn btn-sm" title="Delete this episode" onclick="event.stopPropagation(); vlDelete(' + ep.id + ')">Delete</button>' +
-    '</div></div>';
+    '</div>' +
+    (pics.length ? '<div style="display:grid;grid-template-columns:repeat(' + cols + ',minmax(0,1fr));gap:6px;margin-bottom:10px;">' + show.map(function (u) {   // one row across the card
+      return '<img src="' + escapeHtml(u) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:5px;border:1px solid rgba(var(--accent-rgb),0.15);">';
+    }).join('') + (more ? '<div style="aspect-ratio:3/2;display:flex;align-items:center;justify-content:center;border-radius:5px;border:1px dashed rgba(var(--accent-rgb),0.3);' + VL_DESC + 'font-size:15px;">+' + more + '</div>' : '') + '</div>'
+      : '<div style="' + VL_DESC + 'margin-bottom:10px;">No keyframes yet</div>') +
+    '<div style="' + VL_DESC + '">' + vlEpChip(ep) + ' &nbsp;' + meta + '</div>' +
+  '</div>';
+}
+// v3.5.33 -- TD-1114. An open episode fills the panel: the cards hide under it and come back when it closes.
+function vlShowMode() {
+  var l = document.getElementById('vl-list');
+  if (l) l.style.display = (VL.openId && vlFindEp(VL.openId)) ? 'none' : '';
+}
+function vlCloseEpisode() {
+  vlFlushSave();
+  VL.openId = null; VL.draft = null;
+  vlRenderList(); vlRenderOpen(true);
 }
 
 function vlOpenEpisode(id) {
   vlFlushSave();
-  if (String(VL.openId) === String(id)) { VL.openId = null; VL.draft = null; vlRenderList(); vlRenderOpen(true); return; }
   VL.openId = id; VL.draft = null;
   vlRenderList();
   vlRenderOpen(true);
-  var o = document.getElementById('vl-open'); if (o && o.scrollIntoView) { try { o.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+  var o = document.getElementById('session-tab-videolab'); if (o && o.scrollIntoView) { try { o.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
 }
 
 function vlNewEpisode() {
   if (VL.busy || !VL.sid || !VL.fid) return;
   VL.busy = true;
-  var b = document.getElementById('vl-new-btn'); if (b) { b.disabled = true; b.innerHTML = vlSpin(12) + ' Making...'; }
+  var b = document.getElementById('vl-new-btn'); if (b) { b.style.pointerEvents = 'none'; b.innerHTML = vlSpin(16) + '<span>Making the episode...</span>'; }   // v3.5.33: the card
   vlFlushSave();
   fetch('/api/video-lab/episodes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: VL.sid, fork_id: VL.fid }) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
-      VL.busy = false; if (b) { b.disabled = false; b.textContent = '+ New episode'; }
-      if (!res.ok || !res.j || !res.j.episode) { showError((res.j && res.j.error) || 'Could not make the episode.'); return; }
+      VL.busy = false;
+      if (!res.ok || !res.j || !res.j.episode) { vlRenderList(); showError((res.j && res.j.error) || 'Could not make the episode.'); return; }
       VL.episodes.unshift(res.j.episode);
       VL.episodes.sort(function (x, y) { return (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0); });
       VL.openId = res.j.episode.id; VL.draft = null;
       vlRenderList(); vlRenderOpen(true);
     })
-    .catch(function () { VL.busy = false; if (b) { b.disabled = false; b.textContent = '+ New episode'; } showError('Could not reach the server.'); });
+    .catch(function () { VL.busy = false; vlRenderList(); showError('Could not reach the server.'); });
 }
 
 // ---- the open episode: the editor ------------------------------------------------------------
@@ -42203,11 +42216,12 @@ function vlRenderOpen(force) {
   var host = document.getElementById('vl-open');
   if (!host) return;
   var ep = VL.openId ? vlFindEp(VL.openId) : null;
-  if (!ep) { host.innerHTML = ''; return; }
+  if (!ep) { host.innerHTML = ''; vlShowMode(); return; }
   if (!force && VL.draft && String(VL.draft.id) === String(ep.id) && host.querySelector('#vl-ed-' + ep.id)) { vlRenderLive(); return; }
   if (!VL.draft || String(VL.draft.id) !== String(ep.id)) VL.draft = vlDraftFrom(ep);
   VL.liveSig = {};
   host.innerHTML = vlEditorHTML(ep);
+  vlShowMode();
   vlShowCost();
   vlRenderLive();
   vlSlRefresh(ep.id);
@@ -42310,7 +42324,7 @@ function vlEditorHTML(ep) {
     '<div style="font-size:26px;color:var(--accent-bright);">+</div><div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.6);">Add a keyframe from the Archive</div></div></div></div>');
   return '<div id="vl-ed-' + ep.id + '">' +
     (VL.webhook === false ? '<div style="' + VL_DESC + 'color:var(--danger);margin-bottom:8px;">PUBLIC_BASE_URL is not set on this server, so fal cannot report back.</div>' : '') +
-    '<div style="' + VL_BOX + 'padding:14px 16px;margin-bottom:14px;">' +
+    '<div style="' + VL_BOX + 'padding:10px 14px;margin-bottom:12px;">' +   // v3.5.33 -- TD-1114: tighter, with the close
       '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">' +
         '<div style="flex:2;min-width:220px;"><label class="form-label" for="vl-name">Name</label>' +
           '<input id="vl-name" class="form-input" type="text" maxlength="120" value="' + escapeHtml(d.name) + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true"></div>' +
@@ -42319,10 +42333,12 @@ function vlEditorHTML(ep) {
         '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);padding-bottom:9px;cursor:pointer;">' +
           '<input id="vl-sound" type="checkbox" onchange="vlEdit()" onblur="vlFlushSave()"' + (d.sound ? ' checked' : '') + '> The model\'s own sound</label>' +
         '<button class="btn btn-sm vl-pin-btn" style="margin-bottom:4px;display:inline-flex;align-items:center;gap:5px;' + (ep.pinned ? 'border-color:var(--accent-bright);color:var(--accent-bright);' : '') + '" onclick="vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')">' + _vpickPinSvg(!!ep.pinned) + '<span>' + (ep.pinned ? 'Pinned' : 'Pin this episode') + '</span></button>' +   // v3.5.17
+        '<button type="button" class="modal-close" title="Close this episode and go back to the episode cards" style="margin-bottom:6px;margin-left:auto;" onclick="vlCloseEpisode()">&times;</button>' +   // v3.5.33
       '</div>' +
       vlStyleRowHTML(d, writing) +
+      '<div id="vl-epnote" style="' + VL_DESC + 'margin-top:4px;"></div>' +   // v3.5.33: the old "The episode" box's line
     '</div>' +
-    '<div id="vl-epvideo" style="margin-bottom:14px;"></div>' +
+    '<div id="vl-epvideo"></div>' +
     '<div class="narrative-panel" style="margin-bottom:14px;">' +
       '<div class="narrative-block-header"><span>&#9998; Overall direction: who, where, the mood. It goes into every shot.</span></div>' +
       '<textarea class="narrative-inline-box" id="vl-overall"' + (writing ? ' disabled' : '') + ' maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
@@ -42652,11 +42668,19 @@ function vlEpVideoHTML(ep) {
   else if (ep.join_status === 'error') note = '<span style="color:var(--danger);" data-no-words>Joining the shots failed: ' + escapeHtml(ep.join_error || '') + '</span> <button class="btn btn-sm" onclick="vlJoinEpisode(' + ep.id + ')">Join again</button>';
   else if (made < shots.length) note = made + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' made. The episode video is put together once every shot has a pinned take.';
   else if (ep.video_url && !ep.video_current) note = 'Out of date: the pinned takes have changed.';
-  if (!ep.video_url && !note) return '';
-  return '<div style="' + VL_BOX + 'padding:12px 14px;">' + head +
-    (ep.video_url ? '<video src="' + escapeHtml(ep.video_url) + '" controls preload="metadata" style="display:block;width:100%;max-height:70vh;background:#000;border-radius:var(--radius-lg);"></video>' : '') +
-    (note ? '<div style="' + VL_DESC + 'margin-top:' + (ep.video_url ? '8px' : '0') + ';">' + note + '</div>' : '') +
+  if (!ep.video_url) return '';   // v3.5.33 -- TD-1114: no box until there is a video; the line is in the header (vlEpNoteHTML)
+  return '<div style="' + VL_BOX + 'padding:12px 14px;margin-bottom:14px;">' + head +
+    '<video src="' + escapeHtml(ep.video_url) + '" controls preload="metadata" style="display:block;width:100%;max-height:70vh;background:#000;border-radius:var(--radius-lg);"></video>' +
   '</div>';
+}
+function vlEpNoteHTML(ep) {   // v3.5.33 -- the episode's one line, under the Style row
+  var shots = ep.shots || [];
+  var made = shots.filter(function (s) { var t = vlChosen(s); return t && t.status === 'done'; }).length;
+  if (ep.join_status === 'running' || ep.join_status === 'saving') return vlSpin(12) + ' Joining ' + shots.length + ' shots with plain cuts...';
+  if (ep.join_status === 'error') return '<span style="color:var(--danger);" data-no-words>Joining the shots failed: ' + escapeHtml(ep.join_error || '') + '</span> <button class="btn btn-sm" onclick="vlJoinEpisode(' + ep.id + ')">Join again</button>';
+  if (made < shots.length) return made + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' made. The episode video is put together once every shot has a pinned take.';
+  if (ep.video_url && !ep.video_current) return 'Out of date: the pinned takes have changed.';
+  return '';
 }
 // Redraw a live part only when what it shows has changed, so a video being watched is not restarted.
 function vlSetLive(el, key, html) {
@@ -42675,6 +42699,7 @@ function vlRenderLive() {
     vlSetLive(document.getElementById('vl-livebtn-' + ds.ck), 'btn-' + ds.ck, vlShotBtnHTML(ep, ds, si));   // v3.5.11
   });
   vlSetLive(document.getElementById('vl-epvideo'), 'ep', vlEpVideoHTML(ep));
+  vlSetLive(document.getElementById('vl-epnote'), 'note', vlEpNoteHTML(ep));   // v3.5.33
   if (vlBusyEp(ep)) vlStartTimer();
 }
 
@@ -42918,7 +42943,7 @@ function vlStyleRowHTML(d, writing) {
     return '<button class="btn btn-primary" id="vl-sl-btn-' + mode + '" onclick="vlWriteShotList(\'' + mode + '\')"' + (writing ? ' disabled' : '') + ' title="' + escapeHtml(tip) + '" style="white-space:nowrap;flex:none;">' +
       (kind === mode ? vlSpin(12) + ' ' + busyLabel : icon + ' ' + label + ' <span id="vl-sl-price-' + mode + '">' + escapeHtml(price) + '</span>') + '</button>';
   }
-  return '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">' +
+  return '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:8px;">' +
     '<div style="flex:1;min-width:220px;"><label class="form-label" for="vl-style">Style</label>' +
       '<select id="vl-style" class="form-input" onchange="vlStyleChange()" onblur="vlFlushSave()"' + (writing ? ' disabled' : '') + '>' + ss.map(function (x) {
         return '<option value="' + escapeHtml(x.key) + '"' + (x.key === cur.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
