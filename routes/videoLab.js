@@ -228,6 +228,23 @@ function falErrorText(e) {
   if (!detail && body) { try { detail = typeof body === 'string' ? body : JSON.stringify(body); } catch (_e) {} }
   return ((e.status ? e.status + ' ' : '') + (e.message || '') + (detail ? ' ' + detail : '')).trim().slice(0, 1000) || 'unknown error';
 }
+// v3.5.69 -- the reasons in a fal refusal ({"detail": [{"loc": [...], "msg": "..."}]}, anywhere in the text), each with the
+// field it is about, as "msg" fields; '' when there are none.
+function falDetailWhy(text) {
+  const t = String(text || ''), out = [];
+  let from = t.indexOf('{');
+  while (from >= 0 && out.length === 0) {
+    for (let to = t.lastIndexOf('}'); to > from; to = t.lastIndexOf('}', to - 1)) {
+      let b = null; try { b = JSON.parse(t.slice(from, to + 1)); } catch (e) { continue; }
+      const list = (b && Array.isArray(b.detail)) ? b.detail : (b && b.detail && Array.isArray(b.detail.detail) ? b.detail.detail : []);
+      list.forEach(function (d) { if (d && d.msg) out.push('"msg": "' + ((Array.isArray(d.loc) ? d.loc.filter(function (x) { return x !== 'body'; }).join('.') + ': ' : '') + d.msg).replace(/"/g, "'") + '"'); });
+      break;
+    }
+    from = t.indexOf('{', from + 1);
+    if (out.length || from > 2000) break;
+  }
+  return out.join(' ');
+}
 // v3.5.44 -- fal's reason in a few words: the "msg" fields of its answer when there are any (a 422 lists what it refused),
 // else the start of what it said.
 function falReason(text) {
@@ -1986,7 +2003,8 @@ router.post('/webhook', async function (req, res) {
     const failed = String(b.status || '').toUpperCase() === 'ERROR';
     // v3.5.49 (Ian, 2026-11-09: a take failed with only "Unexpected status code: 422"): fal puts its reasons in the payload
     // (detail[].msg) and only the status in error, so both are kept and falReason picks out the reasons.
-    const why = failed ? ('fal: ' + [b.error ? String(b.error) : '', b.payload ? JSON.stringify(b.payload) : ''].filter(Boolean).join(' ')).slice(0, 1500) : null;
+    const full = failed ? [b.error ? String(b.error) : '', b.payload ? JSON.stringify(b.payload) : ''].filter(Boolean).join(' ') : '';
+    const why = failed ? ('fal: ' + [falDetailWhy(full), full].filter(Boolean).join(' ')).slice(0, 1500) : null;   // v3.5.69: the reasons first, before the cut
     const mv = await db.prepare('SELECT * FROM moves WHERE request_id = ?').get(rid);
     if (mv) {
       if (failed) return void await finishMove(mv, null, why);

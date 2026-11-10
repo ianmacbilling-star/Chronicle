@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.70",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3570-fal-webhook-reason",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video: a take fal refuses after accepting it shows the reason too.",
+        "detail": "Ian, 2026-11-10. fal's report of a refused take (sent to our webhook) was cut at 1500 characters, all of them its copy of the prompt. The reasons are now pulled out of the whole report and put first.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.69",
     "staged_on": "2026-11-10",
     "entries": [
