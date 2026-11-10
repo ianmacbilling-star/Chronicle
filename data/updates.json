@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.62",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3562-download-outline",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: a Download outline button saves the whole episode as a text file.",
+        "detail": "Ian, 2026-11-10. Beside Compile, Download outline writes every shot (purpose, mode, length, pictures, references, start, actions, lines, camera, end, sound, takes, pinned take, transition) to a text file built in the browser. No server change.",
+        "td": [
+          "TD-1120"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.61",
     "staged_on": "2026-11-10",
     "entries": [

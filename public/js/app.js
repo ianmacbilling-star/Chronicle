@@ -42631,6 +42631,7 @@ function vlEditorHTML(ep) {
       '<span id="vl-cost" style="' + VL_DESC + 'flex:1;min-width:200px;"></span>' +
       '<span id="vl-saved" style="' + VL_DESC + '"></span>' +
       '<span id="vl-compile-note" style="' + VL_DESC + '"></span>' +
+      '<button class="btn" onclick="vlOutline()" title="Save the whole episode as a text file: every shot\'s purpose, pictures, references and words, the pinned takes and the transitions">Download outline</button>' +   // v3.5.62
       '<button class="btn btn-primary" id="vl-compile" onclick="vlCompile()"' + (locked ? ' disabled' : '') + ' title="Put the pinned take of every shot together, with their trims and the transitions between them, into the episode video">Compile all shots together</button>' +   // v3.5.57 (Ian: "Compile all Shots Together"; Generate all shots removed, "That\'s a dangerous button")
     '</div>' +
     '<div id="vl-msg" style="' + VL_DESC + 'margin-top:6px;"></div>' +
@@ -43003,6 +43004,55 @@ function vlEpVideoHTML(ep) {
   return '<div style="' + VL_BOX + 'padding:12px 14px;margin-bottom:14px;">' + head +
     '<video src="' + escapeHtml(ep.video_url) + '" controls preload="metadata" style="display:block;width:100%;max-height:70vh;background:#000;border-radius:var(--radius-lg);"></video>' +
   '</div>';
+}
+// v3.5.62 (Ian, 2026-11-10: "dump the entire contents of an episode on the video tab into a text file so I can give it
+// to you... Download Outline"). Built from what is on screen; no server call.
+function vlOutline() {
+  vlReadForm();
+  var d = VL.draft, ep = d && vlFindEp(d.id);
+  if (!d) return;
+  var m = vlModel(d.model), st = vlStyle(d.style), L = [];
+  var line = function (k, v) { if (v != null && String(v).trim() !== '') L.push(k + ': ' + String(v).replace(/\s*\n\s*/g, ' / ').trim()); };
+  L.push('EPISODE: ' + (d.name || 'Untitled'));
+  line('Model', (m && m.label) || d.model);
+  line('Style', (st && (st.label || st.key)) || d.style);
+  line('Model sound', d.sound ? 'on' : 'off');
+  line('Overall direction', d.overall);
+  var miss = vlMissingList(ep);
+  if (miss.length) { L.push('Missing shots still open:'); miss.forEach(function (x) { L.push('  - ' + x.name + ': ' + x.what + (x.why ? ' (why: ' + x.why + ')' : '')); }); }
+  var total = 0;
+  d.shots.forEach(function (sh, i) {
+    total += Number(sh.seconds) || 0;
+    L.push(''); L.push('================================================================');
+    L.push('SHOT ' + (i + 1) + (sh.name ? ': ' + sh.name : ''));
+    line('Purpose', sh.purpose);
+    line('Mode', sh.mode || 'same as episode');
+    line('Length', (sh.seconds || '?') + ' s');
+    if ((sh.kfs || []).length) { L.push('Pictures:'); sh.kfs.forEach(function (k, j) { L.push('  ' + (j + 1) + '. ' + (k.label || 'picture') + ' - ' + k.url); }); }
+    else L.push('Pictures: none yet');
+    var refs = (sh.refs || []).map(function (r) { var it = vlPoolItem(r.type, r.id); return it ? it.name + (r.type === 'asset' ? ' (asset)' : '') + (it.usable ? '' : ' [not sent: ' + (it.why_not || 'no picture') + ']') : null; }).filter(Boolean);
+    line('References sent', refs.join(', ') || 'none');
+    line('Start', sh.start);
+    var acts = vlActionsList(sh.actions);
+    if (acts.length) { L.push('Actions:'); acts.forEach(function (a, j) { L.push('  ' + (j + 1) + '. ' + a); }); }
+    if ((sh.lines || []).length) { L.push('Lines:'); sh.lines.forEach(function (x) { L.push('  ' + (x.who || '?') + (x.off ? ' (off screen)' : '') + ' at ' + (Number(x.when) || 0) + ' s: "' + (x.text || '') + '"'); }); }
+    line('Camera', sh.camera);
+    line('End', sh.end);
+    line('Sound', sh.sounds);
+    line('Around them', sh.around);
+    var es = ep && sh.id ? vlEpShot(ep, sh.id) : null, takes = (es && es.takes) || [], t = vlChosen(es);
+    line('Takes', takes.length ? takes.length + ' (' + takes.filter(function (x) { return x.status === 'done'; }).length + ' done)' : 'none');
+    if (t) line('Pinned take', 'take ' + t.id + ', ' + t.status + (t.stale ? ', out of date' : '') + (t.trim_start != null || t.trim_end != null ? ', trimmed ' + (Number(t.trim_start) || 0) + '-' + (t.trim_end != null ? t.trim_end : 'end') + ' s' : '') + (t.video_url ? ' - ' + t.video_url : ''));
+    if (i < d.shots.length - 1) line('Then', vlCutInfo(sh.cut_style || 'instant').label + ' into shot ' + (i + 2));
+  });
+  L.push(''); L.push('================================================================');
+  L.push(d.shots.length + ' shot(s), about ' + total + ' s in all. Downloaded ' + new Date().toLocaleString() + '.');
+  var blob = new Blob([L.join('\r\n') + '\r\n'], { type: 'text/plain;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = String(d.name || 'Episode').replace(/[\\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) + ' - outline.txt';
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 1000);
 }
 // v3.5.57 -- Compile: the episode video is made only on this button.
 function vlCompile() {
