@@ -1214,14 +1214,23 @@ function refsToSend(ep, w, refs, pool, room) {
 // v3.5.44 -- a model with a prompt limit (Kling O3: 2500 characters) gets the script cut to fit: first the lines that
 // matter least to the picture (Sound, unless its own sound is on; Around them; Overall), then the end of the text at a
 // full stop. Without this fal refuses the whole take.
+// v3.5.71 (Ian, 2026-11-10: "prompt: size must be between 0 and 2500" on a prompt we had cut to 2500 characters): fal
+// counts bytes, and a dash or a curly quote is three. The fancy punctuation is made plain, and the cut is measured in bytes.
+function plainPunct(p) {
+  return String(p || '').replace(/[\u2014\u2013\u2012\u2212]/g, '-').replace(/[\u201c\u201d\u201e\u00ab\u00bb]/g, '"').replace(/[\u2018\u2019\u201a]/g, "'").replace(/\u2026/g, '...').replace(/\u00a0/g, ' ');
+}
+function byteLen(x) { return Buffer.byteLength(String(x || ''), 'utf8'); }
 function fitPrompt(p, max, sound) {
-  p = String(p || '');
-  if (!max || p.length <= max) return p;
+  p = plainPunct(p);
+  if (!max || byteLen(p) <= max) return p;
   let lines = p.split('\n');
   const drop = (sound ? [] : [/^Sound:/]).concat([/^Around them:/, /^Overall:/]);
-  for (let i = 0; i < drop.length && lines.join('\n').length > max; i++) { const re = drop[i]; lines = lines.filter(function (l) { return !re.test(l); }); }
+  for (let i = 0; i < drop.length && byteLen(lines.join('\n')) > max; i++) { const re = drop[i]; lines = lines.filter(function (l) { return !re.test(l); }); }
   let out = lines.join('\n');
-  if (out.length > max) { out = out.slice(0, max); const k = Math.max(out.lastIndexOf('. '), out.lastIndexOf('.\n')); if (k > max * 0.6) out = out.slice(0, k + 1); }
+  if (byteLen(out) > max) {
+    let cut = max; while (cut > 0 && byteLen(out.slice(0, cut)) > max) cut -= Math.max(1, Math.ceil((byteLen(out.slice(0, cut)) - max) / 3));
+    out = out.slice(0, cut); const k = Math.max(out.lastIndexOf('. '), out.lastIndexOf('.\n')); if (k > cut * 0.6) out = out.slice(0, k + 1);
+  }
   return out;
 }
 // What one move sends to fal: each model names its pictures and its length its own way.

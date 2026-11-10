@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.71",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3571-prompt-bytes",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video: Kling prompts are fitted to fal's limit in bytes.",
+        "detail": "Ian, 2026-11-10. A Kling O3 take failed: prompt size must be between 0 and 2500. We cut prompts to 2500 characters, but fal counts bytes and dashes and curly quotes take three. Dashes, curly quotes and ellipses are now sent plain, and the cut is measured in bytes.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.70",
     "staged_on": "2026-11-10",
     "entries": [
