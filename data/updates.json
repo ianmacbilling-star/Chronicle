@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.65",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3565-beats-move-length",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: move beats up and down; a shot takes its beats' length on Generate take; Notes keeps assets and clears old check findings.",
+        "detail": "Ian, 2026-11-10. Up and down arrows on each beat (its camera, sound and lines go with it). The beats' total turns red when it is not the shot's length, and Generate take sets the length to it. Director's Notes keeps the assets on a shot's references and clears the Pre-production findings it makes out of date. The check reports words that leave out part of a shot's Purpose. The Notes message says plainly that every shot's words are rewritten.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.64",
     "staged_on": "2026-11-10",
     "entries": [

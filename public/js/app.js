@@ -43159,6 +43159,7 @@ function vlMakeShot(si, checked) {
   var d = VL.draft;
   if (!d || vlSlLocked(d.id)) return;
   if (!checked) { vlShapeCheck([si], function () { vlMakeShot(si, true); }); return; }   // v3.5.14: warn about pictures that are not wide
+  vlReadForm(); if (vlBeatsFit(si)) { vlQueueSave(); vlRefreshChecks(); }   // v3.5.65: the shot takes the beats' length
   var msg = document.getElementById('vl-msg');
   var ck = d.shots[si] && d.shots[si].ck;
   var live = document.getElementById('vl-livebtn-' + ck), b = live && live.querySelector('button.vl-gen');   // v3.5.11: the button's own place
@@ -43377,7 +43378,7 @@ function vlHasWords(d) { return !!(String(d.overall || '').trim() || d.shots.som
 // v3.5.23 -- THE DIRECTOR (Ian, 2026-11-08: "lets start the concept of our AI Director... like our AI Editor on books").
 // Two buttons: Create Shots plans the cuts; the Director's Notes write every box of the shots as they stand.
 var VL_TIP_SHOTS = 'The Director reads your pictures in story order and divides them into shots, cutting where the place changes, time jumps, or someone has to leave and come back. Each shot gets one to five pictures and a name. Next, the Director\'s Notes gives each shot its direction. Don\'t like a cut? Move it with \u2702 or UnCut.';
-var VL_TIP_NOTES = 'The Director gives every shot its direction: how it opens, what the characters do and say, where the camera goes, how it ends, and the sound and surroundings, plus who appears in it. Your shots stay exactly as they are. Everything the Director writes is yours to change.';
+var VL_TIP_NOTES = 'The Director gives every shot its direction: how it opens, what the characters do and say, where the camera goes, how it ends, and the sound and surroundings, plus who appears in it. It rewrites the words of every shot; the shots themselves, their pictures and takes stay. Everything the Director writes is yours to change.';
 function vlSlKind(info) { var j = info && info.job; return (j && j.kind === 'shots') ? 'shots' : ((j && j.kind === 'precheck') ? 'precheck' : 'notes'); }   // v3.5.34: precheck
 var VL_TIP_PRECHECK = 'Before any video is made, the Director looks at every shot: its pictures, words, references and video mode, with the story. Each shot gets a to-do list: pictures that are not wide or not in the art style, moments the story needs that no picture shows, words that fight the pictures, and whether Reference or Keyframes suits it. Run it after the Director\'s Notes, and again any time.';
 function vlStyleRowHTML(d, writing, locked) {   // v3.5.37: locked (Create Shots or the Notes running), the buttons in #vl-sl-btns
@@ -43564,8 +43565,8 @@ function vlWriteShotList(mode, chained) {
   notesGo();
   function notesGo() {
     if (!vlHasWords(d) && !nTakes) { go(); return; }
-    uiConfirm('The Director will write the notes for every shot: the overall direction and every box are replaced, and the references become the characters named. Your shots stay exactly as they are.' +
-      (nTakes ? ' The ' + nTakes + ' take' + (nTakes === 1 ? '' : 's') + ' stay, marked out of date.' : '') + ' The book is not changed.', { okText: 'Write the notes' })
+    uiConfirm('The Director will rewrite the words of every shot: the overall direction, and each shot\'s Opening, beats, lines, Throughout and Closing, are replaced, and its references become the characters it names. What stays: the shots and their order, names, purposes, pictures and transitions.' +   // v3.5.64 (Ian: "Shots don\'t change but all the text inside them do")
+      (nTakes ? ' All your takes stay, marked out of date.' : '') + ' The book is not changed.', { okText: 'Write the notes' })
       .then(function (yes) { if (yes) go(); });
   }
 }
@@ -44020,6 +44021,37 @@ function vlBeatLineAdd(si, bi) {
   s.lines.push({ who: '', text: '', when: bi >= 0 ? bi + 1 : 0, off: false });
   vlBeatsChanged(si, 'vl-lw-' + si + '-' + (s.lines.length - 1));
 }
+var VL_BEAT_OVER = 'color:#e0604f;font-size:12px;font-weight:600;';
+// v3.5.65 (Ian, 2026-11-10: "turn the seconds red in the beats... let them do it and then whatever it adds up to... the
+// seconds at the top should change to that when they hit Generate take"). The beats' own length: every beat set, their
+// sum; else at least what the set ones need. Off when it is not the shot's length.
+function vlBeatsLen(s, n) {
+  var b = vlBeatsNorm(s.beats, n), set = 0, loose = 0;
+  b.forEach(function (x) { if (x.secs) set += x.secs; else loose++; });
+  if (!n || (!set)) return Number(s.seconds) || VL_SHOT_SECS;
+  return loose ? Math.max(Number(s.seconds) || VL_SHOT_SECS, set + loose) : set;
+}
+function vlBeatsOff(s, n) { return Math.abs(vlBeatsLen(s, n) - (Number(s.seconds) || VL_SHOT_SECS)) > 0.05; }
+function vlBeatsFit(si) {
+  var s = VL.draft && VL.draft.shots[si]; if (!s) return false;
+  var n = vlBeatTexts(s).length; if (!n || !vlBeatsOff(s, n)) return false;
+  var len = Math.max(4, Math.min(15, Math.round(vlBeatsLen(s, n))));
+  if (len === Number(s.seconds)) return false;
+  s.seconds = len;
+  var e = document.getElementById('vl-se-' + si); if (e) e.value = String(len);
+  return true;
+}
+function vlBeatMove(si, bi, dir) {
+  vlReadForm();
+  var s = VL.draft && VL.draft.shots[si]; if (!s) return;
+  var texts = vlBeatTexts(s), beats = vlBeatsNorm(s.beats, texts.length), to = bi + dir;
+  if (to < 0 || to >= texts.length) return;
+  var t = texts[bi]; texts[bi] = texts[to]; texts[to] = t;
+  var b = beats[bi]; beats[bi] = beats[to]; beats[to] = b;
+  s.lines.forEach(function (l) { if (l.when === bi + 1) l.when = to + 1; else if (l.when === to + 1) l.when = bi + 1; });
+  s.actions = vlActionsText(texts); s.beats = beats;
+  vlBeatsChanged(si);
+}
 function vlBeatsTotalText(s, n, set, total) { return n + ' beat' + (n === 1 ? '' : 's') + ', ' + vlSecsText(Math.max(set, total)) + ' s of the shot\'s ' + s.seconds + ' s'; }
 // A beat's seconds typed: the times and the total follow in place (drawing the shot again would take the box being typed in).
 function vlBeatSecs(si) {
@@ -44031,7 +44063,8 @@ function vlBeatSecs(si) {
     var b = document.getElementById('vl-bs-' + si + '-' + bi); if (b) b.placeholder = vlSecsText(tm.d);
   });
   var t = document.getElementById('vl-btot-' + si);
-  if (t) { t.textContent = vlBeatsTotalText(s, n, set, times.length ? times[times.length - 1].to : 0); t.style.cssText = set > Number(s.seconds) ? VL_WARN : VL_DESC; }
+  times.forEach(function (tm, bi) { var e = document.getElementById('vl-btm-' + si + '-' + bi); if (e) e.style.cssText = (tm.to > Number(s.seconds) + 0.05 ? VL_BEAT_OVER : VL_DESC) + 'flex:none;'; });
+  if (t) { t.textContent = vlBeatsTotalText(s, n, set, times.length ? times[times.length - 1].to : 0); t.style.cssText = vlBeatsOff(s, n) ? VL_BEAT_OVER : VL_DESC; }
   vlRefreshChecks(); vlQueueSave();
 }
 function vlBeatKey(e, si, bi) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); vlBeatAdd(si, bi); } }
@@ -44056,9 +44089,11 @@ function vlBeatsHTML(s, si) {
     return '<div class="vl-beat" style="border-left:2px solid rgba(var(--accent-rgb),0.35);padding:4px 0 6px 10px;margin:6px 0;">' +
       '<div style="display:flex;gap:6px;align-items:center;margin-bottom:3px;">' +
         '<span style="font-weight:600;color:var(--accent-pale);font-size:12px;flex:none;">Beat ' + (bi + 1) + '</span>' +
-        '<span id="vl-btm-' + si + '-' + bi + '" style="' + VL_DESC + 'flex:none;">' + vlSecsText(tm.from) + '&ndash;' + vlSecsText(tm.to) + ' s</span>' +
+        '<span id="vl-btm-' + si + '-' + bi + '" style="' + (tm.to > Number(s.seconds) + 0.05 ? VL_BEAT_OVER : VL_DESC) + 'flex:none;">' + vlSecsText(tm.from) + '&ndash;' + vlSecsText(tm.to) + ' s</span>' +
         '<label style="' + VL_DESC + 'display:inline-flex;gap:4px;align-items:center;margin-left:auto;" title="How long this beat takes. Empty: an equal share of what the other beats leave.">Seconds' +
           '<input id="vl-bs-' + si + '-' + bi + '" class="form-input" type="number" min="0.5" max="15" step="0.5" style="width:64px;padding:2px 6px;font-size:12px;height:auto;" placeholder="' + vlSecsText(tm.d) + '" value="' + (b.secs ? b.secs : '') + '" oninput="vlBeatSecs(' + si + ')"></label>' +
+        (bi > 0 ? '<button type="button" class="narrative-regen-btn" title="Move this beat up (its camera, sound and lines go with it)" onclick="vlBeatMove(' + si + ',' + bi + ',-1)">&#9650;</button>' : '') +   // v3.5.65 (Ian: reorder beats)
+        (bi < texts.length - 1 ? '<button type="button" class="narrative-regen-btn" title="Move this beat down (its camera, sound and lines go with it)" onclick="vlBeatMove(' + si + ',' + bi + ',1)">&#9660;</button>' : '') +
         '<button type="button" class="narrative-regen-btn" title="Remove this beat (its lines stay, said at any time)" onclick="vlBeatRemove(' + si + ',' + bi + ')">&#10005;</button>' +
       '</div>' +
       '<textarea id="vl-ba-' + si + '-' + bi + '" class="narrative-inline-box vl-box" rows="' + vlRowsFor(t) + '" style="' + VL_BOX_STYLE + '" placeholder="' + (bi ? 'What happens next' : 'Drel presses a glowing diamond into Ori\'s chest.') + '" oninput="vlGrow(this);vlEdit()" onblur="vlFlushSave()" onkeydown="vlBeatKey(event,' + si + ',' + bi + ')">' + escapeHtml(t) + '</textarea>' +
@@ -44076,7 +44111,7 @@ function vlBeatsHTML(s, si) {
   return rows +
     '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;">' +
       '<button type="button" class="btn btn-sm" onclick="vlBeatAdd(' + si + ',' + (texts.length - 1) + ')" title="Add a beat at the end (or press Enter at the end of a beat)">+ Add a beat</button>' +
-      '<span id="vl-btot-' + si + '" style="' + (set > Number(s.seconds) ? VL_WARN : VL_DESC) + '">' + vlBeatsTotalText(s, texts.length, set, total) + '</span>' +
+      '<span id="vl-btot-' + si + '" style="' + (vlBeatsOff(s, texts.length) ? VL_BEAT_OVER : VL_DESC) + '">' + vlBeatsTotalText(s, texts.length, set, total) + '</span>' +
     '</div>';
 }
 function vlPanelsHTML(d, si) {

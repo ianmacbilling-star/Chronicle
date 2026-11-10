@@ -2494,7 +2494,10 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
       for (let i = 0; i < live.length; i++) {
         const sh = result.shots[i];
         await writeWords(tx, live[i].id, sh.words);
-        await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(namedRefs(sh.words)), live[i].id);
+        // v3.5.65 (Ian, 2026-11-10: shot 14 lost the Goliath Rider): the assets already on the shot stay
+        const keepAssets = (shotRefs(live[i]) || []).filter(function (r) { return r.type === 'asset'; });
+        await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(namedRefs(sh.words).concat(keepAssets)), live[i].id);
+        await tx.prepare('UPDATE shots SET precheck = NULL WHERE id = ?').run(live[i].id);   // v3.5.65 (Ian: "If I rerun the Directors notes... Shouldn't it clear the Pre Prod Suggestions?")
         if (!cleanShotName(live[i].name) && sh.name) await tx.prepare('UPDATE shots SET name = ? WHERE id = ?').run(sh.name, live[i].id);
       }
       await tx.prepare('UPDATE episodes SET overall = ?, shot_list = ?, style = ?, updated_at = NOW() WHERE id = ?').run(result.overall, JSON.stringify(shotList), ctx.style.key, episodeId);
@@ -2804,6 +2807,7 @@ function precheckRequest(ctx, images) {
     'BEATS: each action is a beat with its seconds (shown as "(0-3 s)"); judge crowding from those seconds, not by counting actions: a beat under about 2 seconds rarely shows a whole movement.\n' +
     'KEEP THE USER\'S WORDS (v3.5.64, Ian: a suggestion threw away "run", a shouted line and a bloody flail): replacement words keep everything the user wrote, their verbs, details, lines and who does what, and change ONLY the part that causes the problem. Never rewrite a box to fix something in another box.\n' +
     'NO EMPTY FINDINGS: report only what needs changing. Never a finding that ends with "it is fine", "retain" or "no change needed", and never two findings with the same fix.\n' +
+    'PURPOSE: each shot\'s Purpose is the user\'s intent. When the words leave out part of it (the purpose says Drel takes the mirror from Ori and Ori is not in the shot) or do something it does not ask for, that is a finding of kind "words" with a fix that adds only what is missing. When a purpose describes what happens in another shot, say which shot and suggest no words.\n' +
     'TITLE CARDS: a title, logo or text-on-black picture as a shot\'s first picture is meant: the shot opens on it and moves into the scene (clouds, a fade). Never report it as a different kind of art, never tell them to drop it, and never take "opens on the title" out of the words.\n' +
     '5. reference: someone clearly on screen AND named in the shot\'s words who is not among the references sent. Never someone already sent, a background figure or a guess.\n' +
     '6. style: only a picture that is plainly a different kind of art from the shot\'s other pictures (a photo among paintings, a flat cartoon among painted pictures, black and white among colour). The art style\'s name' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' is a loose label, not a test: never report that a picture is not that style, and never report differences of colour, light or detail.\n' +
