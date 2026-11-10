@@ -959,6 +959,8 @@ function exitLines(w, names) {
 function shotScript(ep, w, pics) {
   const out = [];
   out.push('One continuous shot, no cuts. Keep every character looking exactly the same from start to finish.');
+  // v3.5.48 (Ian, 2026-11-09: "can you make it so nothing appears out of thin air unless we tell it to?" -- take 26's pestle)
+  out.push('Nothing appears or disappears out of thin air: any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
   if (pics) {
     pics.cast.forEach(function (c) {
       if (c.kind === 'asset') out.push('@Image' + c.n + ' is ' + c.name + ': it must look like @Image' + c.n + ' whenever it is on screen.');   // v3.5.22
@@ -1960,7 +1962,7 @@ function shotListRequest(ctx, images) {
       'FOR EACH SHOT write these, in plain words:\n' +
       '- name: 2 to 5 words naming the shot.\n' +
       '- start: who is where when the shot opens, and which way they face, and anything lying around that must stay in the shot (bodies, fallen weapons, props) as the shot\'s pictures show it: later pictures do not carry them (one to three sentences).\n' +
-      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning. When someone leaves the frame, say they walk completely out of frame and are gone, give that about 2 seconds, and make the end say the frame is empty of them.\n' +   // v3.5.47
+      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning. Read the shot\'s pictures in order and write what they show being done (crumbling something, pouring, lighting) and every step that gets from one picture to the next: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there, something now lit or open), write the action that brings it in, in its place (for example "He picks up the stone pestle from beside the bowl."), so nothing appears out of thin air. When someone leaves the frame, say they walk completely out of frame and are gone, give that about 2 seconds, and make the end say the frame is empty of them.\n' +   // v3.5.47
       (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view; always name the speaker}. At most two short lines in a shot; an empty list when nobody should talk.\n'
         : '- lines: always an empty list in this style.\n') +
       '- camera: what the camera does. If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
@@ -2440,8 +2442,8 @@ function precheckRequest(ctx, images) {
     'WHAT TO LOOK FOR, SHOT BY SHOT\n' +
     '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
     '2. gap: the story says something happens that the video must show and no picture covers (between two pictures of a shot, or between two shots). Read the story: if it explains a change (someone healed in turn, a later moment), that is not a mistake, but the video still has to get from one picture to the next. Suggest the missing picture: say after which picture number it goes and describe it in one or two sentences.\n' +
-    '3. continuity: a person or prop that appears from nowhere, someone who leaves and is needed again in the same shot (a cut is the reliable fix), a change of place inside one shot.\n' +
-    '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end, someone who must leave the frame with too little time left to get all the way out (they stop at the edge) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +
+    '3. continuity: a person or prop that appears from nowhere: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there) and no action brings it in, give a fix of type "words" for the actions box with the missing step written in its place (for example "He picks up the stone pestle from beside the bowl."); someone who leaves and is needed again in the same shot (a cut is the reliable fix); a change of place inside one shot.\n' +   // v3.5.48
+    '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end (when there are more actions than the length allows, give a fix of type "seconds" with the length that fits, at most 15), someone who must leave the frame with too little time left to get all the way out (they stop at the edge) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +
     '5. reference: someone clearly on screen who is not among the references sent.\n' +
     '6. style: a picture that does not look like the version\'s art style' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' or like the other pictures.\n\n' +
     'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
@@ -2452,7 +2454,8 @@ function precheckRequest(ctx, images) {
     '{"type": "words", "box": "start|actions|camera|end|sounds|around", "text": "the whole new text of that box (for actions, one action per line)"}\n' +
     '{"type": "add_reference", "name": "a character\'s exact name"}\n' +
     '{"type": "mode", "mode": "reference|keyframes"}\n' +
-    '{"type": "add_picture", "after_picture": <picture number>, "describe": "what the missing picture shows"}';
+    '{"type": "add_picture", "after_picture": <picture number>, "describe": "what the missing picture shows"}\n' +
+    '{"type": "seconds", "seconds": <the shot\'s new length, 4 to 15>}';   // v3.5.48
   const content = [];
   const head = [];
   head.push('EPISODE: ' + String(ctx.ep.name || '') + (ctx.sessionName ? ' (session "' + ctx.sessionName + '")' : '') + '.');
@@ -2512,6 +2515,7 @@ function parsePrecheck(raw, ctx) {
       if (fx && fx.type === 'words' && PC_BOXES.indexOf(fx.box) >= 0 && String(fx.text || '').trim()) fix = { type: 'words', box: fx.box, text: String(fx.text).replace(/\r\n?/g, '\n').trim().slice(0, 1500) };
       else if (fx && fx.type === 'add_reference' && names[String(fx.name || '').trim().toLowerCase()]) fix = { type: 'add_reference', name: names[String(fx.name).trim().toLowerCase()] };
       else if (fx && fx.type === 'mode' && (fx.mode === 'reference' || fx.mode === 'keyframes')) fix = { type: 'mode', mode: fx.mode };
+      else if (fx && fx.type === 'seconds' && parseInt(fx.seconds, 10) >= 4 && parseInt(fx.seconds, 10) <= 15) fix = { type: 'seconds', seconds: parseInt(fx.seconds, 10) };   // v3.5.48: Make it N s
       else if (fx && fx.type === 'add_picture' && parseInt(fx.after_picture, 10) >= 1 && parseInt(fx.after_picture, 10) <= N) fix = { type: 'add_picture', after_picture: parseInt(fx.after_picture, 10), describe: pcText(fx.describe, 500) };
       findings.push({ kind: kind, text: text, fix: fix });
     });

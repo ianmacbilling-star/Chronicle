@@ -43790,6 +43790,7 @@ function vlPcRowHTML(si, f, done) {
     if (x.type === 'words') { fixBtn = '<button class="' + B + '" onclick="vlPcWords(' + si + ',' + f.id + ')">Use these words</button>'; extra = '<div style="font-size:12px;margin-top:4px;padding:6px 8px;border-left:2px solid rgba(var(--accent-rgb),0.4);white-space:pre-wrap;color:var(--accent-pale);" data-no-words>' + escapeHtml(x.text) + '</div>'; }
     else if (x.type === 'add_reference') fixBtn = '<button class="' + B + '" onclick="vlPcRef(' + si + ',' + f.id + ')">Add ' + escapeHtml(x.name) + '</button>';
     else if (x.type === 'mode') fixBtn = '<button class="' + B + '" onclick="vlPcSetMode(' + si + ',\'' + x.mode + '\',' + f.id + ')">Switch to ' + (x.mode === 'reference' ? 'Reference' : 'Keyframes') + '</button>';
+    else if (x.type === 'seconds') fixBtn = '<button class="' + B + '" onclick="vlPcSeconds(' + si + ',' + f.id + ')" title="Set this shot\'s length to ' + Number(x.seconds) + ' seconds">Make it ' + Number(x.seconds) + ' s</button>';   // v3.5.48
     else if (x.type === 'expand') fixBtn = '<button class="' + B + '" onclick="vlPcExpand(' + si + ',' + f.id + ')" title="Redraw this picture wide (16:9) in its art style, with more of the scene at the sides. One retouch; only this episode\'s copy changes; Revert brings it back.">Expand picture ' + Number(x.picture) + '</button>';   // v3.5.35
     else if (x.type === 'add_picture') { fixBtn = '<button class="' + B + '" onclick="vlPcPicture(' + si + ',' + f.id + ')">Add a picture here</button>'; if (x.describe) extra = '<div style="font-size:12px;margin-top:4px;color:var(--accent-pale);" data-no-words>The missing picture: ' + escapeHtml(x.describe) + '</div>'; }
   }
@@ -43830,6 +43831,12 @@ function vlPcRef(si, fid) {
   if (!it) (ep.assets || []).forEach(function (a) { if (!it && String(a.name || '').toLowerCase() === name) { it = a; type = 'asset'; } });
   if (!it || !it.id) { vlPcMsg(f.fix.name + ' has no picture to send as a reference.'); return; }
   vlPcApply(si, fid, function (s) { s.refs = s.refs || []; if (!s.refs.some(function (r) { return r.type === type && Number(r.id) === Number(it.id); })) s.refs.push({ type: type, id: Number(it.id) }); });
+}
+// v3.5.48 -- Make it N s: the shot's length, saved, the finding ticked off and the check signed to the shot as it is now.
+function vlPcSeconds(si, fid) {
+  var f = vlPcFinding(si, fid); if (!f || !f.fix || f.fix.type !== 'seconds') return;
+  var n = Math.max(4, Math.min(15, Number(f.fix.seconds) || 0)); if (!n) return;
+  vlPcApply(si, fid, function (s) { s.seconds = n; });
 }
 function vlPcSetMode(si, mode, fid) { vlPcApply(si, fid, function (s) { s.mode = mode; }); }
 // v3.5.35 (Ian, 2026-11-09): Expand right from the to-do list. The finding is ticked off once the retouch has started.

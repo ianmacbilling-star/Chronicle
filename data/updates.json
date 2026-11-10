@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.48",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3548-video-thin-air-make-it-n-s",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: nothing out of thin air; the Director writes the steps the pictures imply; Make it N s.",
+        "detail": "Ian, 2026-11-09 (take 26: the pestle appeared in his hand). Every take's words now say nothing appears or disappears out of thin air: an object must be seen and picked up or brought into view, a person must come into view. The Director's Notes read the shot's pictures and write what they show being done and every step between them (He picks up the stone pestle from beside the bowl.); the Pre-production check flags a missing step with Use these words, and too many actions for the length with a Make it N s button.",
+        "td": [
+          "TD-1115"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.47",
     "staged_on": "2026-11-09",
     "entries": [
