@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.52",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3552-video-one-keyframe-retouch",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video: retouching or flipping a keyframe changes only that keyframe, even when the same picture is in the episode twice.",
+        "detail": "Ian, 2026-11-09: he put the same picture twice in a shot to retouch one, and the retouch changed both. When the picture is on more than one keyframe, the one pressed now gets its own copy (rights carried over) and only the copy is retouched; a flip changes only the keyframe pressed. A picture shown once works as before.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.51",
     "staged_on": "2026-11-09",
     "entries": [

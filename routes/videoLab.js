@@ -1340,6 +1340,18 @@ router.post('/takes/:id/join', requireAuth, requireVideo, async function (req, r
 // startKeyframeRetouch) on the episode's own copy: when the picture arrives every keyframe of this episode still showing
 // the old picture takes the new one and keeps the old in its Revert slot. The book is not changed. Takes made from the
 // old picture show "out of date" (the shot's signature includes its pictures).
+// v3.5.52 (Ian, 2026-11-09: "i put the same picture in the sequence... When I did that it retouched both of them"). The
+// keyframe pressed, found by its shot and its place in it: [id, url] when this episode shows its picture more than once,
+// else null (one keyframe, or none named: the old way, by picture).
+async function pressedKeyframe(db, ep, url, b) {
+  const shotId = parseInt(b && b.shot_id, 10), ki = parseInt(b && b.kf_index, 10);
+  if (!shotId || !(ki >= 0)) return null;
+  const n = await db.prepare('SELECT COUNT(*) AS n FROM keyframes WHERE episode_id = ? AND image_url = ?').get(ep.id, url);
+  if (Number(n && n.n) < 2) return null;
+  const all = await db.prepare('SELECT id, image_url FROM keyframes WHERE episode_id = ? AND shot_id = ? ORDER BY position, id').all(ep.id, shotId);
+  const k = all[ki];
+  return k && k.image_url === url ? k : null;
+}
 router.post('/episodes/:id/keyframe-retouch', requireAuth, requireVideo, async function (req, res) {
   const FN = 'POST /api/video-lab/episodes/' + req.params.id + '/keyframe-retouch';
   try {
@@ -1375,12 +1387,23 @@ router.post('/episodes/:id/keyframe-retouch', requireAuth, requireVideo, async f
       const pool = await refsPool(db, ep);
       refs = refsToSend(ep, null, cleanRefs(b.refs), pool, 12).map(function (r) { return { name: r.name, url: r.url, isAsset: r.kind === 'asset' }; });
     }
-    const out = await require('./images').startKeyframeRetouch(db, { refs: refs, userId: req.session.userId, campaignId: ep.campaign_id, episodeId: ep.id, imageUrl: url,
+    // v3.5.52 -- the same picture on more than one keyframe: the one pressed gets its own copy first, and the copy is retouched
+    let target = url;
+    const pk = await pressedKeyframe(db, ep, url, b);
+    if (pk) {
+      let c;
+      try { c = await require('./images').copyPicture(url); }
+      catch (e) { return vlRefuse(req, res, FN, 400, e && e.userFacing ? e.message : 'Could not retouch that keyframe on its own. Please try again.', { error: e && e.message }); }
+      await db.prepare('UPDATE keyframes SET image_url = ? WHERE id = ? AND image_url = ?').run(c.url, pk.id, url);
+      target = c.url;
+      vlDebug(req.session.userId, 'info', FN, 'The picture is on more than one keyframe: the one pressed got its own copy', { from: vlShortUrl(url), copy: vlShortUrl(c.url), keyframe: pk.id });
+    }
+    const out = await require('./images').startKeyframeRetouch(db, { refs: refs, userId: req.session.userId, campaignId: ep.campaign_id, episodeId: ep.id, imageUrl: target,
       momentId: kf.moment_id || null, shape: shape, style: style, forceShape: expand ? 'wide' : null,
       instruction: expand ? EXPAND_INSTRUCTION : b.instruction, markedUrl: expand ? null : b.marked_url, refName: expand ? null : b.ref_name });
     if (out.error) return res.status(out.error === 'INSUFFICIENT_TOKENS' ? 402 : 400).json(out);
     vlDebug(req.session.userId, 'info', FN, 'Keyframe retouch started (job ' + out.job_id + ')', { url: vlShortUrl(url), moment_id: kf.moment_id, archive_id: kf.archive_id, art_style: style, shot_refs: refs ? refs.map(function (r) { return r.name; }) : null });
-    res.json({ job_id: out.job_id });
+    res.json({ job_id: out.job_id, image_url: target });
   } catch (e) {
     console.error('[video] keyframe retouch error:', e && e.message);
     vlDebug(req.session && req.session.userId, 'error', FN, 'Could not start: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });
@@ -1409,7 +1432,9 @@ router.post('/episodes/:id/keyframe-flip', requireAuth, requireVideo, async func
     let m;
     try { m = await require('./images').mirrorPicture(url); }
     catch (e) { return vlRefuse(req, res, FN, 400, e && e.userFacing ? e.message : 'Could not flip the picture. Please try again.', { error: e && e.message }); }
-    const r = await db.prepare('UPDATE keyframes SET image_url = ?, prev_image_url = ? WHERE episode_id = ? AND image_url = ?').run(m.url, url, ep.id, url);
+    const pk = await pressedKeyframe(db, ep, url, req.body);   // v3.5.52: only the keyframe pressed, when the picture is on more than one
+    const r = pk ? await db.prepare('UPDATE keyframes SET image_url = ?, prev_image_url = ? WHERE id = ? AND image_url = ?').run(m.url, url, pk.id, url)
+      : await db.prepare('UPDATE keyframes SET image_url = ?, prev_image_url = ? WHERE episode_id = ? AND image_url = ?').run(m.url, url, ep.id, url);
     vlDebug(req.session.userId, 'info', FN, 'Keyframe flipped (' + r.changes + ' keyframe(s) show it)', { from: vlShortUrl(url), to: vlShortUrl(m.url) });
     res.json({ success: true, image_url: m.url });
   } catch (e) {

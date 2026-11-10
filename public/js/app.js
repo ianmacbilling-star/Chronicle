@@ -43212,14 +43212,21 @@ function vlRetouch(si, ki) {
     refs.push({ name: it.name, kind: r.type === 'asset' ? 'asset' : 'character', category: it.category || '' });
     ids.push({ type: r.type, id: r.id });
   });
-  state.retouchVl = { episodeId: d.id, url: k.url, rg: rg, refs: ids };
+  state.retouchVl = { episodeId: d.id, url: k.url, rg: rg, refs: ids, kf: k };   // v3.5.52 kf: the keyframe pressed
   var ta = document.getElementById('retouch-instruction'); if (ta) ta.value = '';
   var modal = document.getElementById('retouch-modal'); if (modal) modal.classList.remove('hidden');
   try { rgSetup(rg, { url: k.url, shape: null, refs: refs }); } catch (e) {}
   if (ta) setTimeout(function () { ta.focus(); }, 30);
 }
+// v3.5.52 (Ian, 2026-11-09: the same picture twice, and a retouch of one changed both): where the keyframe pressed is now,
+// so the server changes only it.
+function vlKfWhere(kf) {
+  var d = VL.draft, out = null;
+  if (d && kf) d.shots.forEach(function (s) { var i = s.kfs.indexOf(kf); if (i >= 0 && s.id && !out) out = { shot_id: s.id, kf_index: i }; });
+  return out || {};
+}
 function vlRetouchSend(t, instruction, snap, refName) {
-  var url = t.url;
+  var url = t.url, where = vlKfWhere(t.kf);
   VL.kfBusy[url] = 'starting';
   vlRenderOpen(true);
   var undo = function (msgHtml) {
@@ -43229,11 +43236,18 @@ function vlRetouchSend(t, instruction, snap, refName) {
   var marked = (typeof rgUploadMarked === 'function') ? rgUploadMarked(snap) : Promise.resolve(null);
   Promise.resolve(marked).then(function (markedUrl) {
     return fetch('/api/video-lab/episodes/' + t.episodeId + '/keyframe-retouch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_url: url, instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null, expand: !!t.expand, refs: t.expand ? undefined : (t.refs || []) }) });   // v3.5.14 expand; v3.5.24 the shot's references
+      body: JSON.stringify({ image_url: url, instruction: instruction, marked_url: markedUrl || null, ref_name: refName || null, expand: !!t.expand, refs: t.expand ? undefined : (t.refs || []), shot_id: where.shot_id, kf_index: where.kf_index }) });   // v3.5.14 expand; v3.5.24 the shot's references; v3.5.52 the keyframe pressed
   }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
       var j = res.j || {};
-      if (j.job_id && (res.ok || /already being retouched/.test(j.error || ''))) { if (t.onStarted) t.onStarted(); vlKfFollow(t.episodeId, j.job_id, url); return; }   // v3.5.35 onStarted
+      if (j.job_id && (res.ok || /already being retouched/.test(j.error || ''))) {
+        var follow = url;
+        if (j.image_url && j.image_url !== url && t.kf) {   // v3.5.52: the keyframe pressed got its own copy; the others keep the picture
+          delete VL.kfBusy[url]; t.kf.url = j.image_url; follow = j.image_url;
+          if (VL.draft && String(VL.draft.id) === String(t.episodeId)) vlStructural();
+        }
+        if (t.onStarted) t.onStarted(); vlKfFollow(t.episodeId, j.job_id, follow); return;
+      }   // v3.5.35 onStarted
       if (j.error === 'INSUFFICIENT_TOKENS') { undo(insufficientTokensHtml(escapeHtml(j.message || 'You are out of tokens.'))); return; }
       undo(escapeHtml(j.message || j.error || 'Could not retouch the keyframe.'));
     })
@@ -43242,17 +43256,18 @@ function vlRetouchSend(t, instruction, snap, refName) {
 // v3.5.24 -- Flip a keyframe: the server mirrors the episode's copy (free, at once); it swaps in like a retouch, with the
 // old picture in the Revert slot.
 function vlFlipSend(t) {
-  var url = t.url;
+  var url = t.url, where = vlKfWhere(t.kf);
   VL.kfBusy[url] = 'flip';
   vlRenderOpen(true);
-  fetch('/api/video-lab/episodes/' + t.episodeId + '/keyframe-flip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_url: url }) })
+  fetch('/api/video-lab/episodes/' + t.episodeId + '/keyframe-flip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_url: url, shot_id: where.shot_id, kf_index: where.kf_index }) })
     .then(function (r) { return r.json(); })
     .then(function (j) {
       delete VL.kfBusy[url];
       var d = VL.draft;
       if (j && j.image_url) {
         if (d && String(d.id) === String(t.episodeId)) {
-          d.shots.forEach(function (s) { s.kfs.forEach(function (k) { if (k.url === url) { k.prev = url; k.url = j.image_url; } }); });
+          var only = t.kf && where.shot_id ? t.kf : null;   // v3.5.52: only the keyframe pressed
+          d.shots.forEach(function (s) { s.kfs.forEach(function (k) { if (k.url === url && (!only || k === only)) { k.prev = url; k.url = j.image_url; } }); });
           vlStructural();
         }
         return;
@@ -43352,7 +43367,7 @@ function vlExpand(si, ki) {
   var url = k.url, id = d.id;
   uiConfirm('Expand this picture to wide (16:9)? It is redrawn wider in its art style, with more of the scene at the sides, so the video does not crop or reshape it. ' +
     'This uses one retouch (the usual retouch price). Only this episode\'s copy changes, and Revert brings the original back.', { okText: 'Expand it' })
-    .then(function (yes) { if (yes) vlRetouchSend({ episodeId: id, url: url, expand: true }, '', null, null); });
+    .then(function (yes) { if (yes) vlRetouchSend({ episodeId: id, url: url, expand: true, kf: k }, '', null, null); });
 }
 // The keyframes of the given shots that are not wide: [{ n, label, shape }]. Pictures not yet shown are not counted.
 function vlShapeProblems(shotIdx) {
@@ -43871,7 +43886,7 @@ function vlPcExpand(si, fid) {
     .then(function (yes) {
       if (!yes) return;
       vlPcMsg('Expanding picture ' + Number(f.fix.picture) + '...');
-      vlRetouchSend({ episodeId: id, url: k.url, expand: true, onStarted: function () { if (sid) vlPcDone(sid, fid, false); } }, '', null, null);
+      vlRetouchSend({ episodeId: id, url: k.url, expand: true, kf: k, onStarted: function () { if (sid) vlPcDone(sid, fid, false); } }, '', null, null);
     });
 }
 // v3.5.35 (Ian, 2026-11-09): the shot's mode in the to-do window, with one button to the recommended mode (no menu here).

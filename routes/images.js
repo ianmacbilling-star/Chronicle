@@ -1927,6 +1927,20 @@ async function mirrorPicture(url) {
   return { url: newUrl, width: meta.width || null, height: meta.height || null };
 }
 
+// v3.5.52 (Ian, 2026-11-09: the same picture twice in a shot, and a retouch of one changed both). A byte-for-byte copy
+// under a new name, its rights carried over, so one keyframe can be retouched on its own.
+async function copyPicture(url) {
+  const buf = await fetchFile(url);
+  if (!buf) { const e = new Error('Only a Campaignia picture can be retouched on its own.'); e.userFacing = true; throw e; }
+  const m = /\.(png|jpe?g|webp)(\?|$)/i.exec(String(url));
+  const ext = m ? m[1].toLowerCase().replace('jpeg', 'jpg') : 'png';
+  const type = ext === 'jpg' ? 'image/jpeg' : (ext === 'webp' ? 'image/webp' : 'image/png');
+  const newUrl = await uploadFile(buf, 'kfcopy-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext, type);
+  if (!newUrl) throw new Error('the copy could not be stored');
+  try { await rightsCheck.inherit(url, newUrl); } catch (e) { console.error('copy: rights inherit failed:', e && e.message); }
+  return { url: newUrl };
+}
+
 // POST /api/images/flip-moment
 // A story panel mirrored left to right. The checks are the retouch's (owner, lock, title panel, a job in flight, the
 // rights check); the bookkeeping is the retouch webhook's: the picture it was goes into the one-step Revert slot, and a
@@ -4542,6 +4556,7 @@ async function startKeyframeRetouch(db, o) {
 module.exports = router;
 module.exports.startKeyframeRetouch = startKeyframeRetouch;   // v3.5.09 -- TD-090
 module.exports.mirrorPicture = mirrorPicture;   // v3.5.24 -- Flip, for the Video tab's keyframes
+module.exports.copyPicture = copyPicture;   // v3.5.52 -- a keyframe's own copy, for the Video tab
 module.exports.generateReferenceImage = generateReferenceImage;
 // v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.
 module.exports.charPromptWithHeight = charPromptWithHeight;
