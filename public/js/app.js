@@ -42385,6 +42385,7 @@ function vlShotHTML(d, si, m, n0) {
       vlModeSelectHTML(si) +   // v3.5.34
       '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +
       '<span id="vl-todo-' + s.ck + '" style="flex:none;margin-left:auto;">' + vlTodoBtnHTML(si) + '</span>' +   // v3.5.34
+      ((typeof state !== 'undefined' && state.user && state.user.is_admin) ? '<button type="button" class="narrative-regen-btn" style="flex:none;" title="Admin: copy this shot\'s outline to the clipboard" onclick="vlOutline(' + si + ')">&#128203;</button>' : '') +   // v3.5.74
     '</div>' +
     '<div id="vl-body-' + s.ck + '" style="' + (vlFolded(s) ? 'display:none;' : '') + '">' +
     '<div class="vl-halves">' +
@@ -42406,6 +42407,12 @@ function vlShotHTML(d, si, m, n0) {
   '</div>';
 }
 // v3.5.59 -- a shot folded away (by its id, or its draft key before it is saved), kept while the page is open.
+// v3.5.74 -- text to the clipboard, with a fallback for browsers that refuse the clipboard API
+function vlCopyText(t, ok) {
+  function done() { var m = document.getElementById('vl-msg'); if (m) { m.textContent = ok; setTimeout(function () { if (m.textContent === ok) m.textContent = ''; }, 4000); } }
+  function old() { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px;top:0;'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { showError('Could not copy.'); } document.body.removeChild(ta); }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, old); else old();
+}
 function vlFoldKey(s) { return s.id ? 'id' + s.id : 'ck' + s.ck; }
 function vlFolded(s) { return !!(VL.folded && s && VL.folded[vlFoldKey(s)]); }
 function vlFold(si) {
@@ -43020,7 +43027,7 @@ function vlEpVideoHTML(ep) {
 }
 // v3.5.62 (Ian, 2026-11-10: "dump the entire contents of an episode on the video tab into a text file so I can give it
 // to you... Download Outline"). Built from what is on screen; no server call.
-function vlOutline() {
+function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (admins, Ian: "get the outline of just the shot")
   vlReadForm();
   var d = VL.draft, ep = d && vlFindEp(d.id);
   if (!d) return;
@@ -43031,10 +43038,11 @@ function vlOutline() {
   line('Style', (st && (st.label || st.key)) || d.style);
   line('Model sound', d.sound ? 'on' : 'off');
   line('Overall direction', d.overall);
-  var miss = vlMissingList(ep);
+  var miss = onlySi != null ? [] : vlMissingList(ep);
   if (miss.length) { L.push('Missing shots still open:'); miss.forEach(function (x) { L.push('  - ' + x.name + ': ' + x.what + (x.why ? ' (why: ' + x.why + ')' : '')); }); }
   var total = 0;
   d.shots.forEach(function (sh, i) {
+    if (onlySi != null && i !== onlySi) return;
     total += Number(sh.seconds) || 0;
     L.push(''); L.push('================================================================');
     L.push('SHOT ' + (i + 1) + (sh.name ? ': ' + sh.name : ''));
@@ -43072,6 +43080,7 @@ function vlOutline() {
     if (t) line('Pinned take', 'take ' + t.id + ', ' + t.status + (t.stale ? ', out of date' : '') + (t.trim_start != null || t.trim_end != null ? ', trimmed ' + (Number(t.trim_start) || 0) + '-' + (t.trim_end != null ? t.trim_end : 'end') + ' s' : '') + (t.video_url ? ' - ' + t.video_url : ''));
     if (i < d.shots.length - 1) line('Then', vlCutInfo(sh.cut_style || 'instant').label + ' into shot ' + (i + 2));
   });
+  if (onlySi != null) { vlCopyText(L.join('\n'), 'Shot ' + (onlySi + 1) + ' outline copied.'); return; }
   L.push(''); L.push('================================================================');
   L.push(d.shots.length + ' shot(s), about ' + total + ' s in all. Downloaded ' + new Date().toLocaleString() + '.');
   var blob = new Blob([L.join('\r\n') + '\r\n'], { type: 'text/plain;charset=utf-8' });

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.74",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3574-copy-shot-outline",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video tab (admins): copy one shot's outline to the clipboard.",
+        "detail": "Ian, 2026-11-10. A small clipboard button on each shot's top line, for admins only, copies that shot's outline (the episode's model, style and overall direction, then the shot as in Download outline).",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.73",
     "staged_on": "2026-11-10",
     "entries": [
