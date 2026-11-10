@@ -42616,9 +42616,7 @@ function vlEditorHTML(ep) {
           '<div id="vl-epnote" style="' + VL_DESC + 'margin-top:4px;"></div>' +
         '</div>' +
         '<div class="vl-top-col">' +
-          '<div style="display:flex;gap:8px;align-items:center;"><label class="form-label" for="vl-model" style="flex:1;margin:0;">Video model</label>' +
-            '<button type="button" class="modal-close" title="Close this episode and go back to the episode cards" style="" onclick="vlCloseEpisode()">&times;</button>' +   // v3.5.33
-          '</div>' +
+          '<label class="form-label" for="vl-model">Video model</label>' +
           '<select id="vl-model" class="form-input" title="' + escapeHtml(VL_MODEL_TIPS[m.key] || '') + '" onchange="this.title = VL_MODEL_TIPS[this.value] || \'\'; vlEdit(true)" onblur="vlFlushSave()">' + vlModelOptions(ms, m.key) + '</select>' +   // v3.5.19: grouped
           '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px;">' +
             '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);cursor:pointer;">' +
@@ -42628,7 +42626,10 @@ function vlEditorHTML(ep) {
           vlStyleRowHTML(d, writing, locked, 'buttons') +
         '</div>' +
         '<div class="vl-top-col">' +
-          '<label class="form-label" for="vl-overall">Overall direction: who, where, the mood. It goes into every shot.</label>' +
+          // v3.5.73 (Ian, 2026-11-10: "Get rid of the x at the top of the episode and put a close button... top right by the Overall Direction")
+          '<div style="display:flex;gap:8px;align-items:flex-start;"><label class="form-label" for="vl-overall" style="flex:1;">Overall direction: who, where, the mood. It goes into every shot.</label>' +
+            '<button type="button" class="btn btn-sm" title="Close this episode and go back to the episode cards" style="flex:none;" onclick="vlCloseEpisode()">Close</button>' +
+          '</div>' +
           '<textarea class="narrative-inline-box" id="vl-overall"' + (locked ? ' disabled' : '') + ' maxlength="2000" style="min-height:150px;width:100%;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
         '</div>' +
       '</div>' +
@@ -43891,7 +43892,7 @@ function vlTokPerSec(m) {
 var VL_MODEL_TIPS = {
   seedance2ref: 'Reference mode, best quality. The model is given the shot\'s pictures and the cast\'s reference pictures and directs the shot itself from your words: the first picture is how it opens, the others show who is there and the place. Copes well with big camera moves and changes of place. Its own sound costs nothing extra. Shots of 4 to 15 seconds.',
   seedance2reffast: 'Reference mode, faster and cheaper. The same way of working as Seedance 2.0 (Reference) at a little lower quality. Its own sound costs nothing extra. Shots of 4 to 15 seconds.',
-  klingo3ref: 'Reference mode, the cheapest. The same way of working as the Seedance reference models: the shot\'s pictures and the cast\'s reference pictures guide it (up to 7 pictures, so 4 from the shot and 3 of the cast). Good for trying out your words before using a dearer model. Its own sound costs extra. Shots of 3 to 15 seconds.',
+  klingo3ref: 'Reference mode, the cheapest. The same way of working as the Seedance reference models: the shot\'s pictures and the cast\'s reference pictures guide it (up to 7 pictures, so 4 from the shot and 3 of the cast). Good for trying out your words before using a dearer model, and for simple shots: people in one place, a quiet camera. On big camera moves (a descent from the sky, a long push in) it tends to hold the first scene picture\'s framing, and people can come out the wrong size in it; use Seedance for those shots. Its own sound costs extra. Shots of 3 to 15 seconds.',
   seedance2: 'Keyframes mode, best quality. The video moves from each picture exactly to the next, so it lands on your pictures\' framing. Best when neighbouring pictures match closely: the same place, similar poses. Square or tall pictures are cropped to wide, so Expand them first. Its own sound costs nothing extra. 4 to 15 seconds a move. It takes no reference pictures: the cast is not sent, so anyone the pictures do not show clearly may come out as someone else.',
   seedance2fast: 'Keyframes mode, faster and cheaper. The same way of working as Seedance 2.0 (Keyframes) at a little lower quality. Square or tall pictures are cropped to wide, so Expand them first. Its own sound costs nothing extra. 4 to 15 seconds a move. It takes no reference pictures: the cast is not sent, so anyone the pictures do not show clearly may come out as someone else.',
   kling3std: 'Keyframes mode, the cheapest of the Keyframes models. Moves from each picture to the next; best for small changes between pictures that match closely. Its own sound costs extra. 3 to 15 seconds a move. It takes no reference pictures: the cast is not sent, so anyone the pictures do not show clearly may come out as someone else.',

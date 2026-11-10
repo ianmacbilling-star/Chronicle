@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.73",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3573-close-btn-kling-tip",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: a Close button by the overall direction; the Kling model's tip says what it is good at.",
+        "detail": "Ian, 2026-11-10. The x beside the video model is gone; a Close button sits top right, by the Overall direction. Shot 1 on Kling O3 Standard held the wide scene picture and made Gubuk giant; the same words on Seedance were a keeper, so Kling's tip now says it suits simple shots and to use Seedance for big camera moves.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.72",
     "staged_on": "2026-11-10",
     "entries": [
