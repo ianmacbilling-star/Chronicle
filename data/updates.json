@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.60",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3560-our-tooltip",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Tooltips everywhere now use the same easy-to-read style as the ? help, and show right away.",
+        "detail": "Ian, 2026-11-10. Every button, box and link with a tip shows it in the ? help's light panel at once on hover, kept on screen and wrapped when long (hover screens only). A Video shot's Purpose box shows its whole purpose on hover.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.59",
     "staged_on": "2026-11-10",
     "entries": [

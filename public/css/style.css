@@ -3205,3 +3205,6 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 .archive-ib-thumb{position:absolute;bottom:8px;left:8px;padding:3px 8px;font-size:11px;background:rgba(var(--glass-rgb),0.7);color:rgba(var(--accent-text-rgb),0.9);border:1px solid rgba(var(--accent-rgb),0.4);border-radius:6px;cursor:pointer;opacity:0;transition:opacity .15s;}
 .archive-card:hover .archive-ib-thumb{opacity:1;}
 .archive-ib-thumb:hover{background:rgba(var(--glass-rgb),0.9);color:var(--accent-bright);}
+/* v3.5.60 -- our tooltip everywhere (Ian: like the ?s help's): every title shows in this, placed by app.js */
+#cg-tip{position:fixed;z-index:100000;display:none;max-width:340px;white-space:pre-line;background:var(--light-panel);color:var(--hover-fill-text);
+  font:400 13px/1.45 Georgia,serif;letter-spacing:0;text-transform:none;text-align:left;padding:7px 11px;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.5);pointer-events:none;}

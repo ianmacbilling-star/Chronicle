@@ -42308,7 +42308,7 @@ function vlShotHTML(d, si, m, n0) {
       '<input id="vl-sn-' + si + '" class="form-input vl-shot-name" type="text" maxlength="120" value="' + escapeHtml(s.name || '') + '" placeholder="Name this shot" title="The shot\'s name" style="' + VL_SHOT_NAME + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
       // v3.5.59 (Ian, 2026-11-10: "every shot needs a Purpose field. It's more for the user and what the shot creating process can
       // fill in"): on the top line, so it stays readable when the shot is folded and the pictures stay right under it.
-      '<input id="vl-pu-' + si + '" class="form-input vl-purpose" type="text" maxlength="300" value="' + escapeHtml(s.purpose || '') + '" placeholder="Purpose: what this shot is for in the story" title="What this shot is for in the story: for you and the Director, never sent to the video model" style="flex:3 1 280px;min-width:200px;padding:4px 8px;font-size:13px;" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
+      '<input id="vl-pu-' + si + '" class="form-input vl-purpose" type="text" maxlength="300" value="' + escapeHtml(s.purpose || '') + '" placeholder="Purpose: what this shot is for in the story"' + (s.purpose ? ' title="' + escapeHtml(s.purpose) + '"' : '') + ' style="flex:3 1 280px;min-width:200px;padding:4px 8px;font-size:13px;" oninput="vlEdit();if(this.value)this.title=this.value;else this.removeAttribute(\'title\');" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +   // v3.5.60: the tip is the whole purpose
       '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;" for="vl-se-' + si + '">How long?' +
         '<select id="vl-se-' + si + '" class="form-input" style="width:auto;padding:3px 8px;font-size:13px;height:auto;" onchange="vlEdit()" onblur="vlFlushSave()">' + secs.join('') + '</select></label>' +
       vlModeSelectHTML(si) +   // v3.5.34
@@ -44677,3 +44677,52 @@ async function npSend() {
 var _sbSessWant = null, _sbReloadSeq = 0;
 function _sbWant() { return { sid: String(state.currentSession && state.currentSession.id), fork: String(state.currentForkId || '') }; }
 function _sbStill(w) { return !!(w && state.currentSession && String(state.currentSession.id) === w.sid && String(state.currentForkId || '') === w.fork); }
+
+// v3.5.60 -- OUR TOOLTIP EVERYWHERE (Ian, 2026-11-10: "use our prettier tool tip similar to the one on the ?s help. That
+// should be our standard tool tip everywhere"). Every element's title is shown in the ?s help's look (light panel,
+// Georgia), at once on hover, kept on the screen. The title is lifted off while the tip shows (so the browser's own does
+// not appear too) and put back after. Hover screens only; touch screens are left as they are.
+(function () {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !window.matchMedia || !window.matchMedia('(hover: hover)').matches) return;
+  var tip = null, cur = null, watch = null;
+  function box() {
+    if (!tip) { tip = document.createElement('div'); tip.id = 'cg-tip'; tip.setAttribute('role', 'tooltip'); tip.style.cssText = 'position:fixed;left:0;top:0;z-index:100000;pointer-events:none;display:none;'; document.body.appendChild(tip); }   // placed and out of the page's flow even before style.css loads
+    return tip;
+  }
+  function hide() {
+    if (watch) { clearInterval(watch); watch = null; }
+    if (cur) {
+      if (cur.dataset && cur.dataset.cgTitle != null) { if (!cur.hasAttribute('title')) cur.setAttribute('title', cur.dataset.cgTitle); delete cur.dataset.cgTitle; }
+      cur = null;
+    }
+    if (tip) tip.style.display = 'none';
+  }
+  function place(t) {
+    var b = box(), r = t.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    b.style.display = 'block'; b.style.left = '0px'; b.style.top = '0px';
+    var w = b.offsetWidth, h = b.offsetHeight;
+    var left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), vw - w - 8);
+    var top = r.bottom + 8;
+    if (top + h > vh - 8) top = Math.max(8, r.top - h - 8);
+    b.style.left = Math.round(left) + 'px'; b.style.top = Math.round(top) + 'px';
+  }
+  document.addEventListener('mouseover', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[title]') : null;
+    if (t && t === cur) return;
+    if (!t && cur && cur.contains(e.target)) return;
+    hide();
+    if (!t || t === document.documentElement || t === document.body) return;
+    if (t.namespaceURI && t.namespaceURI !== 'http://www.w3.org/1999/xhtml') return;   // SVG titles stay the browser's
+    var text = String(t.getAttribute('title') || '').trim();
+    if (!text) return;
+    t.dataset.cgTitle = t.getAttribute('title'); t.removeAttribute('title');
+    cur = t;
+    box().textContent = text;
+    place(t);
+    watch = setInterval(function () { if (!cur || !cur.isConnected) hide(); }, 400);
+  }, true);
+  document.addEventListener('mousedown', hide, true);
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('blur', hide);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); }, true);
+})();
