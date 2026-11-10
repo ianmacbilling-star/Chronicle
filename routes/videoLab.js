@@ -725,8 +725,8 @@ function cleanShots(list, m) {
         prev_url: String(k.prev_url || k.prev_image_url || '') || null };   // v3.5.09: the Revert slot
     }).filter(function (k) { return k.url; });
     const room = MAX_KEYFRAMES - n;
-    if (room <= 0 || !kfs.length) return;
-    n += Math.min(room, kfs.length);
+    if (kfs.length && room <= 0) return;   // v3.5.57: a shot with no pictures yet is kept (Add new shot below)
+    n += Math.max(0, Math.min(room, kfs.length));
     out.push({ id: parseInt(s.id, 10) || null, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
@@ -1342,10 +1342,33 @@ router.post('/episodes/:id/join', requireAuth, requireVideo, async function (req
     const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
     if (!ep || !(await canChange(req, ep))) return res.status(404).json({ error: 'Not found.' });
     await db.prepare("UPDATE episodes SET join_status = NULL, join_error = NULL, join_request_id = NULL, updated_at = NOW() WHERE id = ? AND join_status = 'error'").run(ep.id);
-    await maybeJoinEpisode(db, ep.id);
+    await maybeJoinEpisode(db, ep.id, true);
     res.json({ episode: await loadEpisode(db, ep.id) });
   } catch (e) {
     res.status(500).json({ error: 'Could not join it again.' });
+  }
+});
+// v3.5.57 -- COMPILE: the pinned take of every shot, with their trims and the transitions, into the episode video.
+router.post('/episodes/:id/compile', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/episodes/' + req.params.id + '/compile';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!ep || !(await canChange(req, ep))) return vlRefuse(req, res, FN, 404, 'Not found.');
+    if (ep.join_status === 'running' || ep.join_status === 'saving') return res.json({ episode: await loadEpisode(db, ep.id), message: 'The episode is already being put together.' });
+    const shots = await db.prepare('SELECT s.id, t.status, t.video_url FROM shots s LEFT JOIN takes t ON t.id = s.chosen_take_id WHERE s.episode_id = ? ORDER BY s.position, s.id').all(ep.id);
+    if (!shots.length) return vlRefuse(req, res, FN, 409, 'This episode has no shots yet.');
+    const missing = []; shots.forEach(function (s, i) { if (!(s.status === 'done' && s.video_url)) missing.push(i + 1); });
+    if (missing.length) return vlRefuse(req, res, FN, 409, (missing.length === 1 ? 'Shot ' + missing[0] + ' has' : 'Shots ' + missing.slice(0, -1).join(', ') + ' and ' + missing[missing.length - 1] + ' have') + ' no finished pinned take yet. Pin a finished take in every shot, then compile.');
+    await db.prepare("UPDATE episodes SET join_status = NULL, join_error = NULL, join_request_id = NULL, updated_at = NOW() WHERE id = ? AND join_status = 'error'").run(ep.id);
+    await maybeJoinEpisode(db, ep.id, true);
+    vlDebug(req.session.userId, 'info', FN, 'Compile asked for (' + shots.length + ' shot(s))', {});
+    const out = await loadEpisode(db, ep.id);
+    res.json({ episode: out, message: out && out.video_current ? 'The episode video is up to date.' : 'Putting the episode together...' });
+  } catch (e) {
+    console.error('[video] compile error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not put the episode together.' });
   }
 });
 // A take whose join failed: join its moves again.
@@ -1735,7 +1758,10 @@ async function finishTakeMerge(t, falResult, falError) {
 
 // The episode video: once every shot has a made chosen take, they are joined in order with plain cuts. Joined again
 // whenever the chosen takes change (video_sig records which takes the video is made of). One shot: its take is the video.
-async function maybeJoinEpisode(db, episodeId) {
+// v3.5.57 (Ian, 2026-11-09: "a button below All the Shots called Compile all Shots Together... that creates the Final
+// Episode video"; joining only on the button). Every other caller is a no-op now; only Compile (and Join again) joins.
+async function maybeJoinEpisode(db, episodeId, compile) {
+  if (!compile) return;
   const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(episodeId);
   if (!ep || ep.join_status === 'running' || ep.join_status === 'saving') return;
   const shots = await db.prepare('SELECT s.id, s.chosen_take_id, s.cut_style, t.status, t.video_url, t.trim_start, t.trim_end FROM shots s LEFT JOIN takes t ON t.id = s.chosen_take_id WHERE s.episode_id = ? ORDER BY s.position, s.id').all(episodeId);

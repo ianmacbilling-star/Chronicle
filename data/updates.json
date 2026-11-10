@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.57",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3557-video-new-shot-compile",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Add new shot below, Compile all shots together, and no more Generate all shots.",
+        "detail": "Ian, 2026-11-09. Each shot's bottom border has + Add new shot below: an empty shot right under it (give it pictures with its Add a picture card; it cannot be generated until it has one). Compile all shots together at the bottom puts the pinned take of every shot, with trims and transitions, into the episode video; the episode is joined only on that button now (it says which shots still need a pinned take, and shows Out of date after a change). Generate all shots is gone (Ian: a dangerous button).",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.56",
     "staged_on": "2026-11-09",
     "entries": [

@@ -42323,7 +42323,16 @@ function vlShotHTML(d, si, m, n0) {
     // v3.5.25 -- the takes and Generate take across the whole shot, under both halves (Ian: "put the viewer below the
     // Left hand side as well. To make more room for multiple").
     '<div id="vl-livebtn-' + s.ck + '" class="vl-takes-row" style="margin-top:12px;"></div>' +
+    // v3.5.57 (Ian, 2026-11-09: "On the bottom border of a shot we need Add New Shot below"): a new, empty shot right under this one
+    '<button type="button" class="btn btn-sm vl-add-shot" style="position:absolute;left:24px;bottom:0;transform:translateY(50%);z-index:1;background:rgb(var(--panel-rgb));border-radius:999px;padding:2px 12px;" title="Add a new, empty shot right below this one; give it pictures with its Add a picture card" onclick="vlAddShotBelow(' + si + ')">+ Add new shot below</button>' +
   '</div>';
+}
+function vlAddShotBelow(si) {
+  vlReadForm();
+  var d = VL.draft;
+  if (!d || !d.shots[si] || vlSlLocked(d.id)) return;
+  d.shots.splice(si + 1, 0, vlNewShot([]));
+  vlStructural();
 }
 // v3.5.54 (Ian, 2026-11-09: "Between the shots... we need to have some canned transitions"; "a play button between the
 // shots that does the stitching on the fly"; spec claude/VIDEO_TRANSITIONS_SPEC.md). The cut marker: how this shot
@@ -42533,7 +42542,8 @@ function vlEditorHTML(ep) {
     '<div style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
       '<span id="vl-cost" style="' + VL_DESC + 'flex:1;min-width:200px;"></span>' +
       '<span id="vl-saved" style="' + VL_DESC + '"></span>' +
-      '<button class="btn btn-primary" id="vl-go" onclick="vlMakeAll()"' + (locked ? ' disabled' : '') + ' title="Generate a take of every shot that has no take yet">Generate all shots</button>' +
+      '<span id="vl-compile-note" style="' + VL_DESC + '"></span>' +
+      '<button class="btn btn-primary" id="vl-compile" onclick="vlCompile()"' + (locked ? ' disabled' : '') + ' title="Put the pinned take of every shot together, with their trims and the transitions between them, into the episode video">Compile all shots together</button>' +   // v3.5.57 (Ian: "Compile all Shots Together"; Generate all shots removed, "That\'s a dangerous button")
     '</div>' +
     '<div id="vl-msg" style="' + VL_DESC + 'margin-top:6px;"></div>' +
   '</div>';
@@ -42869,6 +42879,7 @@ function vlShotBtnHTML(ep, ds, si) {
   var takes = s ? (s.takes || []) : [];
   var making = takes.some(function (t) { return t.status === 'making'; });
   var btn = !ds.id ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Saving...</button>'
+    : !(ds.kfs || []).length ? '<button class="btn btn-sm vl-gen" disabled title="Add a picture to this shot first">Generate take</button>'   // v3.5.57: a new, empty shot
     : making ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Being made</button>'
     : takes.length >= VL_MAX_TAKES ? '<span class="vl-full" style="' + VL_DESC + 'margin-right:8px;">' + VL_MAX_TAKES + ' takes max &mdash; delete one to make another.</span><button class="btn btn-sm vl-gen" disabled title="' + VL_MAX_TAKES + ' takes max: delete one to make another">Generate take</button>'   // v3.5.15
     : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now. The tokens come off when the take arrives; a take that fails costs nothing.">Generate take (' + vlShotTok(VL.draft, ds) + ' tokens)</button>';   // v3.5.46
@@ -42897,20 +42908,42 @@ function vlEpVideoHTML(ep) {
   var note = '';
   if (joining) note = vlSpin(12) + ' Joining ' + shots.length + ' shots...';
   else if (ep.join_status === 'error') note = '<span style="color:var(--danger);" data-no-words>Joining the shots failed: ' + escapeHtml(ep.join_error || '') + '</span> <button class="btn btn-sm" onclick="vlJoinEpisode(' + ep.id + ')">Join again</button>';
-  else if (made < shots.length) note = made + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' made. The episode video is put together once every shot has a pinned take.';
+  else if (made < shots.length) note = made + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' made. Pin a finished take in every shot, then Compile.';
   else if (ep.video_url && !ep.video_current) note = 'Out of date: the pinned takes have changed.';
   if (!ep.video_url) return '';   // v3.5.33 -- TD-1114: no box until there is a video; the line is in the header (vlEpNoteHTML)
   return '<div style="' + VL_BOX + 'padding:12px 14px;margin-bottom:14px;">' + head +
     '<video src="' + escapeHtml(ep.video_url) + '" controls preload="metadata" style="display:block;width:100%;max-height:70vh;background:#000;border-radius:var(--radius-lg);"></video>' +
   '</div>';
 }
+// v3.5.57 -- Compile: the episode video is made only on this button.
+function vlCompile() {
+  var d = VL.draft; if (!d) return;
+  vlReadForm();
+  var btn = document.getElementById('vl-compile');
+  if (btn) { btn.disabled = true; btn.innerHTML = vlBtnSpin() + ' Compiling...'; }
+  var go = function () {
+    fetch('/api/video-lab/episodes/' + d.id + '/compile', { method: 'POST' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.j && res.j.episode) vlPutEp(res.j.episode);
+        var n = document.getElementById('vl-compile-note');
+        if (n) n.textContent = (res.j && (res.j.message || res.j.error)) || (res.ok ? '' : 'Could not put the episode together.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Compile all shots together'; }
+        vlRenderList(); vlRenderLive();
+      })
+      .catch(function () { if (btn) { btn.disabled = false; btn.textContent = 'Compile all shots together'; } var n = document.getElementById('vl-compile-note'); if (n) n.textContent = 'Could not reach the server.'; });
+  };
+  if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
+  vlSave(function () { go(); });   // the trims and transitions as they are on screen
+}
 function vlEpNoteHTML(ep) {   // v3.5.33 -- the episode's one line, under the Style row
   var shots = ep.shots || [];
   var made = shots.filter(function (s) { var t = vlChosen(s); return t && t.status === 'done'; }).length;
   if (ep.join_status === 'running' || ep.join_status === 'saving') return vlSpin(12) + ' Joining ' + shots.length + ' shots...';
   if (ep.join_status === 'error') return '<span style="color:var(--danger);" data-no-words>Joining the shots failed: ' + escapeHtml(ep.join_error || '') + '</span> <button class="btn btn-sm" onclick="vlJoinEpisode(' + ep.id + ')">Join again</button>';
-  if (made < shots.length) return made + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' made. The episode video is put together once every shot has a pinned take.';
-  if (ep.video_url && !ep.video_current) return 'Out of date: the pinned takes, their trims or the transitions have changed.';
+  if (made < shots.length) return made + ' of ' + shots.length + ' shot' + (shots.length === 1 ? '' : 's') + ' made. Pin a finished take in every shot, then press Compile all shots together at the bottom.';
+  if (ep.video_url && !ep.video_current) return 'Out of date: the pinned takes, their trims or the transitions have changed. Press Compile all shots together to make it again.';
+  if (!ep.video_url) return 'Every shot has a pinned take. Press Compile all shots together at the bottom to make the episode video.';
   return '';
 }
 // Redraw a live part only when what it shows has changed, so a video being watched is not restarted.
