@@ -397,7 +397,7 @@ function ensureTables() {
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS tokens_charged INTEGER');   // v3.5.46: NULL until it lands and is charged   // 'small' (Kling O1 Edit) or 'big' (Seedance 2.0)   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
     // v3.5.19 -- a shot described in plain words, one set per shot (VIDEO_REFERENCE_SHOTS_SPEC section 2). actions and
     // lines are JSON; actions NULL means the shot was never saved this way (its words are still on its keyframes).
-    for (const c of ['start_text TEXT', 'actions TEXT', 'lines TEXT', 'camera TEXT', 'end_text TEXT', 'sounds TEXT', 'around TEXT', 'seconds INTEGER', 'refs TEXT']) {   // refs: v3.5.22
+    for (const c of ['start_text TEXT', 'actions TEXT', 'lines TEXT', 'camera TEXT', 'end_text TEXT', 'sounds TEXT', 'around TEXT', 'seconds INTEGER', 'refs TEXT', 'beats TEXT']) {   // refs: v3.5.22; beats: v3.5.63 (TD-1121)
       await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS ' + c);
     }
     await db.exec('ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS episode_id INTEGER');
@@ -436,10 +436,40 @@ function parseJson(v, dflt) { if (v == null) return dflt; if (typeof v !== 'stri
 function shotWords(shot) {
   if (!shot || shot.actions == null) return null;
   const actions = parseJson(shot.actions, []), lines = parseJson(shot.lines, []);
-  return { start: String(shot.start_text || ''), actions: Array.isArray(actions) ? actions.map(String) : [], lines: Array.isArray(lines) ? lines : [],
+  const w = { start: String(shot.start_text || ''), actions: Array.isArray(actions) ? actions.map(String) : [], lines: Array.isArray(lines) ? lines : [],
     camera: String(shot.camera || ''), end: String(shot.end_text || ''), sounds: String(shot.sounds || ''), around: String(shot.around || ''),
     seconds: Math.max(SHOT_MIN_SECS, Math.min(SHOT_MAX_SECS, parseInt(shot.seconds, 10) || SHOT_DEFAULT_SECS)) };
+  return withBeats(w, parseJson(shot.beats, null));
 }
+// v3.5.63 -- TD-1121, THE SHOT IN BEATS (Ian, 2026-11-10; spec claude/VIDEO_BEATS_SPEC.md). Each action is a beat with its own
+// camera, sound and seconds (null: an equal share of what is left). The words carry beats only when one has something in
+// it, so takes made before stay current.
+function cleanBeats(list, n) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const b = (Array.isArray(list) && list[i]) || {};
+    const secs = parseFloat(b.secs);
+    out.push({ camera: cleanText(b.camera, 300), sound: cleanText(b.sound, 300), secs: secs > 0 ? Math.min(SHOT_MAX_SECS, Math.round(secs * 2) / 2) : null });
+  }
+  return out;
+}
+function withBeats(w, list) {
+  const b = cleanBeats(list, w.actions.length);
+  if (b.some(function (x) { return x.camera || x.sound || x.secs; })) w.beats = b;
+  return w;
+}
+// Each beat's seconds, from and to: the fixed ones as set, the rest an equal share of what they leave (at least half a second).
+function beatTimes(w) {
+  const n = w.actions.length, b = w.beats || [], out = [];
+  if (!n) return out;
+  let fixed = 0, loose = 0;
+  for (let i = 0; i < n; i++) { if (b[i] && b[i].secs) fixed += b[i].secs; else loose++; }
+  const share = loose ? Math.max(0.5, (w.seconds - fixed) / loose) : 0;
+  let t = 0;
+  for (let i = 0; i < n; i++) { const d = (b[i] && b[i].secs) || share; out.push({ from: t, to: t + d }); t += d; }
+  return out;
+}
+function secsText(x) { return String(Math.round(x * 10) / 10); }
 function clampSecs(n) { return Math.max(SHOT_MIN_SECS, Math.min(SHOT_MAX_SECS, Math.round(Number(n) || SHOT_DEFAULT_SECS))); }
 // A shot never saved in plain words: its old per-keyframe words become its actions, in order (spec section 5).
 function legacyWords(kfs, m) {
@@ -458,8 +488,9 @@ function cleanWords(s) {
     const when = parseInt(l.when, 10);
     return { who: cleanText(l.who, 80), text: cleanText(l.text, 300).replace(/^["\u201c]+|["\u201d]+$/g, ''), when: when >= 1 && when <= actions.length ? when : 0, off: !!l.off };
   }).filter(function (l) { return l.text; }).slice(0, 12);
-  return { start: cleanText(s.start_text != null ? s.start_text : s.start, 900), actions: actions, lines: lines, camera: cleanText(s.camera, 900), end: cleanText(s.end_text != null ? s.end_text : s.end, 900),
+  const w = { start: cleanText(s.start_text != null ? s.start_text : s.start, 900), actions: actions, lines: lines, camera: cleanText(s.camera, 900), end: cleanText(s.end_text != null ? s.end_text : s.end, 900),
     sounds: cleanText(s.sounds, 600), around: cleanText(s.around, 600), seconds: clampSecs(s.seconds) };
+  return withBeats(w, s.beats);
 }
 // Which chosen takes, in order, the episode video is made of.
 function chosenSig(shots) { return shots.map(function (s) { return s.chosen_take_id || 0; }).join(','); }
@@ -650,8 +681,8 @@ router.get('/episodes/:id', requireAuth, requireVideo, async function (req, res)
 // new; shots no longer sent are removed with their takes. Runs inside the caller's transaction. Returns the files of
 // removed takes, to delete once the transaction is in.
 async function writeWords(tx, sid, w) {
-  await tx.prepare('UPDATE shots SET start_text = ?, actions = ?, lines = ?, camera = ?, end_text = ?, sounds = ?, around = ?, seconds = ? WHERE id = ?')
-    .run(w.start, JSON.stringify(w.actions), JSON.stringify(w.lines), w.camera, w.end, w.sounds, w.around, w.seconds, sid);
+  await tx.prepare('UPDATE shots SET start_text = ?, actions = ?, lines = ?, camera = ?, end_text = ?, sounds = ?, around = ?, seconds = ?, beats = ? WHERE id = ?')
+    .run(w.start, JSON.stringify(w.actions), JSON.stringify(w.lines), w.camera, w.end, w.sounds, w.around, w.seconds, w.beats ? JSON.stringify(w.beats) : null, sid);   // v3.5.63 beats
 }
 function cleanPurpose(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 300); }   // v3.5.59
 async function writeShots(tx, ep, shotsIn) {
@@ -856,7 +887,7 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
         const w = s.words || {};
-        return { name: s.name, purpose: s.purpose || '', mode: s.mode || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+        return { name: s.name, purpose: s.purpose || '', mode: s.mode || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, beats: w.beats, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m));
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -1021,10 +1052,13 @@ function shotScript(ep, w, pics) {
   const spk = {}; w.lines.forEach(function (l) { spk[firstName(l.who)] = true; });
   const hearers = pics ? pics.cast.filter(function (c) { return c.kind !== 'asset' && !spk[firstName(c.name)]; }).map(function (c) { return c.name; }) : [];   // v3.5.25
   if (w.actions.length || loose.length) {
-    out.push('What happens, in order:');
+    out.push('What happens, in order' + (w.actions.length >= 2 ? ', with the seconds each part takes' : '') + ':');
+    const times = beatTimes(w), beats = w.beats || [];   // v3.5.63 -- TD-1121: each beat its seconds, camera and sound
     w.actions.forEach(function (a, i) {
       const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return 'As this happens, ' + sayLine(l, hearers) + '.'; });
-      out.push((i + 1) + '. ' + a + (said.length ? ' ' + said.join(' ') : ''));
+      const b = beats[i] || {}, at = w.actions.length >= 2 && times[i] ? '(' + secsText(times[i].from) + '-' + secsText(times[i].to) + ' s) ' : '';
+      function stop(x) { x = String(x).trim(); return /[.!?"\u201d]$/.test(x) ? x : x + '.'; }
+      out.push((i + 1) + '. ' + at + ((said.length || b.camera || b.sound) ? stop(a) : a) + (said.length ? ' ' + said.join(' ') : '') + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
     });
     loose.forEach(function (l) { const t = sayLine(l, hearers); out.push(w.actions.length ? 'Then, ' + t + '.' : t.charAt(0).toUpperCase() + t.slice(1) + '.'); });
   }
@@ -2787,7 +2821,8 @@ function precheckRequest(ctx, images) {
     const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
     lines.push('References sent: ' + (inf.refs.length ? inf.refs.join(', ') : 'none') + '.');
     lines.push('start: ' + (w.start || '(empty)'));
-    lines.push('actions: ' + (w.actions.length ? w.actions.map(function (a, i) { return (i + 1) + '. ' + a; }).join(' ') : '(empty)'));
+    const bt = beatTimes(w), bb = w.beats || [];   // v3.5.63 -- TD-1121: each beat with its seconds, camera and sound
+    lines.push('actions (beats): ' + (w.actions.length ? w.actions.map(function (a, i) { const b = bb[i] || {}; return (i + 1) + '. (' + secsText(bt[i].from) + '-' + secsText(bt[i].to) + ' s' + (b.secs ? ', set by the user' : '') + ') ' + a + (b.camera ? ' [camera: ' + b.camera + ']' : '') + (b.sound ? ' [sound: ' + b.sound + ']' : ''); }).join(' ') : '(empty)'));
     if (w.lines.length) lines.push('lines: ' + w.lines.map(function (l) { return (String(l.who || '').trim() || 'a voice off-screen') + (l.off ? ' (off-screen)' : '') + ': "' + l.text + '"' + (l.when ? ' during action ' + l.when : ''); }).join('; '));
     lines.push('camera: ' + (w.camera || '(empty)'));
     lines.push('end: ' + (w.end || '(empty)'));

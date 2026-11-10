@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.63",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3563-shot-beats",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: a shot is written in beats, each with its own seconds, camera, sound and lines.",
+        "detail": "Ian, 2026-11-10. Opening, Beats, Throughout and Closing replace the six question panels. Each beat has seconds (an equal share unless set), and a camera, a sound or a line only when added; lines stay tied to their beat. The video is sent each beat with its seconds. Existing shots show their actions as beats; nothing to convert. Spec claude/VIDEO_BEATS_SPEC.md.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.62",
     "staged_on": "2026-11-10",
     "entries": [
