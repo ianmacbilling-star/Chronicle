@@ -43820,7 +43820,7 @@ function vlTodoPaint() {
 function vlPcRowHTML(si, f, done) {
   var B = 'btn btn-sm', x = f.fix, fixBtn = '', extra = '';
   if (!done && x) {
-    if (x.type === 'words') { fixBtn = '<button class="' + B + '" onclick="vlPcWords(' + si + ',' + f.id + ')">Use these words</button>'; extra = '<div style="font-size:12px;margin-top:4px;padding:6px 8px;border-left:2px solid rgba(var(--accent-rgb),0.4);white-space:pre-wrap;color:var(--accent-pale);" data-no-words>' + escapeHtml(x.text) + '</div>'; }
+    if (x.type === 'words') { var _ch = x.box === 'actions' && x.changes && x.changes.length; fixBtn = '<button class="' + B + '" onclick="vlPcWords(' + si + ',' + f.id + ')">' + (_ch ? 'Use ' + (x.changes.length === 1 ? 'this change' : 'these changes') : 'Use these words') + '</button>'; extra = '<div style="font-size:12px;margin-top:4px;padding:6px 8px;border-left:2px solid rgba(var(--accent-rgb),0.4);' + (_ch ? '' : 'white-space:pre-wrap;') + 'color:var(--accent-pale);" data-no-words>' + (_ch ? vlActChangesHTML(x.changes) : escapeHtml(x.text)) + '</div>'; }   // v3.5.53
     else if (x.type === 'add_reference') fixBtn = '<button class="' + B + '" onclick="vlPcRef(' + si + ',' + f.id + ')">Add ' + escapeHtml(x.name) + '</button>';
     else if (x.type === 'mode') fixBtn = '<button class="' + B + '" onclick="vlPcSetMode(' + si + ',\'' + x.mode + '\',' + f.id + ')">Switch to ' + (x.mode === 'reference' ? 'Reference' : 'Keyframes') + '</button>';
     else if (x.type === 'seconds') fixBtn = '<button class="' + B + '" onclick="vlPcSeconds(' + si + ',' + f.id + ')" title="Set this shot\'s length to ' + Number(x.seconds) + ' seconds">Make it ' + Number(x.seconds) + ' s</button>';   // v3.5.48
@@ -43854,7 +43854,46 @@ function vlPcApply(si, fid, change) {
 function vlPcWords(si, fid) {
   var f = vlPcFinding(si, fid); if (!f || !f.fix || f.fix.type !== 'words') return;
   var map = { start: 'start', actions: 'actions', camera: 'camera', end: 'end', sounds: 'sounds', around: 'around' };
+  if (f.fix.box === 'actions' && f.fix.changes && f.fix.changes.length) {   // v3.5.53: only the actions it changes
+    vlReadForm();
+    var s0 = VL.draft && VL.draft.shots[si];
+    var next = s0 ? vlActChangesApply(vlActionsList(s0.actions), f.fix.changes) : { error: 'no shot' };
+    if (next.error) { vlPcMsg(next.error); return; }
+    vlPcApply(si, fid, function (s) { s.actions = vlActionsText(next.list); });
+    return;
+  }
   vlPcApply(si, fid, function (s) { s[map[f.fix.box]] = f.fix.text; if (f.fix.box === 'sounds' || f.fix.box === 'around') s.more = true; });
+}
+// v3.5.53 (Ian, 2026-11-09: "only list the number that you need to be different for the issue at hand... So you can keep
+// one of them and not both of them if you want"). The changes a suggestion makes to the Actions box, found by their old
+// words (where they were, else anywhere), so another suggestion used first does not get overwritten.
+function vlActNorm(t) { return String(t || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function vlActChangesApply(cur, changes) {
+  var norm = cur.map(vlActNorm);
+  function find(n, old) { var o = vlActNorm(old); if (n >= 1 && norm[n - 1] === o) return n - 1; var k = norm.indexOf(o); return (k >= 0 && norm.indexOf(o, k + 1) < 0) ? k : -1; }
+  var rep = {}, del = {}, ins = {}, first = [];
+  for (var i = 0; i < changes.length; i++) {
+    var c = changes[i];
+    if (c.op === 'insert') {
+      if (!c.after) { first.push(c.text); continue; }
+      var a = find(c.after, c.anchor);
+      if (a < 0) return { error: 'Action ' + c.after + ' has changed since the check, so this suggestion no longer fits. Check this shot again.' };
+      (ins[a] = ins[a] || []).push(c.text); continue;
+    }
+    var k = find(c.n, c.old);
+    if (k < 0) return { error: 'Action ' + c.n + ' has changed since the check, so this suggestion no longer fits. Check this shot again.' };
+    if (c.op === 'delete') del[k] = true; else rep[k] = c.text;
+  }
+  var out = first.slice();
+  cur.forEach(function (t, j) { if (!del[j]) out.push(rep[j] != null ? rep[j] : t); (ins[j] || []).forEach(function (x) { out.push(x); }); });
+  return { list: out };
+}
+function vlActChangesHTML(changes) {
+  return changes.map(function (c) {
+    if (c.op === 'replace') return '<div><b>' + Number(c.n) + '.</b> ' + escapeHtml(c.text) + '</div>';
+    if (c.op === 'insert') return '<div><b>New, ' + (c.after ? 'after ' + Number(c.after) : 'first') + ':</b> ' + escapeHtml(c.text) + '</div>';
+    return '<div><b>Remove ' + Number(c.n) + ':</b> <span style="text-decoration:line-through;opacity:0.8;">' + escapeHtml(c.old) + '</span></div>';
+  }).join('');
 }
 function vlPcRef(si, fid) {
   var f = vlPcFinding(si, fid), ep = VL.draft && vlFindEp(VL.draft.id);

@@ -2531,6 +2531,32 @@ function precheckRequest(ctx, images) {
   content.push({ type: 'text', text: ctx.only != null ? 'Now the pre-production check for shot ' + (ctx.only + 1) + ' only, as JSON.' : 'Now the pre-production check for these ' + ctx.shots.length + ' shots, as JSON.' });
   return { system: system, content: content, max_tokens: ctx.only != null ? 3000 : Math.min(12000, 1200 + ctx.shots.length * 700) };
 }
+// v3.5.53 (Ian, 2026-11-09: "You list the actions twice... only list the number that you need to be different for the
+// issue at hand"). A new Actions box from the check, as the actions it changes against the shot's actions when it was
+// checked: replace (n, old, text), insert (after n, 0 = first; anchor = the old text of n) and delete (n, old).
+function pcActNorm(t) { return String(t || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function pcActLines(text) { return String(text || '').split('\n').map(function (a) { return a.replace(/^\s*\d+\s*[.)]\s*/, '').trim(); }).filter(Boolean); }
+function actionChanges(oldA, newA) {
+  const a = oldA.map(pcActNorm), b = newA.map(pcActNorm), n = a.length, m = b.length;
+  const L = []; for (let i = 0; i <= n; i++) { L.push(new Array(m + 1).fill(0)); }
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const out = []; let i = 0, j = 0, D = [], I = [];
+  function flush() {
+    const k = Math.min(D.length, I.length);
+    for (let x = 0; x < k; x++) out.push({ op: 'replace', n: D[x] + 1, old: oldA[D[x]], text: newA[I[x]] });
+    for (let x = k; x < D.length; x++) out.push({ op: 'delete', n: D[x] + 1, old: oldA[D[x]] });
+    const after = k ? D[k - 1] + 1 : (D.length ? D[0] : i - D.length);
+    for (let x = k; x < I.length; x++) out.push({ op: 'insert', after: after, anchor: after ? oldA[after - 1] : '', text: newA[I[x]] });
+    D = []; I = [];
+  }
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) { flush(); i++; j++; }
+    else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) { I.push(j); j++; }
+    else { D.push(i); i++; }
+  }
+  flush();
+  return out;
+}
 function pcText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }
 function parsePrecheck(raw, ctx) {
   const j = readJson(raw);
@@ -2551,7 +2577,14 @@ function parsePrecheck(raw, ctx) {
       const kind = PC_KINDS.indexOf(f.kind) >= 0 && f.kind !== 'aspect' ? f.kind : 'other';
       let fix = null;
       const fx = f.fix;
-      if (fx && fx.type === 'words' && PC_BOXES.indexOf(fx.box) >= 0 && String(fx.text || '').trim()) fix = { type: 'words', box: fx.box, text: String(fx.text).replace(/\r\n?/g, '\n').trim().slice(0, 1500) };
+      if (fx && fx.type === 'words' && PC_BOXES.indexOf(fx.box) >= 0 && String(fx.text || '').trim()) {
+        fix = { type: 'words', box: fx.box, text: String(fx.text).replace(/\r\n?/g, '\n').trim().slice(0, 1500) };
+        const was = fx.box === 'actions' && ctx.info && ctx.info[si] && ctx.info[si].words ? (ctx.info[si].words.actions || []) : [];
+        if (fx.box === 'actions' && was.length) {   // v3.5.53: only the actions it changes
+          const ch = actionChanges(was, pcActLines(fix.text));
+          if (!ch.length) fix = null; else fix.changes = ch;
+        }
+      }
       else if (fx && fx.type === 'add_reference' && names[String(fx.name || '').trim().toLowerCase()]) fix = { type: 'add_reference', name: names[String(fx.name).trim().toLowerCase()] };
       else if (fx && fx.type === 'mode' && (fx.mode === 'reference' || fx.mode === 'keyframes')) fix = { type: 'mode', mode: fx.mode };
       else if (fx && fx.type === 'seconds' && parseInt(fx.seconds, 10) >= 4 && parseInt(fx.seconds, 10) <= 15) fix = { type: 'seconds', seconds: parseInt(fx.seconds, 10) };   // v3.5.48: Make it N s

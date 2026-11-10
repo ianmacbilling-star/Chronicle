@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.53",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3553-video-suggestion-changes-only",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: a suggestion for the Actions box shows and changes only the actions it is about.",
+        "detail": "Ian, 2026-11-09: two suggestions each listed all four actions. A Pre-production check suggestion for the Actions box now shows only what it changes (4. ..., New after 2: ..., Remove 3) and Use this change changes only those, so one suggestion can be used and another dismissed, or both used. If an action was edited since the check, it says so instead of overwriting it.",
+        "td": [
+          "TD-1115"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.52",
     "staged_on": "2026-11-09",
     "entries": [
