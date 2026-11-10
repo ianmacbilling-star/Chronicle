@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.68",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3568-pad-aspect",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video: a picture too wide or too tall for the video model is sent padded to an accepted shape.",
+        "detail": "Ian, 2026-11-10. A take failed at fal: the aspect ratio of the image should be between 0.4 and 2.5 (the title logo, a wide banner). Pictures outside 0.42 to 2.4 are sent as a padded copy, extended in the colour of their corner (black around a logo); the original is not changed.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.67",
     "staged_on": "2026-11-10",
     "entries": [

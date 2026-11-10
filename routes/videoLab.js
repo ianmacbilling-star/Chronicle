@@ -2729,6 +2729,7 @@ async function precheckShotTokens(db) {
 // Oya's asset picture was 258 x 335; "just do it automatically"). Every picture in a take's input that is under 320 px on a
 // side is sent as an enlarged copy (the original is not changed). Copies are remembered for the life of the process.
 const MIN_PIC_PX = 320;
+const PIC_MIN_RATIO = 0.42, PIC_MAX_RATIO = 2.4;   // v3.5.68: inside fal's 0.4 to 2.5, with a little room
 const _bigCopies = {};
 async function bigEnoughUrl(url) {
   if (!url || !storage.isOurPublicUrl(url)) return null;
@@ -2739,9 +2740,20 @@ async function bigEnoughUrl(url) {
   const meta = await sharp(buf).rotate().metadata();
   let w = meta.width || 0, h = meta.height || 0;
   if (meta.orientation && meta.orientation >= 5) { const t = w; w = h; h = t; }
-  if (!w || !h || Math.min(w, h) >= MIN_PIC_PX) { _bigCopies[url] = null; return null; }
-  const f = MIN_PIC_PX / Math.min(w, h), nw = Math.round(w * f), nh = Math.round(h * f);
-  const out = await sharp(buf).rotate().resize({ width: nw, height: nh, kernel: 'lanczos3' }).png().toBuffer();
+  // v3.5.68 (Ian, 2026-11-10: "The aspect ratio of the image should be between 0.4 and 2.5" -- the title logo, a wide
+  // banner): a picture too wide or too tall is sent padded out to the limit in its own edge colour (black around a logo).
+  const tooWide = w / h > PIC_MAX_RATIO, tooTall = w / h < PIC_MIN_RATIO;
+  if (!w || !h || (Math.min(w, h) >= MIN_PIC_PX && !tooWide && !tooTall)) { _bigCopies[url] = null; return null; }
+  const pw = tooTall ? Math.ceil(h * PIC_MIN_RATIO) : w, ph = tooWide ? Math.ceil(w / PIC_MAX_RATIO) : h;
+  const f = Math.max(1, MIN_PIC_PX / Math.min(pw, ph)), nw = Math.round(pw * f), nh = Math.round(ph * f);
+  let img = sharp(buf).rotate();
+  if (pw !== w || ph !== h) {
+    const raw = await sharp(buf).rotate().extract({ left: 0, top: 0, width: 1, height: 1 }).raw().toBuffer();
+    const bg = { r: raw[0] || 0, g: raw[1] || 0, b: raw[2] || 0, alpha: 1 };
+    const top = Math.floor((ph - h) / 2), left = Math.floor((pw - w) / 2);
+    img = sharp(await img.extend({ top: top, bottom: ph - h - top, left: left, right: pw - w - left, background: bg }).png().toBuffer());
+  }
+  const out = await img.resize({ width: nw, height: nh, kernel: 'lanczos3' }).png().toBuffer();
   const nu = await storage.uploadFile(out, 'vlbig-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.png', 'image/png', 'video-lab');
   if (!nu) return null;
   try { await require('../services/rightsCheck').inherit(url, nu); } catch (e) {}
