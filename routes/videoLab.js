@@ -216,7 +216,16 @@ function falErrorText(e) {
   if (!e) return 'unknown error';
   const body = e.body || (e.response && e.response.data);
   let detail = '';
-  if (body) { try { detail = typeof body === 'string' ? body : JSON.stringify(body); } catch (_e) {} }
+  // v3.5.68 (Ian, 2026-11-10: a 422 showed only the echo of what was sent, cut before the reason): a refusal's reasons
+  // ("msg", with the field they are about) come first, without the copy of the input fal sends back.
+  try {
+    const b = typeof body === 'string' ? JSON.parse(body) : body;
+    if (b && Array.isArray(b.detail) && b.detail.length) {
+      const why = b.detail.map(function (d) { return d && d.msg ? (Array.isArray(d.loc) ? d.loc.filter(function (x) { return x !== 'body'; }).join('.') + ': ' : '') + d.msg : ''; }).filter(Boolean);
+      if (why.length) detail = why.map(function (w) { return '"msg": "' + w.replace(/"/g, "'") + '"'; }).join(' ');
+    }
+  } catch (_e) {}
+  if (!detail && body) { try { detail = typeof body === 'string' ? body : JSON.stringify(body); } catch (_e) {} }
   return ((e.status ? e.status + ' ' : '') + (e.message || '') + (detail ? ' ' + detail : '')).trim().slice(0, 1000) || 'unknown error';
 }
 // v3.5.44 -- fal's reason in a few words: the "msg" fields of its answer when there are any (a 422 lists what it refused),

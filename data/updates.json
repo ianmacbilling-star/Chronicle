@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.69",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3569-fal-reason-first",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video: when fal refuses a take, its reason is shown.",
+        "detail": "Ian, 2026-11-10. A refused take showed only the start of fal's answer (its copy of what was sent) and lost the reason at the end. The reasons now come first, with the field each is about.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.68",
     "staged_on": "2026-11-10",
     "entries": [
