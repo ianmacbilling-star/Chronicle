@@ -43255,7 +43255,63 @@ function vlSlBtnsHTML(d, writing) {
   }
   return btn('shots', '', 'Create Shots', 'The Director is planning the shots...', VL_TIP_SHOTS, vlSlPriceText(info, 'shots')) +
     btn('notes', '', 'Director\'s Notes', 'The Director is writing the notes...', VL_TIP_NOTES, vlSlPriceText(info, 'notes')) +
-    btn('precheck', '', 'Pre-production check', 'The Director is checking the shots...', VL_TIP_PRECHECK, vlSlPriceText(info, 'precheck'));
+    btn('precheck', '', 'Pre-production check', 'The Director is checking the shots...', VL_TIP_PRECHECK, vlSlPriceText(info, 'precheck')) +
+    (function () { var n = vlMissingList(vlFindEp(d.id)).length; return n ? '<button class="btn btn-sm" style="white-space:nowrap;flex:none;" onclick="vlMissingOpen()" title="Moments the story needs that no shot shows yet, found by Create Shots">Missing shots (' + n + ')</button>' : ''; })();   // v3.5.58
+}
+// v3.5.58 (Ian, 2026-11-10: on Create Shots, "a modal dialog that pops up that tells you which shots it thinks it needs
+// and a button to create each one"; a shot saves with just a general description). The open items of Create Shots' list.
+function vlMissingList(ep) {
+  var l = []; try { l = JSON.parse((ep && ep.missing_shots) || '[]') || []; } catch (e) { l = []; }
+  return l.filter(function (x) { return x && !x.done; });
+}
+function vlMissingClose() { var b = document.getElementById('vl-missing-modal'); if (b && b.parentNode) b.parentNode.removeChild(b); }
+function vlMissingOpen() {
+  var d = VL.draft, ep = d && vlFindEp(d.id);
+  vlMissingClose();
+  var list = vlMissingList(ep);
+  if (!list.length) return;
+  var box = document.createElement('div');
+  box.id = 'vl-missing-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.addEventListener('click', function (e) { if (e.target === box) vlMissingClose(); });
+  var rows = list.map(function (x) {
+    var where = 'At the start';
+    if (x.after_id) { var i = -1; d.shots.forEach(function (s, k) { if (String(s.id) === String(x.after_id)) i = k; }); where = i >= 0 ? 'After shot ' + (i + 1) + (d.shots[i].name ? ' (' + d.shots[i].name + ')' : '') : 'At the end'; }
+    return '<div style="border:1px solid rgba(var(--accent-rgb),0.3);border-radius:8px;padding:10px 12px;margin-bottom:10px;">' +
+      '<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;"><b style="color:var(--accent-pale);">' + escapeHtml(x.name) + '</b><span style="' + VL_DESC + '">' + escapeHtml(where) + '</span></div>' +
+      '<div style="margin-top:4px;">' + escapeHtml(x.what) + '</div>' +
+      (x.why ? '<div style="' + VL_DESC + 'margin-top:4px;">Why: ' + escapeHtml(x.why) + '</div>' : '') +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button class="btn btn-sm" onclick="vlMissingDone(' + x.id + ', false)">Dismiss</button><button class="btn btn-sm btn-primary" onclick="vlMissingDone(' + x.id + ', true)">Create this shot</button></div>' +
+    '</div>';
+  }).join('');
+  box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:640px;width:100%;max-height:85vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Shots the story still needs</div><button class="modal-close" onclick="vlMissingClose()">&times;</button></div>' +
+    '<div style="' + VL_DESC + 'margin-bottom:12px;">The Director found these moments in the story that no picture shows. Create this shot adds an empty shot in its place with this description; give it pictures, then Director\'s Notes writes it out.</div>' +
+    '<div id="vl-missing-msg" style="' + VL_DESC + 'margin-bottom:8px;"></div>' + rows + '</div>';
+  document.body.appendChild(box);
+}
+function vlMissingDone(k, create) {
+  var d = VL.draft, ep = d && vlFindEp(d.id);
+  var x = vlMissingList(ep).filter(function (m) { return m.id === k; })[0];
+  if (!d || !x) return;
+  if (create) {
+    if (vlSlLocked(d.id)) { var mm = document.getElementById('vl-missing-msg'); if (mm) mm.textContent = 'The Director is rewriting the shots; create it when that is done.'; return; }
+    vlReadForm();
+    var at = 0;
+    if (x.after_id) { at = d.shots.length; d.shots.forEach(function (s, i) { if (String(s.id) === String(x.after_id)) at = i + 1; }); }
+    var ns = vlNewShot([]);
+    ns.name = x.name || ''; ns.start = x.what || ''; ns.actions = x.why ? vlActionsText([x.why]) : '';
+    d.shots.splice(at, 0, ns);
+    vlStructural();
+  }
+  fetch('/api/video-lab/episodes/' + d.id + '/missing/' + k + '/done', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (j && j.episode) { var e = vlFindEp(d.id); if (e) e.missing_shots = j.episode.missing_shots; }
+      var bt = document.getElementById('vl-sl-btns'); if (bt && VL.draft) bt.innerHTML = vlSlBtnsHTML(VL.draft, !!vlSlWriting(VL.draft.id));
+      if (vlMissingList(vlFindEp(d.id)).length) vlMissingOpen(); else vlMissingClose();
+    })
+    .catch(function () {});
 }
 function vlStyleHint(st, d) {
   return (st && st.speech && d && !d.sound) ? escapeHtml(' Tick The model\'s own sound to hear the lines.') : '';
@@ -43383,6 +43439,7 @@ function vlSlPoll(id) {
         vlRenderList(); vlRenderOpen(true);
         if (j && j.status === 'done' && typeof refreshTokenBalance === 'function') refreshTokenBalance();
         if (chain) { VL.chainNotes = null; if (VL.draft && String(VL.draft.id) === String(id)) vlWriteShotList('notes', true); }
+        if (j && j.status === 'done' && j.kind === 'shots' && VL.draft && String(VL.draft.id) === String(id) && vlMissingList(vlFindEp(id)).length) setTimeout(vlMissingOpen, 200);   // v3.5.58
       })
       .catch(function () { if (vlSlWriting(id)) vlSlPoll(id); });
   }, 3000);

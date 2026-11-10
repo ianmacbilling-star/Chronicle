@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.58",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3558-video-missing-shots",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: Create Shots lists the shots the story still needs, each with Create this shot.",
+        "detail": "Ian, 2026-11-10. Create Shots still divides the pictures into shots, and now also lists moments the story tells that no picture shows (at most 6, each placed after a shot, with why). A window opens when it lands, and Missing shots (N) reopens it. Create this shot adds an empty shot in place with its name and description; Dismiss drops it. Director's Notes now writes shots with no pictures yet too. Same price.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.57",
     "staged_on": "2026-11-09",
     "entries": [
