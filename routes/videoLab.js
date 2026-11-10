@@ -1219,18 +1219,26 @@ function refsToSend(ep, w, refs, pool, room) {
 function plainPunct(p) {
   return String(p || '').replace(/[\u2014\u2013\u2012\u2212]/g, '-').replace(/[\u201c\u201d\u201e\u00ab\u00bb]/g, '"').replace(/[\u2018\u2019\u201a]/g, "'").replace(/\u2026/g, '...').replace(/\u00a0/g, ' ');
 }
-function byteLen(x) { return Buffer.byteLength(String(x || ''), 'utf8'); }
+function byteLen(x) {
+  return Buffer.byteLength(String(x || ''), 'utf8');
+}
+// v3.5.72 (Ian, 2026-11-10: still refused on 3.5.71; "we need to not send the general stuff like lore and backstory"): a
+// margin under the limit (fal's count can run past ours), and the general lines go first: the overall direction, then the
+// surroundings, the sound and the house rules, before the shot's own beats are ever cut.
 function fitPrompt(p, max, sound) {
+  const PROMPT_MARGIN = 250;
   p = plainPunct(p);
+  if (max) max = Math.max(500, max - PROMPT_MARGIN);
   if (!max || byteLen(p) <= max) return p;
   let lines = p.split('\n');
-  const drop = (sound ? [] : [/^Sound:/]).concat([/^Around them:/, /^Overall:/]);
+  const drop = [/^Overall:/, /^Around them:/].concat(sound ? [] : [/^Sound:/]).concat([/^Nothing appears or disappears/, /^If a scene picture shows a character/, /^Sound:/]);
   for (let i = 0; i < drop.length && byteLen(lines.join('\n')) > max; i++) { const re = drop[i]; lines = lines.filter(function (l) { return !re.test(l); }); }
   let out = lines.join('\n');
   if (byteLen(out) > max) {
     let cut = max; while (cut > 0 && byteLen(out.slice(0, cut)) > max) cut -= Math.max(1, Math.ceil((byteLen(out.slice(0, cut)) - max) / 3));
     out = out.slice(0, cut); const k = Math.max(out.lastIndexOf('. '), out.lastIndexOf('.\n')); if (k > cut * 0.6) out = out.slice(0, k + 1);
   }
+  console.log('[video] prompt fitted: ' + byteLen(p) + ' bytes to ' + byteLen(out) + ' (limit ' + max + ')');
   return out;
 }
 // What one move sends to fal: each model names its pictures and its length its own way.

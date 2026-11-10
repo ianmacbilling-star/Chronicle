@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.72",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3572-prompt-margin",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video: a long Kling prompt drops the general lines first, with room to spare.",
+        "detail": "Ian, 2026-11-10. Still refused on 3.5.71 (prompt size). Kling prompts are now fitted 250 bytes under the limit, and the overall direction goes first, then the surroundings, the sound (when the model's sound is off) and the house rules, before the shot's own beats are cut. The server log says how much was cut.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.71",
     "staged_on": "2026-11-10",
     "entries": [
