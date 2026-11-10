@@ -42684,7 +42684,7 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
         (making ? vlSpin(20) + '<div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.7);">' + escapeHtml(vlTakeProgress(t)) + ' &middot; ' + vlElapsed(t.created_at) + '</div>'
                 : '<div class="moment-img-inner" style="color:var(--danger);" data-no-words>' + escapeHtml(t.merge_error || t.error || ((t.moves || []).filter(function (x) { return x.error; }).map(function (x) { return x.error; })[0]) || 'Failed') + '</div>') +
       '</div>';
-  return '<div style="width:220px;flex:0 0 auto;border:1px solid ' + (chosen ? 'rgba(var(--accent-rgb),0.8)' : 'rgba(var(--accent-rgb),0.2)') + ';border-radius:8px;padding:6px;">' +
+  return '<div data-take="' + t.id + '" style="width:220px;flex:0 0 auto;border:1px solid ' + (chosen ? 'rgba(var(--accent-rgb),0.8)' : 'rgba(var(--accent-rgb),0.2)') + ';border-radius:8px;padding:6px;">' +
     body +
     '<div style="display:flex;gap:4px;align-items:center;margin-top:5px;flex-wrap:wrap;">' +
       '<button type="button" class="vl-pin vl-take-pin" title="' + (chosen ? 'Pinned: the take this shot uses in the episode' : 'Pin this take: use it in the episode') + '" ' + (t.status === 'done' && !chosen ? 'onclick="vlChooseTake(' + t.id + ')"' : 'disabled') +
@@ -42751,6 +42751,23 @@ function vlEpNoteHTML(ep) {   // v3.5.33 -- the episode's one line, under the St
   return '';
 }
 // Redraw a live part only when what it shows has changed, so a video being watched is not restarted.
+// v3.5.49 (Ian, 2026-11-09: a spinner ran on finished takes every few seconds while another take was being made): the
+// making take's card shows a running time, so the shot's whole row of takes was drawn again and every video reloaded.
+// When the same takes are there in the same order, only the cards that changed (and the button) are replaced.
+function vlPatchTakes(el, key, html) {
+  if (!el || VL.liveSig[key] === html) return !!el;
+  var tmp = document.createElement('div'); tmp.innerHTML = html;
+  var newCards = tmp.querySelectorAll('[data-take]'), oldCards = el.querySelectorAll('[data-take]');
+  if (!oldCards.length || newCards.length !== oldCards.length) return false;
+  for (var i = 0; i < newCards.length; i++) if (newCards[i].getAttribute('data-take') !== oldCards[i].getAttribute('data-take')) return false;
+  var newRow = tmp.firstElementChild, oldRow = el.firstElementChild;
+  if (!newRow || !oldRow || newRow.children.length !== oldRow.children.length) return false;
+  for (var k = 0; k < newCards.length; k++) if (newCards[k].outerHTML !== oldCards[k].outerHTML) oldCards[k].parentNode.replaceChild(newCards[k].cloneNode(true), oldCards[k]);
+  var nb = newRow.lastElementChild, ob = oldRow.lastElementChild;   // the Generate take button
+  if (nb && ob && nb.outerHTML !== ob.outerHTML) ob.parentNode.replaceChild(nb.cloneNode(true), ob);
+  VL.liveSig[key] = html;
+  return true;
+}
 function vlSetLive(el, key, html) {
   if (!el) return;
   if (VL.liveSig[key] === html) return;
@@ -42767,7 +42784,8 @@ function vlRenderLive() {
   var m = vlModel(d.model);
   d.shots.forEach(function (ds, si) {
     vlSetLive(document.getElementById('vl-live-' + ds.ck), 'shot-' + ds.ck, vlLiveShotHTML(ep, ds, si, m));
-    vlSetLive(document.getElementById('vl-livebtn-' + ds.ck), 'btn-' + ds.ck, vlShotBtnHTML(ep, ds, si));   // v3.5.11
+    var lb = document.getElementById('vl-livebtn-' + ds.ck), lh = vlShotBtnHTML(ep, ds, si);   // v3.5.11
+    if (!vlPatchTakes(lb, 'btn-' + ds.ck, lh)) vlSetLive(lb, 'btn-' + ds.ck, lh);   // v3.5.49: finished videos are left alone
     vlSetLive(document.getElementById('vl-todo-' + ds.ck), 'todo-' + ds.ck, vlTodoBtnHTML(si));   // v3.5.34
   });
   vlSetLive(document.getElementById('vl-epvideo'), 'ep', vlEpVideoHTML(ep));

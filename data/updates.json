@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.49",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3549-video-exit-deadline-quiet-takes",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: exits finish a second before the end; finished takes stop reloading; fal's reason on a failed take.",
+        "detail": "Ian, 2026-11-09. Someone leaving the frame must be fully out by one second before the end (by second 11 of a 12-second shot) and the camera does not follow them out; the Pre-production check flags an exit that cannot fit. Finished take videos no longer reload every poll while another take is made (only the changed card is redrawn). A failed take shows fal's own reasons from the webhook, not just Unexpected status code 422.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.48",
     "staged_on": "2026-11-09",
     "entries": [

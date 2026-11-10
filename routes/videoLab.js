@@ -944,7 +944,9 @@ function voiceRules(w, onScreen) {
 // or End that has someone leave gets a firm line: completely out of frame before the shot ends, then the empty frame held.
 const EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|behind|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|view|sight|picture)|off[- ]?(screen|frame)|disappears?|disappearing|vanish(es|ing)?|is gone\b)/i;
 function hasExit(text) { return EXIT_RE.test(String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '')); }
-function exitLines(w, names) {
+// v3.5.49 (Ian, 2026-11-09: the figure still did not get all the way out; "say one second"): a deadline in seconds, one
+// second before the end, when the shot is one move (reference mode), and the camera told not to follow them out.
+function exitLines(w, names, secs) {
   const acts = [];
   w.actions.forEach(function (a, i) { if (hasExit(a)) acts.push(i + 1); });
   const endExit = hasExit(w.end);
@@ -952,7 +954,7 @@ function exitLines(w, names) {
   const src = acts.map(function (n) { return w.actions[n - 1]; }).concat(endExit ? [w.end] : []).join(' ');
   const who = (names || []).filter(function (nm, i, all) { return all.indexOf(nm) === i; }).filter(function (nm) { const f = firstName(nm); return f && new RegExp('(^|[^a-z])' + f.toLowerCase().replace(/[^a-z0-9]/g, '') + '([^a-z]|$)').test(src.toLowerCase()); });
   const whom = who.length === 1 ? who[0] : 'whoever leaves';
-  const out = ['Leaving the frame' + (acts.length ? ' (action ' + acts.join(', ') + ')' : '') + ': ' + whom + ' must keep moving until completely out of frame, with no part of them left in view, well before the shot ends. Do not stop at the edge of the frame. Hold the empty frame for the last second.'];
+  const out = ['Leaving the frame' + (acts.length ? ' (action ' + acts.join(', ') + ')' : '') + ': ' + whom + ' must keep moving until completely out of frame, with no part of them left in view, ' + (secs >= 4 ? 'by second ' + (secs - 1) + ' of this ' + secs + '-second shot' : 'well before the shot ends') + '. Do not stop at the edge of the frame. The camera does not follow them out: it holds still as they go. Hold the empty frame for the last second.'];
   if (!endExit) out.push('The shot ends with ' + (who.length === 1 ? who[0] : 'the one who left') + ' gone from the frame.');
   return out;
 }
@@ -986,7 +988,7 @@ function shotScript(ep, w, pics) {
     loose.forEach(function (l) { const t = sayLine(l, hearers); out.push(w.actions.length ? 'Then, ' + t + '.' : t.charAt(0).toUpperCase() + t.slice(1) + '.'); });
   }
   voiceRules(w, pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []).forEach(function (r) { out.push(r); });   // v3.5.25
-  const ex = exitLines(w, (ep.castNames || []).concat(pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []));   // v3.5.47
+  const ex = exitLines(w, (ep.castNames || []).concat(pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []), pics ? w.seconds : 0);   // v3.5.47; v3.5.49 the deadline
   if (ex.length) out.push(ex[0]);
   if (w.camera) out.push('Camera: ' + w.camera);
   if (w.end) out.push('End: ' + w.end);
@@ -1701,7 +1703,9 @@ router.post('/webhook', async function (req, res) {
     if (!rid) return;
     const db = await getDb();
     const failed = String(b.status || '').toUpperCase() === 'ERROR';
-    const why = failed ? 'fal: ' + (b.error || JSON.stringify(b.payload || {})).toString().slice(0, 500) : null;
+    // v3.5.49 (Ian, 2026-11-09: a take failed with only "Unexpected status code: 422"): fal puts its reasons in the payload
+    // (detail[].msg) and only the status in error, so both are kept and falReason picks out the reasons.
+    const why = failed ? ('fal: ' + [b.error ? String(b.error) : '', b.payload ? JSON.stringify(b.payload) : ''].filter(Boolean).join(' ')).slice(0, 1500) : null;
     const mv = await db.prepare('SELECT * FROM moves WHERE request_id = ?').get(rid);
     if (mv) {
       if (failed) return void await finishMove(mv, null, why);
@@ -2443,7 +2447,7 @@ function precheckRequest(ctx, images) {
     '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
     '2. gap: the story says something happens that the video must show and no picture covers (between two pictures of a shot, or between two shots). Read the story: if it explains a change (someone healed in turn, a later moment), that is not a mistake, but the video still has to get from one picture to the next. Suggest the missing picture: say after which picture number it goes and describe it in one or two sentences.\n' +
     '3. continuity: a person or prop that appears from nowhere: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there) and no action brings it in, give a fix of type "words" for the actions box with the missing step written in its place (for example "He picks up the stone pestle from beside the bowl."); someone who leaves and is needed again in the same shot (a cut is the reliable fix); a change of place inside one shot.\n' +   // v3.5.48
-    '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end (when there are more actions than the length allows, give a fix of type "seconds" with the length that fits, at most 15), someone who must leave the frame with too little time left to get all the way out (they stop at the edge) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +
+    '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end (when there are more actions than the length allows, give a fix of type "seconds" with the length that fits, at most 15), someone who must leave the frame with too little time left to get all the way out at least 1 second before the shot ends (they stop at the edge; give a fix of type "seconds" or cut an action) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +
     '5. reference: someone clearly on screen who is not among the references sent.\n' +
     '6. style: a picture that does not look like the version\'s art style' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' or like the other pictures.\n\n' +
     'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
