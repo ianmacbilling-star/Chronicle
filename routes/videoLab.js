@@ -389,7 +389,8 @@ function ensureTables() {
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS source_take_id INTEGER');   // v3.5.26: a retouch of that take
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_text TEXT');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');
-    await db.exec('ALTER TABLE episodes ADD COLUMN IF NOT EXISTS missing_shots TEXT');   // v3.5.58: Create Shots' list of shots the story still needs
+    await db.exec('ALTER TABLE episodes ADD COLUMN IF NOT EXISTS missing_shots TEXT');   // v3.5.58
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS purpose TEXT');   // v3.5.59: what the shot is for (for the user and the Director; never sent to the video model)   // v3.5.58: Create Shots' list of shots the story still needs
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS trim_start REAL');   // v3.5.54: the part of the take the episode uses
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS trim_end REAL');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS tokens INTEGER');   // v3.5.46: the take's price in tokens (NULL: made before tokens)
@@ -652,6 +653,7 @@ async function writeWords(tx, sid, w) {
   await tx.prepare('UPDATE shots SET start_text = ?, actions = ?, lines = ?, camera = ?, end_text = ?, sounds = ?, around = ?, seconds = ? WHERE id = ?')
     .run(w.start, JSON.stringify(w.actions), JSON.stringify(w.lines), w.camera, w.end, w.sounds, w.around, w.seconds, sid);
 }
+function cleanPurpose(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 300); }   // v3.5.59
 async function writeShots(tx, ep, shotsIn) {
   const have = await tx.prepare('SELECT id FROM shots WHERE episode_id = ?').all(ep.id);
   const haveIds = {}; have.forEach(function (s) { haveIds[s.id] = true; });
@@ -667,12 +669,14 @@ async function writeShots(tx, ep, shotsIn) {
       if (s.words) await writeWords(tx, sid, s.words);   // v3.5.19 (a save without words keeps them)
       if (s.refs) await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(s.refs), sid);   // v3.5.22
       if (s.mode !== undefined) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode || null, sid);   // v3.5.34
+      if (s.purpose !== undefined) await tx.prepare('UPDATE shots SET purpose = ? WHERE id = ?').run(s.purpose || null, sid);   // v3.5.59
     } else {
       const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style, name) VALUES (?, ?, ?, ?)').run(ep.id, pos, s.cut_style, s.name || null);
       sid = r.lastInsertRowid;
       if (s.words) await writeWords(tx, sid, s.words);
       if (s.refs) await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(s.refs), sid);
       if (s.mode) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode, sid);   // v3.5.34
+      if (s.purpose) await tx.prepare('UPDATE shots SET purpose = ? WHERE id = ?').run(s.purpose, sid);   // v3.5.59
     }
     keep[sid] = true;
     for (let i = 0; i < s.keyframes.length; i++) {
@@ -728,7 +732,7 @@ function cleanShots(list, m) {
     const room = MAX_KEYFRAMES - n;
     if (kfs.length && room <= 0) return;   // v3.5.57: a shot with no pictures yet is kept (Add new shot below)
     n += Math.max(0, Math.min(room, kfs.length));
-    out.push({ id: parseInt(s.id, 10) || null, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
+    out.push({ id: parseInt(s.id, 10) || null, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), purpose: s.purpose === undefined ? undefined : cleanPurpose(s.purpose), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
 }
@@ -852,7 +856,7 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
         const w = s.words || {};
-        return { name: s.name, mode: s.mode || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+        return { name: s.name, purpose: s.purpose || '', mode: s.mode || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m));
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -2182,11 +2186,11 @@ function shotListRequest(ctx, images) {
     system = directorHead(ctx) +
       'YOUR JOB NOW: divide the episode\'s ' + N + ' pictures, in story order, into shots. Every picture is used exactly once, none skipped, none moved; each shot is a run of 1 to ' + SL_MAX_PER_SHOT + ' consecutive pictures. ' +
       'Cut where the place changes, where time jumps, or where someone must leave the frame and come back later. Keep pictures together when they are one continuous moment in one place. A single picture can be a shot (a reaction, a line, an establishing view). ' +
-      'Give each shot a name of 2 to 5 words. Do not write anything else: what happens in each shot is written later.\n\n' +
+      'Give each shot a name of 2 to 5 words and a purpose: one short sentence saying what the shot is for in the story (what the viewer learns or sees happen). Do not write anything else: what happens in each shot is written later.\n\n' +   // v3.5.59 purpose
       // v3.5.58 (Ian, 2026-11-10: "a modal dialog that pops up that tells you which shots it thinks it needs and a button to create each one")
-      'THEN LIST THE MISSING SHOTS: moments the story tells that the video must show and no picture covers, such as getting from one place to another, a scene the pictures skip, or a talk that decides what happens next. Only moments a viewer would be lost without; at most 6; an empty list when the pictures already tell the story. For each: "after" (the number of the shot in your list that it comes after; 0 = before the first shot), "name" (2 to 5 words), "what" (one or two sentences: who does what, where), "why" (one short sentence: what the viewer would miss without it).\n\n' +
+      'THEN LIST THE MISSING SHOTS: moments the story tells between or around the pictures that a video would show and no picture covers, such as getting from one place to another, a talk that decides what happens next, or a scene the pictures skip. Read the story closely for them. At most 6, the most needed first; an empty list only when the story skips nothing. For each: "after" (the number of the shot in your list that it comes after; 0 = before the first shot), "name" (2 to 5 words), "what" (one or two sentences: who does what, where), "why" (one short sentence: what the viewer would miss without it).\n\n' +
       'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
-      'ANSWER WITH ONLY THIS JSON, no other text:\n{"shots": [{"pictures": [1, 2], "name": "..."}, {"pictures": [3], "name": "..."}], "missing": [{"after": 1, "name": "...", "what": "...", "why": "..."}]}\n' +
+      'ANSWER WITH ONLY THIS JSON, no other text:\n{"shots": [{"pictures": [1, 2], "name": "...", "purpose": "..."}, {"pictures": [3], "name": "...", "purpose": "..."}], "missing": [{"after": 1, "name": "...", "what": "...", "why": "..."}]}\n' +
       '"pictures" lists the picture numbers of the shot. Across all shots they must be exactly 1 to ' + N + ', in order.';
   } else {
     system = directorHead(ctx) +
@@ -2246,10 +2250,10 @@ function shotListRequest(ctx, images) {
       const n = sh.keyframes.length, first = i + 1, last = i + n;
       if (!n) {
         const why = [textOf(sh.start_text), (function () { try { return (JSON.parse(sh.actions || '[]') || []).join(' '); } catch (e) { return ''; } })()].filter(Boolean).join(' ').slice(0, 800);
-        content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': NO PICTURES YET. It is for: ' + (why || 'a moment the story needs here') });
+        content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': NO PICTURES YET. It is for: ' + ([textOf(sh.purpose), why].filter(Boolean).join(' ') || 'a moment the story needs here') });
         return;
       }
-      content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' });
+      content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(sh.purpose) ? ' Its purpose: ' + textOf(sh.purpose) : '') });   // v3.5.59
       for (let k = 0; k < n; k++) pushPicture(i + k);
       i += n;
     });
@@ -2307,7 +2311,7 @@ function parseShotList(raw, ctx) {
     if (!pics.length) return { error: 'shot ' + (i + 1) + ' has no pictures' };
     for (let j = 0; j < pics.length; j++) { if (pics[j] !== next) return { error: 'shot ' + (i + 1) + ' has picture ' + pics[j] + ' where picture ' + next + ' was due' }; next++; }
     if (pics.length > SL_MAX_PER_SHOT) return { error: 'shot ' + (i + 1) + ' has ' + pics.length + ' pictures (at most ' + SL_MAX_PER_SHOT + ')' };
-    shots.push({ pictures: pics, name: cleanShotName(textOf(x.name)), words: null });
+    shots.push({ pictures: pics, name: cleanShotName(textOf(x.name)), purpose: cleanPurpose(textOf(x.purpose)), words: null });   // v3.5.59 purpose
   }
   if (next !== N + 1) return { error: 'the shots cover ' + (next - 1) + ' of ' + N + ' pictures' };
   return { overall: null, shots: shots, missing: cleanMissing(p.missing, shots.length) };   // v3.5.58
@@ -2457,9 +2461,9 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
       const same = live.filter(function (o) { return !used[o.id] && o.keyframes.length === urls.length && o.keyframes.every(function (k, j) { return k.image_url === urls[j]; }); })[0];
       if (same) {
         used[same.id] = true;
-        return { id: same.id, name: cleanShotName(same.name) || sh.name, cut_style: same.cut_style || 'instant', keyframes: same.keyframes.map(kfOut) };
+        return { id: same.id, name: cleanShotName(same.name) || sh.name, purpose: cleanPurpose(same.purpose) || sh.purpose || undefined, cut_style: same.cut_style || 'instant', keyframes: same.keyframes.map(kfOut) };
       }
-      return { id: null, name: sh.name, cut_style: 'instant', keyframes: sh.pictures.map(function (n) { return kfOut(pics[n - 1]); }) };
+      return { id: null, name: sh.name, purpose: sh.purpose || undefined, cut_style: 'instant', keyframes: sh.pictures.map(function (n) { return kfOut(pics[n - 1]); }) };
     });
     kept = Object.keys(used).length;
     try { files = await writeShots(tx, ep, fresh); }
@@ -2490,7 +2494,10 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
   } catch (e) { console.error('[video] shot list charge failed:', e && e.message); }
   await db.prepare('UPDATE episode_writer_jobs SET tokens_charged = ? WHERE id = ?').run(charged, jobId);
   console.log('[video] ' + JFN + ': ' + result.shots.length + ' shot(s), ' + inTok + ' in / ' + outTok + ' out, $' + usd + ', ' + charged + ' token(s)');
-  vlDebug(userId, 'info', JFN, (ctx.mode === 'shots' ? 'The Director planned ' + result.shots.length + ' shot(s), ' + kept + ' kept as they were' : 'The Director wrote the notes of ' + result.shots.length + ' shot(s)') + ', ' + charged + ' token(s) charged', { mode: ctx.mode, input_tokens: inTok, output_tokens: outTok, cost_usd: usd, worked_out: charge,
+  if (ctx.mode === 'shots') vlDebug(userId, 'info', JFN, 'The cut and the missing shots', {   // v3.5.59 (Ian, 2026-11-10: "Did you happen to write what it's doing to the log")
+    shots: result.shots.map(function (sh, i) { return { shot: i + 1, pictures: sh.pictures.join(','), name: sh.name, purpose: sh.purpose || '' }; }),
+    missing: (result.missing || []).map(function (x) { return { after: x.after, name: x.name, what: x.what, why: x.why }; }) });
+  vlDebug(userId, 'info', JFN, (ctx.mode === 'shots' ? 'The Director planned ' + result.shots.length + ' shot(s), ' + kept + ' kept as they were, ' + (result.missing || []).length + ' missing shot(s) found' : 'The Director wrote the notes of ' + result.shots.length + ' shot(s)') + ', ' + charged + ' token(s) charged', { mode: ctx.mode, input_tokens: inTok, output_tokens: outTok, cost_usd: usd, worked_out: charge,
     plan: result.shots.map(function (sh) { return sh.words ? { pictures: sh.pictures, name: sh.name, actions: sh.words.actions.length, lines: sh.words.lines.length, seconds: sh.words.seconds } : { pictures: sh.pictures, name: sh.name }; }) });
 }
 
@@ -2769,7 +2776,7 @@ function precheckRequest(ctx, images) {
   let n = 0;
   ctx.shots.forEach(function (s, si) {
     const inf = ctx.info[si], w = inf.words, first = n + 1, last = n + s.keyframes.length;
-    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '. Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
+    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
     lines.push('References sent: ' + (inf.refs.length ? inf.refs.join(', ') : 'none') + '.');
     lines.push('start: ' + (w.start || '(empty)'));
     lines.push('actions: ' + (w.actions.length ? w.actions.map(function (a, i) { return (i + 1) + '. ' + a; }).join(' ') : '(empty)'));

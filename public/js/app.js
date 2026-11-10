@@ -42005,7 +42005,7 @@ var VL_BOX = 'background:rgba(var(--panel-rgb),0.7);border:1px solid rgba(var(--
 var VL_SHOT = 'background:rgba(var(--panel-rgb),0.72);border:1px solid rgba(var(--accent-rgb),0.45);border-radius:var(--radius-lg);padding:10px 12px 12px;';   // v3.5.08: more solid, so the page background no longer drowns the shading
 var VL_SHOT_ODD = 'background:linear-gradient(rgba(150,150,150,0.16),rgba(150,150,150,0.16)),rgba(var(--panel-rgb),0.72);';   // v3.5.07: shots 1, 3, 5... greyer (v3.5.08: a clear grey wash; Ian could not see 0.07)
 var VL_CUTMARK = 'position:absolute;top:0;left:50%;transform:translate(-50%,-50%);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px);padding:3px 10px;background:rgb(var(--panel-rgb));border:1px solid rgba(var(--accent-rgb),0.45);border-radius:999px;z-index:1;';   // v3.5.15
-var VL_SHOT_NAME = 'flex:0 1 320px;min-width:140px;padding:4px 8px;font-size:13px;height:auto;';   // v3.5.15
+var VL_SHOT_NAME = 'flex:0 1 220px;min-width:140px;padding:4px 8px;font-size:13px;height:auto;';   // v3.5.15; v3.5.59 220px, to make room for the purpose
 var VL_PIN = 'background:none;border:none;cursor:pointer;line-height:0;padding:2px;display:inline-flex;align-items:center;';   // v3.5.17 (Ian: "replace the stars with our SOP Pins")
 var VL_MAX_TAKES = 10;   // v3.5.15: the server's MAX_TAKES (v3.5.25: 10)
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
@@ -42216,7 +42216,7 @@ function vlDraftFrom(ep) {
     style: (vlStyle(ep.style) || vlStyle(VL.defaultStyle) || {}).key || 'living',
     shots: (ep.shots || []).map(function (s) {
       var w = s.words || {};   // v3.5.19: the shot in plain words
-      return { ck: ++VL.ck, id: s.id, name: s.name || '', cut_style: s.cut_style || 'instant',
+      return { ck: ++VL.ck, id: s.id, name: s.name || '', purpose: s.purpose || '', cut_style: s.cut_style || 'instant',   // v3.5.59 purpose
         start: w.start || '', actions: vlActionsText(w.actions || []), lines: (w.lines || []).map(function (l) { return { who: l.who || '', text: l.text || '', when: Number(l.when) || 0, off: !!l.off }; }),
         camera: w.camera || '', end: w.end || '', sounds: w.sounds || '', around: w.around || '', seconds: Number(w.seconds) || VL_SHOT_SECS, more: !!(w.sounds || w.around),
         op: vlPanelsOpenFor(s.id),   // v3.5.22: which question panels are open
@@ -42302,14 +42302,20 @@ function vlShotHTML(d, si, m, n0) {
   return '<div class="vl-shot" style="' + VL_SHOT + (si % 2 === 0 ? VL_SHOT_ODD : '') + 'position:relative;' + (si > 0 ? 'margin-top:26px;padding-top:18px;' : '') + '">' +
     (si > 0 ? vlCutMarkHTML(si - 1) : '') +
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+      // v3.5.59 (Ian, 2026-11-10: "collapse the shot panels like the Accordion leaving their name and purpose readable")
+      '<button type="button" class="vl-fold" onclick="vlFold(' + si + ')" title="' + (vlFolded(s) ? 'Open this shot' : 'Fold this shot away (its name and purpose stay)') + '" style="background:none;border:none;color:var(--accent-bright);cursor:pointer;font-size:13px;padding:0 2px;flex:none;">' + (vlFolded(s) ? '&#9656;' : '&#9662;') + '</button>' +
       '<div style="' + VL_TITLE + 'font-size:14px;flex:none;">Shot ' + (si + 1) + '</div>' +
       '<input id="vl-sn-' + si + '" class="form-input vl-shot-name" type="text" maxlength="120" value="' + escapeHtml(s.name || '') + '" placeholder="Name this shot" title="The shot\'s name" style="' + VL_SHOT_NAME + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
+      // v3.5.59 (Ian, 2026-11-10: "every shot needs a Purpose field. It's more for the user and what the shot creating process can
+      // fill in"): on the top line, so it stays readable when the shot is folded and the pictures stay right under it.
+      '<input id="vl-pu-' + si + '" class="form-input vl-purpose" type="text" maxlength="300" value="' + escapeHtml(s.purpose || '') + '" placeholder="Purpose: what this shot is for in the story" title="What this shot is for in the story: for you and the Director, never sent to the video model" style="flex:3 1 280px;min-width:200px;padding:4px 8px;font-size:13px;" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
       '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;" for="vl-se-' + si + '">How long?' +
         '<select id="vl-se-' + si + '" class="form-input" style="width:auto;padding:3px 8px;font-size:13px;height:auto;" onchange="vlEdit()" onblur="vlFlushSave()">' + secs.join('') + '</select></label>' +
       vlModeSelectHTML(si) +   // v3.5.34
       '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +
       '<span id="vl-todo-' + s.ck + '" style="flex:none;margin-left:auto;">' + vlTodoBtnHTML(si) + '</span>' +   // v3.5.34
     '</div>' +
+    '<div id="vl-body-' + s.ck + '" style="' + (vlFolded(s) ? 'display:none;' : '') + '">' +
     '<div class="vl-halves">' +
       '<div class="vl-left">' +
         '<div id="vl-refs-' + si + '" class="vl-refs" style="margin-bottom:8px;">' + vlRefsHTML(si) + '</div>' +   // v3.5.45: in the left half, so the pictures start right under the top line
@@ -42323,9 +42329,21 @@ function vlShotHTML(d, si, m, n0) {
     // v3.5.25 -- the takes and Generate take across the whole shot, under both halves (Ian: "put the viewer below the
     // Left hand side as well. To make more room for multiple").
     '<div id="vl-livebtn-' + s.ck + '" class="vl-takes-row" style="margin-top:12px;"></div>' +
+    '</div>' +   // v3.5.59: the end of the part that folds away
     // v3.5.57 (Ian, 2026-11-09: "On the bottom border of a shot we need Add New Shot below"): a new, empty shot right under this one
     '<button type="button" class="btn btn-sm vl-add-shot" style="position:absolute;left:24px;bottom:0;transform:translateY(50%);z-index:1;background:rgb(var(--panel-rgb));border-radius:999px;padding:2px 12px;" title="Add a new, empty shot right below this one; give it pictures with its Add a picture card" onclick="vlAddShotBelow(' + si + ')">+ Add new shot below</button>' +
   '</div>';
+}
+// v3.5.59 -- a shot folded away (by its id, or its draft key before it is saved), kept while the page is open.
+function vlFoldKey(s) { return s.id ? 'id' + s.id : 'ck' + s.ck; }
+function vlFolded(s) { return !!(VL.folded && s && VL.folded[vlFoldKey(s)]); }
+function vlFold(si) {
+  var s = VL.draft && VL.draft.shots[si]; if (!s) return;
+  VL.folded = VL.folded || {};
+  var k = vlFoldKey(s); VL.folded[k] = !VL.folded[k];
+  var b = document.getElementById('vl-body-' + s.ck); if (b) b.style.display = VL.folded[k] ? 'none' : '';
+  var shot = b && b.parentNode, t = shot && shot.querySelector('.vl-fold');
+  if (t) { t.innerHTML = VL.folded[k] ? '&#9656;' : '&#9662;'; t.title = VL.folded[k] ? 'Open this shot' : 'Fold this shot away (its name and purpose stay)'; }
 }
 function vlAddShotBelow(si) {
   vlReadForm();
@@ -42561,6 +42579,7 @@ function vlReadForm() {
   var sy = v('vl-style'); if (sy) d.style = sy;
   d.shots.forEach(function (sh, si) {
     var sn = v('vl-sn-' + si); if (sn != null) sh.name = sn;   // v3.5.15
+    var pu = v('vl-pu-' + si); if (pu != null) sh.purpose = pu;   // v3.5.59
     var mo = v('vl-mo-' + si); if (mo != null) sh.mode = mo;   // v3.5.34
     // v3.5.19 -- the shot's boxes
     var x;
@@ -42668,7 +42687,7 @@ function vlSave(cb) {
   VL.saving = true; VL.savePending = false; VL.saveError = '';
   var keys = d.shots.map(function (s) { return s.ck; });
   var body = { name: d.name, overall: d.overall, model: d.model, sound: d.sound, style: d.style,
-    shots: d.shots.map(function (s) { return { id: s.id, name: s.name || '', cut_style: s.cut_style,
+    shots: d.shots.map(function (s) { return { id: s.id, name: s.name || '', purpose: s.purpose || '', cut_style: s.cut_style,   // v3.5.59 purpose
       refs: (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; }),   // v3.5.22
       mode: s.mode || '',   // v3.5.34
       start: s.start, actions: vlActionsList(s.actions), lines: s.lines.map(function (l) { return { who: l.who, text: l.text, when: l.when, off: l.off }; }),   // v3.5.19
@@ -43300,7 +43319,7 @@ function vlMissingDone(k, create) {
     var at = 0;
     if (x.after_id) { at = d.shots.length; d.shots.forEach(function (s, i) { if (String(s.id) === String(x.after_id)) at = i + 1; }); }
     var ns = vlNewShot([]);
-    ns.name = x.name || ''; ns.start = x.what || ''; ns.actions = x.why ? vlActionsText([x.why]) : '';
+    ns.name = x.name || ''; ns.start = x.what || ''; ns.purpose = x.why || '';   // v3.5.59: the why is the shot's purpose
     d.shots.splice(at, 0, ns);
     vlStructural();
   }
@@ -43331,6 +43350,7 @@ function vlSlMsgHTML(info) {
   }
   var shots = j.kind === 'shots';
   if (j.status === 'done') return escapeHtml((shots ? 'The Director planned the shots: ' : 'The Director\'s Notes are in: ') + j.tokens_charged + ' token' + (j.tokens_charged === 1 ? '' : 's') + ' used.' +
+    (shots ? (function () { var n = vlMissingList(vlFindEp(j.episode_id || (VL.draft && VL.draft.id))).length; return n ? ' It found ' + n + ' missing shot' + (n === 1 ? '' : 's') + ' (Missing shots).' : ' It found no missing shots.'; })() : '') +   // v3.5.59
     (shots ? (VL.chainNotes ? ' Now the notes...' : ' Next, the Director\'s Notes give each shot its direction.') : ' Everything the Director wrote is yours to change.'));
   return '<span style="color:var(--danger);">' + escapeHtml(j.error || (shots ? 'The Director could not plan the shots.' : 'The Director could not write the notes.') + ' Nothing was charged.') + '</span>';
 }
@@ -43664,7 +43684,7 @@ var VL_BOX_LABEL = 'display:block;font-size:12px;font-weight:600;color:var(--acc
 var VL_BOX_STYLE = 'min-height:0;padding:6px 10px;line-height:1.45;resize:vertical;overflow:hidden;';
 var VL_WARN = 'color:#e8a85a;font-size:12px;line-height:1.45;';
 function vlNewShot(kfs) {
-  return { ck: ++VL.ck, id: null, name: '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false, op: {}, refs: [] };
+  return { ck: ++VL.ck, id: null, name: '', purpose: '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false, op: {}, refs: [] };
 }
 function vlPanelsOpenFor(id) { var o = {}; if (id && VL.panelsOpen) VL_PANELS.forEach(function (p) { if (VL.panelsOpen[id + ':' + p[0]]) o[p[0]] = true; }); return o; }
 // A shot never given references: the characters named in its words (as the server would send them).
