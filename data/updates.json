@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.54",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3554-video-transitions-trim-preview",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: transitions between shots, trimming a take, and a quick preview of each cut.",
+        "detail": "Ian, 2026-11-09 (spec claude/VIDEO_TRANSITIONS_SPEC.md). Each cut marker has a menu: Cut, Dissolve, Fade to black, Fade to white, Wipe, Slide or Circle. A take can be trimmed (Start here / End here; the take itself is not changed). Preview plays the end of one shot into the next with its transition and trims, in the browser. Episodes with a transition or a trim are joined on our own server with ffmpeg; plain cuts still join on fal as before.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.53",
     "staged_on": "2026-11-09",
     "entries": [

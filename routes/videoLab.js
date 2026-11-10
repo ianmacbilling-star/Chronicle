@@ -149,7 +149,21 @@ const MAX_KEYFRAMES = 60;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 const STUCK_MINUTES = 45;
 const MAX_TAKES = 10;   // v3.5.15 (Ian: "for now we limit them to 3 takes"); v3.5.25: 10 while Video is built out (Ian: "Let's lift the limit on 3 takes")
-const CUT_STYLES = ['instant'];   // this build makes plain cuts only; the styles come in their own build (spec section 4)
+// v3.5.54 (Ian, 2026-11-09: "Between the shots... we need to have some canned transitions"; spec
+// claude/VIDEO_TRANSITIONS_SPEC.md). The cut AFTER a shot: its name, its length in seconds and ffmpeg's xfade name.
+const CUT_STYLE_INFO = {
+  instant: { label: 'Cut', secs: 0 },
+  dissolve: { label: 'Dissolve', secs: 0.5, xfade: 'fade' },
+  fadeblack: { label: 'Fade to black', secs: 1, xfade: 'fadeblack' },
+  fadewhite: { label: 'Fade to white', secs: 1, xfade: 'fadewhite' },
+  wipeleft: { label: 'Wipe left', secs: 0.5, xfade: 'wipeleft' },
+  wiperight: { label: 'Wipe right', secs: 0.5, xfade: 'wiperight' },
+  slideleft: { label: 'Slide left', secs: 0.5, xfade: 'slideleft' },
+  slideright: { label: 'Slide right', secs: 0.5, xfade: 'slideright' },
+  circleopen: { label: 'Circle open', secs: 0.7, xfade: 'circleopen' },
+  circleclose: { label: 'Circle close', secs: 0.7, xfade: 'circleclose' }
+};
+const CUT_STYLES = Object.keys(CUT_STYLE_INFO);
 
 function estCost(m, duration, sound) {
   const per = sound ? m.priceSound : m.price;
@@ -375,6 +389,8 @@ function ensureTables() {
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS source_take_id INTEGER');   // v3.5.26: a retouch of that take
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_text TEXT');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS trim_start REAL');   // v3.5.54: the part of the take the episode uses
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS trim_end REAL');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS tokens INTEGER');   // v3.5.46: the take's price in tokens (NULL: made before tokens)
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS tokens_charged INTEGER');   // v3.5.46: NULL until it lands and is charged   // 'small' (Kling O1 Edit) or 'big' (Seedance 2.0)   // v3.5.23: 'shots' (Create Shots) or 'notes' (Director's Notes)
     // v3.5.19 -- a shot described in plain words, one set per shot (VIDEO_REFERENCE_SHOTS_SPEC section 2). actions and
@@ -445,6 +461,17 @@ function cleanWords(s) {
 }
 // Which chosen takes, in order, the episode video is made of.
 function chosenSig(shots) { return shots.map(function (s) { return s.chosen_take_id || 0; }).join(','); }
+// v3.5.54 -- what the episode video is made from: the chosen takes, and, once any cut is not plain or any chosen take is
+// trimmed, the cuts and the trims too (so an episode joined before stays current). shots: [{ chosen_take_id, cut_style,
+// trim_start, trim_end }] in order.
+function trimOf(v) { return v == null || v === '' ? null : Math.round(Number(v) * 100) / 100; }
+function needsLocalJoin(shots) {
+  return shots.some(function (s, i) { return (i < shots.length - 1 && (s.cut_style || 'instant') !== 'instant') || trimOf(s.trim_start) != null || trimOf(s.trim_end) != null; });
+}
+function joinSig(shots) {
+  if (!needsLocalJoin(shots)) return chosenSig(shots);
+  return shots.map(function (s, i) { return (s.chosen_take_id || 0) + '[' + (trimOf(s.trim_start) == null ? '' : trimOf(s.trim_start)) + '-' + (trimOf(s.trim_end) == null ? '' : trimOf(s.trim_end)) + ']' + (i < shots.length - 1 ? '>' + (s.cut_style || 'instant') : ''); }).join(',');
+}
 
 async function loadEpisodes(db, where, params) {
   const eps = await db.prepare('SELECT * FROM episodes WHERE ' + where + ' ORDER BY pinned DESC, created_at DESC, id DESC').all(params);
@@ -491,7 +518,7 @@ async function loadEpisodes(db, where, params) {
         t.stale = t.sig !== s.sig;
       });
     });
-    const cs = chosenSig(ep.shots);
+    const cs = joinSig(ep.shots.map(function (s) { const t = s.takes.filter(function (x) { return x.id === s.chosen_take_id; })[0]; return { chosen_take_id: s.chosen_take_id, cut_style: s.cut_style, trim_start: t ? t.trim_start : null, trim_end: t ? t.trim_end : null }; }));   // v3.5.54
     const pool = castByVersion[ep.fork_id + ':' + ep.campaign_id] || { characters: [], assets: [] };
     ep.cast = pool.characters;   // v3.5.19: who can be sent as a reference; v3.5.22: with id and picture
     ep.assets = pool.assets;     // v3.5.22
@@ -587,7 +614,7 @@ router.get('/models', requireAuth, requireVideo, async function (req, res) {
   vlDebug(req.session && req.session.userId, 'info', 'GET /api/video-lab/models', 'Models offered: ' + out.map(function (x) { return x.key; }).join(', '));   // v3.5.18
   let cpt = SL_DEFAULTS.shotlist_cents_per_token;   // v3.5.39 (Ian, 2026-11-09): the model menu shows tokens a second
   try { cpt = (await shotListPrices(await getDb())).shotlist_cents_per_token; } catch (e) { cpt = SL_DEFAULTS.shotlist_cents_per_token; }
-  res.json({ models: out, webhook: !!webhookUrl(), ffmpeg: FFMPEG_VERSION, styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES, cents_per_token: cpt });
+  res.json({ models: out, webhook: !!webhookUrl(), ffmpeg: FFMPEG_VERSION, styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES, cutStyleInfo: CUT_STYLES.map(function (k) { return { key: k, label: CUT_STYLE_INFO[k].label, secs: CUT_STYLE_INFO[k].secs }; }), cents_per_token: cpt });
 });
 
 router.get('/episodes', requireAuth, requireVideo, async function (req, res) {
@@ -1320,6 +1347,34 @@ router.post('/episodes/:id/join', requireAuth, requireVideo, async function (req
   }
 });
 // A take whose join failed: join its moves again.
+// v3.5.54 -- TRIM A TAKE (Ian, 2026-11-09: the end at trim, "the more options the better"). The part of a done take the
+// episode uses: start and end in seconds (null: from the start / to the end). The take's file is never changed.
+router.post('/takes/:id/trim', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/takes/' + req.params.id + '/trim';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
+    if (!x.ep || !(await canChange(req, x.ep))) return vlRefuse(req, res, FN, 404, 'Not found.');
+    if (x.t.status !== 'done') return vlRefuse(req, res, FN, 409, 'Only a finished take can be trimmed.');
+    const moves = await db.prepare('SELECT duration FROM moves WHERE take_id = ?').all(x.t.id);
+    const len = takeSecs(moves) || 15;
+    const b = req.body || {};
+    let st = b.start == null || b.start === '' ? null : Number(b.start), en = b.end == null || b.end === '' ? null : Number(b.end);
+    if ((st != null && !isFinite(st)) || (en != null && !isFinite(en))) return vlRefuse(req, res, FN, 400, 'Give the start and end in seconds.');
+    if (st != null) st = Math.round(Math.max(0, Math.min(st, len)) * 100) / 100;
+    if (en != null) en = Math.round(Math.max(0, Math.min(en, len + 0.5)) * 100) / 100;
+    if (st === 0) st = null;
+    if ((st || 0) + 1 > (en == null ? len : en)) return vlRefuse(req, res, FN, 400, 'Keep at least 1 second of the take.');
+    await db.prepare('UPDATE takes SET trim_start = ?, trim_end = ?, updated_at = NOW() WHERE id = ?').run(st, en, x.t.id);
+    vlDebug(req.session.userId, 'info', FN, 'Take ' + x.t.id + ' trimmed to ' + (st || 0) + '-' + (en == null ? 'end' : en) + ' s', { length: len });
+    await maybeJoinEpisode(db, x.ep.id);
+    res.json({ episode: await loadEpisode(db, x.ep.id) });
+  } catch (e) {
+    console.error('[video] trim error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not trim the take.' });
+  }
+});
 router.post('/takes/:id/join', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
@@ -1646,6 +1701,7 @@ async function takeStatus(db, takeId) {
 
 // A join is back (a take's or an episode's): claim it, copy the joined video to R2.
 async function joinedVideo(falResult, requestId) {
+  if (falResult && Buffer.isBuffer(falResult.buffer)) return falResult.buffer;   // v3.5.54: joined on our own server
   let data = falResult;
   if (!data || !data.video) { const r = await falClient().queue.result(MERGE_ENDPOINT, { requestId: requestId }); data = r && (r.data || r); }
   const url = data && data.video && data.video.url;
@@ -1678,11 +1734,12 @@ async function finishTakeMerge(t, falResult, falError) {
 async function maybeJoinEpisode(db, episodeId) {
   const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(episodeId);
   if (!ep || ep.join_status === 'running' || ep.join_status === 'saving') return;
-  const shots = await db.prepare('SELECT s.id, s.chosen_take_id, t.status, t.video_url FROM shots s LEFT JOIN takes t ON t.id = s.chosen_take_id WHERE s.episode_id = ? ORDER BY s.position, s.id').all(episodeId);
+  const shots = await db.prepare('SELECT s.id, s.chosen_take_id, s.cut_style, t.status, t.video_url, t.trim_start, t.trim_end FROM shots s LEFT JOIN takes t ON t.id = s.chosen_take_id WHERE s.episode_id = ? ORDER BY s.position, s.id').all(episodeId);
   if (!shots.length || !shots.every(function (s) { return s.status === 'done' && s.video_url; })) return;
-  const sig = chosenSig(shots);
+  const sig = joinSig(shots);   // v3.5.54
   if (ep.video_sig === sig && ep.video_url) return;
   if (ep.join_status === 'error' && ep.join_sig === sig) return;   // the same join failed: Join again asks for it (a new take tries by itself)
+  if (needsLocalJoin(shots)) return void await startLocalJoin(db, ep, shots, sig);   // v3.5.54: transitions or trims, on our own server
   if (shots.length === 1) {
     const old = ep.video_url;
     await db.prepare('UPDATE episodes SET video_url = ?, video_sig = ?, updated_at = NOW() WHERE id = ?').run(shots[0].video_url, sig, episodeId);
@@ -1699,6 +1756,94 @@ async function maybeJoinEpisode(db, episodeId) {
     await db.prepare("UPDATE episodes SET join_status = 'error', join_error = ?, updated_at = NOW() WHERE id = ?").run(('fal refused the join: ' + falErrorText(e)).slice(0, 1000), episodeId);
   }
 }
+// v3.5.54 -- THE JOIN ON OUR OWN SERVER (spec claude/VIDEO_TRANSITIONS_SPEC.md): trims and transitions with ffmpeg. One
+// join at a time in this process; join_request_id 'local' marks it, and the sweep ends one this process no longer has.
+const LOCAL_JOINS = {};
+let _joinQueue = Promise.resolve();
+const LOCAL_JOIN_TIMEOUT_MS = 10 * 60 * 1000;
+function r3(x) { return Math.round(x * 1000) / 1000; }
+function runTool(cmd, args, timeoutMs) {
+  return new Promise(function (resolve, reject) {
+    require('child_process').execFile(cmd, args, { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, function (err, out, errOut) {
+      if (err) return reject(new Error(cmd + ' failed: ' + String(errOut || err.message || '').trim().split('\n').slice(-3).join(' ').slice(0, 600)));
+      resolve(String(out || ''));
+    });
+  });
+}
+async function probeClip(file) {
+  const j = JSON.parse(await runTool('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,width,height:format=duration', '-of', 'json', file], 60000));
+  const v = (j.streams || []).filter(function (s) { return s.codec_type === 'video'; })[0];
+  if (!v) throw new Error('a take has no video stream');
+  return { dur: Number(j.format && j.format.duration) || 0, w: Number(v.width) || 1280, h: Number(v.height) || 720, audio: (j.streams || []).some(function (s) { return s.codec_type === 'audio'; }) };
+}
+// clips: [{ start, end, audio, cut }] (cut: the style after this clip). The filter for one ffmpeg run, and the length.
+function joinFilter(clips, W, H) {
+  const parts = [], lens = clips.map(function (c) { return r3(c.end - c.start); });
+  const AF = 'aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo';
+  clips.forEach(function (c, i) {
+    parts.push('[' + i + ':v]trim=start=' + r3(c.start) + ':end=' + r3(c.end) + ',setpts=PTS-STARTPTS,scale=' + W + ':' + H + ':force_original_aspect_ratio=decrease,pad=' + W + ':' + H + ':(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p,settb=AVTB[v' + i + ']');
+    parts.push(c.audio ? '[' + i + ':a]atrim=start=' + r3(c.start) + ':end=' + r3(c.end) + ',asetpts=PTS-STARTPTS,' + AF + '[a' + i + ']'
+      : 'anullsrc=r=48000:cl=stereo,atrim=0:' + lens[i] + ',asetpts=PTS-STARTPTS,' + AF + '[a' + i + ']');
+  });
+  let v = 'v0', a = 'a0', L = lens[0];
+  for (let i = 1; i < clips.length; i++) {
+    const info = CUT_STYLE_INFO[clips[i - 1].cut] || CUT_STYLE_INFO.instant, nv = 'vj' + i, na = 'aj' + i;
+    const d = info.xfade ? r3(Math.min(info.secs, lens[i - 1] / 2, lens[i] / 2)) : 0;
+    if (!d) {
+      parts.push('[' + v + '][v' + i + ']concat=n=2:v=1:a=0,settb=AVTB[' + nv + ']');
+      parts.push('[' + a + '][a' + i + ']concat=n=2:v=0:a=1[' + na + ']');
+      L = r3(L + lens[i]);
+    } else {
+      parts.push('[' + v + '][v' + i + ']xfade=transition=' + info.xfade + ':duration=' + d + ':offset=' + r3(L - d) + '[' + nv + ']');
+      parts.push('[' + a + '][a' + i + ']acrossfade=d=' + d + '[' + na + ']');
+      L = r3(L + lens[i] - d);
+    }
+    v = nv; a = na;
+  }
+  return { filter: parts.join(';'), v: v, a: a, total: L };
+}
+async function ffmpegJoin(shots) {
+  const fs = require('fs'), path = require('path'), os = require('os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vljoin-'));
+  try {
+    const clips = [];
+    for (let i = 0; i < shots.length; i++) {
+      const f = path.join(dir, 'c' + i + '.mp4');
+      fs.writeFileSync(f, await fetchVideo(shots[i].video_url));
+      const p = await probeClip(f);
+      let st = trimOf(shots[i].trim_start), en = trimOf(shots[i].trim_end);
+      st = st == null ? 0 : Math.max(0, Math.min(st, p.dur));
+      en = en == null ? p.dur : Math.max(st, Math.min(en, p.dur));
+      if (en - st < 0.5) { st = 0; en = p.dur; }
+      clips.push({ file: f, start: st, end: en, audio: p.audio, cut: shots[i].cut_style || 'instant', w: p.w, h: p.h });
+    }
+    const W = clips[0].w - (clips[0].w % 2), H = clips[0].h - (clips[0].h % 2);
+    const j = joinFilter(clips, W, H), out = path.join(dir, 'out.mp4');
+    const args = ['-y', '-loglevel', 'error'];
+    clips.forEach(function (c) { args.push('-i', c.file); });
+    args.push('-filter_complex', j.filter, '-map', '[' + j.v + ']', '-map', '[' + j.a + ']', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', out);
+    await runTool('ffmpeg', args, LOCAL_JOIN_TIMEOUT_MS);
+    return fs.readFileSync(out);
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
+  }
+}
+async function startLocalJoin(db, ep, shots, sig) {
+  const claim = await db.prepare("UPDATE episodes SET join_status = 'running', join_sig = ?, join_error = NULL, join_request_id = 'local', join_started_at = NOW(), updated_at = NOW() WHERE id = ? AND (join_status IS NULL OR join_status = 'done' OR (join_status = 'error' AND join_sig IS DISTINCT FROM ?))").run(sig, ep.id, sig);
+  if (!claim.changes) return;
+  LOCAL_JOINS[ep.id] = true;
+  console.log('[video] episode ' + ep.id + ': joining ' + shots.length + ' shot(s) here with transitions or trims');
+  _joinQueue = _joinQueue.then(async function () {
+    let buf = null, err = null;
+    try { buf = await ffmpegJoin(shots); } catch (e) { err = 'the join on our server failed: ' + (e && e.message); }
+    try {
+      const fresh = await (await getDb()).prepare('SELECT * FROM episodes WHERE id = ?').get(ep.id);
+      if (fresh) await finishEpisodeJoin(fresh, buf ? { buffer: buf } : null, err);
+    } catch (e) { console.error('[video] episode ' + ep.id + ' local join could not finish:', e && e.message); }
+    delete LOCAL_JOINS[ep.id];
+  });
+}
+
 // An old episode video may be a take's own video (a one-shot episode): only files nothing else points at are deleted.
 async function videoInUse(db, url) {
   const a = await db.prepare('SELECT id FROM takes WHERE video_url = ? LIMIT 1').get(url);
@@ -1790,6 +1935,10 @@ async function sweep() {
     }
     const ej = await db.prepare("SELECT * FROM episodes WHERE join_status = 'running' ORDER BY id LIMIT 20").all();
     for (const ep of ej) {
+      if (ep.join_request_id === 'local') {   // v3.5.54: ours; one this process no longer has was cut off by a restart
+        if (!LOCAL_JOINS[ep.id] && (Date.now() - new Date(ep.join_started_at || ep.updated_at).getTime()) / 60000 > 2) await finishEpisodeJoin(ep, null, 'the join was interrupted (the server restarted); press Join again');
+        continue;
+      }
       await askJoin(ep.join_request_id, (Date.now() - new Date(ep.join_started_at || ep.updated_at).getTime()) / 60000, function (err) { return finishEpisodeJoin(ep, null, err); });
     }
     // A take whose moves are all back but whose join never started (a restart at the wrong moment).
@@ -2766,6 +2915,7 @@ module.exports.buildInput = buildInput;
 module.exports.MERGE_ENDPOINT = MERGE_ENDPOINT;
 module.exports._ensureTables = ensureTables;
 module.exports._sweep = sweep;
+module.exports._join = { joinFilter: joinFilter, joinSig: joinSig, chosenSig: chosenSig, needsLocalJoin: needsLocalJoin, LOCAL_JOINS: LOCAL_JOINS, CUT_STYLE_INFO: CUT_STYLE_INFO };   // v3.5.54
 module.exports._stopSweep = function () { if (_timer) clearInterval(_timer); _timer = null; };
 module.exports._internals = { finishMove: finishMove, takeStatus: takeStatus, finishTakeMerge: finishTakeMerge, maybeJoinEpisode: maybeJoinEpisode, finishEpisodeJoin: finishEpisodeJoin,
   loadEpisode: loadEpisode, planMoves: planMoves, cleanShots: cleanShots, writeShots: writeShots, shotSig: shotSig, makeShot: makeShot, vlSaveSummary: vlSaveSummary };
