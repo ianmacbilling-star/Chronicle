@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.56",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3556-video-small-pictures",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video: small pictures are sent enlarged, so Kling no longer refuses them.",
+        "detail": "Ian, 2026-11-09: a Kling O3 take failed: Image dimensions are too small, minimum 300x300 (Oya's asset picture was 258 x 335). Before a take or a take retouch is sent, any picture under 320 px on a side is sent as an enlarged copy; the original is not changed. The take log names each one with its size.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.55",
     "staged_on": "2026-11-09",
     "entries": [

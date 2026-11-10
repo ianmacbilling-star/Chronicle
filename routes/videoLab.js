@@ -1214,6 +1214,8 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   let sent = 0;
   const fal = falClient();
   for (const x of rows) {
+    const big = await enlargeSmallPictures(x.bi.input);   // v3.5.56
+    if (big.length) vlDebug(req.session.userId, 'info', 'makeShot', 'Shot ' + shotNo + ': ' + big.length + ' small picture(s) sent enlarged', { pictures: big });
     try {
       const sub = await fal.queue.submit(x.bi.endpoint, { input: x.bi.input, webhookUrl: hook });
       await db.prepare("UPDATE moves SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, x.id);
@@ -1584,6 +1586,8 @@ router.post('/takes/:id/retouch', requireAuth, requireVideo, async function (req
       .run(takeId, x.ep.id, x.t.video_url, prompt, 'retouch-' + kind, R.endpoint, duration, sound, 'queued', cost);
     vlDebug(req.session.userId, 'info', FN, 'Retouch of take ' + x.t.id + ' (' + R.label + ', ' + R.endpoint + ') as take ' + takeId, { kind: kind, seconds: secs, est_cost_usd: cost,
       video: vlShortUrl(x.t.video_url), refs: refs.map(function (r) { return { name: r.name, kind: r.kind, url: vlShortUrl(r.url) }; }), input: Object.assign({}, input, { prompt: undefined }), prompt: prompt });
+    const bigR = await enlargeSmallPictures(input);   // v3.5.56
+    if (bigR.length) vlDebug(req.session.userId, 'info', FN, bigR.length + ' small picture(s) sent enlarged', { pictures: bigR });
     try {
       const sub = await falClient().queue.submit(R.endpoint, { input: input, webhookUrl: hook });
       await db.prepare("UPDATE moves SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, mv.lastInsertRowid);
@@ -2588,6 +2592,42 @@ async function precheckShotTokens(db) {
   return (Number.isFinite(v) && v >= 1) ? v : 1;
 }
 // A picture for the Director (512 px JPEG) and its real shape.
+// v3.5.56 (Ian, 2026-11-09: a Kling take failed "Image dimensions are too small. Minimum dimensions are 300x300 pixels";
+// Oya's asset picture was 258 x 335; "just do it automatically"). Every picture in a take's input that is under 320 px on a
+// side is sent as an enlarged copy (the original is not changed). Copies are remembered for the life of the process.
+const MIN_PIC_PX = 320;
+const _bigCopies = {};
+async function bigEnoughUrl(url) {
+  if (!url || !storage.isOurPublicUrl(url)) return null;
+  if (_bigCopies[url] !== undefined) return _bigCopies[url];
+  const axios = require('axios'), sharp = require('sharp');
+  const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000, maxContentLength: 25 * 1024 * 1024, maxBodyLength: 25 * 1024 * 1024 });
+  const buf = Buffer.from(resp.data);
+  const meta = await sharp(buf).rotate().metadata();
+  let w = meta.width || 0, h = meta.height || 0;
+  if (meta.orientation && meta.orientation >= 5) { const t = w; w = h; h = t; }
+  if (!w || !h || Math.min(w, h) >= MIN_PIC_PX) { _bigCopies[url] = null; return null; }
+  const f = MIN_PIC_PX / Math.min(w, h), nw = Math.round(w * f), nh = Math.round(h * f);
+  const out = await sharp(buf).rotate().resize({ width: nw, height: nh, kernel: 'lanczos3' }).png().toBuffer();
+  const nu = await storage.uploadFile(out, 'vlbig-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.png', 'image/png', 'video-lab');
+  if (!nu) return null;
+  try { await require('../services/rightsCheck').inherit(url, nu); } catch (e) {}
+  _bigCopies[url] = { url: nu, from: w + 'x' + h, to: nw + 'x' + nh };
+  return _bigCopies[url];
+}
+// Swaps small pictures in a fal input for their enlarged copies; returns what it changed. Never throws.
+async function enlargeSmallPictures(input) {
+  const done = [];
+  const swap = async function (u) {
+    try { const c = await bigEnoughUrl(u); if (c) { done.push({ url: vlShortUrl(u), from: c.from, to: c.to }); return c.url; } }
+    catch (e) { console.warn('[video] could not measure a picture (' + (e && e.message) + ')'); }
+    return u;
+  };
+  if (!input) return done;
+  if (Array.isArray(input.image_urls)) { for (let i = 0; i < input.image_urls.length; i++) input.image_urls[i] = await swap(input.image_urls[i]); }
+  for (const k of Object.keys(input)) if (/image_url$/.test(k) && typeof input[k] === 'string') input[k] = await swap(input[k]);
+  return done;
+}
 async function pcShape(url) {
   try {
     if (!url || !storage.isOurPublicUrl(url)) return null;
@@ -2916,6 +2956,7 @@ module.exports.MERGE_ENDPOINT = MERGE_ENDPOINT;
 module.exports._ensureTables = ensureTables;
 module.exports._sweep = sweep;
 module.exports._join = { joinFilter: joinFilter, joinSig: joinSig, chosenSig: chosenSig, needsLocalJoin: needsLocalJoin, LOCAL_JOINS: LOCAL_JOINS, CUT_STYLE_INFO: CUT_STYLE_INFO };   // v3.5.54
+module.exports._pics = { enlargeSmallPictures: enlargeSmallPictures };   // v3.5.56
 module.exports._stopSweep = function () { if (_timer) clearInterval(_timer); _timer = null; };
 module.exports._internals = { finishMove: finishMove, takeStatus: takeStatus, finishTakeMerge: finishTakeMerge, maybeJoinEpisode: maybeJoinEpisode, finishEpisodeJoin: finishEpisodeJoin,
   loadEpisode: loadEpisode, planMoves: planMoves, cleanShots: cleanShots, writeShots: writeShots, shotSig: shotSig, makeShot: makeShot, vlSaveSummary: vlSaveSummary };
