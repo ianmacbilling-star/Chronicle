@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.66",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3566-top-three-columns",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: the top of an episode in three columns.",
+        "detail": "Ian, 2026-11-10. Name and Style on the left, the video model, sound, pin and the Director's buttons in the middle, the Overall direction on the right, each about a third of the width (two columns, then one, on narrower screens).",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.65",
     "staged_on": "2026-11-10",
     "entries": [

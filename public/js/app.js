@@ -42605,25 +42605,35 @@ function vlEditorHTML(ep) {
     '<div style="font-size:26px;color:var(--accent-bright);">+</div><div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.6);">Add a keyframe from the Archive</div></div></div></div>');
   return '<div id="vl-ed-' + ep.id + '">' +
     (VL.webhook === false ? '<div style="' + VL_DESC + 'color:var(--danger);margin-bottom:8px;">PUBLIC_BASE_URL is not set on this server, so fal cannot report back.</div>' : '') +
-    '<div style="' + VL_BOX + 'padding:10px 14px;margin-bottom:12px;">' +   // v3.5.33 -- TD-1114: tighter, with the close
-      '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">' +
-        '<div style="flex:2;min-width:220px;"><label class="form-label" for="vl-name">Name</label>' +
-          '<input id="vl-name" class="form-input" type="text" maxlength="120" value="' + escapeHtml(d.name) + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true"></div>' +
-        '<div style="flex:1;min-width:200px;"><label class="form-label" for="vl-model">Video model</label>' +
-          '<select id="vl-model" class="form-input" title="' + escapeHtml(VL_MODEL_TIPS[m.key] || '') + '" onchange="this.title = VL_MODEL_TIPS[this.value] || \'\'; vlEdit(true)" onblur="vlFlushSave()">' + vlModelOptions(ms, m.key) + '</select></div>' +   // v3.5.19: grouped
-        '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);padding-bottom:9px;cursor:pointer;">' +
+    // v3.5.65 (Ian, 2026-11-10: "Shrink the Name and Animated boxes down so they take up about 1/3... Video Model and buttons
+    // ... in a center column... pull up the Overall Direction text box to sit in the final column"): three columns.
+    '<div style="' + VL_BOX + 'padding:10px 14px;margin-bottom:12px;">' +
+      '<div class="vl-top3">' +
+        '<div class="vl-top-col">' +
+          '<label class="form-label" for="vl-name">Name</label>' +
+          '<input id="vl-name" class="form-input" type="text" maxlength="120" value="' + escapeHtml(d.name) + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
+          vlStyleRowHTML(d, writing, locked, 'style') +
+          '<div id="vl-epnote" style="' + VL_DESC + 'margin-top:4px;"></div>' +
+        '</div>' +
+        '<div class="vl-top-col">' +
+          '<div style="display:flex;gap:8px;align-items:center;"><label class="form-label" for="vl-model" style="flex:1;margin:0;">Video model</label>' +
+            '<button type="button" class="modal-close" title="Close this episode and go back to the episode cards" style="" onclick="vlCloseEpisode()">&times;</button>' +   // v3.5.33
+          '</div>' +
+          '<select id="vl-model" class="form-input" title="' + escapeHtml(VL_MODEL_TIPS[m.key] || '') + '" onchange="this.title = VL_MODEL_TIPS[this.value] || \'\'; vlEdit(true)" onblur="vlFlushSave()">' + vlModelOptions(ms, m.key) + '</select>' +   // v3.5.19: grouped
+          '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px;">' +
+            '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--accent-pale);cursor:pointer;">' +
           '<input id="vl-sound" type="checkbox" onchange="vlEdit()" onblur="vlFlushSave()"' + (d.sound ? ' checked' : '') + '> The model\'s own sound</label>' +
-        '<button class="btn btn-sm vl-pin-btn" style="margin-bottom:4px;display:inline-flex;align-items:center;gap:5px;' + (ep.pinned ? 'border-color:var(--accent-bright);color:var(--accent-bright);' : '') + '" onclick="vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')">' + _vpickPinSvg(!!ep.pinned) + '<span>' + (ep.pinned ? 'Pinned' : 'Pin this episode') + '</span></button>' +   // v3.5.17
-        '<button type="button" class="modal-close" title="Close this episode and go back to the episode cards" style="margin-bottom:6px;margin-left:auto;" onclick="vlCloseEpisode()">&times;</button>' +   // v3.5.33
+            '<button class="btn btn-sm vl-pin-btn" style="display:inline-flex;align-items:center;gap:5px;' + (ep.pinned ? 'border-color:var(--accent-bright);color:var(--accent-bright);' : '') + '" onclick="vlPin(' + ep.id + ', ' + (ep.pinned ? 'false' : 'true') + ')">' + _vpickPinSvg(!!ep.pinned) + '<span>' + (ep.pinned ? 'Pinned' : 'Pin this episode') + '</span></button>' +   // v3.5.17
+          '</div>' +
+          vlStyleRowHTML(d, writing, locked, 'buttons') +
+        '</div>' +
+        '<div class="vl-top-col">' +
+          '<label class="form-label" for="vl-overall">Overall direction: who, where, the mood. It goes into every shot.</label>' +
+          '<textarea class="narrative-inline-box" id="vl-overall"' + (locked ? ' disabled' : '') + ' maxlength="2000" style="min-height:150px;width:100%;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
+        '</div>' +
       '</div>' +
-      vlStyleRowHTML(d, writing, locked) +
-      '<div id="vl-epnote" style="' + VL_DESC + 'margin-top:4px;"></div>' +   // v3.5.33: the old "The episode" box's line
     '</div>' +
     '<div id="vl-epvideo"></div>' +
-    '<div class="narrative-panel" style="margin-bottom:14px;">' +
-      '<div class="narrative-block-header"><span>&#9998; Overall direction: who, where, the mood. It goes into every shot.</span></div>' +
-      '<textarea class="narrative-inline-box" id="vl-overall"' + (locked ? ' disabled' : '') + ' maxlength="2000" style="min-height:80px;" placeholder="For example: a torch-lit dwarven hall; Brannoc in battered plate, Ysolde in a green cloak; tense and quiet." oninput="vlEdit()" onblur="vlFlushSave()">' + escapeHtml(d.overall) + '</textarea>' +
-    '</div>' +
     '<style>' + VL_HALVES_CSS + '</style>' +   // v3.5.22
     '<datalist id="vl-cast-names">' + (ep.cast || []).map(function (c) { return '<option value="' + escapeHtml(c.name) + '">'; }).join('') + '</datalist>' +   // v3.5.19: who says a line
     (locked ? '<div style="' + VL_WARN + 'margin:0 0 8px;">' + vlSpin(12) + ' The Director is writing these shots. You can edit them when it is done.</div>' : '') +   // v3.5.37
@@ -43381,11 +43391,19 @@ var VL_TIP_SHOTS = 'The Director reads your pictures in story order and divides 
 var VL_TIP_NOTES = 'The Director gives every shot its direction: how it opens, what the characters do and say, where the camera goes, how it ends, and the sound and surroundings, plus who appears in it. It rewrites the words of every shot; the shots themselves, their pictures and takes stay. Everything the Director writes is yours to change.';
 function vlSlKind(info) { var j = info && info.job; return (j && j.kind === 'shots') ? 'shots' : ((j && j.kind === 'precheck') ? 'precheck' : 'notes'); }   // v3.5.34: precheck
 var VL_TIP_PRECHECK = 'Before any video is made, the Director looks at every shot: its pictures, words, references and video mode, with the story. Each shot gets a to-do list: pictures that are not wide or not in the art style, moments the story needs that no picture shows, words that fight the pictures, and whether Reference or Keyframes suits it. Run it after the Director\'s Notes, and again any time.';
-function vlStyleRowHTML(d, writing, locked) {   // v3.5.37: locked (Create Shots or the Notes running), the buttons in #vl-sl-btns
+function vlStyleRowHTML(d, writing, locked, part) {   // v3.5.37: locked (Create Shots or the Notes running), the buttons in #vl-sl-btns
   var ss = VL.styles || [];
   if (!ss.length) return '';
   var cur = vlStyle(d.style) || ss[0];
   var info = VL.sl[d.id] || {};
+  // v3.5.65 -- the top in three columns: the Style menu and its notes under the name, the Director's buttons under the model
+  if (part === 'buttons') return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><span id="vl-sl-btns" style="display:contents;">' + vlSlBtnsHTML(d, writing) + '</span></div>' +
+    '<div id="vl-sl-msg" style="' + VL_DESC + 'margin-top:4px;">' + vlSlMsgHTML(info) + '</div>';
+  if (part === 'style') return '<label class="form-label" for="vl-style" style="margin-top:8px;">Style</label>' +
+    '<select id="vl-style" class="form-input" onchange="vlStyleChange()" onblur="vlFlushSave()"' + (locked ? ' disabled' : '') + '>' + ss.map(function (x) {
+      return '<option value="' + escapeHtml(x.key) + '"' + (x.key === cur.key ? ' selected' : '') + '>' + escapeHtml(x.label) + '</option>';
+    }).join('') + '</select>' +
+    '<div id="vl-style-desc" style="' + VL_DESC + 'margin-top:6px;">' + escapeHtml(cur.description || '') + vlStyleHint(cur, d) + '</div>';
   return '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:8px;">' +
     '<div style="flex:1;min-width:220px;"><label class="form-label" for="vl-style">Style</label>' +
       '<select id="vl-style" class="form-input" onchange="vlStyleChange()" onblur="vlFlushSave()"' + (locked ? ' disabled' : '') + '>' + ss.map(function (x) {
@@ -43810,7 +43828,8 @@ function vlShapeCheck(shotIdx, then) {
 var VL_SHOT_SECS = 8;
 var VL_STRIP = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;';   // v3.5.22: left to right, a cut between each
 var VL_CUT_BTN = 'flex:none;width:26px;height:26px;border-radius:50%;padding:0;font-size:13px;line-height:24px;text-align:center;cursor:pointer;background:rgba(var(--glass-rgb),0.5);color:var(--accent-pale);border:1px dashed rgba(var(--accent-rgb),0.5);';
-var VL_HALVES_CSS = '.vl-halves{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:10px;align-items:start;}' +
+var VL_HALVES_CSS = '.vl-top3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start;}.vl-top-col .form-input{width:100%;}@media (max-width:1100px){.vl-top3{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}.vl-top3>.vl-top-col:last-child{grid-column:1/-1;}}@media (max-width:700px){.vl-top3{grid-template-columns:1fr;}}' +   // v3.5.65
+  '.vl-halves{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:10px;align-items:start;}' +
   '@media (max-width:900px){.vl-halves{grid-template-columns:minmax(0,1fr);}.vl-right{order:-1;}}' +
   '.vl-panel{border:1px solid rgba(var(--accent-rgb),0.22);border-radius:6px;margin-bottom:6px;background:rgba(var(--panel-rgb),0.25);}' +
   '.vl-panel-head{display:flex;gap:8px;align-items:center;width:100%;padding:6px 10px;background:none;border:none;cursor:pointer;text-align:left;color:inherit;font-size:12px;}' +
