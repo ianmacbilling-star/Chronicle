@@ -42334,8 +42334,8 @@ function vlCutMarkHTML(si) {
   var s = VL.draft && VL.draft.shots[si], cur = (s && s.cut_style) || 'instant';
   var opts = vlCutList().map(function (o) { return '<option value="' + escapeHtml(o.key) + '"' + (o.key === cur ? ' selected' : '') + '>' + escapeHtml(o.label) + (o.secs ? ' (' + o.secs + ' s)' : '') + '</option>'; }).join('');
   return '<div class="vl-cutmark" style="' + VL_CUTMARK + '">' +
-    '<span style="' + VL_DESC + 'color:var(--accent-pale);white-space:nowrap;">&#9986;</span>' +
-    '<select class="form-select vl-cut-style" style="width:auto;padding:2px 8px;font-size:12px;height:auto;" title="How this shot changes into the next one in the episode video" onchange="vlSetCut(' + si + ', this.value)">' + opts + '</select>' +
+    '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;white-space:nowrap;" title="How this shot changes into the next one in the episode video">&#9986; Transition' +   // v3.5.55: like the Mode menu
+    '<select class="form-input vl-cut-style" style="width:auto;padding:3px 8px;font-size:13px;height:auto;" onchange="vlSetCut(' + si + ', this.value)">' + opts + '</select></label>' +
     '<button type="button" class="btn btn-sm" title="Play the end of this shot into the start of the next, with this transition and the takes\' trims. Quick, in your browser: the episode video itself is put together on the server." onclick="vlPreview(' + si + ')">Preview</button>' +
     '<button type="button" class="btn btn-sm" title="Remove this cut: shots ' + (si + 1) + ' and ' + (si + 2) + ' become one continuous shot" onclick="vlJoinShots(' + si + ')">UnCut - Join with previous shot</button>' +
   '</div>';

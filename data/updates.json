@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.55",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3555-video-transition-menu-look",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: the transition menu looks like the Mode menu.",
+        "detail": "Ian, 2026-11-09: make the transition drop-downs look like ours, like Mode. Labelled Transition, same box, size and colour.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.54",
     "staged_on": "2026-11-09",
     "entries": [
