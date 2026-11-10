@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.50",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3550-video-lighter-check",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Video: the Pre-production check is lighter on art style, references and likeness.",
+        "detail": "Ian, 2026-11-09 (it said High Fantasy was not High Fantasy, and that Emanon was too bulky to be Emanon). Art style is flagged only for a picture plainly a different kind of art from the others; the style name is a loose label. A missing reference only for someone clearly on screen and named in the words. Likeness (build, face, hair, clothes) is never judged, only a plain mismatch such as another skin colour or kind of creature.",
+        "td": [
+          "TD-1115"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.49",
     "staged_on": "2026-11-09",
     "entries": [
