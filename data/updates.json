@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.51",
+    "staged_on": "2026-11-09",
+    "entries": [
+      {
+        "id": "3551-ffmpeg-on-server",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Server: ffmpeg installed, ready for transitions between video shots.",
+        "detail": "Ian, 2026-11-09: canned transitions (dissolve, fades, wipes) between shots need ffmpeg on our own server, since fal's join only puts clips end to end. railpack.json installs ffmpeg beside ghostscript; the server logs [video] ffmpeg: and the version at start-up. Nothing uses it yet.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.50",
     "staged_on": "2026-11-09",
     "entries": [

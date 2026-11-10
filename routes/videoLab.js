@@ -135,6 +135,15 @@ const REF_MAX_IMAGES = 9;      // fal: up to 9 reference images
 const REF_MAX_KEYFRAMES = 5;   // the rest of the 9 are kept for the cast
 const REF_MIN_SECS = 4, REF_MAX_SECS = 15;
 const DEFAULT_MODEL = 'seedance2reffast';   // v3.5.19: reference mode is the normal way (was seedance2fast, keyframes)
+// v3.5.51 (Ian, 2026-11-09: canned transitions between shots need ffmpeg on our own server; railpack.json now installs it).
+// Said once at start-up, so the deploy log shows whether it is there. Nothing uses it yet.
+let FFMPEG_VERSION = null;
+try {
+  require('child_process').execFile('ffmpeg', ['-version'], { timeout: 15000 }, function (err, out) {
+    FFMPEG_VERSION = err ? null : String(out || '').split('\n')[0].trim().slice(0, 120);
+    console.log('[video] ffmpeg: ' + (FFMPEG_VERSION || 'NOT FOUND (' + (err && (err.code || err.message)) + ')'));
+  });
+} catch (e) { console.log('[video] ffmpeg: could not check (' + e.message + ')'); }
 const MERGE_ENDPOINT = 'fal-ai/ffmpeg-api/merge-videos';   // joins clips in order on fal's servers (listed at $0)
 const MAX_KEYFRAMES = 60;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
@@ -578,7 +587,7 @@ router.get('/models', requireAuth, requireVideo, async function (req, res) {
   vlDebug(req.session && req.session.userId, 'info', 'GET /api/video-lab/models', 'Models offered: ' + out.map(function (x) { return x.key; }).join(', '));   // v3.5.18
   let cpt = SL_DEFAULTS.shotlist_cents_per_token;   // v3.5.39 (Ian, 2026-11-09): the model menu shows tokens a second
   try { cpt = (await shotListPrices(await getDb())).shotlist_cents_per_token; } catch (e) { cpt = SL_DEFAULTS.shotlist_cents_per_token; }
-  res.json({ models: out, webhook: !!webhookUrl(), styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES, cents_per_token: cpt });
+  res.json({ models: out, webhook: !!webhookUrl(), ffmpeg: FFMPEG_VERSION, styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES, cents_per_token: cpt });
 });
 
 router.get('/episodes', requireAuth, requireVideo, async function (req, res) {
