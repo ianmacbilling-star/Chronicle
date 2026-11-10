@@ -8752,6 +8752,69 @@ async function aimpRun() {
   }
 }
 
+// v3.5.61 (Ian, 2026-11-10: "do a size like we have now on characters but only on the NPC Asset Option... we might need
+// to go bigger than 25 ft"). The character slider's feel, up to 100 ft: most of the travel stays on people's heights.
+var ASSET_H_STOPS = [[0, 1], [0.10, 3], [0.55, 8], [0.80, 25], [1, 100]];
+var ASSET_H_TICKS = [3, 5, 6, 8, 10, 15, 25, 50, 100];
+function assetHeightFromSlider(v) {
+  var t = Math.max(0, Math.min(1, (+v || 0) / 1000));
+  for (var i = 1; i < ASSET_H_STOPS.length; i++) {
+    var a = ASSET_H_STOPS[i - 1], b = ASSET_H_STOPS[i];
+    if (t <= b[0] || i === ASSET_H_STOPS.length - 1) { var f = (b[0] === a[0]) ? 0 : (t - a[0]) / (b[0] - a[0]); var h = a[1] + (b[1] - a[1]) * f; return h > 25 ? Math.round(h) : Math.round(h * 10) / 10; }
+  }
+  return 1;
+}
+function assetSliderFromHeight(ft) {
+  var f = Math.max(1, Math.min(100, +ft || 1));
+  for (var i = 1; i < ASSET_H_STOPS.length; i++) {
+    var a = ASSET_H_STOPS[i - 1], b = ASSET_H_STOPS[i];
+    if (f <= b[1] || i === ASSET_H_STOPS.length - 1) { var r = (b[1] === a[1]) ? 0 : (f - a[1]) / (b[1] - a[1]); return Math.round(1000 * (a[0] + (b[0] - a[0]) * r)); }
+  }
+  return 0;
+}
+function assetHeightSync() {
+  var el = document.getElementById('asset-height'), out = document.getElementById('asset-height-out'), num = document.getElementById('asset-height-num');
+  if (!el || !out) return;
+  el.dataset.set = '1'; out.textContent = charHeightLabel(assetHeightFromSlider(el.value));
+  // all the way right: a box to type a bigger height (Ian: "if they go all the way to the right give them an option to type it in")
+  if (num) { var atEnd = +el.value >= 1000; num.style.display = atEnd ? '' : 'none'; if (!atEnd) num.value = ''; }
+  scheduleAssetMetaSave();
+}
+function assetHeightTyped() {
+  var num = document.getElementById('asset-height-num'), out = document.getElementById('asset-height-out'), el = document.getElementById('asset-height');
+  if (!num || !out || !el) return;
+  var v = parseFloat(num.value);
+  if (v > 0) { el.dataset.set = '1'; out.textContent = charHeightLabel(Math.round(Math.min(1000, v))); }
+  scheduleAssetMetaSave();
+}
+function assetHeightClear() {
+  var el = document.getElementById('asset-height'), out = document.getElementById('asset-height-out');
+  if (!el || !out) return;
+  el.value = 0; el.dataset.set = ''; out.textContent = 'Not set';
+  var num = document.getElementById('asset-height-num'); if (num) { num.value = ''; num.style.display = 'none'; }
+  scheduleAssetMetaSave();
+}
+function assetHeightValue() {
+  var el = document.getElementById('asset-height'), num = document.getElementById('asset-height-num');
+  if (!el || !el.dataset.set) return null;
+  if (num && num.style.display !== 'none' && parseFloat(num.value) > 0) return Math.round(Math.min(1000, parseFloat(num.value)));
+  return assetHeightFromSlider(el.value);
+}
+function assetHeightLoad(ft) {
+  var el = document.getElementById('asset-height'), out = document.getElementById('asset-height-out');
+  if (!el || !out) return;
+  var dl = document.getElementById('asset-height-ticks');
+  if (dl && !dl.childNodes.length) { ASSET_H_TICKS.forEach(function (t) { var o = document.createElement('option'); o.value = assetSliderFromHeight(t); dl.appendChild(o); }); el.setAttribute('list', 'asset-height-ticks'); }
+  var num = document.getElementById('asset-height-num');
+  if (num) { num.value = ''; num.style.display = 'none'; }
+  if (ft == null || ft === '' || !(+ft > 0)) { el.value = 0; el.dataset.set = ''; out.textContent = 'Not set'; return; }
+  el.value = assetSliderFromHeight(ft); el.dataset.set = '1'; out.textContent = charHeightLabel(+ft);
+  if (num && +ft >= 100) { num.style.display = ''; num.value = String(+ft); }
+}
+function assetHeightShow() {
+  var row = document.getElementById('asset-height-row'), cat = document.getElementById('asset-category');
+  if (row) row.style.display = (cat && cat.value === 'npc') ? '' : 'none';
+}
 function openAssetModal(assetId) {
   var modal = document.getElementById('asset-modal');
   var title = document.getElementById('asset-modal-title');
@@ -8772,13 +8835,16 @@ function openAssetModal(assetId) {
     if (nameEl) nameEl.value = a.name || '';
     if (catEl) catEl.value = a.category || 'location';
     if (descEl) descEl.value = a.description || '';
+    assetHeightLoad(a.height_ft);   // v3.5.61
   } else {
     state.modalAsset = { id: null, name: '', category: 'location', description: '', image_url: null, revert_image_url: null };
     if (title) title.textContent = 'Add Asset';
     if (nameEl) nameEl.value = '';
     if (catEl) catEl.value = 'location';
     if (descEl) descEl.value = '';
+    assetHeightLoad(null);   // v3.5.61
   }
+  assetHeightShow();
   renderAssetModalImage(state.modalAsset);
   if (modal) modal.classList.remove('hidden');
   if (!assetId) { try { maybeStartTour('asset-modal'); } catch (e) {} }
@@ -8957,7 +9023,9 @@ function scheduleAssetMetaSave() {
     state.modalAsset.name = nameEl ? nameEl.value : state.modalAsset.name;
     state.modalAsset.category = catEl ? catEl.value : state.modalAsset.category;
     state.modalAsset.description = descEl ? descEl.value : state.modalAsset.description;
+    state.modalAsset.height_ft = assetHeightValue();   // v3.5.61
   }
+  assetHeightShow();
   if (!state.modalAsset || !state.modalAsset.id) return;
   if (state.assetMetaTimer) clearTimeout(state.assetMetaTimer);
   state.assetMetaTimer = setTimeout(saveAssetMeta, 700);
@@ -8970,6 +9038,7 @@ function saveAssetMeta() {
   fd.append('name', state.modalAsset.name || '');
   fd.append('category', state.modalAsset.category || 'location');
   fd.append('description', state.modalAsset.description || '');
+  fd.append('height_ft', state.modalAsset.height_ft == null ? '' : String(state.modalAsset.height_ft));   // v3.5.61
   fetch('/api/campaigns/' + state.currentCampaign.id + '/assets/' + id, { method: 'PUT', body: fd })
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -8977,7 +9046,7 @@ function saveAssetMeta() {
         state.assets = (state.assets || []).map(function(x){ return String(x.id) === String(id) ? data : x; });
         renderAssets();
         _syncReviewAsset('upsert', data);
-        if (state.modalAsset && String(state.modalAsset.id) === String(id)) { state.modalAsset = data; renderAssetModalImage(data); }
+        if (state.modalAsset && String(state.modalAsset.id) === String(id)) { var _h = state.modalAsset.height_ft; state.modalAsset = data; if (data.category === 'npc' && _h != null && data.height_ft == null) state.modalAsset.height_ft = _h; renderAssetModalImage(data); }
       }
     })
     .catch(function(){});
@@ -9014,7 +9083,7 @@ function assetGenerateFromModal() {
         if (errEl) { errEl.textContent = data.message || data.error; errEl.classList.remove('hidden'); }
         return;
       }
-      if (data.asset) state.modalAsset = data.asset;
+      if (data.asset) { state.modalAsset = data.asset; if (assetHeightValue() != null) scheduleAssetMetaSave(); }   // v3.5.61: a height set before the asset existed
       var jobId = data.image_job_id || data.job_id;
       var targetId = state.modalAsset ? state.modalAsset.id : (data.asset && data.asset.id);
       if (jobId) {
@@ -9054,6 +9123,7 @@ function assetUploadFile(file) {
       hideBusyOverlay('asset-modal-image-body');
       if (data && data.error) { if (errEl) { errEl.textContent = data.error; errEl.classList.remove('hidden'); } return; }
       state.modalAsset = data;
+      if (assetHeightValue() != null) scheduleAssetMetaSave();   // v3.5.61
       var found = false;
       state.assets = (state.assets || []).map(function(x){ if (String(x.id) === String(data.id)) { found = true; return data; } return x; });
       if (!found) state.assets.push(data);

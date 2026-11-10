@@ -1006,7 +1006,7 @@ function shotScript(ep, w, pics) {
   out.push('Nothing appears or disappears out of thin air: any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
   if (pics) {
     pics.cast.forEach(function (c) {
-      if (c.kind === 'asset') out.push('@Image' + c.n + ' is ' + c.name + ': it must look like @Image' + c.n + ' whenever it is on screen.');   // v3.5.22
+      if (c.kind === 'asset') out.push('@Image' + c.n + ' is ' + c.name + (c.height ? ', ' + c.height : '') + ': it must look like @Image' + c.n + ' whenever it is on screen.');   // v3.5.22; v3.5.61 an NPC's height
       else out.push('@Image' + c.n + ' is ' + c.name + ': ' + c.name + '\'s face, hair, build, clothes and gear must match @Image' + c.n + ' whenever ' + c.name + ' is on screen.');
     });
     if (pics.cast.length) out.push('If a scene picture shows a character or thing differently, follow its own picture.');
@@ -1067,7 +1067,7 @@ function planReferenceWords(ep, kfs, w, shotNo, pool, refs) {
   if (!wordsHaveContent(ep, w)) return { error: 'Shot ' + shotNo + ' needs words: say what the characters do, or how the shot starts.' };
   const scenePics = kfs.slice(0, m.maxScene || REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });   // v3.5.42: a model's own limits
   const people = refsToSend(ep, w, refs, pool, (m.maxRefs || REF_MAX_IMAGES) - scenePics.length);   // v3.5.22: the shot's references
-  const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1, kind: p.kind }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };
+  const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1, kind: p.kind, height: p.height || '' }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };   // v3.5.61 height
   return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics), duration: String(w.seconds),
     images: people.map(function (p) { return p.url; }).concat(scenePics), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
@@ -1109,12 +1109,20 @@ async function castRefs(db, ep, detail) {
 // see the references that are already on that shot... just like we do on the Review tab, Storyboard and Image builder").
 // The version's characters (their version picture, else their own) and the campaign's assets; an asset whose picture was
 // refused by the rights check, or that is not a Campaignia picture, cannot be sent.
+// v3.5.61 -- an NPC asset's height in words, as images.js charHeightPhrase writes a character's ("about 9 feet 6 inches tall").
+function vlHeightPhrase(ft) {
+  const n = parseFloat(ft);
+  if (!(n > 0)) return '';
+  const inches = Math.round(n * 12), f = Math.floor(inches / 12), i = inches % 12;
+  if (f <= 0) return 'about ' + inches + ' inches tall';
+  return 'about ' + f + (f === 1 ? ' foot' : ' feet') + (i && f < 25 ? ' ' + i + (i === 1 ? ' inch' : ' inches') : '') + ' tall';
+}
 async function refsPool(db, ep) {
   const cast = await castRefs(db, ep, true);
   let assets = [];
   try {
-    assets = (await db.prepare("SELECT a.id, a.name, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS url FROM campaign_assets a LEFT JOIN image_rights r ON r.image_url = a.image_url AND r.verdict = 'reject' WHERE a.campaign_id = ? ORDER BY LOWER(a.name)").all(ep.campaign_id))
-      .map(function (a) { const ok = !!(a.url && storage.isOurPublicUrl(a.url)); return { id: a.id, name: a.name, url: ok ? a.url : null, usable: ok, why_not: ok ? null : (a.url ? 'not a Campaignia picture' : 'no usable picture') }; });
+    assets = (await db.prepare("SELECT a.id, a.name, a.category, a.height_ft, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS url FROM campaign_assets a LEFT JOIN image_rights r ON r.image_url = a.image_url AND r.verdict = 'reject' WHERE a.campaign_id = ? ORDER BY LOWER(a.name)").all(ep.campaign_id))
+      .map(function (a) { const ok = !!(a.url && storage.isOurPublicUrl(a.url)); return { id: a.id, name: a.name, url: ok ? a.url : null, usable: ok, why_not: ok ? null : (a.url ? 'not a Campaignia picture' : 'no usable picture'), height: (a.category === 'npc' && Number(a.height_ft) > 0) ? vlHeightPhrase(a.height_ft) : '' }; });   // v3.5.61 an NPC's height
   } catch (e) { console.error('[video] assets could not be read: ' + (e && e.message)); }
   return { characters: cast.all.filter(function (c) { return c.name && c.id; }).map(function (c) { return { id: c.id, name: c.name, url: c.url || null, usable: !!c.usable, why_not: c.why_not || null }; }), assets: assets };
 }
@@ -1137,7 +1145,7 @@ function refsToSend(ep, w, refs, pool, room) {
     refs.forEach(function (r) {
       if (out.length >= room) return;
       const it = (r.type === 'asset' ? pool.assets : pool.characters).filter(function (x) { return Number(x.id) === Number(r.id); })[0];
-      if (it && it.usable && it.url && !out.some(function (o) { return o.url === it.url; })) out.push({ name: String(it.name).trim(), url: it.url, kind: r.type });
+      if (it && it.usable && it.url && !out.some(function (o) { return o.url === it.url; })) out.push({ name: String(it.name).trim(), url: it.url, kind: r.type, height: it.height || '' });   // v3.5.61 height
     });
     return out;
   }
@@ -1571,7 +1579,7 @@ function retouchPrompt(kind, text, refs, sound) {
     out.push('Recreate @Video1 exactly, shot for shot: the same motion, timing, framing, camera, characters, place and light. Change only this: ' + text);
     refs.forEach(function (r, i) {
       const n = '@Image' + (i + 1);
-      out.push(r.kind === 'asset' ? n + ' is ' + r.name + ': it must look like ' + n + ' whenever it is on screen.' : n + ' is ' + r.name + ': ' + r.name + '\'s face, hair, build, clothes and gear must match ' + n + ' whenever ' + r.name + ' is on screen.');
+      out.push(r.kind === 'asset' ? n + ' is ' + r.name + (r.height ? ', ' + r.height : '') + ': it must look like ' + n + ' whenever it is on screen.' : n + ' is ' + r.name + ': ' + r.name + '\'s face, hair, build, clothes and gear must match ' + n + ' whenever ' + r.name + ' is on screen.');   // v3.5.61 an NPC's height
     });
     if (sound) out.push('Keep the same voices, words and sounds as @Video1; no one speaks who does not speak in @Video1.');
   }

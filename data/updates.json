@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.61",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3561-npc-asset-height",
+        "kind": "feature",
+        "public": true,
+        "summary": "Supporting Character / NPC assets can have a height, like characters, and pictures and videos draw them at that size.",
+        "detail": "Ian, 2026-11-10. The asset window shows a Height slider for a Supporting Character / NPC: up to 100 ft, and slid all the way right a box to type a bigger one (up to 1000 ft). The height goes with the NPC into every picture prompt (as a character's does) and into the video wording. Other kinds of asset have no height.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.60",
     "staged_on": "2026-11-10",
     "entries": [

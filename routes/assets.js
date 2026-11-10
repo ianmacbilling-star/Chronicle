@@ -603,6 +603,11 @@ router.put('/:assetId', requireAuth, verifyCampaignAssetCreator, guardUpload(upl
       ? cleanCategory(req.body.category)
       : existing.category;
     const description = (req.body && typeof req.body.description === 'string') ? req.body.description.trim() : existing.description;
+    // v3.5.61 (Ian, 2026-11-10: "do a size like we have now on characters but only on the NPC Asset Option"). Sent as
+    // height_ft ('' = not set); kept only for an NPC; any other kind of asset has none.
+    let heightFt = existing.height_ft == null ? null : Number(existing.height_ft);
+    if (req.body && req.body.height_ft !== undefined) { const h = parseFloat(req.body.height_ft); heightFt = h > 0 ? Math.round(Math.min(1000, Math.max(1, h)) * 10) / 10 : null; }   // the slider goes to 100 ft, then a typed height up to 1000 (Ian: "bigger than 25 ft"; "give them an option to type it in")
+    if (category !== 'npc') heightFt = null;
     let imageUrl = existing.image_url;
     if (req.file) imageUrl = await handleAssetUpload(req.file, existing.image_url, { userId: req.session.userId, campaignId: req.params.campaignId });
 
@@ -611,6 +616,7 @@ router.put('/:assetId', requireAuth, verifyCampaignAssetCreator, guardUpload(upl
       'UPDATE campaign_assets SET name = ?, category = ?, image_url = ?, description = ?, edited_at = ?, edited_by = ? ' +
       'WHERE id = ?'
     ).run(name, category, imageUrl, description, now, req.session.userId, req.params.assetId);
+    await db.prepare('UPDATE campaign_assets SET height_ft = ? WHERE id = ?').run(heightFt, req.params.assetId);   // v3.5.61
     const asset = await db.prepare('SELECT * FROM campaign_assets WHERE id = ?').get(req.params.assetId);
     if (asset && req.file && imageUrl) asset.rights = rightsCheck.responseRights(await rightsCheck.lookup([imageUrl]));   // v3.1.90 -- TD-979
     res.json(asset);

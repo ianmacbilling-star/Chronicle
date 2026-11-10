@@ -3044,6 +3044,17 @@
         <option value="item">Item</option>
       </select>
     </div>
+    <!-- v3.5.61: an NPC's height, as on characters (Ian: "only on the NPC Asset Option"; "bigger than 25 ft") -->
+    <div class="form-group" id="asset-height-row" style="display:none;">
+      <label class="form-label">Height <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">Optional. Tells the artist how tall this NPC is in every picture and video, next to the others.</span></label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="range" id="asset-height" min="0" max="1000" step="1" value="0" oninput="assetHeightSync()" style="flex:1;" />
+        <div id="asset-height-out" class="form-label" style="margin-bottom:0;min-width:64px;text-align:left;white-space:nowrap;">Not set</div>
+        <input type="number" id="asset-height-num" class="form-input" min="1" max="1000" step="1" placeholder="ft" title="Slid all the way right: type the height in feet (up to 1000)" style="display:none;width:90px;padding:4px 8px;" oninput="assetHeightTyped()" />
+        <button type="button" class="btn btn-sm" onclick="assetHeightClear()" title="Leave the height unset. The NPC is drawn as it is today.">Clear</button>
+      </div>
+      <datalist id="asset-height-ticks"></datalist>
+    </div>
     <div class="form-group">
       <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; what to generate from; editable anytime</span></label>
       <textarea class="form-input" id="asset-description" rows="3" placeholder="Describe the item, location, or Supporting Character / NPC to generate -- e.g. a weathered stone keep on a cliff at dusk, banners flying &#183; a farmhouse kitchen with a kettle on the stove" oninput="scheduleAssetMetaSave()"></textarea>

@@ -27,7 +27,7 @@ const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
 // (a watermark or a stock picture, image_rights) comes back with no image_url. buildAssetBlock already
 // skips an asset with no picture, so it is left out of every generation and every reference picker
 // until its picture is replaced -- and the previews cannot disagree with what is generated.
-const ASSET_REF_SQL = "SELECT a.id, a.name, a.category, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS image_url " +
+const ASSET_REF_SQL = "SELECT a.id, a.name, a.category, a.height_ft, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS image_url " +   // v3.5.61 height_ft
   "FROM campaign_assets a LEFT JOIN image_rights r ON r.image_url = a.image_url AND r.verdict = 'reject' WHERE a.campaign_id = ?";
 const titleRefUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
 // v3.0.757 -- the marked overlay: the same panel with the reader's rings drawn
@@ -413,7 +413,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
       if (r.isAsset) {
         if (r.category === 'location') return n + ' is the location/setting "' + r.name + '".';
         if (r.category === 'item') return n + ' is an item called "' + r.name + '".';
-        if (r.category === 'npc') return n + ' is the reference for ' + r.name + '.';
+        if (r.category === 'npc') return n + ' is the reference for ' + r.name + (r.height ? ', ' + r.height : '') + '.';   // v3.5.61
         if (r.category === 'scene') return n + ' is an earlier moment from this story, "' + r.name + '"' + ((r.people && r.people.length) ? ', showing ' + r.people.join(', ') : '') + '. ' + (r.note || '') + ' Redraw it in this picture\u2019s art style.';   // v3.4.19 -- TD-1095, Image Builder only
         if (r.category === 'plan') return n + ' is a flat, top-down plan of the place "' + r.name + '". It is not an object in the scene and is never drawn itself: use it only for the layout of the place you draw.';   // v3.4.11 -- TD-1091, Map to Scene only
         return n + ' is a reference for "' + r.name + '".';
@@ -698,7 +698,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       if (r.isAsset) {
         if (r.category === 'location') return n + ' is the location/setting "' + r.name + '".';
         if (r.category === 'item') return n + ' is an item called "' + r.name + '".';
-        if (r.category === 'npc') return n + ' is the reference for ' + r.name + '.';
+        if (r.category === 'npc') return n + ' is the reference for ' + r.name + (r.height ? ', ' + r.height : '') + '.';   // v3.5.61
         return n + ' is a reference for "' + r.name + '".';
       }
       return n + ' is the reference for ' + r.name + '.';
@@ -1042,8 +1042,10 @@ function buildAssetBlock(assets, panelText, explicitAssetIds) {
     var cat = a.category || 'location';
     if (/^https?:\/\//.test(a.image_url)) {
       var canon = assetCanonicalName(a.name);
-      refs.push({ name: canon, url: a.image_url, category: cat, isAsset: true });
-      lines.push(canon + ' (' + cat + ')');
+      // v3.5.61 -- an NPC's height on its line and its reference, as a character's is on its name line
+      var hp = (cat === 'npc' && a.height_ft != null && Number(a.height_ft) > 0) ? charHeightPhrase(a.height_ft) : '';
+      refs.push({ name: canon, url: a.image_url, category: cat, isAsset: true, height: hp });
+      lines.push(canon + ' (' + cat + (hp ? ', ' + hp : '') + ')');
     }
   });
   return { text: lines.join('\n'), refs: refs };
