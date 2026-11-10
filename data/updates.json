@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.64",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3564-beats-notes-check",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: Director's Notes writes beats, and the Pre-production check keeps your words.",
+        "detail": "Ian, 2026-11-10. Notes may give each beat its own camera, sound and seconds. The check keeps the user's words and changes only what causes a problem, drops findings that change nothing or repeat another, names each suggestion after the box or beat it changes, can change one part of one beat, judges crowding from the beats' seconds, and accepts a title or logo as a shot's opening picture.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.63",
     "staged_on": "2026-11-10",
     "entries": [

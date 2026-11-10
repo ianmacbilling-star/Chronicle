@@ -2244,10 +2244,11 @@ function shotListRequest(ctx, images) {
       'FOR EACH SHOT write these, in plain words:\n' +
       '- name: 2 to 5 words naming the shot.\n' +
       '- start: who is where when the shot opens, and which way they face, and anything lying around that must stay in the shot (bodies, fallen weapons, props) as the shot\'s pictures show it: later pictures do not carry them (one to three sentences).\n' +
+      '- actions: the shot\'s BEATS. Each item is one beat, either a string (what happens) or {"do": what happens, "camera": what the camera does during this beat, only when it does something then, "sound": a sound heard at this moment, only when there is one, "seconds": the beat\'s length, only when it must be set (a quick look 1.5, a long walk 4); leave it out and the beats share the shot\'s length}. A camera move or a sound tied to one moment goes on its beat; what lasts the whole shot goes in camera, sounds and around.\n' +
       '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning. Read the shot\'s pictures in order and write what they show being done (crumbling something, pouring, lighting) and every step that gets from one picture to the next: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there, something now lit or open), write the action that brings it in, in its place (for example "He picks up the stone pestle from beside the bowl."), so nothing appears out of thin air. When someone leaves the frame, say they walk completely out of frame and are gone, give that about 2 seconds, and make the end say the frame is empty of them.\n' +   // v3.5.47
       (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view; always name the speaker}. At most two short lines in a shot; an empty list when nobody should talk.\n'
         : '- lines: always an empty list in this style.\n') +
-      '- camera: what the camera does. If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
+      '- camera: what the camera does across the whole shot (a move tied to one beat goes on that beat). If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
       '- end: who is where when the shot ends, and which way they face.\n' +
       '- sounds: sounds only, never actions.\n' +
       '- around: what the surroundings do (smoke, fire, weather, light), never the characters.\n' +
@@ -2257,7 +2258,7 @@ function shotListRequest(ctx, images) {
       'RULES\n- Keep the names exactly as the story and the cast list write them.\n- Each action is at most 300 characters; every other field short.\n- Never describe a cut inside a shot; never move a picture to another shot.\n' +
       '- Write original words; never reproduce text from any published source.\n- Never put words, captions or titles on screen.\n\n' +
       'ANSWER WITH ONLY THIS JSON, no other text, one entry per shot in order:\n' +
-      '{"overall": "...", "shots": [{"shot": 1, "name": "...", "start": "...", "actions": ["...", "..."], "lines": [{"who": "...", "line": "...", "during": 1, "offscreen": false}], "camera": "...", "end": "...", "sounds": "...", "around": "...", "seconds": 10}]}';
+      '{"overall": "...", "shots": [{"shot": 1, "name": "...", "start": "...", "actions": ["...", {"do": "...", "camera": "...", "sound": "..."}], "lines": [{"who": "...", "line": "...", "during": 1, "offscreen": false}], "camera": "...", "end": "...", "sounds": "...", "around": "...", "seconds": 10}]}';
   }
   const content = [];
   const head = [];
@@ -2313,7 +2314,13 @@ function readJson(raw) {
   }
 }
 function wordsFrom(x, ctx) {
-  const actions = (Array.isArray(x.actions) ? x.actions : [x.actions]).map(textOf).filter(Boolean);
+  // v3.5.64 -- TD-1121 phase 2: an action may come as a beat {"do", "camera", "sound", "seconds"}
+  const items = (Array.isArray(x.actions) ? x.actions : [x.actions]).map(function (a) {
+    if (a && typeof a === 'object') return { a: textOf(a.do != null ? a.do : (a.action != null ? a.action : a.text)), camera: textOf(a.camera), sound: textOf(a.sound), secs: parseFloat(a.seconds) || null };
+    return { a: textOf(a), camera: '', sound: '', secs: null };
+  }).filter(function (it) { return it.a; });
+  const actions = items.map(function (it) { return it.a; });
+  const beats = items.map(function (it) { return { camera: it.camera, sound: it.sound, secs: it.secs }; });
   let lines = [];
   if (ctx.style.speech && Array.isArray(x.lines)) lines = x.lines.map(function (l) {
     l = l || {};
@@ -2322,7 +2329,7 @@ function wordsFrom(x, ctx) {
     who = who.replace(/\s*\(off-?screen\)\s*/i, '').trim();
     return { who: who, text: textOf(l.line != null ? l.line : l.text), when: parseInt(l.during != null ? l.during : l.when, 10) || 0, off: off };
   });
-  return cleanWords({ start: textOf(x.start), actions: actions, lines: lines, camera: textOf(x.camera), end: textOf(x.end), sounds: textOf(x.sounds), around: textOf(x.around), seconds: parseFloat(String(x.seconds == null ? '' : x.seconds).replace(/[^0-9.]/g, '')) });
+  return cleanWords({ start: textOf(x.start), actions: actions, beats: beats, lines: lines, camera: textOf(x.camera), end: textOf(x.end), sounds: textOf(x.sounds), around: textOf(x.around), seconds: parseFloat(String(x.seconds == null ? '' : x.seconds).replace(/[^0-9.]/g, '')) });
 }
 function parseShotList(raw, ctx) {
   const p = readJson(raw);
@@ -2695,6 +2702,11 @@ router.get('/episodes/:id/shot-list', requireAuth, requireVideo, async function 
 // =================================================================================================
 const PC_KINDS = ['gap', 'mode', 'continuity', 'words', 'reference', 'style', 'aspect', 'other'];
 const PC_BOXES = ['start', 'actions', 'camera', 'end', 'sounds', 'around'];
+// v3.5.64 -- each words finding is named after what it changes (Ian: "Art style" offered new Start words)
+function pcBoxLabel(fix) {
+  if (fix.box === 'beat') return 'Beat ' + fix.beat + (fix.field === 'camera' ? ': camera' : (fix.field === 'sound' ? ': sound' : ''));
+  return { start: 'Opening', actions: 'Beats', camera: 'Throughout: camera', end: 'Closing', sounds: 'Throughout: sounds', around: 'Throughout: around them' }[fix.box] || fix.box;
+}
 const PC_MAX_FINDINGS = 8;
 const PC_WIDE = 1.6;   // a picture narrower than this (width / height) is not wide: the video is 16:9
 const PC_SURE = 1.25;   // v3.5.35: narrower than this the model will crop or stretch it (square or tall); between the two it might
@@ -2789,6 +2801,10 @@ function precheckRequest(ctx, images) {
     '2. gap: the story says something happens that the video must show and no picture covers (between two pictures of a shot, or between two shots). Read the story: if it explains a change (someone healed in turn, a later moment), that is not a mistake, but the video still has to get from one picture to the next. Suggest the missing picture: say after which picture number it goes and describe it in one or two sentences.\n' +
     '3. continuity: a person or prop that appears from nowhere: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there) and no action brings it in, give a fix of type "words" for the actions box with the missing step written in its place (for example "He picks up the stone pestle from beside the bowl."); someone who leaves and is needed again in the same shot (a cut is the reliable fix); a change of place inside one shot.\n' +   // v3.5.48
     '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end (when there are more actions than the length allows, give a fix of type "seconds" with the length that fits, at most 15), someone who must leave the frame with too little time left to get all the way out at least 1 second before the shot ends (they stop at the edge; give a fix of type "seconds" or cut an action) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +
+    'BEATS: each action is a beat with its seconds (shown as "(0-3 s)"); judge crowding from those seconds, not by counting actions: a beat under about 2 seconds rarely shows a whole movement.\n' +
+    'KEEP THE USER\'S WORDS (v3.5.64, Ian: a suggestion threw away "run", a shouted line and a bloody flail): replacement words keep everything the user wrote, their verbs, details, lines and who does what, and change ONLY the part that causes the problem. Never rewrite a box to fix something in another box.\n' +
+    'NO EMPTY FINDINGS: report only what needs changing. Never a finding that ends with "it is fine", "retain" or "no change needed", and never two findings with the same fix.\n' +
+    'TITLE CARDS: a title, logo or text-on-black picture as a shot\'s first picture is meant: the shot opens on it and moves into the scene (clouds, a fade). Never report it as a different kind of art, never tell them to drop it, and never take "opens on the title" out of the words.\n' +
     '5. reference: someone clearly on screen AND named in the shot\'s words who is not among the references sent. Never someone already sent, a background figure or a guess.\n' +
     '6. style: only a picture that is plainly a different kind of art from the shot\'s other pictures (a photo among paintings, a flat cartoon among painted pictures, black and white among colour). The art style\'s name' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' is a loose label, not a test: never report that a picture is not that style, and never report differences of colour, light or detail.\n' +
     'LIKENESS: never judge whether a character in a picture looks like their reference (build, height, proportions, face, hair, clothing details): the reference picture is sent and the video follows it. Report only a picture where it plainly cannot be them (another skin colour, another kind of creature, a man where a woman should be).\n\n' +   // v3.5.50 (Ian, 2026-11-09: "it\'s saying this isn\'t Emanon because he\'s too bulky... a little over the top")
@@ -2798,6 +2814,7 @@ function precheckRequest(ctx, images) {
     '{"shots": [{"shot": 1, "mode": "reference", "mode_why": "...", "findings": [{"kind": "gap", "text": "...", "fix": {"type": "add_picture", "after_picture": 3, "describe": "..."}}]}]}\n' +
     (ctx.only != null ? 'One entry only, for shot ' + (ctx.only + 1) + '. "kind" is one of' : 'One entry per shot, ' + ctx.shots.length + ' in all, in order. "kind" is one of') + ': gap, mode, continuity, words, reference, style, other. "fix" is optional and is one of:\n' +
     '{"type": "words", "box": "start|actions|camera|end|sounds|around", "text": "the whole new text of that box (for actions, one action per line)"}\n' +
+    '{"type": "words", "box": "beat", "beat": <beat number>, "field": "do|camera|sound", "text": "the new words for that one part of that one beat"} (best when only one beat needs changing)\n' +
     '{"type": "add_reference", "name": "a character\'s exact name"}\n' +
     '{"type": "mode", "mode": "reference|keyframes"}\n' +
     '{"type": "add_picture", "after_picture": <picture number>, "describe": "what the missing picture shows"}\n' +
@@ -2893,10 +2910,27 @@ function parsePrecheck(raw, ctx) {
           if (!ch.length) fix = null; else fix.changes = ch;
         }
       }
+      else if (fx && fx.type === 'words' && fx.box === 'beat' && String(fx.text || '').trim()) {   // v3.5.64: one part of one beat
+        const w0 = ctx.info && ctx.info[si] && ctx.info[si].words, bn = parseInt(fx.beat, 10), field = ['do', 'camera', 'sound'].indexOf(fx.field) >= 0 ? fx.field : 'do';
+        if (w0 && bn >= 1 && bn <= w0.actions.length) {
+          const cur = field === 'do' ? w0.actions[bn - 1] : String(((w0.beats || [])[bn - 1] || {})[field] || '');
+          const t = String(fx.text).replace(/\s+/g, ' ').trim().slice(0, field === 'do' ? 900 : 300);
+          if (t !== String(cur).trim()) fix = { type: 'words', box: 'beat', beat: bn, field: field, text: t, was: String(cur) };
+        }
+      }
       else if (fx && fx.type === 'add_reference' && names[String(fx.name || '').trim().toLowerCase()]) fix = { type: 'add_reference', name: names[String(fx.name).trim().toLowerCase()] };
       else if (fx && fx.type === 'mode' && (fx.mode === 'reference' || fx.mode === 'keyframes')) fix = { type: 'mode', mode: fx.mode };
       else if (fx && fx.type === 'seconds' && parseInt(fx.seconds, 10) >= 4 && parseInt(fx.seconds, 10) <= 15) fix = { type: 'seconds', seconds: parseInt(fx.seconds, 10) };   // v3.5.48: Make it N s
       else if (fx && fx.type === 'add_picture' && parseInt(fx.after_picture, 10) >= 1 && parseInt(fx.after_picture, 10) <= N) fix = { type: 'add_picture', after_picture: parseInt(fx.after_picture, 10), describe: pcText(fx.describe, 500) };
+      // v3.5.64 -- NO EMPTY FINDINGS: words that change nothing, the same fix twice, or a finding that says to keep things as they are
+      if (fx && fx.type === 'words' && !fix && (PC_BOXES.indexOf(fx.box) >= 0 || fx.box === 'beat')) return;   // words that change nothing
+      if (fix && fix.type === 'words' && fix.box !== 'beat' && fix.box !== 'actions') {
+        const w0 = ctx.info && ctx.info[si] && ctx.info[si].words;
+        if (w0 && String(w0[fix.box] || '').trim() === fix.text.trim()) return;
+      }
+      if (fix && fix.type === 'words' && findings.some(function (o) { return o.fix && o.fix.type === 'words' && o.fix.box === fix.box && o.fix.text === fix.text && o.fix.beat === fix.beat && o.fix.field === fix.field; })) return;
+      if (!fix && kind === 'words' && /\b(retain|keep (both|them|it) as|no change (is )?needed|is fine|are fine)\b/i.test(text)) return;
+      if (fix && fix.type === 'words') fix.label = pcBoxLabel(fix);
       findings.push({ kind: kind, text: text, fix: fix });
     });
     out[si] = { mode: mode, mode_why: pcText(x.mode_why, 400), findings: findings };

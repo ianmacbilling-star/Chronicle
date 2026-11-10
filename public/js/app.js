@@ -44380,7 +44380,7 @@ function vlPcRowHTML(si, f, done) {
     else if (x.type === 'add_picture') { fixBtn = '<button class="' + B + '" onclick="vlPcPicture(' + si + ',' + f.id + ')">Add a picture here</button>'; if (x.describe) extra = '<div style="font-size:12px;margin-top:4px;color:var(--accent-pale);" data-no-words>The missing picture: ' + escapeHtml(x.describe) + '</div>'; }
   }
   return '<div style="padding:8px 0;border-top:1px solid rgba(var(--accent-rgb),0.12);' + (done ? 'opacity:0.5;' : '') + '">' +
-    '<div style="font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:' + (done ? 'inherit' : '#e8a85a') + ';">' + escapeHtml(VL_PC_KIND[f.kind] || 'Note') + '</div>' +
+    '<div style="font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:' + (done ? 'inherit' : '#e8a85a') + ';">' + escapeHtml((x && x.type === 'words' && x.label) ? x.label : (VL_PC_KIND[f.kind] || 'Note')) + '</div>' +   // v3.5.64: named after the box it changes
     '<div style="font-size:13px;line-height:1.45;color:var(--accent-pale);" data-no-words>' + escapeHtml(f.text) + '</div>' + extra +
     '<div style="display:flex;gap:8px;margin-top:6px;">' + fixBtn +
       '<button class="' + B + '" onclick="vlPcDone(' + Number(vlShotIdAt(si)) + ',' + f.id + ',false,' + (done ? 'true' : 'false') + ')">' + (done ? 'Undo' : 'Dismiss') + '</button></div></div>';
@@ -44406,6 +44406,20 @@ function vlPcApply(si, fid, change) {
 function vlPcWords(si, fid) {
   var f = vlPcFinding(si, fid); if (!f || !f.fix || f.fix.type !== 'words') return;
   var map = { start: 'start', actions: 'actions', camera: 'camera', end: 'end', sounds: 'sounds', around: 'around' };
+  if (f.fix.box === 'beat') {   // v3.5.64 -- one part of one beat, found by its words where they were (or by number)
+    vlReadForm();
+    var s1 = VL.draft && VL.draft.shots[si]; if (!s1) return;
+    var texts = vlBeatTexts(s1), bi = Number(f.fix.beat) - 1, fd = f.fix.field || 'do';
+    if (fd === 'do' && f.fix.was && vlActNorm(texts[bi]) !== vlActNorm(f.fix.was)) { var k = texts.map(vlActNorm).indexOf(vlActNorm(f.fix.was)); if (k >= 0) bi = k; }
+    if (bi < 0 || bi >= texts.length) { vlPcMsg('Beat ' + f.fix.beat + ' is not there any more.'); return; }
+    vlPcApply(si, fid, function (s) {
+      var t = vlBeatTexts(s), b = vlBeatsNorm(s.beats, t.length);
+      if (fd === 'do') { t[bi] = f.fix.text; s.actions = vlActionsText(t); }
+      else { b[bi][fd] = f.fix.text; b[bi][fd === 'camera' ? 'sc' : 'ss'] = true; }
+      s.beats = b;
+    });
+    return;
+  }
   if (f.fix.box === 'actions' && f.fix.changes && f.fix.changes.length) {   // v3.5.53: only the actions it changes
     vlReadForm();
     var s0 = VL.draft && VL.draft.shots[si];
