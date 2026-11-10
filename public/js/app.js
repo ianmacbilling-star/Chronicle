@@ -44234,10 +44234,14 @@ function vlChecks(si) {
     });
   });
   var secs = Number(s.seconds) || VL_SHOT_SECS;
-  if (acts.length > Math.max(2, Math.floor(secs / 2.5))) out.push({ p: 'shot', t: 'That\'s ' + acts.length + ' actions for ' + secs + ' seconds. Consider a longer shot or a cut.' });
-  // v3.5.47 (Ian: someone told to leave stops at the edge): leaving needs about 2 seconds to get all the way out.
-  else acts.forEach(function (a, i) {
-    if (!vlHasExit(a) || secs >= acts.length * 2.5 + 2) return;
+  // v3.5.67 (Ian, 2026-11-10: "Someone leaves in beat 5" when beat 5 had 3 s): judged by the beats' own seconds
+  var btm = vlBeatTimes(s, acts.length);
+  btm.forEach(function (tm, i) { if (acts[i] && tm.d < 1.5) out.push({ p: 'beats', t: 'Beat ' + (i + 1) + ' has only ' + vlSecsText(tm.d) + ' s. That is rarely enough for a whole movement.' }); });
+  // v3.5.47 (Ian: someone told to leave stops at the edge): leaving needs about 2 seconds to get all the way out, and a
+  // second of empty frame when it ends the shot.
+  acts.forEach(function (a, i) {
+    var tm = btm[i]; if (!vlHasExit(a) || !tm) return;
+    if (tm.d >= 2 && (secs - tm.to > 0.5 || tm.d >= 3)) return;
     var ep1 = vlFindEp(VL.draft.id), who = ((ep1 && ep1.cast) || []).filter(function (c) { return vlNamed(c.name, a); }).map(function (c) { return String(c.name).trim().split(/\s+/)[0]; })[0] || 'Someone';
     out.push({ p: 'actions', t: who + ' leaves in beat ' + (i + 1) + '. Give them about 2 seconds to get all the way out of frame: make the shot longer or drop a beat.' });
   });
@@ -44420,7 +44424,7 @@ function vlTodoPaint() {
     open.forEach(function (f) { rows.push(vlPcRowHTML(si, f, false)); });
     if (done.length) rows.push('<div style="' + VL_DESC + 'margin:12px 0 4px;">Done</div>' + done.map(function (f) { return vlPcRowHTML(si, f, true); }).join(''));
   }
-  rows.push('<div style="' + VL_DESC + 'margin:14px 0 4px;">Quick checks (free, as you type)</div>' + (quick.length ? quick.map(function (c) { return '<div style="' + VL_WARN + 'margin-bottom:4px;">&#9888; ' + escapeHtml(c.t) + '</div>'; }).join('') : '<div style="' + VL_DESC + '">None.</div>'));
+  rows.push('<div style="' + VL_DESC + 'margin:14px 0 4px;">Optional Checks</div>' + (quick.length ? quick.map(function (c) { return '<div style="' + VL_WARN + 'margin-bottom:4px;">&#9888; ' + escapeHtml(c.t) + '</div>'; }).join('') : '<div style="' + VL_DESC + '">None.</div>'));
   box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:680px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' + head + rows.join('') + '<div id="vl-todo-msg" style="' + VL_DESC + 'margin-top:8px;"></div></div>';
 }
 function vlPcRowHTML(si, f, done) {

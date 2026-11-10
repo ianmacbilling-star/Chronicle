@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.67",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3567-check-lines-in-beats",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: the check sees each line inside its beat; the quick checks judge by the beats' seconds.",
+        "detail": "Ian, 2026-11-10. The Pre-production check said a line set on beat 4 had no beat and suggested moving it into the beat's sound. It now reads each line inside its beat and is told never to move a line. The free quick checks no longer count actions against the shot length: a beat under 1.5 s is flagged, and someone leaving needs a beat of at least 2 s (3 s when it ends the shot).",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.66",
     "staged_on": "2026-11-10",
     "entries": [
