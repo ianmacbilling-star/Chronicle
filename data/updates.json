@@ -1,5 +1,23 @@
 [
   {
+    "version": "3.5.83",
+    "staged_on": "2026-11-11",
+    "entries": [
+      {
+        "id": "3583-no-kf-pref",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab (admins): the check no longer steers shots to Keyframes; it still says when someone is in none of the pictures.",
+        "detail": "Ian, 2026-11-11: Keyframes with several pictures lands exactly on each one, so preferring it whenever everyone is in the first picture was wrong. The mode advice is back to how it was; the not-pictured finding (add a reference for X) stays.",
+        "td": [
+          "TD-1121",
+          "TD-1113",
+          "TD-1128"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.82",
     "staged_on": "2026-11-11",
     "entries": [
