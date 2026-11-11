@@ -42379,7 +42379,7 @@ function vlShotHTML(d, si, m, n0) {
       '<input id="vl-sn-' + si + '" class="form-input vl-shot-name" type="text" maxlength="120" value="' + escapeHtml(s.name || '') + '" placeholder="Name this shot" title="The shot\'s name" style="' + VL_SHOT_NAME + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
       // v3.5.59 (Ian, 2026-11-10: "every shot needs a Purpose field. It's more for the user and what the shot creating process can
       // fill in"): on the top line, so it stays readable when the shot is folded and the pictures stay right under it.
-      '<input id="vl-pu-' + si + '" class="form-input vl-purpose" type="text" maxlength="300" value="' + escapeHtml(s.purpose || '') + '" placeholder="Purpose: what this shot is for in the story"' + (s.purpose ? ' title="' + escapeHtml(s.purpose) + '"' : '') + ' style="flex:3 1 280px;min-width:200px;padding:4px 8px;font-size:13px;" oninput="vlEdit();if(this.value)this.title=this.value;else this.removeAttribute(\'title\');" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +   // v3.5.60: the tip is the whole purpose
+      '<input id="vl-pu-' + si + '" class="form-input vl-purpose" type="text" maxlength="300" value="' + escapeHtml(s.purpose || '') + '" placeholder="Purpose: what this shot is for in the story"' + (s.purpose ? ' title="' + escapeHtml(s.purpose) + '"' : '') + ' style="flex:3 1 200px;min-width:110px;padding:4px 8px;font-size:13px;" oninput="vlEdit();if(this.value)this.title=this.value;else this.removeAttribute(\'title\');" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +   // v3.5.60: the tip is the whole purpose
       '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;" for="vl-se-' + si + '">How long?' +
         '<select id="vl-se-' + si + '" class="form-input" style="width:auto;padding:3px 8px;font-size:13px;height:auto;" onchange="vlEdit()" onblur="vlFlushSave()">' + secs.join('') + '</select></label>' +
       vlModeSelectHTML(si) +   // v3.5.34
@@ -44135,6 +44135,7 @@ function vlBeatsHTML(s, si) {
   var beats = vlBeatsNorm(s.beats, texts.length), times = vlBeatTimes(s, texts.length);
   var rows = texts.map(function (t, bi) {
     var b = beats[bi], tm = times[bi];
+    var cut = bi < texts.length - 1 && s.id ? '<div style="text-align:center;margin:-2px 0 -2px;"><button type="button" class="narrative-regen-btn" style="font-size:11px;padding:1px 10px;" title="Cut the shot here: the beats after this become a new shot right after it, with their camera, sound, seconds and lines" onclick="vlBeatCut(' + si + ',' + bi + ')">&#9986; Cut here</button></div>' : '';   // v3.5.77
     var said = s.lines.map(function (l, li) { return l.when === bi + 1 ? vlLineHTML(si, li, l, texts) : ''; }).join('');
     return '<div class="vl-beat" style="border-left:2px solid rgba(var(--accent-rgb),0.35);padding:4px 0 6px 10px;margin:6px 0;">' +
       '<div style="display:flex;gap:6px;align-items:center;margin-bottom:3px;">' +
@@ -44150,12 +44151,12 @@ function vlBeatsHTML(s, si) {
       (b.camera || b.sc ? '<div style="display:flex;gap:6px;align-items:flex-start;margin-top:4px;"><span style="' + VL_DESC + 'flex:none;width:52px;padding-top:6px;">Camera</span>' + vlBareBox('vl-bc-' + si + '-' + bi, b.camera, 'The camera in this beat, e.g. pans right to find Emanon.', vlRowsFor(b.camera)) + '</div>' : '') +
       (b.sound || b.ss ? '<div style="display:flex;gap:6px;align-items:flex-start;margin-top:4px;"><span style="' + VL_DESC + 'flex:none;width:52px;padding-top:6px;">Sound</span>' + vlBareBox('vl-bo-' + si + '-' + bi, b.sound, 'A sound in this beat, e.g. the diamond chimes.', vlRowsFor(b.sound)) + '</div>' : '') +
       said +
-      '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">' +
+      '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">' +   // v3.5.77: the cut marker follows the beat
         (b.camera || b.sc ? '' : '<button type="button" class="btn btn-sm" style="' + VL_BEAT_BTN + '" onclick="vlBeatExtra(' + si + ',' + bi + ',\'camera\')" title="What the camera does in this beat">+ Camera</button>') +
         (b.sound || b.ss ? '' : '<button type="button" class="btn btn-sm" style="' + VL_BEAT_BTN + '" onclick="vlBeatExtra(' + si + ',' + bi + ',\'sound\')" title="A sound heard in this beat">+ Sound</button>') +
         '<button type="button" class="btn btn-sm" style="' + VL_BEAT_BTN + '" onclick="vlBeatLineAdd(' + si + ',' + bi + ')" title="Someone speaks during this beat">+ Line</button>' +
       '</div>' +
-    '</div>';
+    '</div>' + cut;
   }).join('');
   var set = vlBeatsSet(s), total = times.length ? times[times.length - 1].to : 0;
   return rows +
@@ -44412,6 +44413,100 @@ function vlCheckPoll(id) {
   }, 3000);
 }
 function vlShotNoOf(shotId) { var d = VL.draft, n = 0; if (d) d.shots.forEach(function (s, i) { if (!n && String(s.id) === String(shotId)) n = i + 1; }); return n; }
+// v3.5.77 -- TD-1127, the shot's own Director's Notes (spec claude/VIDEO_BEAT_CUT_SPEC.md): fills only its empty boxes.
+function vlShotEmpty(s) {
+  var out = [];
+  if (!String(s.start || '').trim()) out.push('Opening');
+  if (!vlBeatTexts(s).some(function (t) { return t; })) out.push('beats');
+  if (!String(s.camera || '').trim() || !String(s.sounds || '').trim() || !String(s.around || '').trim()) out.push('Throughout');
+  if (!String(s.end || '').trim()) out.push('Closing');
+  return out;
+}
+function vlShotFillBtnHTML(si) {
+  var d = VL.draft, s = d && d.shots[si];
+  if (!s || !s.id) return '';
+  var empty = vlShotEmpty(s), busy = VL.filling && VL.filling[s.id];
+  if (!empty.length && !busy) return '';
+  return '<button type="button" class="btn btn-sm" id="vl-fill-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;"' + (busy || vlSlWriting(d.id) ? ' disabled' : '') +
+    ' title="The Director writes this shot\'s empty parts (' + escapeHtml(empty.join(', ')) + ') to follow on from the shots either side. What you wrote stays as it is." onclick="vlFillShot(' + si + ')">' +
+    (busy ? vlSpin(12) + ' Writing...' : 'Notes (1 token)') + '</button>';
+}
+function vlFillShot(si) {
+  var d = VL.draft, s = d && d.shots[si];
+  if (!d || !s || !s.id) return;
+  vlReadForm();
+  var id = d.id, sid = s.id;
+  VL.filling = VL.filling || {}; VL.filling[sid] = true; vlRenderOpen(true);
+  var msg = function (t) { var m = document.getElementById('vl-sl-msg'); if (m) m.innerHTML = t; };
+  var done = function () { delete VL.filling[sid]; vlRenderOpen(true); };
+  if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
+  vlSave(function (saved) {
+    if (!saved) { done(); msg(escapeHtml('Could not save the episode first, so the Director did not start.')); return; }
+    fetch('/api/video-lab/shots/' + sid + '/fill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.j || !res.j.episode) { done(); msg(res.j && res.j.error === 'INSUFFICIENT_TOKENS' ? insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')) : escapeHtml((res.j && (res.j.message || res.j.error)) || 'The Director could not write it.')); return; }
+        vlPutEp(res.j.episode);
+        var fresh = vlDraftFrom(res.j.episode), cur = VL.draft;
+        if (cur && cur.id === id) {
+          var f = fresh.shots.filter(function (x) { return x.id === sid; })[0], k = cur.shots.findIndex(function (x) { return x.id === sid; });
+          if (f && k >= 0) ['start', 'actions', 'lines', 'camera', 'end', 'sounds', 'around', 'seconds', 'beats', 'more'].forEach(function (key) { cur.shots[k][key] = f[key]; });
+        }
+        done();
+        msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.'));
+        if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+      })
+      .catch(function () { done(); msg('Could not reach the server.'); });
+  });
+}
+// v3.5.77 -- TD-1127, CUT BETWEEN BEATS (Ian, 2026-11-11). The beats after the cut become a new shot right after this one,
+// with their camera, sound, seconds and lines; each picture Stays, Moves or goes to Both. The first shot's Closing and the
+// new shot's Opening are left empty (the shot's Notes button fills them).
+function vlBeatCut(si, bi) {
+  vlReadForm();
+  var s = VL.draft && VL.draft.shots[si]; if (!s || vlSlLocked(VL.draft.id)) return;
+  var old = document.getElementById('vl-bcut'); if (old) old.parentNode.removeChild(old);
+  var w = document.createElement('div'); w.id = 'vl-bcut';
+  w.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;');
+  w.innerHTML = '<div style="' + VL_BOX + 'max-width:720px;width:92%;max-height:86vh;overflow:auto;padding:16px 18px;">' +
+    '<div style="font-weight:600;margin-bottom:6px;">Cut shot ' + (si + 1) + ' after beat ' + (bi + 1) + '</div>' +
+    '<div style="' + VL_DESC + 'margin-bottom:10px;">Beats ' + (bi + 2) + ' on become a new shot right after this one, with their camera, sound, seconds and lines. Choose where each picture goes. The first picture of each shot is how it opens.</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + s.kfs.map(function (k, i) {
+      return '<div style="width:150px;"><img src="' + escapeHtml(k.image_url || k.url || '') + '" style="width:150px;aspect-ratio:16/9;object-fit:cover;border-radius:4px;display:block;">' +
+        '<select id="vl-bcut-' + i + '" class="form-input" style="margin-top:4px;padding:3px 6px;font-size:12px;height:auto;"><option value="stay">Stays</option><option value="move">Moves</option><option value="both">Both</option></select></div>';
+    }).join('') + (s.kfs.length ? '' : '<div style="' + VL_DESC + '">This shot has no pictures.</div>') + '</div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-sm" onclick="vlBeatCutClose()">Cancel</button><button class="btn btn-sm btn-primary" onclick="vlBeatCutDo(' + si + ',' + bi + ')">Cut here</button></div>' +
+  '</div>';
+  document.body.appendChild(w);
+}
+function vlBeatCutClose() { var w = document.getElementById('vl-bcut'); if (w) w.parentNode.removeChild(w); }
+function vlBeatCutDo(si, bi) {
+  var d = VL.draft, s = d && d.shots[si]; if (!s) return;
+  var choice = s.kfs.map(function (k, i) { var e = document.getElementById('vl-bcut-' + i); return e ? e.value : 'stay'; });
+  vlBeatCutClose();
+  var texts = vlBeatTexts(s), n = texts.length, beats = vlBeatsNorm(s.beats, n), times = vlBeatTimes(s, n);
+  if (bi < 0 || bi >= n - 1) return;
+  function len(from, to) { var t = 0; for (var i = from; i < to; i++) t += times[i].d; return Math.max(4, Math.min(15, Math.round(t))); }
+  var aKfs = [], bKfs = [];
+  s.kfs.forEach(function (k, i) {
+    if (choice[i] !== 'move') aKfs.push(k);
+    if (choice[i] === 'move') bKfs.push(k);
+    else if (choice[i] === 'both') { var c = Object.assign({}, k); delete c.id; bKfs.push(c); }
+  });
+  var ns = vlNewShot(bKfs);
+  ns.name = String(s.name || '').trim() ? String(s.name).trim() + ' (2)' : '';
+  ns.purpose = s.purpose || ''; ns.mode = s.mode; ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });
+  ns.camera = s.camera || ''; ns.sounds = s.sounds || ''; ns.around = s.around || ''; ns.more = !!(ns.sounds || ns.around);
+  ns.end = s.end || ''; ns.start = '';
+  ns.actions = vlActionsText(texts.slice(bi + 1)); ns.beats = beats.slice(bi + 1);
+  ns.lines = s.lines.filter(function (l) { return l.when > bi + 1; }).map(function (l) { return { who: l.who, text: l.text, when: l.when - (bi + 1), off: l.off }; });
+  ns.seconds = len(bi + 1, n);
+  s.lines = s.lines.filter(function (l) { return !(l.when > bi + 1); });
+  s.actions = vlActionsText(texts.slice(0, bi + 1)); s.beats = beats.slice(0, bi + 1);
+  s.end = ''; s.seconds = len(0, bi + 1); s.kfs = aKfs;
+  d.shots.splice(si + 1, 0, ns);
+  vlStructural();
+}
 function vlShotCheckBtnHTML(si) {
   var d = VL.draft, s = d && d.shots[si];
   if (!s || !s.id || !s.kfs.length) return '';
@@ -44428,7 +44523,7 @@ function vlTodoBtnHTML(si) {
   if (n) { label = '&#9888; ' + n + ' to do'; style += 'border-color:#e8a85a;color:#e8a85a;'; }
   else if (pc) label = pc.stale ? 'Changed since the check' : '&#10003; Ready';
   else label = 'Not checked';
-  return '<span style="display:inline-flex;gap:6px;align-items:center;">' + vlShotCheckBtnHTML(si) +   // v3.5.38
+  return '<span style="display:inline-flex;gap:6px;align-items:center;">' + vlShotCheckBtnHTML(si) + vlShotFillBtnHTML(si) +   // v3.5.38; v3.5.77 the shot's Notes
     '<button type="button" class="btn btn-sm vl-todo-btn" style="' + style + '" title="This shot\'s to-do list: the pre-production check and the quick checks" onclick="vlTodoOpen(' + si + ')">' + label + '</button></span>';
 }
 function vlTodoClose() { var o = document.getElementById('vl-todo-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); }

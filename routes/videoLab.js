@@ -3096,6 +3096,77 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
   vlDebug(userId, 'info', JFN, count + ' finding(s), ' + charged + ' token(s) charged', { input_tokens: inTok, output_tokens: outTok, cost_usd: usd,
     shots: result.shots.map(function (s) { return { mode: s.mode, findings: s.findings.map(function (f) { return f.kind + (f.fix ? '+' + f.fix.type : ''); }) }; }) });
 }
+// =================================================================================================
+// v3.5.77 -- TD-1127, A SHOT'S OWN DIRECTOR'S NOTES (Ian, 2026-11-11: "when you create a new shot and it has empty sections
+// this Directors notes button will fill in the missing pieces"; spec claude/VIDEO_BEAT_CUT_SPEC.md). Only the empty boxes
+// are written; everything the user wrote stays. The shots before and after are read so the words follow on. 1 token
+// (app_settings video_fill_tokens), charged only when something was written. Answered at once, no job.
+// =================================================================================================
+const FILL_BOXES = { start: 'Opening (the first frame: who is where, facing which way, and the place)', end: 'Closing (the last frame: where everyone is and how they stand)', camera: 'Camera across the whole shot', sounds: 'Sounds heard all the way through', around: 'What is happening around them (weather, fire, crowds)' };
+async function fillTokens(db) {
+  let v = null;
+  try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_fill_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
+  return (Number.isFinite(v) && v >= 1) ? v : 1;
+}
+function fillWordsText(w, label) {
+  if (!w) return label + ': (none)';
+  const t = beatTimes(w);
+  return label + ':\n' + ['Opening: ' + (w.start || '(empty)'), 'Beats: ' + (w.actions.length ? w.actions.map(function (a, i) { return (i + 1) + '. (' + secsText(t[i].from) + '-' + secsText(t[i].to) + ' s) ' + a + w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return ' [' + (l.who || 'a voice') + (l.off ? ', off screen' : '') + ': "' + l.text + '"]'; }).join(''); }).join(' ') : '(none)'),
+    'Camera: ' + (w.camera || '(empty)'), 'Sounds: ' + (w.sounds || '(empty)'), 'Around them: ' + (w.around || '(empty)'), 'Closing: ' + (w.end || '(empty)'), 'Length: ' + w.seconds + ' s'].join('\n');
+}
+router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/shots/' + req.params.id + '/fill';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(parseInt(req.params.id, 10));
+    const ep = shot ? await db.prepare('SELECT * FROM episodes WHERE id = ?').get(shot.episode_id) : null;
+    if (!shot || !(await canChange(req, ep))) return vlRefuse(req, res, FN, 404, 'Not found.', { found: !!shot });
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return vlRefuse(req, res, FN, 500, 'The writer is not set up on this server (ANTHROPIC_API_KEY).');
+    const busy = await db.prepare("SELECT id FROM episode_writer_jobs WHERE episode_id = ? AND shot_id IS NULL AND status = 'running' LIMIT 1").get(ep.id);
+    if (busy) return vlRefuse(req, res, FN, 409, 'The Director is rewriting the episode. Try when that is done.');
+    const w = shotWords(shot) || cleanWords({ seconds: shot.seconds });
+    const empty = Object.keys(FILL_BOXES).filter(function (k) { return !String(w[k] || '').trim(); });
+    const noBeats = !w.actions.length;
+    if (!empty.length && !noBeats) return res.status(400).json({ error: 'NOTHING', message: 'Every box of this shot is filled in already. Clear a box you want the Director to write.' });
+    const tokens = await fillTokens(db);
+    const bal = await require('./tokens').getBalance(req.session.userId);
+    if (bal.total < tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'The Director\u2019s Notes for one shot cost ' + tokens + ' token' + (tokens === 1 ? '' : 's') + '.' });
+    const all = await db.prepare('SELECT * FROM shots WHERE episode_id = ? ORDER BY position, id').all(ep.id);
+    const at = all.findIndex(function (x) { return x.id === shot.id; });
+    const prev = at > 0 ? shotWords(all[at - 1]) : null, next = at >= 0 && at < all.length - 1 ? shotWords(all[at + 1]) : null;
+    const pool = await refsPool(db, ep).catch(function () { return { characters: [], assets: [] }; });
+    const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of strings, about one for every 2.5 seconds of its ' + w.seconds + ' seconds'] : []);
+    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Reply with JSON only, with just the boxes asked for.';
+    const text = ['Overall direction: ' + (ep.overall || '(none)'), 'Characters: ' + (pool.characters.map(function (c) { return c.name; }).join(', ') || '(none)'),
+      'Shot ' + (at + 1) + (shot.name ? ' "' + shot.name + '"' : '') + (shot.purpose ? '. Purpose: ' + shot.purpose : ''),
+      fillWordsText(w, 'THIS SHOT, as written so far'), prev ? fillWordsText(prev, 'THE SHOT BEFORE') : 'This is the first shot.', next ? fillWordsText(next, 'THE SHOT AFTER') : 'This is the last shot.',
+      'Write these boxes: {' + ask.join(', ') + '}'].join('\n\n');
+    const prices = await shotListPrices(db);
+    const r = await callShotListModel(key, { max_tokens: 1500, system: system, content: [{ type: 'text', text: text }] });
+    if (r.error) return vlRefuse(req, res, FN, 502, 'The Director could not be reached (' + r.error + '). Nothing was charged.');
+    const j = readJson(r.text) || {};
+    const got = {};
+    empty.forEach(function (k) { if (typeof j[k] === 'string' && j[k].trim()) got[k] = j[k].trim(); });
+    if (noBeats && Array.isArray(j.actions)) { const a = j.actions.map(textOf).filter(Boolean).slice(0, 12); if (a.length) got.actions = a; }
+    if (!Object.keys(got).length) return vlRefuse(req, res, FN, 502, 'The Director\u2019s answer had nothing usable. Nothing was charged; try again.');
+    const merged = cleanWords(Object.assign({}, w, got, { beats: got.actions ? null : w.beats }));
+    await db.transaction(async function (tx) {
+      await writeWords(tx, shot.id, merged);
+      await tx.prepare('UPDATE shots SET precheck = NULL WHERE id = ?').run(shot.id);
+    });
+    const tk = require('./tokens');
+    await tk.spendTokens(req.session.userId, tokens, { source: 'video_shot_fill', event_type: 'generation_spend', related_campaign_id: ep.campaign_id });
+    const usd = Math.round(usdFor(prices, Number((r.usage && r.usage.input_tokens) || 0), Number((r.usage && r.usage.output_tokens) || 0)) * 10000) / 10000;
+    vlDebug(req.session.userId, 'info', FN, 'Filled ' + Object.keys(got).join(', ') + ' for ' + tokens + ' token(s), $' + usd + ' to Campaignia', { usage: r.usage });
+    res.json({ ok: true, filled: Object.keys(got), tokens: tokens, episode: await loadEpisode(db, ep.id) });
+  } catch (e) {
+    console.error('[video] shot fill error:', e && e.message);
+    vlDebug(req.session && req.session.userId, 'error', FN, 'Could not fill: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });
+    if (!res.headersSent) res.status(500).json({ error: 'Could not write the notes. Nothing was charged.' });
+  }
+});
 router.post('/episodes/:id/precheck', requireAuth, requireVideo, async function (req, res) {
   const FN = 'POST /api/video-lab/episodes/' + req.params.id + '/precheck';
   try {

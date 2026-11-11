@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.77",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3577-beat-cut-fill",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: cut a shot between its beats; a shot's own Director's Notes fill its empty parts.",
+        "detail": "Ian, 2026-11-11 (TD-1127, spec claude/VIDEO_BEAT_CUT_SPEC.md). Cut here between beats: the later beats become a new shot right after, with their camera, sound, seconds and lines; each picture Stays, Moves or goes to Both. Each shot with empty parts has Fill with Director's Notes (1 token): it writes only the empty boxes, following on from the shots either side.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.76",
     "staged_on": "2026-11-10",
     "entries": [
