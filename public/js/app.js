@@ -43094,6 +43094,11 @@ function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (ad
     var es = ep && sh.id ? vlEpShot(ep, sh.id) : null, takes = (es && es.takes) || [], t = vlChosen(es);
     line('Takes', takes.length ? takes.length + ' (' + takes.filter(function (x) { return x.status === 'done'; }).length + ' done)' : 'none');
     if (t) line('Pinned take', 'take ' + t.id + ', ' + t.status + (t.stale ? ', out of date' : '') + (t.trim_start != null || t.trim_end != null ? ', trimmed ' + (Number(t.trim_start) || 0) + '-' + (t.trim_end != null ? t.trim_end : 'end') + ' s' : '') + (t.video_url ? ' - ' + t.video_url : ''));
+    // v3.5.76 (Ian, 2026-11-11: "Does your new note outline option on the shot give you the Pre Prod Recommendations?")
+    var pcx = vlShotPc(i), open = pcx ? (pcx.findings || []).filter(function (f) { return !f.done; }) : [], qc = vlChecks(i);
+    if (pcx) line('Pre-production check', (pcx.stale ? 'changed since the check' : 'up to date') + (pcx.mode ? ', recommends ' + pcx.mode + ' mode' : ''));
+    if (open.length) { L.push('Check findings:'); open.forEach(function (f) { var x = f.fix || null; L.push('  - ' + ((x && x.label) || f.kind || 'note') + ': ' + String(f.text || '').replace(/\s+/g, ' ').trim() + (x && x.type === 'words' && x.text ? ' -> Suggested: "' + String(x.text).replace(/\s+/g, ' ').trim() + '"' : (x && x.type ? ' -> Fix: ' + x.type : ''))); }); }
+    if (qc.length) { L.push('Optional checks:'); qc.forEach(function (c) { L.push('  - ' + String(c.t || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()); }); }
     if (i < d.shots.length - 1) line('Then', vlCutInfo(sh.cut_style || 'instant').label + ' into shot ' + (i + 2));
   });
   if (onlySi != null) { vlCopyText(L.join('\n'), 'Shot ' + (onlySi + 1) + ' outline copied.'); return; }
@@ -44262,6 +44267,13 @@ function vlChecks(si) {
   var secs = Number(s.seconds) || VL_SHOT_SECS;
   // v3.5.67 (Ian, 2026-11-10: "Someone leaves in beat 5" when beat 5 had 3 s): judged by the beats' own seconds
   var btm = vlBeatTimes(s, acts.length);
+  // v3.5.76 (Ian, 2026-11-11: a 1-second beat with an eight-word line): a line needs about 2.5 words a second to be said
+  (s.lines || []).forEach(function (l) {
+    var tm = l.when ? btm[l.when - 1] : null, words = String(l.text || '').trim().split(/\s+/).filter(Boolean).length;
+    if (!tm || !words) return;
+    var need = Math.max(1, Math.round(words / 2.5 * 2) / 2);
+    if (need > tm.d + 0.25) out.push({ p: 'beats', t: 'Beat ' + l.when + '\'s line (' + words + ' words) needs about ' + vlSecsText(need) + ' s to say and the beat has ' + vlSecsText(tm.d) + ' s. Lengthen the beat or shorten the line.' });
+  });
   btm.forEach(function (tm, i) { if (acts[i] && tm.d < 1.5) out.push({ p: 'beats', t: 'Beat ' + (i + 1) + ' has only ' + vlSecsText(tm.d) + ' s. That is rarely enough for a whole movement.' }); });
   // v3.5.47 (Ian: someone told to leave stops at the edge): leaving needs about 2 seconds to get all the way out, and a
   // second of empty frame when it ends the shot.

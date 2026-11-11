@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.76",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3576-line-length-outline-findings",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: a line too long for its beat is flagged; the outline carries the check's findings.",
+        "detail": "Ian, 2026-11-11. The check said a beat could not carry both a movement and a line. It is now told people move and speak together and to judge a line by speaking time, about 2.5 words a second. A free Optional Check flags a line longer than its beat. The outline (download and the admin copy) lists each shot's open check findings and Optional Checks.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.75",
     "staged_on": "2026-11-10",
     "entries": [
