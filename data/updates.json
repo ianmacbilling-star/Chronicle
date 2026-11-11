@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.79",
+    "staged_on": "2026-11-11",
+    "entries": [
+      {
+        "id": "3579-check-levels",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: the check sorts its findings into Recommended and Optional, says All clear when a shot is ready, and suggests where to cut a shot that is too long.",
+        "detail": "Ian, 2026-11-11: run the check, fix, recheck until the all clear, then generate. Only what will spoil a take is Recommended; small things are Optional suggestions. New rules: a line that is really a direction, silent speech with a line, a Closing that does not match the last beat. A shot longer than the model makes gets Cut after beat N. A recheck does not raise again what was fixed or dismissed. The Notes button now comes before the check.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.78",
     "staged_on": "2026-11-11",
     "entries": [

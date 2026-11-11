@@ -44288,7 +44288,11 @@ function vlChecks(si) {
   if (s.kfs.length > maxScene0) out.push({ p: 'shot', t: 'Only the first ' + maxScene0 + ' pictures are sent. Cut this shot.' });
   s.lines.forEach(function (l) { if (String(l.text || '').trim() && !String(l.who || '').trim()) out.push({ p: 'lines', t: 'Who says "' + String(l.text).slice(0, 40) + '"? A line with no name is sent as a voice from off-screen; name the speaker so it is not given to someone on screen.' }); });   // v3.5.25
   // v3.5.63: a line said at any time is fine now (it sits in Throughout), so no nudge to give it a beat
-  var bsum = vlBeatsSet(s); if (bsum > Number(s.seconds)) out.push({ p: 'beats', t: 'The beats\' seconds add up to ' + bsum + ' s, more than the shot\'s ' + s.seconds + ' s. Shorten a beat or make the shot longer.' });   // v3.5.63
+  // v3.5.79 (Ian, 2026-11-11): longer than the model makes -- cut it between two beats
+  var mmx = vlModel(VL.draft.model), maxS = Math.min(15, Math.max.apply(null, ((mmx && mmx.durations) || ['15']).map(Number)));
+  var btot = btm.length ? btm[btm.length - 1].to : 0;
+  if (btot > maxS + 0.25) out.push({ p: 'beats', t: 'The beats add up to ' + vlSecsText(btot) + ' s and ' + ((mmx && mmx.label) || 'this model') + ' makes at most ' + maxS + ' s. Cut the shot in two with the \u2702 between two beats (the check suggests where), or shorten beats.' });
+  var bsum = vlBeatsSet(s); if (bsum > Number(s.seconds) && !(btot > maxS + 0.25)) out.push({ p: 'beats', t: 'The beats\' seconds add up to ' + bsum + ' s, more than the shot\'s ' + s.seconds + ' s. Shorten a beat or make the shot longer.' });   // v3.5.63
   if (s.kfs.length >= 2 && !String(s.end || '').trim()) out.push({ p: 'end', t: 'Say how the shot ends, so the later pictures don\'t decide it.' });
   var room = vlRefsRoom(si);
   if (room.over > 0) out.push({ p: 'shot', t: 'Only ' + room.max + ' pictures go with a shot: ' + room.over + ' reference' + (room.over === 1 ? '' : 's') + ' at the end of the list will be left out.' });
@@ -44358,7 +44362,7 @@ var VL_MODE_TIPS = {
   reference: 'Reference: the model is given this shot\'s pictures and the cast\'s reference pictures and directs the shot itself from your words. Best when the pictures disagree on place, poses or who is where.',
   keyframes: 'Keyframes: the video moves from each picture exactly to the next. Best when neighbouring pictures match closely: same place, same poses, a small change.'
 };
-var VL_PC_KIND = { gap: 'Missing moment', mode: 'Video mode', continuity: 'Continuity', words: 'Words', reference: 'Reference', style: 'Art style', aspect: 'Picture shape', other: 'Note' };
+var VL_PC_KIND = { gap: 'Missing moment', mode: 'Video mode', continuity: 'Continuity', words: 'Words', reference: 'Reference', style: 'Art style', aspect: 'Picture shape', cut: 'Too long', other: 'Note' };
 function vlModeSelectHTML(si) {
   var s = VL.draft && VL.draft.shots[si]; if (!s) return '';
   var cur = s.mode || '';
@@ -44373,7 +44377,7 @@ function vlShotPc(si) {
 }
 function vlTodoCount(si) {
   var pc = vlShotPc(si), n = vlChecks(si).length;
-  if (pc) n += (pc.findings || []).filter(function (f) { return !f.done; }).length;
+  if (pc) n += (pc.findings || []).filter(function (f) { return !f.done && f.level !== 'optional'; }).length;   // v3.5.79: optional suggestions are not to-dos
   return n;
 }
 // v3.5.38 (Ian, 2026-11-09: "where the todo button is on the shots... give an option to recheck just that single shot"):
@@ -44524,7 +44528,7 @@ function vlTodoBtnHTML(si) {
   if (n) { label = '&#9888; ' + n + ' to do'; style += 'border-color:#e8a85a;color:#e8a85a;'; }
   else if (pc) label = pc.stale ? 'Changed since the check' : '&#10003; Ready';
   else label = 'Not checked';
-  return '<span style="display:inline-flex;gap:6px;align-items:center;">' + vlShotCheckBtnHTML(si) + vlShotFillBtnHTML(si) +   // v3.5.38; v3.5.77 the shot's Notes
+  return '<span style="display:inline-flex;gap:6px;align-items:center;">' + vlShotFillBtnHTML(si) + vlShotCheckBtnHTML(si) +   // v3.5.38; v3.5.77 the shot's Notes; v3.5.79 Notes first (Ian)
     '<button type="button" class="btn btn-sm vl-todo-btn" style="' + style + '" title="This shot\'s to-do list: the pre-production check and the quick checks" onclick="vlTodoOpen(' + si + ')">' + label + '</button></span>';
 }
 function vlTodoClose() { var o = document.getElementById('vl-todo-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); }
@@ -44553,9 +44557,12 @@ function vlTodoPaint() {
     if (pc.mode && pc.mode !== curMode) rows.push('<div style="margin:10px 0;padding:8px 10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;">' +   // v3.5.35 (Ian): only when the shot is not set that way
       '<div style="font-size:13px;color:var(--accent-pale);"><b>The Director recommends ' + (pc.mode === 'reference' ? 'Reference' : 'Keyframes') + '.</b> ' + escapeHtml(pc.mode_why || '') + '</div>' +
       '</div>');   // v3.5.35: the button to the recommended mode is on the Mode line above
+    // v3.5.79 (Ian, 2026-11-11: "Recommended vs Optional"; run the check, fix, recheck until the all clear, then generate)
     var open = (pc.findings || []).filter(function (f) { return !f.done; }), done = (pc.findings || []).filter(function (f) { return f.done; });
-    if (!open.length) rows.push('<div style="' + VL_DESC + 'margin:8px 0;">Nothing open from the Director.</div>');
-    open.forEach(function (f) { rows.push(vlPcRowHTML(si, f, false)); });
+    var rec = open.filter(function (f) { return f.level !== 'optional'; }), opt = open.filter(function (f) { return f.level === 'optional'; });
+    if (rec.length) rows.push('<div style="' + VL_DESC + 'margin:12px 0 4px;">Recommended</div>' + rec.map(function (f) { return vlPcRowHTML(si, f, false); }).join(''));
+    else rows.push('<div style="margin:10px 0;padding:8px 10px;border:1px solid rgba(120,200,140,0.45);border-radius:8px;color:#8fd19e;font-size:13px;">' + (pc.stale ? 'Nothing recommended at the last check, but the shot has changed since. Recheck to be sure.' : '&#10003; <b>All clear: ready to generate.</b>' + (opt.length ? ' The suggestions below are optional.' : '')) + '</div>');
+    if (opt.length) rows.push('<div style="' + VL_DESC + 'margin:12px 0 4px;">Optional suggestions</div>' + opt.map(function (f) { return vlPcRowHTML(si, f, false); }).join(''));
     if (done.length) rows.push('<div style="' + VL_DESC + 'margin:12px 0 4px;">Done</div>' + done.map(function (f) { return vlPcRowHTML(si, f, true); }).join(''));
   }
   rows.push('<div style="' + VL_DESC + 'margin:14px 0 4px;">Optional Checks</div>' + (quick.length ? quick.map(function (c) { return '<div style="' + VL_WARN + 'margin-bottom:4px;">&#9888; ' + escapeHtml(c.t) + '</div>'; }).join('') : '<div style="' + VL_DESC + '">None.</div>'));
@@ -44567,6 +44574,7 @@ function vlPcRowHTML(si, f, done) {
     if (x.type === 'words') { var _ch = x.box === 'actions' && x.changes && x.changes.length; fixBtn = '<button class="' + B + '" onclick="vlPcWords(' + si + ',' + f.id + ')">' + (_ch ? 'Use ' + (x.changes.length === 1 ? 'this change' : 'these changes') : 'Use these words') + '</button>'; extra = '<div style="font-size:12px;margin-top:4px;padding:6px 8px;border-left:2px solid rgba(var(--accent-rgb),0.4);' + (_ch ? '' : 'white-space:pre-wrap;') + 'color:var(--accent-pale);" data-no-words>' + (_ch ? vlActChangesHTML(x.changes) : escapeHtml(x.text)) + '</div>'; }   // v3.5.53
     else if (x.type === 'add_reference') fixBtn = '<button class="' + B + '" onclick="vlPcRef(' + si + ',' + f.id + ')">Add ' + escapeHtml(x.name) + '</button>';
     else if (x.type === 'mode') fixBtn = '<button class="' + B + '" onclick="vlPcSetMode(' + si + ',\'' + x.mode + '\',' + f.id + ')">Switch to ' + (x.mode === 'reference' ? 'Reference' : 'Keyframes') + '</button>';
+    else if (x.type === 'cut') fixBtn = '<button class="' + B + '" onclick="vlPcCut(' + si + ',' + f.id + ')" title="Opens the cut, where you choose where each picture goes">&#9986; Cut after beat ' + Number(x.after_beat) + '</button>';   // v3.5.79
     else if (x.type === 'seconds') fixBtn = '<button class="' + B + '" onclick="vlPcSeconds(' + si + ',' + f.id + ')" title="Set this shot\'s length to ' + Number(x.seconds) + ' seconds">Make it ' + Number(x.seconds) + ' s</button>';   // v3.5.48
     else if (x.type === 'expand') fixBtn = '<button class="' + B + '" onclick="vlPcExpand(' + si + ',' + f.id + ')" title="Redraw this picture wide (16:9) in its art style, with more of the scene at the sides. One retouch; only this episode\'s copy changes; Revert brings it back.">Expand picture ' + Number(x.picture) + '</button>';   // v3.5.35
     else if (x.type === 'add_picture') { fixBtn = '<button class="' + B + '" onclick="vlPcPicture(' + si + ',' + f.id + ')">Add a picture here</button>'; if (x.describe) extra = '<div style="font-size:12px;margin-top:4px;color:var(--accent-pale);" data-no-words>The missing picture: ' + escapeHtml(x.describe) + '</div>'; }
@@ -44576,6 +44584,15 @@ function vlPcRowHTML(si, f, done) {
     '<div style="font-size:13px;line-height:1.45;color:var(--accent-pale);" data-no-words>' + escapeHtml(f.text) + '</div>' + extra +
     '<div style="display:flex;gap:8px;margin-top:6px;">' + fixBtn +
       '<button class="' + B + '" onclick="vlPcDone(' + Number(vlShotIdAt(si)) + ',' + f.id + ',false,' + (done ? 'true' : 'false') + ')">' + (done ? 'Undo' : 'Dismiss') + '</button></div></div>';
+}
+// v3.5.79 (Ian, 2026-11-11: "It's too long you should cut between x and y beats"): the check's cut opens the beat cut
+function vlPcCut(si, fid) {
+  var f = vlPcFinding(si, fid), s = VL.draft && VL.draft.shots[si];
+  if (!f || !f.fix || !s) return;
+  var bi = Number(f.fix.after_beat) - 1, n = vlBeatTexts(s).length;
+  if (!(bi >= 0 && bi < n - 1)) { vlPcMsg('Those beats have changed since the check. Use the \u2702 between the beats to cut by hand.'); return; }
+  vlTodoClose();
+  vlBeatCut(si, bi);
 }
 function vlShotIdAt(si) { var s = VL.draft && VL.draft.shots[si]; return s && s.id ? s.id : 0; }
 function vlPcFinding(si, fid) { var pc = vlShotPc(si); return pc ? (pc.findings || []).filter(function (f) { return Number(f.id) === Number(fid); })[0] : null; }

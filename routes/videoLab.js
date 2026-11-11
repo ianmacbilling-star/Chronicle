@@ -2747,7 +2747,7 @@ router.get('/episodes/:id/shot-list', requireAuth, requireVideo, async function 
 // signature, so a shot changed since shows its findings as out of date. 1 token (app_settings.video_precheck_tokens),
 // charged only once the findings are saved. Runs as a Director job (kind 'precheck'), one at a time with the others.
 // =================================================================================================
-const PC_KINDS = ['gap', 'mode', 'continuity', 'words', 'reference', 'style', 'aspect', 'other'];
+const PC_KINDS = ['gap', 'mode', 'continuity', 'words', 'reference', 'style', 'aspect', 'cut', 'other'];   // v3.5.79 cut
 const PC_BOXES = ['start', 'actions', 'camera', 'end', 'sounds', 'around'];
 // v3.5.64 -- each words finding is named after what it changes (Ian: "Art style" offered new Start words)
 function pcBoxLabel(fix) {
@@ -2844,7 +2844,9 @@ async function precheckContext(db, ep) {
     const w = shotWords(s) || legacyWords(s.keyframes, MODELS[ep.model]);
     const key = shotModelKey(ep.model, shotMode(s)), mm = MODELS[key];
     return { id: s.id, name: s.name || '', words: w, refs: refsToSend(ep, w, shotRefs(s), pool, 12).map(function (p) { return p.name; }),
-      mode: mm.reference ? 'reference' : 'keyframes', modeSet: shotMode(s), model: mm.label + (mm.reference ? ' (Reference)' : ' (Keyframes)') };
+      mode: mm.reference ? 'reference' : 'keyframes', modeSet: shotMode(s), model: mm.label + (mm.reference ? ' (Reference)' : ' (Keyframes)'),
+      maxSecs: Math.min(SHOT_MAX_SECS, Math.max.apply(null, (mm.durations || ['15']).map(Number))),   // v3.5.79
+      dealt: pcDealt(s) };
   });
   return ctx;
 }
@@ -2865,20 +2867,28 @@ function precheckRequest(ctx, images) {
     'NO EMPTY FINDINGS: report only what needs changing. Never a finding that ends with "it is fine", "retain" or "no change needed", and never two findings with the same fix.\n' +
     'PURPOSE: each shot\'s Purpose is the user\'s intent. When the words leave out part of it (the purpose says Drel takes the mirror from Ori and Ori is not in the shot) or do something it does not ask for, that is a finding of kind "words" with a fix that adds only what is missing. When a purpose describes what happens in another shot, say which shot and suggest no words.\n' +
     'TITLE CARDS: a title, logo or text-on-black picture as a shot\'s first picture is meant: the shot opens on it and moves into the scene (clouds, a fade). Never report it as a different kind of art, never tell them to drop it, and never take "opens on the title" out of the words.\n' +
+    // v3.5.79 (Ian, 2026-11-11: the check should get people to an all clear; "Recommended vs Optional"; "It's too long you should cut between x and y beats")
+    'RECOMMENDED OR OPTIONAL: give every finding a "level". "recommended" is only for what will spoil a take: words the model will say or show by mistake, boxes that contradict each other, a beat too short for what is in it, a person or thing that appears from nowhere, someone who leaves and is needed again, a shot longer than the model can make, a picture that cannot be the character, the wrong mode. Everything else (a clearer wording, an extra detail, where a prop comes from, a picture that would help) is "optional". When in doubt, optional. A shot whose only findings are optional is ready to generate.\n' +
+    'SPOKEN BY MISTAKE (recommended): a line\'s words are spoken aloud exactly as written. A line that is really a direction ("Chanting under his breath.", "whispers a prayer", "(muttering)") will be read out: say so, and give a beat fix that puts the direction in the beat\'s action and the sound in its sound instead.\n' +
+    'SILENT AND SPEAKING (recommended): a beat that says someone speaks silently, mouths words or speaks "without sound" but also has a line, or the reverse: say which beat and give the beat\'s words without the contradiction.\n' +
+    'THE CLOSING (recommended): the end must match where the last beat leaves people: who is where, standing or kneeling, what is in their hands. When it does not, give a words fix for the end box.\n' +
+    'TOO LONG (recommended): when the beats add up to more than the most this model makes (given with each shot), the shot must be cut in two. Give a finding of kind "cut" with a fix {"type": "cut", "after_beat": N}: the shot is cut between beat N and beat N+1. Pick the natural break (a change of subject, one action finished before the next starts), with each half no longer than the model makes.\n' +
+    'ALREADY DEALT WITH: findings listed under a shot as already dealt with by the user were fixed or dismissed. Do not raise them again, in any wording.\n' +
     '5. reference: someone clearly on screen AND named in the shot\'s words who is not among the references sent. Never someone already sent, a background figure or a guess.\n' +
     '6. style: only a picture that is plainly a different kind of art from the shot\'s other pictures (a photo among paintings, a flat cartoon among painted pictures, black and white among colour). The art style\'s name' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' is a loose label, not a test: never report that a picture is not that style, and never report differences of colour, light or detail.\n' +
     'LIKENESS: never judge whether a character in a picture looks like their reference (build, height, proportions, face, hair, clothing details): the reference picture is sent and the video follows it. Report only a picture where it plainly cannot be them (another skin colour, another kind of creature, a man where a woman should be).\n\n' +   // v3.5.50 (Ian, 2026-11-09: "it\'s saying this isn\'t Emanon because he\'s too bulky... a little over the top")
     'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
     (ctx.only != null ? 'THIS TIME, CHECK ONLY SHOT ' + (ctx.only + 1) + '. The other shots are listed so you know what comes before and after it (the last picture of the shot before and the first of the shot after are shown): look at the cut into it and out of it, but report only on shot ' + (ctx.only + 1) + '.\n\n' : '') +   // v3.5.38
     'ANSWER WITH ONLY THIS JSON, no other text:\n' +
-    '{"shots": [{"shot": 1, "mode": "reference", "mode_why": "...", "findings": [{"kind": "gap", "text": "...", "fix": {"type": "add_picture", "after_picture": 3, "describe": "..."}}]}]}\n' +
-    (ctx.only != null ? 'One entry only, for shot ' + (ctx.only + 1) + '. "kind" is one of' : 'One entry per shot, ' + ctx.shots.length + ' in all, in order. "kind" is one of') + ': gap, mode, continuity, words, reference, style, other. "fix" is optional and is one of:\n' +
+    '{"shots": [{"shot": 1, "mode": "reference", "mode_why": "...", "findings": [{"kind": "gap", "level": "optional", "text": "...", "fix": {"type": "add_picture", "after_picture": 3, "describe": "..."}}]}]}\n' +
+    (ctx.only != null ? 'One entry only, for shot ' + (ctx.only + 1) + '. "kind" is one of' : 'One entry per shot, ' + ctx.shots.length + ' in all, in order. "kind" is one of') + ': gap, mode, continuity, words, reference, style, cut, other. "level" is recommended or optional. "fix" is optional and is one of:\n' +
     '{"type": "words", "box": "start|actions|camera|end|sounds|around", "text": "the whole new text of that box (for actions, one action per line)"}\n' +
     '{"type": "words", "box": "beat", "beat": <beat number>, "field": "do|camera|sound", "text": "the new words for that one part of that one beat"} (best when only one beat needs changing)\n' +
     '{"type": "add_reference", "name": "a character\'s exact name"}\n' +
     '{"type": "mode", "mode": "reference|keyframes"}\n' +
     '{"type": "add_picture", "after_picture": <picture number>, "describe": "what the missing picture shows"}\n' +
-    '{"type": "seconds", "seconds": <the shot\'s new length, 4 to 15>}';   // v3.5.48
+    '{"type": "seconds", "seconds": <the shot\'s new length, 4 to 15>}\n' +   // v3.5.48
+    '{"type": "cut", "after_beat": <the beat the first half ends with>}';   // v3.5.79
   const content = [];
   const head = [];
   head.push('EPISODE: ' + String(ctx.ep.name || '') + (ctx.sessionName ? ' (session "' + ctx.sessionName + '")' : '') + '.');
@@ -2897,6 +2907,9 @@ function precheckRequest(ctx, images) {
     const inf = ctx.info[si], w = inf.words, first = n + 1, last = n + s.keyframes.length;
     const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
     lines.push('References sent: ' + (inf.refs.length ? inf.refs.join(', ') : 'none') + '.');
+    { const bt0 = beatTimes(w), tot = bt0.length ? bt0[bt0.length - 1].to : 0;   // v3.5.79: too long for the model
+      lines.push('The beats add up to ' + secsText(tot) + ' seconds; this model makes at most ' + inf.maxSecs + ' seconds' + (tot > inf.maxSecs + 0.25 ? ': TOO LONG, it must be cut.' : '.')); }
+    if (inf.dealt.length) lines.push('Already dealt with by the user (do not raise again): ' + inf.dealt.map(function (t) { return '"' + t + '"'; }).join(' '));
     lines.push('start: ' + (w.start || '(empty)'));
     const bt = beatTimes(w), bb = w.beats || [];   // v3.5.63 -- TD-1121: each beat with its seconds, camera and sound
     lines.push('actions (beats): ' + (w.actions.length ? w.actions.map(function (a, i) { const b = bb[i] || {}; return (i + 1) + '. (' + secsText(bt[i].from) + '-' + secsText(bt[i].to) + ' s' + (b.secs ? ', set by the user' : '') + ') ' + a + (b.camera ? ' [camera: ' + b.camera + ']' : '') + (b.sound ? ' [sound: ' + b.sound + ']' : '') +
@@ -2944,6 +2957,12 @@ function actionChanges(oldA, newA) {
   flush();
   return out;
 }
+// v3.5.79 (Ian, 2026-11-11): a recheck starts the list over, but what the user fixed or dismissed is not raised again
+function pcDealt(s) {
+  const pc = parseJson(s && s.precheck, null);
+  if (!pc || !Array.isArray(pc.findings)) return [];
+  return pc.findings.filter(function (f) { return f && f.done && f.kind !== 'aspect'; }).map(function (f) { return pcText(f.text, 240); }).filter(Boolean).slice(0, 12);
+}
 function pcText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }
 function parsePrecheck(raw, ctx) {
   const j = readJson(raw);
@@ -2983,6 +3002,7 @@ function parsePrecheck(raw, ctx) {
       else if (fx && fx.type === 'add_reference' && names[String(fx.name || '').trim().toLowerCase()]) fix = { type: 'add_reference', name: names[String(fx.name).trim().toLowerCase()] };
       else if (fx && fx.type === 'mode' && (fx.mode === 'reference' || fx.mode === 'keyframes')) fix = { type: 'mode', mode: fx.mode };
       else if (fx && fx.type === 'seconds' && parseInt(fx.seconds, 10) >= 4 && parseInt(fx.seconds, 10) <= 15) fix = { type: 'seconds', seconds: parseInt(fx.seconds, 10) };   // v3.5.48: Make it N s
+      else if (fx && fx.type === 'cut' && ctx.info && ctx.info[si] && parseInt(fx.after_beat, 10) >= 1 && parseInt(fx.after_beat, 10) < ctx.info[si].words.actions.length) fix = { type: 'cut', after_beat: parseInt(fx.after_beat, 10) };   // v3.5.79
       else if (fx && fx.type === 'add_picture' && parseInt(fx.after_picture, 10) >= 1 && parseInt(fx.after_picture, 10) <= N) fix = { type: 'add_picture', after_picture: parseInt(fx.after_picture, 10), describe: pcText(fx.describe, 500) };
       // v3.5.64 -- NO EMPTY FINDINGS: words that change nothing, the same fix twice, or a finding that says to keep things as they are
       if (fx && fx.type === 'words' && !fix && (PC_BOXES.indexOf(fx.box) >= 0 || fx.box === 'beat')) return;   // words that change nothing
@@ -2993,7 +3013,7 @@ function parsePrecheck(raw, ctx) {
       if (fix && fix.type === 'words' && findings.some(function (o) { return o.fix && o.fix.type === 'words' && o.fix.box === fix.box && o.fix.text === fix.text && o.fix.beat === fix.beat && o.fix.field === fix.field; })) return;
       if (!fix && kind === 'words' && /\b(retain|keep (both|them|it) as|no change (is )?needed|is fine|are fine)\b/i.test(text)) return;
       if (fix && fix.type === 'words') fix.label = pcBoxLabel(fix);
-      findings.push({ kind: kind, text: text, fix: fix });
+      findings.push({ kind: kind, level: f.level === 'optional' && kind !== 'cut' ? 'optional' : 'recommended', text: text, fix: fix });   // v3.5.79
     });
     out[si] = { mode: mode, mode_why: pcText(x.mode_why, 400), findings: findings };
   });
@@ -3046,7 +3066,7 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
       const sh = shapes[n]; n++;
       if (isRef || (ctx.only != null && si !== ctx.only) || !sh || !sh.w || !sh.h || sh.w / sh.h >= PC_WIDE) return;
       const sure = sh.w / sh.h < PC_SURE;
-      found.push({ kind: 'aspect', text: 'Picture ' + n + ' (' + sh.w + ' x ' + sh.h + ') is ' + (sure ? 'not wide' : 'not quite wide') + '. The video is wide (16:9), so the model ' +
+      found.push({ kind: 'aspect', level: sure ? 'recommended' : 'optional', text: 'Picture ' + n + ' (' + sh.w + ' x ' + sh.h + ') is ' + (sure ? 'not wide' : 'not quite wide') + '. The video is wide (16:9), so the model ' +
         (sure ? 'will crop or stretch it. Expand redraws it wide.' : 'might crop or stretch it a little. Expand redraws it wide if the edges matter.'),
         fix: { type: 'expand', url: k.image_url, picture: n, sure: sure } });
     });
@@ -3076,7 +3096,7 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     for (let x = 0; x < keep.length; x++) {
       const i = keep[x], r = result.shots[i];
       const pc = { sig: ctx.shotSigs[i], at: at, mode: r.mode, mode_why: r.mode_why,
-        findings: r.findings.map(function (f, k) { return { id: k + 1, kind: f.kind, text: f.text, fix: f.fix, done: false }; }) };
+        findings: r.findings.map(function (f, k) { return { id: k + 1, kind: f.kind, level: f.level || 'recommended', text: f.text, fix: f.fix, done: false }; }) };   // v3.5.79 level
       await tx.prepare('UPDATE shots SET precheck = ? WHERE id = ?').run(JSON.stringify(pc), ctx.shots[i].id);
     }
     filled = true;
