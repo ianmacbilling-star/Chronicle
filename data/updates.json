@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.75",
+    "staged_on": "2026-11-10",
+    "entries": [
+      {
+        "id": "3575-take-card",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: each take shows when it was made and with which model.",
+        "detail": "Ian, 2026-11-11. Under each take: the pin, the take number, current or out of date, and the date; then the model, Reference or Keyframes, and whether it has the model's sound; the buttons at the foot of the card.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.74",
     "staged_on": "2026-11-10",
     "entries": [

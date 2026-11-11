@@ -42958,6 +42958,17 @@ function vlTakeProgress(t) {
   if (t.merge_status === 'running' || t.merge_status === 'saving') return 'Joining ' + mv.length + ' parts';
   return mv.length > 1 ? 'Making: ' + done + ' of ' + mv.length + ' parts' : 'Being made';
 }
+// v3.5.75 -- a take's date (finished, else started), short on the card and in full as its tip; its model and mode
+function vlTakeWhen(t, full) {
+  var d = new Date(String(t.finished_at || t.created_at || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(t.finished_at || t.created_at || '')) ? '' : 'Z'));
+  if (isNaN(d.getTime())) return '';
+  if (full) return (t.finished_at ? 'Finished ' : 'Started ') + d.toLocaleString();
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+function vlTakeModelText(t) {
+  var m = vlModel(t.model);
+  return ((m && m.label) || t.model || 'Unknown model') + (m ? ' \u00b7 ' + (m.reference ? 'Reference' : 'Keyframes') : '') + (t.sound ? ' \u00b7 sound' : '');
+}
 function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
@@ -42968,10 +42979,15 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
       '</div>';
   return '<div data-take="' + t.id + '" style="width:220px;flex:0 0 auto;border:1px solid ' + (chosen ? 'rgba(var(--accent-rgb),0.8)' : 'rgba(var(--accent-rgb),0.2)') + ';border-radius:8px;padding:6px;">' +
     body +
+    // v3.5.75 (Ian, 2026-11-11): pin, take, current or out of date, date / the model and mode / the buttons at the foot
     '<div style="display:flex;gap:4px;align-items:center;margin-top:5px;flex-wrap:wrap;">' +
       '<button type="button" class="vl-pin vl-take-pin" title="' + (chosen ? 'Pinned: the take this shot uses in the episode' : 'Pin this take: use it in the episode') + '" ' + (t.status === 'done' && !chosen ? 'onclick="vlChooseTake(' + t.id + ')"' : 'disabled') +
         ' style="' + VL_PIN + 'cursor:' + (t.status === 'done' && !chosen ? 'pointer' : 'default') + ';color:' + (chosen ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.45)') + ';">' + _vpickPinSvg(chosen) + '</button>' +   // v3.5.17: the standard pin
-      '<span style="' + VL_DESC + 'flex:1;">Take ' + n + (t.source_take_id ? ' <span title="' + escapeHtml('Retouched: ' + (t.retouch_text || '')) + '">&middot; retouched from ' + (fromN ? 'take ' + fromN : 'a deleted take') + '</span>' : '') + (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : '') + (t.trim_start != null || t.trim_end != null ? ' <span title="The episode uses only this part of the take">&middot; trimmed ' + (Number(t.trim_start) || 0).toFixed(1) + '&ndash;' + (t.trim_end != null ? Number(t.trim_end).toFixed(1) : 'end') + ' s</span>' : '') + '</span>' +   // v3.5.54
+      '<span style="' + VL_DESC + 'flex:1 0 auto;white-space:nowrap;">Take ' + n + (t.source_take_id ? ' <span title="' + escapeHtml('Retouched: ' + (t.retouch_text || '')) + '">&middot; retouched from ' + (fromN ? 'take ' + fromN : 'a deleted take') + '</span>' : '') + (t.status === 'done' ? (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : ' <span title="Made from the shot as it is now">&middot; current</span>') : '') + (t.trim_start != null || t.trim_end != null ? ' <span title="The episode uses only this part of the take">&middot; trimmed ' + (Number(t.trim_start) || 0).toFixed(1) + '&ndash;' + (t.trim_end != null ? Number(t.trim_end).toFixed(1) : 'end') + ' s</span>' : '') + '</span>' +   // v3.5.54
+      '<span style="' + VL_DESC + 'flex:none;white-space:nowrap;" title="' + escapeHtml(vlTakeWhen(t, true)) + '">' + escapeHtml(vlTakeWhen(t)) + '</span>' +
+    '</div>' +
+    '<div style="' + VL_DESC + 'margin:2px 0 0 2px;">' + escapeHtml(vlTakeModelText(t)) + '</div>' +
+    '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">' +
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + t.id + ')">Retouch</button>' : '') +   // v3.5.26
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Trim: choose the part of this take the episode uses. The take itself is not changed." onclick="vlTrimTake(' + t.id + ')">Trim</button>' : '') +   // v3.5.54
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download" title="Download this take">&#8681;</a>' : '') +
