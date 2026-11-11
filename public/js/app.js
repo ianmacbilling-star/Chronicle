@@ -44426,9 +44426,10 @@ function vlShotFillBtnHTML(si) {
   var d = VL.draft, s = d && d.shots[si];
   if (!s || !s.id) return '';
   var empty = vlShotEmpty(s), busy = VL.filling && VL.filling[s.id];
-  if (!empty.length && !busy) return '';
-  return '<button type="button" class="btn btn-sm" id="vl-fill-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;"' + (busy || vlSlWriting(d.id) ? ' disabled' : '') +
-    ' title="The Director writes this shot\'s empty parts (' + escapeHtml(empty.join(', ')) + ') to follow on from the shots either side. What you wrote stays as it is." onclick="vlFillShot(' + si + ')">' +
+  // v3.5.78 (Ian, 2026-11-11: "leave it there all the time but greyed out if there isn't anything empty")
+  var off = busy || vlSlWriting(d.id) || !empty.length;
+  return '<button type="button" class="btn btn-sm" id="vl-fill-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;' + (!empty.length && !busy ? 'opacity:0.45;' : '') + '"' + (off ? ' disabled' : '') +
+    ' title="' + (empty.length ? 'The Director writes this shot\'s empty parts (' + escapeHtml(empty.join(', ')) + ') to follow on from the shots either side. What you wrote stays as it is.' : 'Nothing empty in this shot. Clear a box you want the Director to write.') + '" onclick="vlFillShot(' + si + ')">' +
     (busy ? vlSpin(12) + ' Writing...' : 'Notes (1 token)') + '</button>';
 }
 function vlFillShot(si) {
