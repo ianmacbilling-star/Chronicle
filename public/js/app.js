@@ -43100,7 +43100,7 @@ function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (ad
     // v3.5.76 (Ian, 2026-11-11: "Does your new note outline option on the shot give you the Pre Prod Recommendations?")
     var pcx = vlShotPc(i), open = pcx ? (pcx.findings || []).filter(function (f) { return !f.done; }) : [], qc = vlChecks(i);
     if (pcx) line('Pre-production check', (pcx.stale ? 'changed since the check' : 'up to date') + (pcx.mode ? ', recommends ' + pcx.mode + ' mode' : ''));
-    if (open.length) { L.push('Check findings:'); open.forEach(function (f) { var x = f.fix || null; L.push('  - ' + ((x && x.label) || f.kind || 'note') + ': ' + String(f.text || '').replace(/\s+/g, ' ').trim() + (x && x.type === 'words' && x.text ? ' -> Suggested: "' + String(x.text).replace(/\s+/g, ' ').trim() + '"' : (x && x.type ? ' -> Fix: ' + x.type : ''))); }); }
+    if (open.length) { L.push('Check findings:'); open.forEach(function (f) { var x = f.fix || null; L.push('  - [' + (f.level === 'optional' ? 'Optional' : 'Recommended') + '] ' + ((x && x.label) || f.kind || 'note') + ': ' + String(f.text || '').replace(/\s+/g, ' ').trim() + (x && x.type === 'words' && x.text ? ' -> Suggested: "' + String(x.text).replace(/\s+/g, ' ').trim() + '"' + (x.remove_line ? ' and remove the line "' + x.remove_line + '"' : '') : (x && x.type ? ' -> Fix: ' + x.type : ''))); }); }
     if (qc.length) { L.push('Optional checks:'); qc.forEach(function (c) { L.push('  - ' + String(c.t || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()); }); }
     if (i < d.shots.length - 1) line('Then', vlCutInfo(sh.cut_style || 'instant').label + ' into shot ' + (i + 2));
   });
@@ -44254,11 +44254,21 @@ var VL_LEAVE_WORDS = /\b(out of (the )?frame|off[- ]screen|leaves|exits|walks of
 var VL_VOICE_OFF = /voice[^.]{0,40}off[- ]screen|off[- ]screen[^.]{0,20}voice|\bfrom off[- ]?(screen|frame)\b/gi;   // v3.5.25; v3.5.63: "Drel yells from off screen" is no one leaving
 var VL_GONE_WORDS = /\b(vanish(es|ing|ed)?|disappear(s|ing|ed)?|gone|leav(es|ing)|left|exit(s|ing|ed)?|out of (the )?frame|off[- ]screen|runs? off|walks? off|walks? away|runs? away|behind the)\b/i;   // v3.5.25
 // The free checks (spec section 6): plain-word warnings under the shot. They never stop Generate.
+var VL_LINE_DIRECTION = /^\s*[\(\[].*[\)\]]\s*$|under (his|her|their|its) breath|^\s*(chanting|chants|muttering|mutters|whispering|murmuring|murmurs|mumbling|humming|hums|sighing|sighs|groaning|groans|laughing|laughs|screaming|screams|sobbing|grunting|grunts)\b/i;   // v3.5.81
+var VL_SILENT_WORDS = /\bsilent(ly)?\b|without (a )?sound|no sound|\bmouths?\b|\bmouthing\b/i;   // v3.5.81
 function vlChecks(si) {
   var d = VL.draft, s = d && d.shots[si], ep = d && vlFindEp(d.id);
   if (!s) return [];
   var out = [], acts = vlActionsList(s.actions), cast = (ep && ep.cast) || [];
-  if (VL_ACTION_WORDS.test(String(s.sounds || '')) || VL_ACTION_WORDS.test(String(s.around || ''))) out.push({ p: 'more', t: 'Sound and surroundings has an action in it; move it to a beat or the model may ignore it.' });
+  // v3.5.81 (Ian, 2026-11-11: "Can you say the action it finds?"; TD-1113 "Fires ... throw" is no one acting): only a cast
+  // member doing something in the same phrase, and the phrase is quoted
+  [['sounds', 'Sound'], ['around', 'Around them']].forEach(function (bx) {
+    String(s[bx[0]] || '').split(/[.;!?]+/).forEach(function (ph) {
+      ph = ph.trim();
+      if (!ph || !VL_ACTION_WORDS.test(ph) || !cast.some(function (c) { return vlNamed(c.name, ph); })) return;
+      out.push({ p: 'more', t: bx[1] + ' has an action in it: \u201c' + ph + '\u201d. Move it to a beat, or the model may ignore it.' });
+    });
+  });
   acts.forEach(function (a, i) {
     a = a.replace(VL_VOICE_OFF, ' ');   // v3.5.25: "we only hear Drel's voice, from off-screen" is no one leaving
     if (!VL_LEAVE_WORDS.test(a)) return;
@@ -44268,6 +44278,13 @@ function vlChecks(si) {
       var endBack = vlNamed(c.name, s.end || '') && !VL_GONE_WORDS.test(String(s.end || ''));   // v3.5.25: an end that has them gone is not a return
       if (vlNamed(c.name, acts.slice(i + 1).join(' ')) || endBack) out.push({ p: 'actions', t: first + ' leaves in beat ' + (i + 1) + ' and is needed again in this shot. Cut here, or give a later beat a Camera that says how we find ' + first + ' again.' });
     });
+  });
+  // v3.5.81 (Ian, 2026-11-11): a line that is really a direction is said aloud; a silent beat with a line
+  (s.lines || []).forEach(function (l) {
+    var tx = String(l.text || '').trim(), n = Number(l.when) || 0;
+    if (!tx) return;
+    if (VL_LINE_DIRECTION.test(tx)) out.push({ p: 'beats', t: (n ? 'Beat ' + n + '\u2019s line' : 'The line') + ' \u201c' + tx + '\u201d reads like a direction, and the model will say it aloud. Put it in the beat\u2019s words (or its Sound) and remove the line.' });
+    else if (n && VL_SILENT_WORDS.test(String(acts[n - 1] || ''))) out.push({ p: 'beats', t: 'Beat ' + n + ' says the words are silent but has a line, which will be said aloud or dropped. Say how it is said instead (quietly, under his breath).' });
   });
   var secs = Number(s.seconds) || VL_SHOT_SECS;
   // v3.5.67 (Ian, 2026-11-10: "Someone leaves in beat 5" when beat 5 had 3 s): judged by the beats' own seconds
@@ -44380,7 +44397,9 @@ function vlShotPc(si) {
   return (es && es.precheck) || null;
 }
 function vlTodoCount(si) {
-  var pc = vlShotPc(si), n = vlChecks(si).length;
+  // v3.5.81 (Ian, 2026-11-11: "it shouldn't say 1 thing still pending and give the all clear too"): once the Director has
+  // checked the shot, the free checks are optional and not to-dos
+  var pc = vlShotPc(si), n = (pc && !pc.stale) ? 0 : vlChecks(si).length;
   if (pc) n += (pc.findings || []).filter(function (f) { return !f.done && f.level !== 'optional'; }).length;   // v3.5.79: optional suggestions are not to-dos
   return n;
 }
@@ -44414,6 +44433,10 @@ function vlCheckPoll(id) {
           var sm = document.getElementById('vl-sl-msg'); if (sm) sm.textContent = msg + (done.some(function (c) { return c.status === 'done'; }) ? ' Its to-do button lists what to fix.' : '');
           vlRenderList(); vlRenderLive(); vlSlBtnsPaint();
           if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+          // v3.5.81 -- TD-1128 (Ian, 2026-11-11: "when recheck is done it should auto open the to do list"): one shot checked,
+          // its episode open and nothing else in a window: open that shot's to-do list
+          var ok1 = done.filter(function (c) { return c.status === 'done'; }), sn = ok1.length === 1 ? vlShotNoOf(ok1[0].shot_id) : 0;
+          if (sn && VL.draft && String(VL.draft.id) === String(id) && !document.querySelector('.modal-overlay:not(.hidden), #vl-todo-modal, #vl-bcut')) vlTodoOpen(sn - 1);
         }
         if (vlAnyChecking(id)) vlCheckPoll(id);
       })
@@ -44576,7 +44599,7 @@ function vlTodoPaint() {
 function vlPcRowHTML(si, f, done) {
   var B = 'btn btn-sm', x = f.fix, fixBtn = '', extra = '';
   if (!done && x) {
-    if (x.type === 'words') { var _ch = x.box === 'actions' && x.changes && x.changes.length; fixBtn = '<button class="' + B + '" onclick="vlPcWords(' + si + ',' + f.id + ')">' + (_ch ? 'Use ' + (x.changes.length === 1 ? 'this change' : 'these changes') : 'Use these words') + '</button>'; extra = '<div style="font-size:12px;margin-top:4px;padding:6px 8px;border-left:2px solid rgba(var(--accent-rgb),0.4);' + (_ch ? '' : 'white-space:pre-wrap;') + 'color:var(--accent-pale);" data-no-words>' + (_ch ? vlActChangesHTML(x.changes) : escapeHtml(x.text)) + '</div>'; }   // v3.5.53
+    if (x.type === 'words') { var _ch = x.box === 'actions' && x.changes && x.changes.length; fixBtn = '<button class="' + B + '" onclick="vlPcWords(' + si + ',' + f.id + ')">' + (_ch ? 'Use ' + (x.changes.length === 1 ? 'this change' : 'these changes') : 'Use these words') + '</button>'; extra = '<div style="font-size:12px;margin-top:4px;padding:6px 8px;border-left:2px solid rgba(var(--accent-rgb),0.4);' + (_ch ? '' : 'white-space:pre-wrap;') + 'color:var(--accent-pale);" data-no-words>' + (_ch ? vlActChangesHTML(x.changes) : escapeHtml(x.text)) + (x.remove_line ? '<div style="margin-top:4px;opacity:0.85;">and takes away the line ' + escapeHtml((x.remove_who ? x.remove_who + ': ' : '') + '\u201c' + x.remove_line + '\u201d') + '</div>' : '') + '</div>'; }   // v3.5.53; v3.5.81 a line taken away
     else if (x.type === 'add_reference') fixBtn = '<button class="' + B + '" onclick="vlPcRef(' + si + ',' + f.id + ')">Add ' + escapeHtml(x.name) + '</button>';
     else if (x.type === 'mode') fixBtn = '<button class="' + B + '" onclick="vlPcSetMode(' + si + ',\'' + x.mode + '\',' + f.id + ')">Switch to ' + (x.mode === 'reference' ? 'Reference' : 'Keyframes') + '</button>';
     else if (x.type === 'cut') fixBtn = '<button class="' + B + '" onclick="vlPcCut(' + si + ',' + f.id + ')" title="Opens the cut, where you choose where each picture goes">&#9986; Cut after beat ' + Number(x.after_beat) + '</button>';   // v3.5.79
@@ -44631,6 +44654,10 @@ function vlPcWords(si, fid) {
       if (fd === 'do') { t[bi] = f.fix.text; s.actions = vlActionsText(t); }
       else { b[bi][fd] = f.fix.text; b[bi][fd === 'camera' ? 'sc' : 'ss'] = true; }
       s.beats = b;
+      if (f.fix.remove_line) {   // v3.5.81 (Ian, 2026-11-11): the fix takes away a line that was really a direction
+        var gone = false;
+        s.lines = (s.lines || []).filter(function (l) { if (!gone && vlActNorm(l.text) === vlActNorm(f.fix.remove_line)) { gone = true; return false; } return true; });
+      }
     });
     return;
   }

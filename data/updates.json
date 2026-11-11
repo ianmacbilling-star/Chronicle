@@ -1,5 +1,23 @@
 [
   {
+    "version": "3.5.81",
+    "staged_on": "2026-11-11",
+    "entries": [
+      {
+        "id": "3581-check-lines",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: the check can take away a line that is really a direction, catches silent lines, names the action it finds, and shows Ready once only optional things are left.",
+        "detail": "Ian, 2026-11-11: a beat fix can remove the line it replaces (Chanting under his breath. becomes the beat sound); every beat with a line is checked for silent speech; the free checks quote the phrase with an action and only warn when a cast member does it (TD-1113); once the Director has checked a shot the free checks are optional, so the button says Ready with the All clear; the copied outline marks each finding Recommended or Optional; when a shot recheck finishes its to-do list opens (TD-1128).",
+        "td": [
+          "TD-1121",
+          "TD-1113",
+          "TD-1128"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.80",
     "staged_on": "2026-11-11",
     "entries": [

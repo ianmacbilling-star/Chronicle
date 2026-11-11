@@ -2869,8 +2869,9 @@ function precheckRequest(ctx, images) {
     'TITLE CARDS: a title, logo or text-on-black picture as a shot\'s first picture is meant: the shot opens on it and moves into the scene (clouds, a fade). Never report it as a different kind of art, never tell them to drop it, and never take "opens on the title" out of the words.\n' +
     // v3.5.79 (Ian, 2026-11-11: the check should get people to an all clear; "Recommended vs Optional"; "It's too long you should cut between x and y beats")
     'RECOMMENDED OR OPTIONAL: give every finding a "level". "recommended" is only for what will spoil a take: words the model will say or show by mistake, boxes that contradict each other, a beat too short for what is in it, a person or thing that appears from nowhere, someone who leaves and is needed again, a shot longer than the model can make, a picture that cannot be the character, the wrong mode. Everything else (a clearer wording, an extra detail, where a prop comes from, a picture that would help) is "optional". When in doubt, optional. A shot whose only findings are optional is ready to generate.\n' +
-    'SPOKEN BY MISTAKE (recommended): a line\'s words are spoken aloud exactly as written. A line that is really a direction ("Chanting under his breath.", "whispers a prayer", "(muttering)") will be read out: say so, and give a beat fix that puts the direction in the beat\'s action and the sound in its sound instead.\n' +
-    'SILENT AND SPEAKING (recommended): a beat that says someone speaks silently, mouths words or speaks "without sound" but also has a line, or the reverse: say which beat and give the beat\'s words without the contradiction.\n' +
+    // v3.5.81 (Ian, 2026-11-11): the fix takes the line away too; every beat with a line is looked at
+    'SPOKEN BY MISTAKE (recommended): a line\'s words are spoken aloud exactly as written. A line that is really a direction ("Chanting under his breath.", "whispers a prayer", "(muttering)") will be read out: say so, and give a beat fix with "remove_line": true that puts the direction in the beat\'s action (or the chanting in its sound); using the fix takes the line away.\n' +
+    'SILENT AND SPEAKING (recommended): look at EVERY beat that has a line. If that beat\'s words say the speaker speaks silently, "silently speaks", mouths the words, speaks "without sound" or "words without sound", the line will still be said aloud or dropped: say which beat, and give a beat fix whose words say how the line is said (quietly, under his breath, hoarsely) instead. The reverse too: a beat that says someone speaks or calls out a line but has no line on it.\n' +
     'THE CLOSING (recommended): the end must match where the last beat leaves people: who is where, standing or kneeling, what is in their hands. When it does not, give a words fix for the end box.\n' +
     'TOO LONG (recommended): when the beats add up to more than the most this model makes (given with each shot), the shot must be cut in two. Give a finding of kind "cut" with a fix {"type": "cut", "after_beat": N}: the shot is cut between beat N and beat N+1. Pick the natural break (a change of subject, one action finished before the next starts), with each half no longer than the model makes.\n' +
     'ALREADY DEALT WITH: findings listed under a shot as already dealt with by the user were fixed or dismissed. Do not raise them again, in any wording.\n' +
@@ -2883,7 +2884,7 @@ function precheckRequest(ctx, images) {
     '{"shots": [{"shot": 1, "mode": "reference", "mode_why": "...", "findings": [{"kind": "gap", "level": "optional", "text": "...", "fix": {"type": "add_picture", "after_picture": 3, "describe": "..."}}]}]}\n' +
     (ctx.only != null ? 'One entry only, for shot ' + (ctx.only + 1) + '. "kind" is one of' : 'One entry per shot, ' + ctx.shots.length + ' in all, in order. "kind" is one of') + ': gap, mode, continuity, words, reference, style, cut, other. "level" is recommended or optional. "fix" is optional and is one of:\n' +
     '{"type": "words", "box": "start|actions|camera|end|sounds|around", "text": "the whole new text of that box (for actions, one action per line)"}\n' +
-    '{"type": "words", "box": "beat", "beat": <beat number>, "field": "do|camera|sound", "text": "the new words for that one part of that one beat"} (best when only one beat needs changing)\n' +
+    '{"type": "words", "box": "beat", "beat": <beat number>, "field": "do|camera|sound", "text": "the new words for that one part of that one beat", "remove_line": true only when the line on that beat must go} (best when only one beat needs changing)\n' +
     '{"type": "add_reference", "name": "a character\'s exact name"}\n' +
     '{"type": "mode", "mode": "reference|keyframes"}\n' +
     '{"type": "add_picture", "after_picture": <picture number>, "describe": "what the missing picture shows"}\n' +
@@ -2996,7 +2997,9 @@ function parsePrecheck(raw, ctx) {
         if (w0 && bn >= 1 && bn <= w0.actions.length) {
           const cur = field === 'do' ? w0.actions[bn - 1] : String(((w0.beats || [])[bn - 1] || {})[field] || '');
           const t = String(fx.text).replace(/\s+/g, ' ').trim().slice(0, field === 'do' ? 900 : 300);
-          if (t !== String(cur).trim()) fix = { type: 'words', box: 'beat', beat: bn, field: field, text: t, was: String(cur) };
+          const rl = fx.remove_line === true ? (w0.lines || []).filter(function (l) { return Number(l.when) === bn && String(l.text || '').trim(); })[0] : null;   // v3.5.81
+          if (t !== String(cur).trim() || rl) fix = { type: 'words', box: 'beat', beat: bn, field: field, text: t, was: String(cur) };
+          if (fix && rl) { fix.remove_line = String(rl.text).trim().slice(0, 300); fix.remove_who = String(rl.who || '').trim().slice(0, 80); }
         }
       }
       else if (fx && fx.type === 'add_reference' && names[String(fx.name || '').trim().toLowerCase()]) fix = { type: 'add_reference', name: names[String(fx.name).trim().toLowerCase()] };
