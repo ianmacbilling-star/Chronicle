@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.80",
+    "staged_on": "2026-11-11",
+    "entries": [
+      {
+        "id": "3580-uncut-once",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: UnCut after a cut keeps the shared words and pictures once; a cut gives its transition to the new shot.",
+        "detail": "Ian, 2026-11-11: joining two halves of a cut no longer doubles Throughout (camera, sound, around them) or a picture put in Both. Cutting a shot puts a plain Cut between the halves and moves the shot's transition (a fade to black, say) to the new shot; UnCut keeps the second shot's transition.",
+        "td": [
+          "TD-1121"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.79",
     "staged_on": "2026-11-11",
     "entries": [

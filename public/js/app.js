@@ -42916,7 +42916,10 @@ function vlJoinShots(si) {
   var d = VL.draft;
   if (!d || !d.shots[si + 1]) return;
   var a = d.shots[si], b = d.shots[si + 1];
-  a.kfs = a.kfs.concat(b.kfs);
+  // v3.5.80 (Ian, 2026-11-11): a picture put in Both shots by a cut comes back once; the transition out is the second shot's
+  var had = {}; a.kfs.forEach(function (k) { had[k.image_url || k.url || ''] = true; });
+  a.kfs = a.kfs.concat(b.kfs.filter(function (k) { var u = k.image_url || k.url || ''; return !u || !had[u]; }));
+  a.cut_style = b.cut_style || 'instant';
   vlJoinWords(a, b);   // v3.5.19
   if (!String(a.name || '').trim()) a.name = b.name || '';   // v3.5.15: the first shot's name is kept (the second's if it had none)
   d.shots.splice(si + 1, 1);
@@ -44214,7 +44217,8 @@ function vlJoinWords(a, b) {
   a.beats = vlBeatsNorm(a.beats, n).concat(vlBeatsNorm(b.beats, vlActionsList(b.actions).length));   // v3.5.63
   a.actions = vlActionsText(vlActionsList(a.actions).concat(vlActionsList(b.actions)));
   a.lines = a.lines.concat(b.lines.map(function (l) { return { who: l.who, text: l.text, when: l.when ? l.when + n : 0, off: l.off }; }));
-  function join(x, y, sep) { x = String(x || '').trim(); y = String(y || '').trim(); return x && y ? x + sep + y : (x || y); }
+  // v3.5.80 (Ian, 2026-11-11): the same text in both shots (a cut copies Throughout to the new shot) is kept once
+  function join(x, y, sep) { x = String(x || '').trim(); y = String(y || '').trim(); if (x && y && x.replace(/\s+/g, ' ').toLowerCase() === y.replace(/\s+/g, ' ').toLowerCase()) return x; return x && y ? x + sep + y : (x || y); }
   a.start = String(a.start || '').trim() ? a.start : b.start;
   a.end = String(b.end || '').trim() ? b.end : a.end;
   a.camera = join(a.camera, b.camera, ' Then: ');
@@ -44509,6 +44513,7 @@ function vlBeatCutDo(si, bi) {
   s.lines = s.lines.filter(function (l) { return !(l.when > bi + 1); });
   s.actions = vlActionsText(texts.slice(0, bi + 1)); s.beats = beats.slice(0, bi + 1);
   s.end = ''; s.seconds = len(0, bi + 1); s.kfs = aKfs;
+  ns.cut_style = s.cut_style || 'instant'; s.cut_style = 'instant';   // v3.5.80 (Ian, 2026-11-11): the transition out goes with the new shot; a plain cut between the halves
   d.shots.splice(si + 1, 0, ns);
   vlStructural();
 }
