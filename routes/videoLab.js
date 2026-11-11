@@ -77,13 +77,13 @@ const EXPAND_INSTRUCTION = 'Expand this picture into a wide 16:9 frame. Keep eve
   'Continue the scene naturally out to the left and right so it fills the wide frame, matching what is already there. Do not crop anyone, do not add new characters, and do not add any text.';
 const MODELS = {
   seedance2: {
-    label: 'Seedance 2.0', group: 'keyframes', endpoint: 'bytedance/seedance-2.0/image-to-video',
+    label: 'Seedance 2.0', group: 'keyframes', pair: 'seedance2ref', endpoint: 'bytedance/seedance-2.0/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.3024, priceSound: 0.3024,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
   },
   seedance2fast: {
-    label: 'Seedance 2.0 Fast', group: 'keyframes', endpoint: 'bytedance/seedance-2.0/fast/image-to-video',
+    label: 'Seedance 2.0 Fast', group: 'keyframes', pair: 'seedance2reffast', endpoint: 'bytedance/seedance-2.0/fast/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
     durationValue: function (d) { return String(d); }, price: 0.2419, priceSound: 0.2419,
     extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
@@ -129,6 +129,62 @@ const MODELS = {
     durationValue: function (d) { return String(d); }, price: 0.084, priceSound: 0.112,
     extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4,
     maxPrompt: 2500   // v3.5.44: fal refuses a Kling O3 prompt over 2500 characters (Ian's first take failed)
+  },
+  // v3.5.82 (Ian, 2026-11-11: "go ahead and build all the models and we can weed out the ones we don't like later"; Seedance
+  // refused shot 2's picture as a real face, Kling held the picture's framing, Veo 3.1 Fast did well). Test models, admins
+  // only (test: true), each in both modes. Read from fal's model pages on 2026-11-11: field names, lengths, prices. Some
+  // name the pictures list differently (refsField), the sound switch (audioField: null = none sent), and how the words
+  // point at a picture (tag). pair: the same model in the other mode.
+  klingo3pro: {
+    label: 'Kling O3 Pro', group: 'keyframes', test: true, pair: 'klingo3proref', endpoint: 'fal-ai/kling-video/o3/pro/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.112, priceSound: 0.14,
+    extra: {}, promptRequired: false, maxPrompt: 2500
+  },
+  klingo3proref: {
+    label: 'Kling O3 Pro', group: 'reference', test: true, pair: 'klingo3pro', endpoint: 'fal-ai/kling-video/o3/pro/reference-to-video', reference: true,
+    durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.224, priceSound: 0.28,   // fal's playground; other listings say half
+    extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4, maxPrompt: 2500
+  },
+  viduq3: {
+    label: 'Vidu Q3', group: 'keyframes', test: true, pair: 'viduq3ref', endpoint: 'fal-ai/vidu/q3/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.154, priceSound: 0.154,
+    extra: { resolution: '720p' }, promptRequired: false, maxPrompt: 2000, audioField: 'audio'
+  },
+  viduq3ref: {
+    label: 'Vidu Q3', group: 'reference', test: true, pair: 'viduq3', endpoint: 'fal-ai/vidu/q3/reference-to-video/mix', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.154, priceSound: 0.154,
+    extra: { aspect_ratio: VIDEO_ASPECT, resolution: '720p' }, promptRequired: true, maxRefs: 4, maxScene: 2, maxPrompt: 2000,
+    audioField: 'audio', refsField: 'reference_image_urls', tag: function (n) { return 'image ' + n; }
+  },
+  h3max: {
+    label: 'MiniMax H3 Max', group: 'keyframes', test: true, pair: 'h3maxref', endpoint: 'minimax/h3-max/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.08, priceSound: 0.08,
+    extra: { resolution: '768P', prompt_expansion_mode: 'balanced' }, promptRequired: true, audioField: null
+  },
+  h3maxref: {
+    label: 'MiniMax H3 Max', group: 'reference', test: true, pair: 'h3max', endpoint: 'minimax/h3-max/reference-to-video', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,   // $0.08 at 768p, plus a little for pictures past the fourth
+    extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'balanced' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
+  },
+  wan27: {
+    label: 'Wan 2.7', group: 'keyframes', test: true, pair: 'wan27ref', endpoint: 'fal-ai/wan/v2.7/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,
+    extra: { resolution: '720p' }, promptRequired: false, maxPrompt: 5000, audioField: null
+  },
+  wan27ref: {
+    label: 'Wan 2.7', group: 'reference', test: true, pair: 'wan27', endpoint: 'fal-ai/wan/v2.7/reference-to-video', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,
+    extra: { aspect_ratio: VIDEO_ASPECT, resolution: '720p' }, promptRequired: true, maxRefs: 5, maxScene: 2, maxPrompt: 5000,
+    audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'image ' + n; }
   }
 };
 const REF_MAX_IMAGES = 9;      // fal: up to 9 reference images
@@ -445,6 +501,7 @@ function ensureTables() {
 function shotMode(shot) { const m = String((shot && shot.mode) || ''); return m === 'reference' || m === 'keyframes' ? m : ''; }
 function shotModelKey(epModel, mode) {
   const key = MODELS[epModel] ? epModel : DEFAULT_MODEL, m = MODELS[key];
+  if (m.pair && MODELS[m.pair] && !!MODELS[m.pair].reference === (mode === 'reference') && !!m.reference !== (mode === 'reference')) return m.pair;   // v3.5.82: the same model in the other mode
   if (mode === 'reference' && !m.reference) return key === 'seedance2' ? 'seedance2ref' : (key === 'kling3std' ? 'klingo3ref' : 'seedance2reffast');   // v3.5.42: Kling to Kling
   if (mode === 'keyframes' && m.reference) return key === 'seedance2ref' ? 'seedance2' : (key === 'klingo3ref' ? 'kling3std' : 'seedance2fast');
   return key;
@@ -666,9 +723,10 @@ function vlSaveSummary(b) {
 router.get('/models', requireAuth, requireVideo, async function (req, res) {
   const out = Object.keys(MODELS).map(function (k) {
     const m = MODELS[k];
-    return { key: k, label: m.label, group: m.group || 'keyframes', reference: !!m.reference, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired,
+    if (m.test && !req.vlAdmin) return null;   // v3.5.82: the test models are for admins
+    return { key: k, label: m.label, group: m.group || 'keyframes', reference: !!m.reference, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired, test: !!m.test, no_sound_switch: m.audioField === null,
       max_refs: m.reference ? (m.maxRefs || REF_MAX_IMAGES) : 0, max_scene: m.reference ? (m.maxScene || REF_MAX_KEYFRAMES) : 0 };
-  }).sort(function (a, b) { return (b.reference ? 1 : 0) - (a.reference ? 1 : 0); });   // v3.5.19: reference first
+  }).filter(Boolean).sort(function (a, b) { return (b.reference ? 1 : 0) - (a.reference ? 1 : 0); });   // v3.5.19: reference first
   const styles = VIDEO_STYLES.map(function (s) { return { key: s.key, label: s.label, description: s.description, speech: s.speech, defaultShot: s.defaultShot }; });
   vlDebug(req.session && req.session.userId, 'info', 'GET /api/video-lab/models', 'Models offered: ' + out.map(function (x) { return x.key; }).join(', '));   // v3.5.18
   let cpt = SL_DEFAULTS.shotlist_cents_per_token;   // v3.5.39 (Ian, 2026-11-09): the model menu shows tokens a second
@@ -805,7 +863,7 @@ router.post('/episodes', requireAuth, requireVideo, async function (req, res) {
     const s = await versionAccess(req, db, sid, fid);
     if (!s) return res.status(403).json({ error: 'You cannot make an episode of that version.' });
     const pics = await storyboardPictures(db, sid, fid);
-    const model = MODELS[b.model] ? b.model : DEFAULT_MODEL;
+    const model = MODELS[b.model] && !(MODELS[b.model].test && !req.vlAdmin) ? b.model : DEFAULT_MODEL;   // v3.5.82 test models: admins
     const name = cleanName(b.name) || ('Episode ' + new Date().toISOString().slice(0, 16).replace('T', ' '));
     let id = null;
     await db.transaction(async function (tx) {
@@ -834,7 +892,7 @@ router.put('/episodes/:id', requireAuth, requireVideo, async function (req, res)
     const ep0 = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(id);
     if (!(await canChange(req, ep0))) return vlRefuse(req, res, FN, 404, 'Not found.', { found: !!ep0, admin: !!req.vlAdmin });
     if (await runningWriter(db, id, true)) return vlRefuse(req, res, FN, 409, 'The shot list is being written; your changes can be made when it is done.');
-    const model = (b.model != null && MODELS[b.model]) ? b.model : (MODELS[ep0.model] ? ep0.model : DEFAULT_MODEL);
+    const model = (b.model != null && MODELS[b.model] && !(MODELS[b.model].test && !req.vlAdmin)) ? b.model : (MODELS[ep0.model] ? ep0.model : DEFAULT_MODEL);   // v3.5.82 test models: admins
     let shots = null;
     if (b.shots != null) {
       shots = cleanShots(b.shots, MODELS[model]);
@@ -1246,12 +1304,14 @@ function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
   const input = Object.assign({}, m.extra);
   if (prompt) input.prompt = m.maxPrompt ? fitPrompt(prompt, m.maxPrompt, sound) : prompt;   // v3.5.44
   let endpoint = m.endpoint;
-  if (m.reference) input.image_urls = (images && images.length ? images : [startUrl]).slice(0, m.maxRefs || REF_MAX_IMAGES);   // v3.5.16; v3.5.42 the model's own limit
+  if (m.reference) input[m.refsField || 'image_urls'] = (images && images.length ? images : [startUrl]).slice(0, m.maxRefs || REF_MAX_IMAGES);   // v3.5.16; v3.5.42 the model's own limit; v3.5.82 its own field name
+  if (m.reference && m.tag && input.prompt) input.prompt = input.prompt.replace(/@Image(\d+)/g, function (x, n) { return m.tag(Number(n)); });   // v3.5.82: how this model names a picture
   else if (endUrl) { input[m.start] = startUrl; input[m.end] = endUrl; }
   else if (m.single) { endpoint = m.single.endpoint; input[m.single.start] = startUrl; }
   else input[m.start] = startUrl;
-  input.duration = m.durationValue(duration);
-  input.generate_audio = !!sound;
+  // v3.5.82: a length the model does not make (Wan 2.7 Reference stops at 10 s) goes to the nearest one it does
+  input.duration = m.durationValue(m.durations.indexOf(String(duration)) >= 0 ? duration : (snapDuration(m, parseFloat(duration)) || m.defDuration));
+  if (m.audioField !== null) input[m.audioField || 'generate_audio'] = !!sound;   // v3.5.82: some name it 'audio', some have no switch
   return { endpoint: endpoint, input: input };
 }
 
@@ -2858,7 +2918,10 @@ function precheckRequest(ctx, images) {
     '- REFERENCE: the model is given the shot\'s pictures and the cast\'s reference pictures as references and directs the shot itself from the words. The first picture is how it opens; later pictures only show the place, the light and who is there. Best when the pictures disagree on place, poses, facing or who is where.\n' +
     '- KEYFRAMES: the video moves from each picture EXACTLY to the next one, morphing the first into the second. Best only when neighbouring pictures match closely: the same place, the same people in nearly the same poses and positions, a small change. When neighbouring pictures differ in place, in someone\'s pose or facing (a man carried with his head to the left in one picture and lying with his head to the right in the next), in who is holding what, or in who is where, a Keyframes take morphs nonsense.\n\n' +
     'WHAT TO LOOK FOR, SHOT BY SHOT\n' +
-    '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
+    '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch. ' +
+    // v3.5.82 (Ian, 2026-11-11: Veo made shot 2 well from its one picture, with no references; "Can it mention it in the findings that you need a reference for X because they are not pictured?")
+    'When everyone the shot shows is already in its first picture, drawn clearly enough to animate, KEYFRAMES is the better mode: one picture to animate, and nothing for the model to guess. Recommend REFERENCE only when someone enters who is not in the first picture, when someone small or half hidden in the picture gets a close-up, or when the shot ends somewhere no picture shows.\n' +
+    'NOT PICTURED (recommended): when someone or something that matters (a named character, an asset) appears in the shot but is in none of its pictures, the model can only guess what they look like. Say who, and in which beat they appear, and that they are not in the pictures. If the shot is in Keyframes mode, the fix is to switch to Reference (fix type "mode"); if it is already in Reference and they are not among the references sent, the fix is add_reference.\n' +
     '2. gap: the story says something happens that the video must show and no picture covers (between two pictures of a shot, or between two shots). Read the story: if it explains a change (someone healed in turn, a later moment), that is not a mistake, but the video still has to get from one picture to the next. Suggest the missing picture: say after which picture number it goes and describe it in one or two sentences.\n' +
     '3. continuity: a person or prop that appears from nowhere: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there) and no action brings it in, give a fix of type "words" for the actions box with the missing step written in its place (for example "He picks up the stone pestle from beside the bowl."); someone who leaves and is needed again in the same shot (a cut is the reliable fix); a change of place inside one shot.\n' +   // v3.5.48
     '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end (when there are more actions than the length allows, give a fix of type "seconds" with the length that fits, at most 15), someone who must leave the frame with too little time left to get all the way out at least 1 second before the shot ends (they stop at the edge; give a fix of type "seconds" or cut an action) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +

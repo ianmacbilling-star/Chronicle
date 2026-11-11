@@ -1,5 +1,23 @@
 [
   {
+    "version": "3.5.82",
+    "staged_on": "2026-11-11",
+    "entries": [
+      {
+        "id": "3582-test-models",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab (admins): eight test video models to try side by side, and the check says when someone in a shot is not in its pictures.",
+        "detail": "Ian, 2026-11-11: Kling O3 Pro, Vidu Q3, MiniMax H3 Max and Wan 2.7, each in Reference and Keyframes mode, marked (test) and shown to admins only. The model menu shows tokens a second and how many pictures each model takes, and each model has a bulleted tip: who makes it, what it is sent, lengths, sound, price and what we have seen. The check now recommends Keyframes when everyone is in the first picture, and flags anyone who appears but is in none of the pictures (switch to Reference or add a reference).",
+        "td": [
+          "TD-1121",
+          "TD-1113",
+          "TD-1128"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.81",
     "staged_on": "2026-11-11",
     "entries": [
