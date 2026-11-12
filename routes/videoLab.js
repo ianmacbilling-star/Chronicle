@@ -1894,7 +1894,14 @@ router.get('/takes/:id/download', requireAuth, requireVideo, async function (req
     // "Third Go Episode (shot 3, take 57, Kling O3 Pro, Keyframes).mp4"; a retouch says which kind
     const tm = MODELS[x.t.model];
     const made = x.t.retouch_kind ? (x.t.retouch_kind === 'small' ? 'Kling O1 Edit, retouch' : 'Seedance 2.0, retouch') : (tm ? tm.label + ', ' + (tm.reference ? 'Reference' : 'Keyframes') : '');
-    await sendVideo(res, x.t.video_url, baseName(x.ep.name) + ' (shot ' + (sh ? sh.position : '') + ', take ' + x.t.id + (made ? ', ' + made : '') + ').mp4');
+    // v3.5.95 (Ian, 2026-11-12): named by the take's code, e<episode id>s<shot>t<take on the card>-<take id, 4 digits>-<date made>,
+    // then the model and mode, e.g. "e6s2t8-0077-2026-11-12 MiniMax H3 Max Reference.mp4". The page sends its code (the date in the
+    // person's own time zone); it is used only when its episode, shot, take and id are this take's.
+    const nRow = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ? AND id <= ?').get(x.t.shot_id, x.t.id);
+    const want = 'e' + x.ep.id + 's' + (sh ? sh.position : 0) + 't' + (Number(nRow && nRow.n) || 1) + '-' + String(x.t.id).padStart(4, '0') + '-';
+    const sent = String(req.query.code || '');
+    const code = (sent.indexOf(want) === 0 && /^\d{4}-\d{2}-\d{2}$/.test(sent.slice(want.length))) ? sent : want + new Date(x.t.created_at || Date.now()).toISOString().slice(0, 10);
+    await sendVideo(res, x.t.video_url, code + (made ? ' ' + made.replace(/,/g, '') : '') + '.mp4');
   } catch (e) {
     res.status(500).json({ error: 'Could not read the video.' });
   }

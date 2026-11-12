@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.95",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3595-take-code",
+        "kind": "feature",
+        "public": false,
+        "summary": "Every take has a code.",
+        "detail": "Video tab: each take has a code, e<episode id>s<shot>t<take>-<take id>-<date> (e.g. e6s2t8-0077-2026-11-12), on its card, at the top of its Info and as its download name (with the model and mode).",
+        "td": [
+          "TD-1124"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.94",
     "staged_on": "2026-11-12",
     "entries": [

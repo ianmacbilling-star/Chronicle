@@ -43076,6 +43076,19 @@ function vlTakeProgress(t) {
   return mv.length > 1 ? 'Making: ' + done + ' of ' + mv.length + ' parts' : 'Being made';
 }
 // v3.5.75 -- a take's date (finished, else started), short on the card and in full as its tip; its model and mode
+// v3.5.95 -- A TAKE'S CODE (Ian, 2026-11-12: "e3s2t8-##-Date... e for episode, s for shot, t for take and then (0088) is the actual
+// ID then the date"; "Just do ID for episode"): e<episode id>s<shot number>t<take number on the card>-<take id, 4 digits>-<date
+// made, here>. On the card's date row, at the top of the take's Info, and the name a download is saved under.
+function vlTakeCodeOf(epId, shotNo, n, takeId, when) {
+  var d = new Date(String(when || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(when || '')) ? '' : 'Z'));
+  var day = isNaN(d.getTime()) ? '' : d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  return 'e' + epId + 's' + shotNo + 't' + n + '-' + ('000' + takeId).slice(-Math.max(4, String(takeId).length)) + (day ? '-' + day : '');
+}
+function vlTakeCode(t, n) {
+  var d = VL.draft, si = -1;
+  if (d) d.shots.forEach(function (s, i) { if (String(s.id) === String(t.shot_id)) si = i; });
+  return vlTakeCodeOf(d ? d.id : (t.episode_id || ''), si + 1, n, t.id, t.created_at);
+}
 function vlTakeWhen(t, full) {
   var d = new Date(String(t.finished_at || t.created_at || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(t.finished_at || t.created_at || '')) ? '' : 'Z'));
   if (isNaN(d.getTime())) return '';
@@ -43104,6 +43117,7 @@ function vlTakeInfo(takeId, n) {
   document.body.appendChild(box);
   fetch('/api/video-lab/takes/' + takeId + '/info').then(function (r) { return r.json(); }).then(function (j) {
     var b = document.getElementById('vl-info-body'); if (!b) return;
+    if (j && j.take) j.n = n;   // v3.5.95: the take's number on the card, for its code
     b.innerHTML = j && j.take ? vlTakeInfoHTML(j) : '<div style="' + VL_WARN + '">' + escapeHtml((j && j.error) || 'Could not read the take.') + '</div>';
   }).catch(function () { var b = document.getElementById('vl-info-body'); if (b) b.innerHTML = '<div style="' + VL_WARN + '">Could not reach the server.</div>'; });
 }
@@ -43139,6 +43153,7 @@ function vlTakeInfoHTML(j) {
   function head(k) { H.push('<div style="' + VL_BOX_LABEL + 'margin-top:14px;">' + k + '</div>'); }
   function pre(s) { H.push('<pre style="white-space:pre-wrap;word-break:break-word;color:rgb(var(--on-panel-rgb));background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;margin:4px 0;">' + escapeHtml(s) + '</pre>'); }
   var dir = t.directions || {}, mv0 = (dir.moves && dir.moves[0]) || {}, cast = mv0.cast || null;
+  if (sh && j.episode) H.push('<div class="vl-info-code" style="font-family:monospace;font-size:14px;margin:0 0 4px;">' + escapeHtml(vlTakeCodeOf(j.episode.id, sh.position, j.n || 0, t.id, t.created_at)) + '</div>');   // v3.5.95
   head('The take');
   row('Episode', escapeHtml(j.episode.name || ''));
   row('Shot', sh ? (sh.position + (sh.name ? ': ' + escapeHtml(sh.name) : '')) : 'deleted');
@@ -43219,13 +43234,13 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
       '<button type="button" class="vl-pin vl-take-pin" title="' + (chosen ? 'Pinned: the take this shot uses in the episode' : 'Pin this take: use it in the episode') + '" ' + (t.status === 'done' && !chosen ? 'onclick="vlChooseTake(' + t.id + ')"' : 'disabled') +
         ' style="' + VL_PIN + 'cursor:' + (t.status === 'done' && !chosen ? 'pointer' : 'default') + ';color:' + (chosen ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.45)') + ';">' + _vpickPinSvg(chosen) + '</button>' +   // v3.5.17: the standard pin
       '<span style="' + VL_DESC + 'flex:1 0 auto;white-space:nowrap;">Take ' + n + (t.source_take_id ? ' <span title="' + escapeHtml('Retouched: ' + (t.retouch_text || '')) + '">&middot; retouched from ' + (fromN ? 'take ' + fromN : 'a deleted take') + '</span>' : '') + (t.status === 'done' ? (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : ' <span title="Made from the shot as it is now">&middot; current</span>') : '') + (t.trim_start != null || t.trim_end != null ? ' <span title="The episode uses only this part of the take">&middot; trimmed ' + (Number(t.trim_start) || 0).toFixed(1) + '&ndash;' + (t.trim_end != null ? Number(t.trim_end).toFixed(1) : 'end') + ' s</span>' : '') + '</span>' +   // v3.5.54
-      '<span style="' + VL_DESC + 'flex:none;white-space:nowrap;" title="' + escapeHtml(vlTakeWhen(t, true)) + '">' + escapeHtml(vlTakeWhen(t)) + '</span>' +
+      '<span class="vl-take-code" style="' + VL_DESC + 'flex:none;white-space:nowrap;" title="' + escapeHtml(vlTakeWhen(t, true)) + '">' + escapeHtml(vlTakeCode(t, n)) + ' &middot; ' + escapeHtml(vlTakeWhen(t).split(', ').pop()) + '</span>' +   // v3.5.95: the take's code, then the time
     '</div>' +
     '<div style="' + VL_DESC + 'margin:2px 0 0 2px;">' + escapeHtml(vlTakeModelText(t)) + '</div>' +
     '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">' +
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + t.id + ')">Retouch</button>' : '') +   // v3.5.26
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Trim: choose the part of this take the episode uses. The take itself is not changed." onclick="vlTrimTake(' + t.id + ')">Trim</button>' : '') +   // v3.5.54
-      (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download" title="Download this take">&#8681;</a>' : '') +
+      (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '">&#8681;</a>' : '') +
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
       '<button type="button" class="narrative-regen-btn vl-info-btn" title="Everything we know about this take: model, mode, tokens, the words sent and used, the pictures" onclick="vlTakeInfo(' + t.id + ', ' + n + ')">Info</button>' +   // v3.5.92
       (!making ? '<button type="button" class="narrative-regen-btn" title="Delete this take" onclick="vlDeleteTake(' + t.id + ')">&#10005;</button>' : '') +
