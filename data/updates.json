@@ -1,5 +1,23 @@
 [
   {
+    "version": "3.5.85",
+    "staged_on": "2026-11-11",
+    "entries": [
+      {
+        "id": "3585-tips-tokens",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: model tips give the price in tokens and how many characters of words each model takes.",
+        "detail": "Ian, 2026-11-11: no dollar figures in the tips; each tip ends with Price (tokens a second, worked out from the token setting) and Words (about N characters, or no limit given by fal).",
+        "td": [
+          "TD-1121",
+          "TD-1113",
+          "TD-1128"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.84",
     "staged_on": "2026-11-11",
     "entries": [

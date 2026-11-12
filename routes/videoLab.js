@@ -724,7 +724,7 @@ router.get('/models', requireAuth, requireVideo, async function (req, res) {
   const out = Object.keys(MODELS).map(function (k) {
     const m = MODELS[k];
     if (m.test && !req.vlAdmin) return null;   // v3.5.82: the test models are for admins
-    return { key: k, label: m.label, group: m.group || 'keyframes', reference: !!m.reference, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired, test: !!m.test, no_sound_switch: m.audioField === null,
+    return { key: k, label: m.label, group: m.group || 'keyframes', reference: !!m.reference, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired, test: !!m.test, no_sound_switch: m.audioField === null, max_prompt: m.maxPrompt || 0,   // v3.5.85
       max_refs: m.reference ? (m.maxRefs || REF_MAX_IMAGES) : 0, max_scene: m.reference ? (m.maxScene || REF_MAX_KEYFRAMES) : 0 };
   }).filter(Boolean).sort(function (a, b) { return (b.reference ? 1 : 0) - (a.reference ? 1 : 0); });   // v3.5.19: reference first
   const styles = VIDEO_STYLES.map(function (s) { return { key: s.key, label: s.label, description: s.description, speech: s.speech, defaultShot: s.defaultShot }; });
