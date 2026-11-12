@@ -24557,7 +24557,7 @@ function renderPassesConfig(data) {
         'style="width:88px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
         '</div>';
     });
-    html += '<div class="settings-section-desc" id="pass-derived-' + id + '" data-months="' + p.months + '" style="margin:10px 0 0;color:var(--accent-bright);"></div>';
+    html += '<div class="settings-section-desc" id="pass-derived-' + id + '" data-months="' + p.months + '" style="margin:10px 0 0;color:var(--accent-bright);font-size:14px;"></div>';   // v3.5.90: 14px (was 12)
     html += '<div class="pass-panel-foot" style="padding-top:12px;">' +
       '<button class="btn btn-primary btn-sm" onclick="savePassPanel(\'' + id + '\')">Save</button>' +
       '<div class="settings-section-desc" id="pass-save-msg-' + id + '" style="margin:6px 0 0;"></div>' +
@@ -24629,7 +24629,7 @@ function renderPacksConfig(data) {
         'style="width:88px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
         '</div>';
     });
-    html += '<div class="settings-section-desc" id="pack-derived-' + id + '" style="margin:10px 0 0;color:var(--accent-bright);"></div>';
+    html += '<div class="settings-section-desc" id="pack-derived-' + id + '" style="margin:10px 0 0;color:var(--accent-bright);font-size:14px;"></div>';   // v3.5.90: 14px (was 12)
     html += '<div style="padding-top:12px;margin-top:auto;">' +
       '<button class="btn btn-primary btn-sm" onclick="savePackPanel(\'' + id + '\')">Save</button>' +
       '<div class="settings-section-desc" id="pack-save-msg-' + id + '" style="margin:6px 0 0;"></div>' +
@@ -24712,7 +24712,7 @@ function renderTiersConfig(data) {
     });
     html += '</div>';
     // v3.0.922 -- the same readout the pass panels carry, just above the Save button.
-    html += '<div class="settings-section-desc" id="tier-derived-' + tierKey + '" style="margin:10px 0 0;color:var(--accent-bright);"></div>';
+    html += '<div class="settings-section-desc" id="tier-derived-' + tierKey + '" style="margin:10px 0 0;color:var(--accent-bright);font-size:14px;"></div>';   // v3.5.90: 14px (was 12)
     html += '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;">' +
       '<button class="btn btn-primary btn-sm" onclick="saveTierPanel(\'' + tierKey + '\')">Save ' + (t.name || tierKey) + '</button>' +
       '<span class="settings-section-desc" id="tier-save-msg-' + tierKey + '" style="margin:0;"></span>' +

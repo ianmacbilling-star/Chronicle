@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.90",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3590-readouts-14",
+        "kind": "feature",
+        "public": false,
+        "summary": "Bigger readouts on Tiers and Passes.",
+        "detail": "Dashboard, Tiers and Passes: the lines under each tier, pass and pack (per month, sign-up tokens, access and cost per token) are 14px, up from 12.",
+        "td": [
+          "TD-1132"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.89",
     "staged_on": "2026-11-12",
     "entries": [
