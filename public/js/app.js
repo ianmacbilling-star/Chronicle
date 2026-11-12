@@ -43037,13 +43037,15 @@ function vlShotBtnHTML(ep, ds, si) {
     : making ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Being made</button>'
     : takes.length >= VL_MAX_TAKES ? '<span class="vl-full" style="' + VL_DESC + 'margin-right:8px;">' + VL_MAX_TAKES + ' takes max &mdash; delete one to make another.</span><button class="btn btn-sm vl-gen" disabled title="' + VL_MAX_TAKES + ' takes max: delete one to make another">Generate take</button>'   // v3.5.15
     : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now. The tokens come off when the take arrives; a take that fails costs nothing.">Generate take (' + vlShotTok(VL.draft, ds) + ' tokens)</button>';   // v3.5.46
-  return '<div style="display:flex;gap:10px;align-items:flex-end;">' +
-    '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;flex:1;min-width:0;">' +
+  // v3.5.87 (Ian, 2026-11-12: "have that last video come over the Generate button with out the need for the scrollbar... the next
+  // video wrap down below it to the left"): the takes wrap across the whole width; Generate take sits under them on the right.
+  return '<div style="display:flex;flex-direction:column;gap:10px;">' +
+    '<div class="vl-takes-wrap" style="display:flex;flex-wrap:wrap;gap:8px;min-width:0;">' +
       takes.map(function (t, i) {
         var fi = -1; takes.forEach(function (o, j) { if (t.source_take_id && String(o.id) === String(t.source_take_id)) fi = j; });
         return vlTakeCardHTML(t, String(t.id) === String(s.chosen_take_id), i + 1, fi >= 0 ? fi + 1 : 0);
       }).join('') + '</div>' +
-    '<div style="flex:none;margin-left:auto;">' + btn + '</div>' +
+    '<div style="flex:none;align-self:flex-end;">' + btn + '</div>' +
   '</div>';
 }
 function vlLiveShotHTML(ep, ds, si, m) {

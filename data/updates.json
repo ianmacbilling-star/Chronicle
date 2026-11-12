@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.87",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3587-takes-wrap",
+        "kind": "feature",
+        "public": false,
+        "summary": "A shot's takes wrap.",
+        "detail": "Video tab: a shot's takes wrap onto new lines across the whole width instead of scrolling sideways; Generate take sits under them on the right.",
+        "td": [
+          "TD-1119"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.86",
     "staged_on": "2026-11-12",
     "entries": [
