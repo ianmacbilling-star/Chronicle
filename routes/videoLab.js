@@ -486,6 +486,7 @@ function ensureTables() {
     // v3.5.34 -- TD-1115: a shot's own video mode ('' = the episode's model, 'reference', 'keyframes') and its pre-production check.
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS mode TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS precheck TEXT');
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS model TEXT');   // v3.5.86 -- TD-1122: a shot's own video model (NULL = the episode's)
     await db.exec('CREATE INDEX IF NOT EXISTS idx_image_jobs_episode ON image_jobs(episode_id)');
   })();
   _tablesReady.catch(function () { _tablesReady = null; });
@@ -499,18 +500,34 @@ function ensureTables() {
 // '' follows the episode's model. 'reference' / 'keyframes' pick the matching model: the episode's own when it is of that
 // kind, else Seedance 2.0 of the same speed (Kling and Veo have no reference model: Seedance 2.0 Fast).
 function shotMode(shot) { const m = String((shot && shot.mode) || ''); return m === 'reference' || m === 'keyframes' ? m : ''; }
-function shotModelKey(epModel, mode) {
+// v3.5.86 -- TD-1122 (Ian, 2026-11-12: a model on each shot, "People may switch back and forth"). A shot's own model
+// (shots.model, NULL = the episode's) wins; its Mode then only switches to the same model in the other mode, if there is one.
+function modelPartner(key) {
+  const m = MODELS[key]; if (!m) return null;
+  if (m.pair && MODELS[m.pair]) return m.pair;
+  const k = Object.keys(MODELS).filter(function (x) { return MODELS[x].pair === key; })[0];
+  return k || null;
+}
+function shotModel(shot) { const k = String((shot && shot.model) || ''); return MODELS[k] ? k : ''; }
+function shotModelKey(epModel, mode, own) {
+  if (own && MODELS[own]) {   // v3.5.86
+    const p = modelPartner(own);
+    if (mode && p && !!MODELS[p].reference === (mode === 'reference') && !!MODELS[own].reference !== (mode === 'reference')) return p;
+    return own;
+  }
   const key = MODELS[epModel] ? epModel : DEFAULT_MODEL, m = MODELS[key];
-  if (m.pair && MODELS[m.pair] && !!MODELS[m.pair].reference === (mode === 'reference') && !!m.reference !== (mode === 'reference')) return m.pair;   // v3.5.82: the same model in the other mode
+  const p0 = modelPartner(key);   // v3.5.86: the same partner rule as a shot's own model and the page; and only when a mode is set
+  // (v3.5.82 switched a reference test model with a pair to its keyframes twin even on a shot left on the episode's mode)
+  if (mode && p0 && !!MODELS[p0].reference === (mode === 'reference') && !!m.reference !== (mode === 'reference')) return p0;   // v3.5.82: the same model in the other mode
   if (mode === 'reference' && !m.reference) return key === 'seedance2' ? 'seedance2ref' : (key === 'kling3std' ? 'klingo3ref' : 'seedance2reffast');   // v3.5.42: Kling to Kling
   if (mode === 'keyframes' && m.reference) return key === 'seedance2ref' ? 'seedance2' : (key === 'klingo3ref' ? 'kling3std' : 'seedance2fast');
   return key;
 }
-function epForShot(ep, shot) { const k = shotModelKey(ep.model, shotMode(shot)); return k === ep.model ? ep : Object.assign({}, ep, { model: k }); }
+function epForShot(ep, shot) { const k = shotModelKey(ep.model, shotMode(shot), shotModel(shot)); return k === ep.model ? ep : Object.assign({}, ep, { model: k }); }
 function shotSig(ep, kfs, shot) {
   const w = shot ? shotWords(shot) : null, r = shot ? shotRefs(shot) : null;
   return shortSig(JSON.stringify([ep.model, !!ep.sound, String(ep.overall || '')].concat(kfs.map(function (k) { return [k.image_url, k.prompt || '', k.duration || '']; }))
-    .concat(w ? [w] : []).concat(r ? [r] : []).concat(shot && shotMode(shot) ? ['mode:' + shotMode(shot)] : [])));   // v3.5.19: the shot's own words too; v3.5.22: and its references; v3.5.34: its mode, when set
+    .concat(w ? [w] : []).concat(r ? [r] : []).concat(shot && shotMode(shot) ? ['mode:' + shotMode(shot)] : []).concat(shot && shotModel(shot) ? ['model:' + shotModel(shot)] : [])));   // v3.5.86: its model, when set   // v3.5.19: the shot's own words too; v3.5.22: and its references; v3.5.34: its mode, when set
 }
 // v3.5.19 -- A SHOT IN PLAIN WORDS. A shot's words as stored (JSON in actions and lines), or null for a shot never saved
 // this way. lines: [{ who, text, when (1-based action number, or 0 for any time), off (heard off-screen) }].
@@ -625,7 +642,8 @@ async function loadEpisodes(db, where, params) {
       s.words_saved = !!w;
       s.refs = shotRefs(s);   // v3.5.22: null = never chosen (the page starts from the characters named)
       s.mode = shotMode(s);   // v3.5.34
-      s.model_used = shotModelKey(ep.model, s.mode);
+      s.model = shotModel(s);   // v3.5.86 -- TD-1122
+      s.model_used = shotModelKey(ep.model, s.mode, s.model);
       s.precheck = parseJson(s.precheck, null);
       if (s.precheck && typeof s.precheck === 'object') s.precheck.stale = s.precheck.sig !== s.sig; else s.precheck = null;
       s.takes = takes.filter(function (t) { return t.shot_id === s.id; });
@@ -724,7 +742,7 @@ router.get('/models', requireAuth, requireVideo, async function (req, res) {
   const out = Object.keys(MODELS).map(function (k) {
     const m = MODELS[k];
     if (m.test && !req.vlAdmin) return null;   // v3.5.82: the test models are for admins
-    return { key: k, label: m.label, group: m.group || 'keyframes', reference: !!m.reference, durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired, test: !!m.test, no_sound_switch: m.audioField === null, max_prompt: m.maxPrompt || 0,   // v3.5.85
+    return { key: k, label: m.label, group: m.group || 'keyframes', reference: !!m.reference, partner: modelPartner(k), durations: m.durations, defDuration: m.defDuration, price: m.price, priceSound: m.priceSound, promptRequired: m.promptRequired, test: !!m.test, no_sound_switch: m.audioField === null, max_prompt: m.maxPrompt || 0,   // v3.5.85
       max_refs: m.reference ? (m.maxRefs || REF_MAX_IMAGES) : 0, max_scene: m.reference ? (m.maxScene || REF_MAX_KEYFRAMES) : 0 };
   }).filter(Boolean).sort(function (a, b) { return (b.reference ? 1 : 0) - (a.reference ? 1 : 0); });   // v3.5.19: reference first
   const styles = VIDEO_STYLES.map(function (s) { return { key: s.key, label: s.label, description: s.description, speech: s.speech, defaultShot: s.defaultShot }; });
@@ -784,6 +802,7 @@ async function writeShots(tx, ep, shotsIn) {
       if (s.words) await writeWords(tx, sid, s.words);   // v3.5.19 (a save without words keeps them)
       if (s.refs) await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(s.refs), sid);   // v3.5.22
       if (s.mode !== undefined) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode || null, sid);   // v3.5.34
+      if (s.model !== undefined) await tx.prepare('UPDATE shots SET model = ? WHERE id = ?').run(s.model || null, sid);   // v3.5.86
       if (s.purpose !== undefined) await tx.prepare('UPDATE shots SET purpose = ? WHERE id = ?').run(s.purpose || null, sid);   // v3.5.59
     } else {
       const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style, name) VALUES (?, ?, ?, ?)').run(ep.id, pos, s.cut_style, s.name || null);
@@ -791,6 +810,7 @@ async function writeShots(tx, ep, shotsIn) {
       if (s.words) await writeWords(tx, sid, s.words);
       if (s.refs) await tx.prepare('UPDATE shots SET refs = ? WHERE id = ?').run(JSON.stringify(s.refs), sid);
       if (s.mode) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode, sid);   // v3.5.34
+      if (s.model) await tx.prepare('UPDATE shots SET model = ? WHERE id = ?').run(s.model, sid);   // v3.5.86
       if (s.purpose) await tx.prepare('UPDATE shots SET purpose = ? WHERE id = ?').run(s.purpose, sid);   // v3.5.59
     }
     keep[sid] = true;
@@ -830,11 +850,14 @@ async function deleteFiles(files, why) {
 
 // v3.5.15 -- a shot's name: one line, at most 120 characters; empty is no name (the shot shows "Shot n").
 function cleanShotName(v) { const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 120); return t || null; }
-function cleanShots(list, m) {
+function cleanShots(list, m0, admin) {
   const out = [];
   let n = 0;
   (Array.isArray(list) ? list : []).forEach(function (s) {
     s = s || {};
+    // v3.5.86 -- TD-1122: the shot's own model ('' = the episode's); a test model only from an admin, as for the episode
+    const own = s.model === undefined ? undefined : (MODELS[s.model] && !(MODELS[s.model].test && !admin) ? String(s.model) : '');
+    const m = own ? MODELS[own] : m0;
     const kfs = (Array.isArray(s.keyframes) ? s.keyframes : []).map(function (k) {
       k = k || {};
       const src = ['title', 'moment', 'archive'].indexOf(k.source) >= 0 ? k.source : 'archive';
@@ -847,7 +870,7 @@ function cleanShots(list, m) {
     const room = MAX_KEYFRAMES - n;
     if (kfs.length && room <= 0) return;   // v3.5.57: a shot with no pictures yet is kept (Add new shot below)
     n += Math.max(0, Math.min(room, kfs.length));
-    out.push({ id: parseInt(s.id, 10) || null, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), purpose: s.purpose === undefined ? undefined : cleanPurpose(s.purpose), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
+    out.push({ id: parseInt(s.id, 10) || null, model: own, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), purpose: s.purpose === undefined ? undefined : cleanPurpose(s.purpose), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
 }
@@ -895,7 +918,7 @@ router.put('/episodes/:id', requireAuth, requireVideo, async function (req, res)
     const model = (b.model != null && MODELS[b.model] && !(MODELS[b.model].test && !req.vlAdmin)) ? b.model : (MODELS[ep0.model] ? ep0.model : DEFAULT_MODEL);   // v3.5.82 test models: admins
     let shots = null;
     if (b.shots != null) {
-      shots = cleanShots(b.shots, MODELS[model]);
+      shots = cleanShots(b.shots, MODELS[model], !!req.vlAdmin);   // v3.5.86 admin: a shot's test model
       const urls = [];
       shots.forEach(function (s) { s.keyframes.forEach(function (k) { urls.push(k.url); }); });
       const notOurs = urls.filter(function (u) { return !storage.isOurPublicUrl(u); });
@@ -971,8 +994,8 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
         const w = s.words || {};
-        return { name: s.name, purpose: s.purpose || '', mode: s.mode || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, beats: w.beats, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
-      }), m));
+        return { name: s.name, purpose: s.purpose || '', mode: s.mode || '', model: s.model || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, beats: w.beats, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+      }), m, !!req.vlAdmin));   // v3.5.86
     });
     res.json({ episode: await loadEpisode(db, id) });
   } catch (e) {
@@ -2616,14 +2639,16 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
     // IS that shot: it keeps its name, words, references, cut style and takes. The others are new and empty (the
     // Director's Notes fill them); shots that no longer exist go with their takes and files (asked first).
     const used = {};
+    let lastModel = '';   // v3.5.86 (Ian, 2026-11-12: "default to whatever was in the last shot")
     const fresh = result.shots.map(function (sh) {
       const urls = sh.pictures.map(function (n) { return pics[n - 1].image_url; });
       const same = live.filter(function (o) { return !used[o.id] && o.keyframes.length === urls.length && o.keyframes.every(function (k, j) { return k.image_url === urls[j]; }); })[0];
       if (same) {
         used[same.id] = true;
+        lastModel = shotModel(same);
         return { id: same.id, name: cleanShotName(same.name) || sh.name, purpose: cleanPurpose(same.purpose) || sh.purpose || undefined, cut_style: same.cut_style || 'instant', keyframes: same.keyframes.map(kfOut) };
       }
-      return { id: null, name: sh.name, purpose: sh.purpose || undefined, cut_style: 'instant', keyframes: sh.pictures.map(function (n) { return kfOut(pics[n - 1]); }) };
+      return { id: null, model: lastModel || undefined, name: sh.name, purpose: sh.purpose || undefined, cut_style: 'instant', keyframes: sh.pictures.map(function (n) { return kfOut(pics[n - 1]); }) };
     });
     kept = Object.keys(used).length;
     try { files = await writeShots(tx, ep, fresh); }
@@ -2906,7 +2931,7 @@ async function precheckContext(db, ep) {
   ctx.pool = pool;
   ctx.info = ctx.shots.map(function (s) {
     const w = shotWords(s) || legacyWords(s.keyframes, MODELS[ep.model]);
-    const key = shotModelKey(ep.model, shotMode(s)), mm = MODELS[key];
+    const key = shotModelKey(ep.model, shotMode(s), shotModel(s)), mm = MODELS[key];   // v3.5.86: the shot's own model
     return { id: s.id, name: s.name || '', words: w, refs: refsToSend(ep, w, shotRefs(s), pool, 12).map(function (p) { return p.name; }),
       mode: mm.reference ? 'reference' : 'keyframes', modeSet: shotMode(s), model: mm.label + (mm.reference ? ' (Reference)' : ' (Keyframes)'),
       maxSecs: Math.min(SHOT_MAX_SECS, Math.max.apply(null, (mm.durations || ['15']).map(Number))),   // v3.5.79
@@ -3337,6 +3362,6 @@ module.exports._pics = { enlargeSmallPictures: enlargeSmallPictures };   // v3.5
 module.exports._stopSweep = function () { if (_timer) clearInterval(_timer); _timer = null; };
 module.exports._internals = { finishMove: finishMove, takeStatus: takeStatus, finishTakeMerge: finishTakeMerge, maybeJoinEpisode: maybeJoinEpisode, finishEpisodeJoin: finishEpisodeJoin,
   loadEpisode: loadEpisode, planMoves: planMoves, cleanShots: cleanShots, writeShots: writeShots, shotSig: shotSig, makeShot: makeShot, vlSaveSummary: vlSaveSummary };
-module.exports._precheck = { shotMode: shotMode, shotModelKey: shotModelKey, epForShot: epForShot, precheckTokens: precheckTokens, precheckContext: precheckContext, precheckRequest: precheckRequest, parsePrecheck: parsePrecheck, runPrecheck: runPrecheck, pcShape: pcShape };
+module.exports._precheck = { shotMode: shotMode, shotModel: shotModel, modelPartner: modelPartner, cleanShots: cleanShots, shotSig: shotSig, shotModelKey: shotModelKey, epForShot: epForShot, precheckTokens: precheckTokens, precheckContext: precheckContext, precheckRequest: precheckRequest, parsePrecheck: parsePrecheck, runPrecheck: runPrecheck, pcShape: pcShape };
 module.exports._shotList = { styleFor: styleFor, snapDuration: snapDuration, usdFor: usdFor, tokensFor: tokensFor, shotListPrices: shotListPrices, estimateShotList: estimateShotList,
   shotListContext: shotListContext, shotListRequest: shotListRequest, parseShotList: parseShotList, moveBoxText: moveBoxText, runShotList: runShotList, retireLostJobs: retireLostJobs, BOOT: SL_BOOT, structureSig: structureSig };

@@ -42294,6 +42294,7 @@ function vlDraftFrom(ep) {
         op: vlPanelsOpenFor(s.id),   // v3.5.22: which question panels are open
         refs: Array.isArray(s.refs) ? s.refs.map(function (r) { return { type: r.type, id: r.id }; }) : vlRefsFromWords(ep, w),   // v3.5.22
         mode: s.mode || '',   // v3.5.34
+        model: s.model || '',   // v3.5.86 -- TD-1122
         kfs: (s.keyframes || []).map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label || '', prompt: k.prompt || '', duration: String(k.duration || ''), prev: k.prev_image_url || '' }; }) };
     }) };
   vlFitDurations(d, m);
@@ -42381,16 +42382,19 @@ function vlShotHTML(d, si, m, n0) {
       // v3.5.59 (Ian, 2026-11-10: "every shot needs a Purpose field. It's more for the user and what the shot creating process can
       // fill in"): on the top line, so it stays readable when the shot is folded and the pictures stay right under it.
       '<input id="vl-pu-' + si + '" class="form-input vl-purpose" type="text" maxlength="300" value="' + escapeHtml(s.purpose || '') + '" placeholder="Purpose: what this shot is for in the story"' + (s.purpose ? ' title="' + escapeHtml(s.purpose) + '"' : '') + ' style="flex:3 1 200px;min-width:110px;padding:4px 8px;font-size:13px;" oninput="vlEdit();if(this.value)this.title=this.value;else this.removeAttribute(\'title\');" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +   // v3.5.60: the tip is the whole purpose
-      '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;" for="vl-se-' + si + '">How long?' +
-        '<select id="vl-se-' + si + '" class="form-input" style="width:auto;padding:3px 8px;font-size:13px;height:auto;" onchange="vlEdit()" onblur="vlFlushSave()">' + secs.join('') + '</select></label>' +
-      vlModeSelectHTML(si) +   // v3.5.34
-      '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +
+      '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +   // v3.5.86: the length and the Mode moved to the row below
       '<span id="vl-todo-' + s.ck + '" style="flex:none;margin-left:auto;">' + vlTodoBtnHTML(si) + '</span>' +   // v3.5.34
       ((typeof state !== 'undefined' && state.user && state.user.is_admin) ? '<button type="button" class="narrative-regen-btn" style="flex:none;" title="Admin: copy this shot\'s outline to the clipboard" onclick="vlOutline(' + si + ')">&#128203;</button>' : '') +   // v3.5.74
     '</div>' +
     '<div id="vl-body-' + s.ck + '" style="' + (vlFolded(s) ? 'display:none;' : '') + '">' +
     '<div class="vl-halves">' +
       '<div class="vl-left">' +
+        // v3.5.86 -- TD-1122: Model, Mode and Seconds on one row under the name, level with the top of the pictures
+        '<div class="vl-model-row" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+          vlShotModelSelectHTML(si) + vlModeSelectHTML(si) +
+          '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;" for="vl-se-' + si + '">Seconds' +
+            '<select id="vl-se-' + si + '" class="form-input" style="width:auto;padding:3px 8px;font-size:13px;height:auto;" onchange="vlEdit()" onblur="vlFlushSave()">' + secs.join('') + '</select></label>' +
+        '</div>' +
         '<div id="vl-refs-' + si + '" class="vl-refs" style="margin-bottom:8px;">' + vlRefsHTML(si) + '</div>' +   // v3.5.45: in the left half, so the pictures start right under the top line
         '<div id="vl-chk-' + si + '" class="vl-checks">' + vlChecksHTML(si, 'shot') + '</div>' +
         vlPanelsHTML(d, si) +
@@ -42428,7 +42432,7 @@ function vlAddShotBelow(si) {
   vlReadForm();
   var d = VL.draft;
   if (!d || !d.shots[si] || vlSlLocked(d.id)) return;
-  d.shots.splice(si + 1, 0, vlNewShot([]));
+  d.shots.splice(si + 1, 0, vlNewShot([], d.shots[si]));
   vlStructural();
 }
 // v3.5.54 (Ian, 2026-11-09: "Between the shots... we need to have some canned transitions"; "a play button between the
@@ -42671,7 +42675,8 @@ function vlReadForm() {
   d.shots.forEach(function (sh, si) {
     var sn = v('vl-sn-' + si); if (sn != null) sh.name = sn;   // v3.5.15
     var pu = v('vl-pu-' + si); if (pu != null) sh.purpose = pu;   // v3.5.59
-    var mo = v('vl-mo-' + si); if (mo != null) sh.mode = mo;   // v3.5.34
+    var ml = v('vl-ml-' + si); if (ml != null) sh.model = ml;   // v3.5.86
+    var mo = v('vl-mo-' + si); if (mo != null) vlSetShotMode(sh, mo);   // v3.5.34; v3.5.86 within the shot's model
     // v3.5.19 -- the shot's boxes
     var x;
     x = v('vl-st-' + si); if (x != null) sh.start = x;
@@ -42730,12 +42735,30 @@ function vlMovesOf(s) {
 // v3.5.46 -- TAKES IN TOKENS (Ian, 2026-11-09). A take's price: fal's cost at VL.cpt cents a token, rounded up, for the
 // model the shot is made with (its own mode can switch it, as the server's shotModelKey does). The server is the judge.
 function vlTakeTok(usd) { return Math.max(1, Math.ceil((Number(usd) || 0) * 100 / (VL.cpt || 8) - 1e-9)); }
+// v3.5.86 -- TD-1122: the shot's own model wins; its Mode then only switches to the same model in the other mode
+// (as the server's shotModelKey). The pair rule of v3.5.82 was missing here, so it is added for the episode's model too.
 function vlShotModelKey(d, ds) {
-  var key = d.model, m = vlModel(key), mode = ds && ds.mode;
+  var own = ds && ds.model && vlModelKnown(ds.model) ? ds.model : '', mode = ds && ds.mode;
+  if (own) { var om = vlModel(own), p = om.partner && vlModelKnown(om.partner) ? vlModel(om.partner) : null;
+    if (mode && p && !!p.reference === (mode === 'reference') && !!om.reference !== (mode === 'reference')) return p.key;
+    return own; }
+  var key = d.model, m = vlModel(key);
   if (!m) return key;
+  if (mode && m.partner && vlModelKnown(m.partner) && !!vlModel(m.partner).reference === (mode === 'reference') && !!m.reference !== (mode === 'reference')) return m.partner;
   if (mode === 'reference' && !m.reference) return key === 'seedance2' ? 'seedance2ref' : (key === 'kling3std' ? 'klingo3ref' : 'seedance2reffast');
   if (mode === 'keyframes' && m.reference) return key === 'seedance2ref' ? 'seedance2' : (key === 'klingo3ref' ? 'kling3std' : 'seedance2fast');
   return key;
+}
+function vlModelKnown(key) { return (VL.models || []).some(function (x) { return x.key === key; }); }   // v3.5.86
+function vlShotM(d, ds) { return vlModel(vlShotModelKey(d, ds)) || vlModel(d.model); }   // v3.5.86: the model a shot is made with
+// v3.5.86: the Mode menu on a shot with its own model switches the model to its partner (Mode stays '')
+function vlSetShotMode(s, mode) {
+  if (s.model && vlModelKnown(s.model)) {
+    var m = vlModel(s.model), p = m.partner && vlModelKnown(m.partner) ? vlModel(m.partner) : null;
+    if (mode && p && !!p.reference === (mode === 'reference') && !!m.reference !== (mode === 'reference')) s.model = p.key;
+    s.mode = ''; return;
+  }
+  s.mode = mode || '';
 }
 function vlShotTok(d, ds) {
   var m = vlModel(vlShotModelKey(d, ds)) || vlModel(d.model);
@@ -42753,9 +42776,9 @@ function vlShowCost() {
   var m = vlModel(d.model);
   if (!m) return;
   if (!vlKfCount(d)) { el.textContent = 'An episode needs one keyframe at least.'; return; }
-  var per = d.sound ? m.priceSound : m.price;
   var secs = d.shots.reduce(function (t, s) { return t + vlShotSecs(s, m); }, 0);
-  el.textContent = d.shots.length + ' shot' + (d.shots.length === 1 ? '' : 's') + ', ' + secs + ' seconds: about ' + vlTok(per * secs) + ' tokens for one take of every shot';   // v3.5.39: tokens, not dollars
+  var usd = d.shots.reduce(function (t, s) { var sm = vlShotM(d, s) || m; return t + (d.sound ? sm.priceSound : sm.price) * vlShotSecs(s, sm); }, 0);   // v3.5.86: each shot at its own model
+  el.textContent = d.shots.length + ' shot' + (d.shots.length === 1 ? '' : 's') + ', ' + secs + ' seconds: about ' + vlTok(usd) + ' tokens for one take of every shot';   // v3.5.39: tokens, not dollars
 }
 
 // ---- saving: one at a time -------------------------------------------------------------------
@@ -42782,6 +42805,7 @@ function vlSave(cb) {
     shots: d.shots.map(function (s) { return { id: s.id, name: s.name || '', purpose: s.purpose || '', cut_style: s.cut_style,   // v3.5.59 purpose
       refs: (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; }),   // v3.5.22
       mode: s.mode || '',   // v3.5.34
+      model: s.model || '',   // v3.5.86
       start: s.start, actions: vlActionsList(s.actions), lines: vlBeatsOut(s).lines, beats: vlBeatsOut(s).beats,   // v3.5.19; v3.5.63 beats (empty beats left out)
       camera: s.camera, end: s.end, sounds: s.sounds, around: s.around, seconds: s.seconds, keyframes: s.kfs.map(function (k) { return { url: k.url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt || '', duration: String(k.duration || ''), prev_url: k.prev || null }; }) }; }) };
   var id = d.id;
@@ -42906,7 +42930,7 @@ function vlCutHere(si, ki) {
   vlReadForm();
   var d = VL.draft, s = d && d.shots[si];
   if (!s || ki >= s.kfs.length - 1) return;
-  var ns = vlNewShot(s.kfs.splice(ki + 1));   // v3.5.15: the new shot starts without a name; v3.5.19: and with empty boxes
+  var ns = vlNewShot(s.kfs.splice(ki + 1), s);   // v3.5.15: the new shot starts without a name; v3.5.19: and with empty boxes
   ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });   // v3.5.22: and the same references
   d.shots.splice(si + 1, 0, ns);
   vlStructural();
@@ -43067,6 +43091,7 @@ function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (ad
     L.push(''); L.push('================================================================');
     L.push('SHOT ' + (i + 1) + (sh.name ? ': ' + sh.name : ''));
     line('Purpose', sh.purpose);
+    line('Model', sh.model ? ((vlModel(sh.model) || {}).label || sh.model) + ((vlModel(sh.model) || {}).reference ? ' (Reference)' : ' (Keyframes)') : 'same as episode');   // v3.5.86
     line('Mode', sh.mode || 'same as episode');
     line('Length', (sh.seconds || '?') + ' s');
     if ((sh.kfs || []).length) { L.push('Pictures:'); sh.kfs.forEach(function (k, j) { L.push('  ' + (j + 1) + '. ' + (k.label || 'picture') + ' - ' + k.url); }); }
@@ -43508,7 +43533,7 @@ function vlMissingDone(k, create) {
     vlReadForm();
     var at = 0;
     if (x.after_id) { at = d.shots.length; d.shots.forEach(function (s, i) { if (String(s.id) === String(x.after_id)) at = i + 1; }); }
-    var ns = vlNewShot([]);
+    var ns = vlNewShot([], d.shots[at - 1]);
     ns.name = x.name || ''; ns.start = x.what || ''; ns.purpose = x.why || '';   // v3.5.59: the why is the shot's purpose
     d.shots.splice(at, 0, ns);
     vlStructural();
@@ -43791,8 +43816,7 @@ function vlPcFlagged(url) {
 }
 function vlTagged(url) { return vlNotWide(url) || vlPcFlagged(url); }
 function vlShotIsRef(si) {
-  var d = VL.draft, s = d && d.shots[si], mm = d && vlModel(d.model);
-  if (s && s.mode) return s.mode === 'reference';
+  var d = VL.draft, s = d && d.shots[si], mm = s ? vlShotM(d, s) : null;   // v3.5.86: the shot's own model and mode
   return !!(mm && mm.reference);
 }
 function vlShapeTagHTML(url, si, ki) {
@@ -43839,15 +43863,14 @@ function vlShapeProblems(shotIdx) {
   d.shots.forEach(function (s, si) {
     s.kfs.forEach(function (k) {
       n++;
-      if (shotIdx.indexOf(si) >= 0 && vlNotWide(k.url)) out.push({ n: n, shot: si + 1, label: k.source === 'title' ? 'Title picture' : (k.label || 'From the Archive'), shape: vlShapeOf(VL.kfShape[k.url]) });
+      if (shotIdx.indexOf(si) >= 0 && !(vlShotM(d, s) || {}).reference && vlNotWide(k.url)) out.push({ n: n, shot: si + 1, label: k.source === 'title' ? 'Title picture' : (k.label || 'From the Archive'), shape: vlShapeOf(VL.kfShape[k.url]) });
     });
   });
   return out;
 }
 // Ask before generating when a picture is not wide. then() runs on Generate anyway, or at once when all are wide.
-function vlShapeCheck(shotIdx, then) {
-  var mm = VL.draft && vlModel(VL.draft.model);
-  if (mm && mm.reference) { then(); return; }   // v3.5.19: reference pictures may be any shape
+function vlShapeCheck(shotIdx, then) {   // v3.5.86: a reference shot is skipped in vlShapeProblems, by its own model
+  if (!VL.draft) { then(); return; }   // v3.5.19: reference pictures may be any shape
   var bad = vlShapeProblems(shotIdx);
   if (!bad.length) { then(); return; }
   var list = bad.map(function (b) { return 'keyframe ' + b.n + ' (' + b.label + ', shot ' + b.shot + ') is ' + b.shape; }).join('; ');
@@ -43874,8 +43897,8 @@ var VL_HALVES_CSS = '.vl-top3{display:grid;grid-template-columns:repeat(3,minmax
 var VL_BOX_LABEL = 'display:block;font-size:12px;font-weight:600;color:var(--accent-pale);margin:8px 0 3px;';   // v3.5.21: tighter
 var VL_BOX_STYLE = 'min-height:0;padding:6px 10px;line-height:1.45;resize:vertical;overflow:hidden;';
 var VL_WARN = 'color:#e8a85a;font-size:12px;line-height:1.45;';
-function vlNewShot(kfs) {
-  return { ck: ++VL.ck, id: null, name: '', purpose: '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false, op: {}, refs: [], beats: [] };
+function vlNewShot(kfs, prev) {   // v3.5.86 prev: the shot before it, whose model it starts with (Ian, 2026-11-12)
+  return { ck: ++VL.ck, id: null, name: '', purpose: '', model: (prev && prev.model) || '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false, op: {}, refs: [], beats: [] };
 }
 function vlPanelsOpenFor(id) { var o = {}; if (id && VL.panelsOpen) VL_PANELS.forEach(function (p) { if (VL.panelsOpen[id + ':' + p[0]]) o[p[0]] = true; }); return o; }
 // A shot never given references: the characters named in its words (as the server would send them).
@@ -44324,12 +44347,12 @@ function vlChecks(si) {
     var ep1 = vlFindEp(VL.draft.id), who = ((ep1 && ep1.cast) || []).filter(function (c) { return vlNamed(c.name, a); }).map(function (c) { return String(c.name).trim().split(/\s+/)[0]; })[0] || 'Someone';
     out.push({ p: 'actions', t: who + ' leaves in beat ' + (i + 1) + '. Give them about 2 seconds to get all the way out of frame: make the shot longer or drop a beat.' });
   });
-  var mm0 = vlModel(VL.draft.model), maxScene0 = (mm0 && mm0.reference && mm0.max_scene) || 5;   // v3.5.45
+  var mm0 = vlShotM(VL.draft, s), maxScene0 = (mm0 && mm0.reference && mm0.max_scene) || 5;   // v3.5.45
   if (s.kfs.length > maxScene0) out.push({ p: 'shot', t: 'Only the first ' + maxScene0 + ' pictures are sent. Cut this shot.' });
   s.lines.forEach(function (l) { if (String(l.text || '').trim() && !String(l.who || '').trim()) out.push({ p: 'lines', t: 'Who says "' + String(l.text).slice(0, 40) + '"? A line with no name is sent as a voice from off-screen; name the speaker so it is not given to someone on screen.' }); });   // v3.5.25
   // v3.5.63: a line said at any time is fine now (it sits in Throughout), so no nudge to give it a beat
   // v3.5.79 (Ian, 2026-11-11): longer than the model makes -- cut it between two beats
-  var mmx = vlModel(VL.draft.model), maxS = Math.min(15, Math.max.apply(null, ((mmx && mmx.durations) || ['15']).map(Number)));
+  var mmx = vlShotM(VL.draft, s), maxS = Math.min(15, Math.max.apply(null, ((mmx && mmx.durations) || ['15']).map(Number)));
   var btot = btm.length ? btm[btm.length - 1].to : 0;
   if (btot > maxS + 0.25) out.push({ p: 'beats', t: 'The beats add up to ' + vlSecsText(btot) + ' s and ' + ((mmx && mmx.label) || 'this model') + ' makes at most ' + maxS + ' s. Cut the shot in two with the \u2702 between two beats (the check suggests where), or shorten beats.' });
   var bsum = vlBeatsSet(s); if (bsum > Number(s.seconds) && !(btot > maxS + 0.25)) out.push({ p: 'beats', t: 'The beats\' seconds add up to ' + bsum + ' s, more than the shot\'s ' + s.seconds + ' s. Shorten a beat or make the shot longer.' });   // v3.5.63
@@ -44362,7 +44385,7 @@ function vlPoolItem(type, id) {
   return ((type === 'asset' ? ep && ep.assets : ep && ep.cast) || []).filter(function (x) { return Number(x.id) === Number(id); })[0] || null;
 }
 function vlRefsRoom(si) {
-  var s = VL.draft.shots[si], m = vlModel(VL.draft.model);
+  var s = VL.draft.shots[si], m = vlShotM(VL.draft, s);   // v3.5.86
   if (!m || !m.reference) return { sent: 0, over: 0 };
   var refs = (s.refs || []).filter(function (r) { var it = vlPoolItem(r.type, r.id); return it && it.usable; }).length;
   var maxR = m.max_refs || 9, maxS = m.max_scene || 5;   // v3.5.45: the model's own limits (Kling O3: 7 and 4)
@@ -44370,7 +44393,7 @@ function vlRefsRoom(si) {
   return { refs: refs, pics: pics, sent: Math.min(maxR, refs + pics), over: Math.max(0, refs + pics - maxR), max: maxR, maxScene: maxS };
 }
 function vlRefsHTML(si) {
-  var d = VL.draft, s = d.shots[si], m = vlModel(d.model), ep = vlFindEp(d.id);
+  var d = VL.draft, s = d.shots[si], m = vlShotM(d, s), ep = vlFindEp(d.id);   // v3.5.86
   var chip = function (r, i) {
     var it = vlPoolItem(r.type, r.id); if (!it) return '';
     return '<span class="review-chip' + (r.type === 'asset' ? ' review-chip-asset' : '') + '" style="cursor:pointer;' + (it.usable ? '' : 'opacity:0.55;') + '" title="' + (it.usable ? 'Click to see the picture' : escapeHtml('Not sent: ' + (it.why_not || 'no picture'))) + '"' +
@@ -44403,8 +44426,30 @@ var VL_MODE_TIPS = {
   keyframes: 'Keyframes: the video moves from each picture exactly to the next. Best when neighbouring pictures match closely: same place, same poses, a small change.'
 };
 var VL_PC_KIND = { gap: 'Missing moment', mode: 'Video mode', continuity: 'Continuity', words: 'Words', reference: 'Reference', style: 'Art style', aspect: 'Picture shape', cut: 'Too long', other: 'Note' };
+// v3.5.86 -- TD-1122: the shot's model. 'Same as episode' or any model the person may use (test models for admins), each
+// with tokens a second, pictures and its tip; a new shot starts with the model of the shot before it.
+function vlShotModelSelectHTML(si) {
+  var d = VL.draft, s = d && d.shots[si]; if (!s) return '';
+  var own = s.model && vlModelKnown(s.model) ? s.model : '', em = vlModel(d.model), ms = VL.models || [];
+  var tip = own ? vlModelTip(vlModel(own)) : 'Uses the episode\'s video model' + (em ? ' (' + em.label + ')' : '') + '.';
+  return '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;" for="vl-ml-' + si + '">Model' +
+    '<select id="vl-ml-' + si + '" class="form-input" style="width:auto;max-width:260px;padding:3px 8px;font-size:13px;height:auto;" title="' + escapeHtml(tip) + '" onchange="vlShotModelPicked(' + si + ')" onblur="vlFlushSave()">' +
+      '<option value=""' + (own ? '' : ' selected') + '>Same as episode' + (em ? ' (' + escapeHtml(em.label) + ')' : '') + '</option>' + vlModelOptions(ms, own) + '</select></label>';
+}
+function vlShotModelPicked(si) {
+  var mo = document.getElementById('vl-mo-' + si); if (mo) mo.value = '';   // the model picked carries its own mode
+  vlEdit(true);
+}
 function vlModeSelectHTML(si) {
   var s = VL.draft && VL.draft.shots[si]; if (!s) return '';
+  if (s.model && vlModelKnown(s.model)) {   // v3.5.86: the shot's own model -- its mode, or the same model in the other mode
+    var om = vlModel(s.model), pm = om.partner && vlModelKnown(om.partner) ? vlModel(om.partner) : null, curM = om.reference ? 'reference' : 'keyframes';
+    var o2 = function (v, label) { var ok = v === curM || !!pm; return '<option value="' + v + '" title="' + escapeHtml(VL_MODE_TIPS[v]) + '"' + (curM === v ? ' selected' : '') + (ok ? '' : ' disabled') + '>' + label + '</option>'; };
+    var why = pm ? VL_MODE_TIPS[curM] : om.label + ' has one mode only.';
+    return '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;' + (pm ? '' : 'opacity:0.55;') + '" for="vl-mo-' + si + '" title="' + escapeHtml(why) + '">Mode' +
+      '<select id="vl-mo-' + si + '" class="form-input" style="width:auto;padding:3px 8px;font-size:13px;height:auto;"' + (pm ? '' : ' disabled') + ' title="' + escapeHtml(why) + '" onchange="vlEdit(true)" onblur="vlFlushSave()">' +
+        o2('reference', 'Reference') + o2('keyframes', 'Keyframes') + '</select></label>';
+  }
   var cur = s.mode || '';
   var opt = function (v, label) { return '<option value="' + v + '" title="' + escapeHtml(VL_MODE_TIPS[v]) + '"' + (cur === v ? ' selected' : '') + '>' + label + '</option>'; };
   return '<label style="' + VL_DESC + 'display:inline-flex;gap:6px;align-items:center;" for="vl-mo-' + si + '" title="' + escapeHtml(VL_MODE_TIPS.reference + '\n\n' + VL_MODE_TIPS.keyframes) + '">Mode' +
@@ -44544,7 +44589,7 @@ function vlBeatCutDo(si, bi) {
     if (choice[i] === 'move') bKfs.push(k);
     else if (choice[i] === 'both') { var c = Object.assign({}, k); delete c.id; bKfs.push(c); }
   });
-  var ns = vlNewShot(bKfs);
+  var ns = vlNewShot(bKfs, s);
   ns.name = String(s.name || '').trim() ? String(s.name).trim() + ' (2)' : '';
   ns.purpose = s.purpose || ''; ns.mode = s.mode; ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });
   ns.camera = s.camera || ''; ns.sounds = s.sounds || ''; ns.around = s.around || ''; ns.more = !!(ns.sounds || ns.around);
@@ -44600,7 +44645,7 @@ function vlTodoPaint() {
   if (!pc) rows.push('<div style="' + VL_DESC + 'margin:10px 0;">This shot has not been checked. <b>Pre-production check</b>, at the top, has the Director look at every shot for 1 token.</div>');
   else {
     if (pc.stale) rows.push('<div style="' + VL_WARN + 'margin:10px 0;">The shot changed since the check. Run the Pre-production check again to be sure.</div>');
-    var cur = s.mode || '', ep = vlFindEp(d.id), em = vlModel(d.model), curMode = cur || (em && em.reference ? 'reference' : 'keyframes');
+    var cur = s.mode || '', ep = vlFindEp(d.id), em = vlShotM(d, s), curMode = em && em.reference ? 'reference' : 'keyframes';   // v3.5.86
     if (pc.mode && pc.mode !== curMode) rows.push('<div style="margin:10px 0;padding:8px 10px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;">' +   // v3.5.35 (Ian): only when the shot is not set that way
       '<div style="font-size:13px;color:var(--accent-pale);"><b>The Director recommends ' + (pc.mode === 'reference' ? 'Reference' : 'Keyframes') + '.</b> ' + escapeHtml(pc.mode_why || '') + '</div>' +
       '</div>');   // v3.5.35: the button to the recommended mode is on the Mode line above
@@ -44736,7 +44781,7 @@ function vlPcSeconds(si, fid) {
   var n = Math.max(4, Math.min(15, Number(f.fix.seconds) || 0)); if (!n) return;
   vlPcApply(si, fid, function (s) { s.seconds = n; });
 }
-function vlPcSetMode(si, mode, fid) { vlPcApply(si, fid, function (s) { s.mode = mode; }); }
+function vlPcSetMode(si, mode, fid) { vlPcApply(si, fid, function (s) { vlSetShotMode(s, mode); }); }   // v3.5.86: within the shot's model
 // v3.5.35 (Ian, 2026-11-09): Expand right from the to-do list. The finding is ticked off once the retouch has started.
 function vlPcExpand(si, fid) {
   var f = vlPcFinding(si, fid), d = VL.draft, s = d && d.shots[si];
@@ -44757,15 +44802,15 @@ function vlPcExpand(si, fid) {
 // v3.5.35 (Ian, 2026-11-09): the shot's mode in the to-do window, with one button to the recommended mode (no menu here).
 function vlTodoModeHTML(si) {
   var d = VL.draft, s = d && d.shots[si]; if (!s) return '';
-  var em = vlModel(d.model), curMode = s.mode || (em && em.reference ? 'reference' : 'keyframes');
+  var em = vlShotM(d, s), curMode = em && em.reference ? 'reference' : 'keyframes';   // v3.5.86
   return '<div style="display:flex;gap:10px;align-items:center;margin:10px 0 0;flex-wrap:wrap;">' +
-    '<span style="' + VL_DESC + '" title="' + escapeHtml(VL_MODE_TIPS[curMode]) + '">Mode: <b>' + (curMode === 'reference' ? 'Reference' : 'Keyframes') + '</b>' + (s.mode ? '' : ' (same as episode)') + '</span>' + vlTodoRecHTML(si) + '</div>';
+    '<span style="' + VL_DESC + '" title="' + escapeHtml(VL_MODE_TIPS[curMode]) + '">Mode: <b>' + (curMode === 'reference' ? 'Reference' : 'Keyframes') + '</b>' + (s.mode || s.model ? '' : ' (same as episode)') + '</span>' + vlTodoRecHTML(si) + '</div>';
 }
 // v3.5.35 (Ian): one press sets the shot to the mode the Director recommends.
 function vlTodoRecHTML(si) {
   var d = VL.draft, s = d && d.shots[si], pc = vlShotPc(si);
   if (!s || !pc || !pc.mode) return '';
-  var em = vlModel(d.model), curMode = s.mode || (em && em.reference ? 'reference' : 'keyframes'), nm = pc.mode === 'reference' ? 'Reference' : 'Keyframes';
+  var em = vlShotM(d, s), curMode = em && em.reference ? 'reference' : 'keyframes', nm = pc.mode === 'reference' ? 'Reference' : 'Keyframes';   // v3.5.86
   if (pc.mode === curMode) return '<span style="' + VL_DESC + '">&#10003; The recommended mode</span>';
   return '<button type="button" class="btn btn-sm btn-primary" onclick="vlPcSetMode(' + si + ',\'' + pc.mode + '\', null)" title="' + escapeHtml(VL_MODE_TIPS[pc.mode]) + '">Use the recommended: ' + nm + '</button>';
 }

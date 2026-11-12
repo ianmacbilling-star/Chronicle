@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.86",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3586-shot-model",
+        "kind": "feature",
+        "public": false,
+        "summary": "A model on each shot.",
+        "detail": "Video tab: each shot has a Model / Mode / Seconds row under its name, level with the top of its pictures. Model is Same as episode or any video model (test models for admins); a new shot starts with the model of the shot before it. Mode switches to the same model in the other mode, greyed when the model has one mode only. The cost, the Generate price, the quick checks, the Director check, the takes and the outline all follow the shot. Also fixed: a test model in Reference mode no longer turns into its Keyframes twin on shots left on the episode mode.",
+        "td": [
+          "TD-1122"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.85",
     "staged_on": "2026-11-11",
     "entries": [
