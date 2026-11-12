@@ -490,6 +490,11 @@ function ensureTables() {
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS mode TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS precheck TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS model TEXT');   // v3.5.86 -- TD-1122: a shot's own video model (NULL = the episode's)
+    // v3.5.92 -- a take's Info (Ian, 2026-11-12: "Everything we know about the video"): the shot's words when it was made, the
+    // exact input sent to fal for each move, and the prompt the model says it used (fal's expanded_prompt).
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS words_at TEXT');
+    await db.exec('ALTER TABLE moves ADD COLUMN IF NOT EXISTS sent_input TEXT');
+    await db.exec('ALTER TABLE moves ADD COLUMN IF NOT EXISTS used_prompt TEXT');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_image_jobs_episode ON image_jobs(episode_id)');
   })();
   _tablesReady.catch(function () { _tablesReady = null; });
@@ -617,6 +622,8 @@ async function loadEpisodes(db, where, params) {
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE episode_id = ANY(?) ORDER BY shot_id, position, id').all([ids]);
   const takes = await db.prepare('SELECT * FROM takes WHERE episode_id = ANY(?) ORDER BY shot_id, id').all([ids]);
   const moves = await db.prepare('SELECT * FROM moves WHERE episode_id = ANY(?) ORDER BY take_id, position, id').all([ids]);
+  takes.forEach(function (t) { delete t.words_at; });   // v3.5.92: only a take's Info reads these, not every refresh
+  moves.forEach(function (m) { delete m.sent_input; delete m.used_prompt; });
   const archivedBy = {};   // v3.5.20
   {
     const urls = kfs.map(function (k) { return k.image_url; }).filter(Boolean);
@@ -1380,6 +1387,10 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   if (!ins.lastInsertRowid) return { status: 409, error: 'Shot ' + shotNo + ' is already being made.' };
   const takeId = ins.lastInsertRowid;
   await db.prepare('UPDATE shots SET chosen_take_id = ? WHERE id = ?').run(takeId, shot.id);
+  try {   // v3.5.92: the shot as it was when this take was made, for the take's Info
+    await db.prepare('UPDATE takes SET words_at = ? WHERE id = ?').run(JSON.stringify({ name: shot.name || '', purpose: shot.purpose || '', shot_model: shotModel(shot), shot_mode: shotMode(shot),
+      words: shotWords(shot) || legacyWords(kfs, m), pictures: kfs.map(function (k) { return { url: k.image_url, label: k.label || '' }; }), overall: ep.overall || '', style: ep.style || '' }), takeId);
+  } catch (e) { console.warn('[video] take ' + takeId + ': could not keep the words: ' + (e && e.message)); }
   const rows = [];
   for (const x of plan.moves) {
     const bi = buildInput(m, x.full, x.start, x.end, x.duration, sound, x.images);
@@ -1392,6 +1403,7 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   for (const x of rows) {
     const big = await enlargeSmallPictures(x.bi.input);   // v3.5.56
     if (big.length) vlDebug(req.session.userId, 'info', 'makeShot', 'Shot ' + shotNo + ': ' + big.length + ' small picture(s) sent enlarged', { pictures: big });
+    try { await db.prepare('UPDATE moves SET sent_input = ? WHERE id = ?').run(JSON.stringify({ endpoint: x.bi.endpoint, input: x.bi.input }), x.id); } catch (e) {}   // v3.5.92: exactly what fal is sent
     try {
       const sub = await fal.queue.submit(x.bi.endpoint, { input: x.bi.input, webhookUrl: hook });
       await db.prepare("UPDATE moves SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, x.id);
@@ -1803,6 +1815,7 @@ router.post('/takes/:id/retouch', requireAuth, requireVideo, async function (req
       video: vlShortUrl(x.t.video_url), refs: refs.map(function (r) { return { name: r.name, kind: r.kind, url: vlShortUrl(r.url) }; }), input: Object.assign({}, input, { prompt: undefined }), prompt: prompt });
     const bigR = await enlargeSmallPictures(input);   // v3.5.56
     if (bigR.length) vlDebug(req.session.userId, 'info', FN, bigR.length + ' small picture(s) sent enlarged', { pictures: bigR });
+    try { await db.prepare('UPDATE moves SET sent_input = ? WHERE id = ?').run(JSON.stringify({ endpoint: R.endpoint, input: input }), mv.lastInsertRowid); } catch (e) {}   // v3.5.92
     try {
       const sub = await falClient().queue.submit(R.endpoint, { input: input, webhookUrl: hook });
       await db.prepare("UPDATE moves SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, mv.lastInsertRowid);
@@ -1837,6 +1850,37 @@ router.get('/episodes/:id/download', requireAuth, requireVideo, async function (
     await sendVideo(res, ep.video_url, baseName(ep.name) + '.mp4');
   } catch (e) {
     res.status(500).json({ error: 'Could not read the video.' });
+  }
+});
+// v3.5.92 -- A TAKE'S INFO (Ian, 2026-11-12: model, mode, tokens, prompt sent, prompt used, references... "Everything we know
+// about the video"; for everyone for now, failed takes too). Read only; the page lays it out.
+router.get('/takes/:id/info', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
+    if (!x.ep || !(await canSee(req, x.ep))) return res.status(404).json({ error: 'That take is not there any more.' });
+    const t = x.t;
+    const sh = await db.prepare('SELECT id, position, name FROM shots WHERE id = ?').get(t.shot_id);
+    const mvs = await db.prepare('SELECT * FROM moves WHERE take_id = ? ORDER BY position, id').all(t.id);
+    const tm = MODELS[t.model];
+    const made = t.retouch_kind ? (t.retouch_kind === 'small' ? 'Kling O1 Edit (Small fix retouch)' : 'Seedance 2.0 (Bigger change retouch)') : null;
+    let maker = null; try { const u = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(t.user_id); maker = u ? (u.name || u.email || null) : null; } catch (e) { maker = null; }
+    res.json({
+      take: { id: t.id, status: t.status, model: t.model, model_label: made || (tm ? tm.label : t.model), mode: made ? 'Retouch' : (tm ? (tm.reference ? 'Reference' : 'Keyframes') : ''),
+        sound: !!t.sound, tokens: t.tokens, tokens_charged: t.tokens_charged, est_cost_usd: t.est_cost_usd, error: t.merge_error || t.error || null,
+        created_at: t.created_at, finished_at: t.finished_at, trim_start: t.trim_start, trim_end: t.trim_end, made_by: maker,
+        source_take_id: t.source_take_id, retouch_kind: t.retouch_kind, retouch_text: t.retouch_text, video_url: t.video_url,
+        directions: parseJson(t.directions, null), words_at: parseJson(t.words_at, null) },
+      shot: sh ? { id: sh.id, position: sh.position, name: sh.name || '' } : null,
+      episode: { id: x.ep.id, name: x.ep.name || '' },
+      moves: mvs.map(function (m) { return { position: m.position, model: m.model, endpoint: m.endpoint, duration: m.duration, sound: !!m.sound, status: m.status, request_id: m.request_id,
+        error: m.error, est_cost_usd: m.est_cost_usd, file_size: m.file_size, submitted_at: m.submitted_at, finished_at: m.finished_at, start_url: m.start_url, end_url: m.end_url,
+        prompt: m.prompt, sent: parseJson(m.sent_input, null), used_prompt: m.used_prompt || null }; })
+    });
+  } catch (e) {
+    console.error('[video] take info error:', e && e.message);
+    res.status(500).json({ error: 'Could not read the take.' });
   }
 });
 router.get('/takes/:id/download', requireAuth, requireVideo, async function (req, res) {
@@ -1880,6 +1924,7 @@ async function finishMove(mv, falResult, falError) {
     const buf = await fetchVideo(url);
     const stored = await storage.uploadFile(buf, 'ep-' + mv.episode_id + '-take-' + mv.take_id + '-move-' + mv.id + '-' + Date.now() + '.mp4', 'video/mp4', 'video-lab');
     await db.prepare("UPDATE moves SET status = 'done', fal_video_url = ?, video_url = ?, file_size = ?, error = NULL, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(url, stored, buf.length, mv.id);
+    if (typeof data.expanded_prompt === 'string' && data.expanded_prompt) { try { await db.prepare('UPDATE moves SET used_prompt = ? WHERE id = ?').run(data.expanded_prompt.slice(0, 20000), mv.id); } catch (e) {} }   // v3.5.92: the model's own rewrite, when it made one
     console.log('[video] move ' + mv.id + ' done: ' + buf.length + ' bytes -> ' + stored);
     await takeStatus(db, mv.take_id);
     return 'done';

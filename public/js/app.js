@@ -43086,6 +43086,107 @@ function vlTakeModelText(t) {
   var m = vlModel(t.model);
   return ((m && m.label) || t.model || 'Unknown model') + (m ? ' \u00b7 ' + (m.reference ? 'Reference' : 'Keyframes') : '') + (t.sound ? ' \u00b7 sound' : '');
 }
+// v3.5.92 -- A TAKE'S INFO (Ian, 2026-11-12: "a button that would open a modal that would have all the info on it... Model used,
+// Mode used, Tokens used, Prompt sent, Prompt used, References sent... Everything we know about the video"; for everyone for
+// now, failed takes too). Takes made before v3.5.92 did not keep the input sent or the shot's words: those say so.
+function vlTakeInfoClose() { var o = document.getElementById('vl-info-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); }
+function vlTakeInfo(takeId, n) {
+  vlTakeInfoClose();
+  var box = document.createElement('div');
+  box.id = 'vl-info-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.addEventListener('click', function (e) { if (e.target === box) vlTakeInfoClose(); });
+  box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:900px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Take ' + (n || takeId) + ' &middot; info</div><button class="modal-close" onclick="vlTakeInfoClose()">&times;</button></div>' +
+    '<div id="vl-info-body" style="margin-top:10px;">' + vlSpin(14) + ' Loading...</div></div>';
+  document.body.appendChild(box);
+  fetch('/api/video-lab/takes/' + takeId + '/info').then(function (r) { return r.json(); }).then(function (j) {
+    var b = document.getElementById('vl-info-body'); if (!b) return;
+    b.innerHTML = j && j.take ? vlTakeInfoHTML(j) : '<div style="' + VL_WARN + '">' + escapeHtml((j && j.error) || 'Could not read the take.') + '</div>';
+  }).catch(function () { var b = document.getElementById('vl-info-body'); if (b) b.innerHTML = '<div style="' + VL_WARN + '">Could not reach the server.</div>'; });
+}
+function vlInfoWhen(v) { if (!v) return ''; var d = new Date(v); return isNaN(d.getTime()) ? String(v) : d.toLocaleString(); }
+// The pictures in a fal input, in order, each with the name the words give it.
+function vlInfoPictures(sent, cast) {
+  var inp = (sent && sent.input) || {}, out = [];
+  ['image_url', 'start_image_url', 'first_frame_url', 'end_image_url', 'last_frame_url', 'video_url'].forEach(function (k) { if (typeof inp[k] === 'string' && inp[k]) out.push({ url: inp[k], what: k.replace(/_/g, ' ') }); });
+  ['image_urls', 'reference_image_urls', 'video_urls'].forEach(function (k) {
+    if (!Array.isArray(inp[k])) return;
+    inp[k].forEach(function (u, i) { out.push({ url: u, what: 'Image ' + (i + 1) + (cast && cast[i] ? ': ' + cast[i] : (k === 'video_urls' ? ' (video)' : (cast && cast.length ? ': a shot picture' : ''))) }); });
+  });
+  return out;
+}
+function vlTakeInfoHTML(j) {
+  var t = j.take, sh = j.shot, H = [], P = 'margin:2px 0;font-size:13px;line-height:1.5;';
+  function row(k, v) { if (v === null || v === undefined || v === '') return; H.push('<div style="' + P + '"><span style="color:var(--accent-pale);">' + k + ':</span> ' + v + '</div>'); }
+  function head(k) { H.push('<div style="' + VL_BOX_LABEL + 'margin-top:14px;">' + k + '</div>'); }
+  function pre(s) { H.push('<pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;margin:4px 0;">' + escapeHtml(s) + '</pre>'); }
+  var dir = t.directions || {}, mv0 = (dir.moves && dir.moves[0]) || {}, cast = mv0.cast || null;
+  head('The take');
+  row('Episode', escapeHtml(j.episode.name || ''));
+  row('Shot', sh ? (sh.position + (sh.name ? ': ' + escapeHtml(sh.name) : '')) : 'deleted');
+  row('Status', escapeHtml(t.status));
+  row('Model', escapeHtml(t.model_label || t.model || '') + (t.model ? ' <span style="opacity:0.6;">(' + escapeHtml(t.model) + ')</span>' : ''));
+  row('Mode', escapeHtml(t.mode || ''));
+  row('Sound', t.sound ? 'on' : 'off');
+  row('Tokens', t.tokens_charged != null ? t.tokens_charged + ' charged' : (t.tokens != null ? t.tokens + ' (not charged' + (t.status === 'error' ? ': it failed' : ' yet') + ')' : 'not recorded'));
+  row('fal cost', t.est_cost_usd != null ? '$' + Number(t.est_cost_usd).toFixed(3) + ' (estimate)' : '');
+  row('Made', escapeHtml(vlInfoWhen(t.created_at)) + (t.made_by ? ' by ' + escapeHtml(t.made_by) : ''));
+  row('Finished', escapeHtml(vlInfoWhen(t.finished_at)) + (t.finished_at && t.created_at ? ' (' + Math.round((new Date(t.finished_at) - new Date(t.created_at)) / 1000) + ' s)' : ''));
+  if (t.trim_start != null || t.trim_end != null) row('Trim', (t.trim_start || 0) + ' s to ' + (t.trim_end != null ? t.trim_end + ' s' : 'the end'));
+  if (t.source_take_id) { row('Retouch of', 'take id ' + t.source_take_id + ' (' + (t.retouch_kind === 'small' ? 'Small fix' : 'Bigger change') + ')'); row('Asked for', escapeHtml(t.retouch_text || '')); }
+  if (t.error) { head('Why it failed'); H.push('<div style="' + VL_WARN + 'font-size:13px;">' + escapeHtml(t.error) + '</div>'); }
+  (j.moves || []).forEach(function (m, i) {
+    var many = (j.moves || []).length > 1;
+    head(many ? 'Move ' + (i + 1) : 'Sent to fal');
+    row('Endpoint', escapeHtml(m.endpoint || ''));
+    row('Length', escapeHtml(String(m.duration || '')) + ' s');
+    row('Request', escapeHtml(m.request_id || ''));
+    if (m.error) row('Error', '<span style="' + VL_WARN + '">' + escapeHtml(m.error) + '</span>');
+    var sentPrompt = m.sent && m.sent.input && typeof m.sent.input.prompt === 'string' ? m.sent.input.prompt : null;
+    head((many ? 'Move ' + (i + 1) + ': p' : 'P') + 'rompt sent' + (sentPrompt ? '' : ' (before fitting; the exact words sent were not kept for this take)'));
+    pre(sentPrompt || m.prompt || '');
+    head((many ? 'Move ' + (i + 1) + ': p' : 'P') + 'rompt the model used');
+    if (m.used_prompt) pre(m.used_prompt);
+    else H.push('<div style="' + VL_DESC + 'font-size:13px;">' + (m.sent ? 'The words as sent: fal reported no rewrite for this take.' : 'Not recorded for this take (made before v3.5.92).') + '</div>');
+    var pics = vlInfoPictures(m.sent, cast);
+    if (!pics.length && (m.start_url || m.end_url)) { if (m.start_url) pics.push({ url: m.start_url, what: 'start' }); if (m.end_url) pics.push({ url: m.end_url, what: 'end' }); }
+    if (!pics.length && mv0.images) pics = mv0.images.map(function (u, k) { return { url: u, what: 'Image ' + (k + 1) + (cast && cast[k] ? ': ' + cast[k] : '') }; });
+    head((many ? 'Move ' + (i + 1) + ': p' : 'P') + 'ictures sent (' + pics.length + ')');
+    H.push('<div style="display:flex;gap:8px;flex-wrap:wrap;">' + pics.map(function (p) {
+      var vid = /\.mp4(\?|$)/i.test(p.url);
+      return '<a href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener" style="display:block;width:132px;text-decoration:none;color:inherit;" title="' + escapeHtml(p.url) + '">' +
+        (vid ? '<div style="height:80px;display:flex;align-items:center;justify-content:center;background:#000;border-radius:6px;">video</div>' : '<img src="' + escapeHtml(p.url) + '" style="width:132px;height:80px;object-fit:cover;border-radius:6px;display:block;">') +
+        '<div style="font-size:11px;line-height:1.3;margin-top:3px;">' + escapeHtml(p.what) + '</div></a>';
+    }).join('') + '</div>');
+    if (m.sent && m.sent.input) {
+      var other = {}; Object.keys(m.sent.input).forEach(function (k) { if (k !== 'prompt' && !/url/.test(k)) other[k] = m.sent.input[k]; });
+      head('Other settings sent'); pre(JSON.stringify(other, null, 2));
+    }
+  });
+  var w = t.words_at;
+  head('The shot when this take was made');
+  if (!w) H.push('<div style="' + VL_DESC + 'font-size:13px;">Not recorded for this take (made before v3.5.92).</div>');
+  else {
+    var ww = w.words || {}, L = [];
+    if (w.name) L.push('Name: ' + w.name);
+    if (w.purpose) L.push('Purpose: ' + w.purpose);
+    L.push('Shot model: ' + (w.shot_model || 'same as episode') + ' / mode: ' + (w.shot_mode || 'same as episode') + ' / ' + (ww.seconds || '?') + ' s');
+    if (ww.start) L.push('Opening: ' + ww.start);
+    (ww.actions || []).forEach(function (a, k) { var b = (ww.beats || [])[k] || {};
+      L.push('Beat ' + (k + 1) + (b.secs ? ' (' + b.secs + ' s)' : '') + ': ' + a + (b.camera ? ' / Camera: ' + b.camera : '') + (b.sound ? ' / Sound: ' + b.sound : ''));
+      (ww.lines || []).filter(function (l) { return Number(l.when) === k + 1; }).forEach(function (l) { L.push('    Line: ' + (l.who || 'off-screen') + (l.off ? ' (off-screen)' : '') + ': "' + l.text + '"'); }); });
+    (ww.lines || []).filter(function (l) { return !Number(l.when); }).forEach(function (l) { L.push('Line, any time: ' + (l.who || 'off-screen') + ': "' + l.text + '"'); });
+    if (ww.camera) L.push('Camera: ' + ww.camera);
+    if (ww.sounds) L.push('Sound: ' + ww.sounds);
+    if (ww.around) L.push('Around them: ' + ww.around);
+    if (ww.end) L.push('Closing: ' + ww.end);
+    if (w.overall) L.push('Overall direction: ' + w.overall);
+    if (cast && cast.length) L.push('References sent: ' + cast.join(', '));
+    pre(L.join('\n'));
+  }
+  return H.join('');
+}
 function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
@@ -43109,6 +43210,7 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Trim: choose the part of this take the episode uses. The take itself is not changed." onclick="vlTrimTake(' + t.id + ')">Trim</button>' : '') +   // v3.5.54
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download" title="Download this take">&#8681;</a>' : '') +
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
+      '<button type="button" class="narrative-regen-btn vl-info-btn" title="Everything we know about this take: model, mode, tokens, the words sent and used, the pictures" onclick="vlTakeInfo(' + t.id + ', ' + n + ')">Info</button>' +   // v3.5.92
       (!making ? '<button type="button" class="narrative-regen-btn" title="Delete this take" onclick="vlDeleteTake(' + t.id + ')">&#10005;</button>' : '') +
     '</div>' +
   '</div>';

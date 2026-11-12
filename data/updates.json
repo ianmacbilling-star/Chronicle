@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.92",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3592-take-info",
+        "kind": "feature",
+        "public": false,
+        "summary": "Info on every take.",
+        "detail": "Video tab: an Info button on every take, failed ones too, shows the model, mode, tokens, the words sent, the words the model used, the pictures sent with their names, the other settings and the shot as it was when the take was made. Takes made before this keep less, and say so.",
+        "td": [
+          "TD-1124"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.91",
     "staged_on": "2026-11-12",
     "entries": [
