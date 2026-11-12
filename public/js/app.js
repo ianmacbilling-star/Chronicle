@@ -45810,12 +45810,17 @@ function _sbStill(w) { return !!(w && state.currentSession && String(state.curre
 // not appear too) and put back after. Hover screens only; touch screens are left as they are.
 (function () {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !window.matchMedia || !window.matchMedia('(hover: hover)').matches) return;
-  var tip = null, cur = null, watch = null;
+  var tip = null, cur = null, watch = null, pend = null, warmUntil = 0;   // v3.6.02 pend, warmUntil
+  // v3.6.02 (Ian, 2026-11-12: "delay the tool tip time by half a second so when you move your mouse around it doesn't flash all
+  // of them instantly"; everywhere): a tip waits TIP_DELAY on the same element; one shown a moment ago makes the next show at once.
+  var TIP_DELAY = 500, TIP_WARM = 400;
   function box() {
     if (!tip) { tip = document.createElement('div'); tip.id = 'cg-tip'; tip.setAttribute('role', 'tooltip'); tip.style.cssText = 'position:fixed;left:0;top:0;z-index:100000;pointer-events:none;display:none;'; document.body.appendChild(tip); }   // placed and out of the page's flow even before style.css loads
     return tip;
   }
   function hide() {
+    if (pend) { clearTimeout(pend); pend = null; }   // v3.6.02
+    if (tip && tip.style.display !== 'none') warmUntil = Date.now() + TIP_WARM;
     if (watch) { clearInterval(watch); watch = null; }
     if (cur) {
       if (cur.dataset && cur.dataset.cgTitle != null) { if (!cur.hasAttribute('title')) cur.setAttribute('title', cur.dataset.cgTitle); delete cur.dataset.cgTitle; }
@@ -45843,8 +45848,8 @@ function _sbStill(w) { return !!(w && state.currentSession && String(state.curre
     if (!text) return;
     t.dataset.cgTitle = t.getAttribute('title'); t.removeAttribute('title');
     cur = t;
-    box().textContent = text;
-    place(t);
+    var go = function () { pend = null; if (cur !== t || !t.isConnected) return; box().textContent = text; place(t); };   // v3.6.02
+    if (Date.now() < warmUntil) go(); else pend = setTimeout(go, TIP_DELAY);
     watch = setInterval(function () { if (!cur || !cur.isConnected) hide(); }, 400);
   }, true);
   document.addEventListener('mousedown', hide, true);

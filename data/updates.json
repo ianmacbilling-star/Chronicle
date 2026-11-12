@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.02",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3602-tip-delay",
+        "kind": "feature",
+        "public": true,
+        "summary": "Tooltips wait half a second before they appear.",
+        "detail": "Everywhere: a tooltip shows once the mouse has rested on something for half a second, so moving across the page no longer flashes them all. Once one is showing, the next one you move onto shows at once.",
+        "td": [
+          "TD-1134"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.01",
     "staged_on": "2026-11-12",
     "entries": [
