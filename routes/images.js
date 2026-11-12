@@ -27,7 +27,7 @@ const rightsCheck = require('../services/rightsCheck');   // v3.1.90 -- TD-979
 // (a watermark or a stock picture, image_rights) comes back with no image_url. buildAssetBlock already
 // skips an asset with no picture, so it is left out of every generation and every reference picker
 // until its picture is replaced -- and the previews cannot disagree with what is generated.
-const ASSET_REF_SQL = "SELECT a.id, a.name, a.category, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS image_url " +
+const ASSET_REF_SQL = "SELECT a.id, a.name, a.category, a.height_ft, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS image_url " +   // v3.5.61 height_ft
   "FROM campaign_assets a LEFT JOIN image_rights r ON r.image_url = a.image_url AND r.verdict = 'reject' WHERE a.campaign_id = ?";
 const titleRefUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 }, fileFilter: imageFileFilter }).single('image');
 // v3.0.757 -- the marked overlay: the same panel with the reader's rings drawn
@@ -413,7 +413,7 @@ function buildPanelInput(prompt, style, charBlock, seed, modelKey, shape, thinki
       if (r.isAsset) {
         if (r.category === 'location') return n + ' is the location/setting "' + r.name + '".';
         if (r.category === 'item') return n + ' is an item called "' + r.name + '".';
-        if (r.category === 'npc') return n + ' is the reference for ' + r.name + '.';
+        if (r.category === 'npc') return n + ' is the reference for ' + r.name + (r.height ? ', ' + r.height : '') + '.';   // v3.5.61
         if (r.category === 'scene') return n + ' is an earlier moment from this story, "' + r.name + '"' + ((r.people && r.people.length) ? ', showing ' + r.people.join(', ') : '') + '. ' + (r.note || '') + ' Redraw it in this picture\u2019s art style.';   // v3.4.19 -- TD-1095, Image Builder only
         if (r.category === 'plan') return n + ' is a flat, top-down plan of the place "' + r.name + '". It is not an object in the scene and is never drawn itself: use it only for the layout of the place you draw.';   // v3.4.11 -- TD-1091, Map to Scene only
         return n + ' is a reference for "' + r.name + '".';
@@ -698,7 +698,7 @@ async function submitRetouch(currentImageUrl, instruction, style, falKey, webhoo
       if (r.isAsset) {
         if (r.category === 'location') return n + ' is the location/setting "' + r.name + '".';
         if (r.category === 'item') return n + ' is an item called "' + r.name + '".';
-        if (r.category === 'npc') return n + ' is the reference for ' + r.name + '.';
+        if (r.category === 'npc') return n + ' is the reference for ' + r.name + (r.height ? ', ' + r.height : '') + '.';   // v3.5.61
         return n + ' is a reference for "' + r.name + '".';
       }
       return n + ' is the reference for ' + r.name + '.';
@@ -1042,8 +1042,10 @@ function buildAssetBlock(assets, panelText, explicitAssetIds) {
     var cat = a.category || 'location';
     if (/^https?:\/\//.test(a.image_url)) {
       var canon = assetCanonicalName(a.name);
-      refs.push({ name: canon, url: a.image_url, category: cat, isAsset: true });
-      lines.push(canon + ' (' + cat + ')');
+      // v3.5.61 -- an NPC's height on its line and its reference, as a character's is on its name line
+      var hp = (cat === 'npc' && a.height_ft != null && Number(a.height_ft) > 0) ? charHeightPhrase(a.height_ft) : '';
+      refs.push({ name: canon, url: a.image_url, category: cat, isAsset: true, height: hp });
+      lines.push(canon + ' (' + cat + (hp ? ', ' + hp : '') + ')');
     }
   });
   return { text: lines.join('\n'), refs: refs };
@@ -1925,6 +1927,20 @@ async function mirrorPicture(url) {
   if (!newUrl) throw new Error('the flipped picture could not be stored');
   try { await rightsCheck.inherit(url, newUrl); } catch (e) { console.error('flip: rights inherit failed:', e && e.message); }
   return { url: newUrl, width: meta.width || null, height: meta.height || null };
+}
+
+// v3.5.52 (Ian, 2026-11-09: the same picture twice in a shot, and a retouch of one changed both). A byte-for-byte copy
+// under a new name, its rights carried over, so one keyframe can be retouched on its own.
+async function copyPicture(url) {
+  const buf = await fetchFile(url);
+  if (!buf) { const e = new Error('Only a Campaignia picture can be retouched on its own.'); e.userFacing = true; throw e; }
+  const m = /\.(png|jpe?g|webp)(\?|$)/i.exec(String(url));
+  const ext = m ? m[1].toLowerCase().replace('jpeg', 'jpg') : 'png';
+  const type = ext === 'jpg' ? 'image/jpeg' : (ext === 'webp' ? 'image/webp' : 'image/png');
+  const newUrl = await uploadFile(buf, 'kfcopy-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext, type);
+  if (!newUrl) throw new Error('the copy could not be stored');
+  try { await rightsCheck.inherit(url, newUrl); } catch (e) { console.error('copy: rights inherit failed:', e && e.message); }
+  return { url: newUrl };
 }
 
 // POST /api/images/flip-moment
@@ -4319,6 +4335,41 @@ router.post('/builder/images/:id/copy', requireAuth, async function (req, res) {
   } catch (e) { console.error('[image-builder] copy error:', e.message); res.json({ error: 'Could not copy the picture.' }); }
 });
 
+// v3.5.35 -- Edit in Image Builder (Ian, 2026-11-09: "a button on Archived pictures to allow editing in the image
+// builder... so it will open it in the image builder with all the tools there"; "new copy is right. copy everytime").
+// Any archived picture of the campaign becomes a new Image Builder Draft of the caller's: the picture as it is, its
+// name, prompt, art style and shape as the recipe. Free: nothing is drawn. The archived picture is never changed, and
+// the file is shared (releaseImage keeps a file any archive or builder row still names).
+function ibShapeOfDims(w, h) {
+  w = Number(w) || 0; h = Number(h) || 0;
+  if (!w || !h) return 'standard';
+  const r = w / h;
+  let best = 'standard', bd = Infinity;
+  Object.keys(IB_SHAPES).forEach(function (k) { const p = shapeAspectRatio(k).split(':'); const d = Math.abs(Math.log(r / (Number(p[0]) / Number(p[1])))); if (d < bd) { bd = d; best = k; } });
+  return best;
+}
+router.post('/builder/campaigns/:cid/from-archive', requireAuth, async function (req, res) {
+  try {
+    if (!(await ibGate(req, res))) return;
+    const db = await getDb();
+    const uid = req.session.userId, cid = parseInt(req.params.cid, 10);
+    const a = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(parseInt((req.body || {}).archive_id, 10) || 0, cid);
+    if (!a || !a.image_url) return res.status(404).json({ error: 'That picture is no longer in the Archive.' });
+    if (await rightsCheck.refuseRejected(res, [a.image_url], 'It can\u2019t be edited. Replace it with a picture you have the rights to.')) return;
+    const prompt = String(a.image_prompt || '').trim();
+    const name = String(a.title || 'Archived picture').trim().slice(0, IB_NAME_MAX) || 'Archived picture';
+    const description = (prompt || name).slice(0, IB_DESC_MAX);
+    const shape = IB_SHAPES[a.shape] ? a.shape : ibShapeOfDims(a.img_w, a.img_h);
+    const now = new Date().toISOString();
+    const ins = await db.prepare(
+      'INSERT INTO builder_images (campaign_id, user_id, name, description, image_type, shape, art_style, art_style_name, include_lore, refs, prompt, words, image_url, img_w, img_h, is_ready, created_at, updated_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(cid, uid, name, description, null, shape, a.art_style || null, a.art_style_name || null, true, '{}', prompt || null, prompt ? prompt.slice(0, IB_WORDS_MAX) : null, a.image_url, a.img_w || null, a.img_h || null, false, now, now);
+    const row = await db.prepare(IB_LIST_SQL + 'WHERE b.id = ?').get(ins.lastInsertRowid);
+    res.json({ success: true, image: ibRow(row) });
+  } catch (e) { console.error('[image-builder] from-archive error:', e.message); res.json({ error: 'Could not open the picture in the Image Builder.' }); }
+});
+
 // v3.3.82 -- Retouch a Builder picture, through the same submitRetouch the Story panels use: the picture is Image 1,
 // the recipe's references follow, the reader's markers ride along as a location diagram (marked_url), and a picked
 // reference narrows the payload to that one (ref_name). One token, spent when the picture arrives; the picture on
@@ -4507,6 +4558,7 @@ async function startKeyframeRetouch(db, o) {
 module.exports = router;
 module.exports.startKeyframeRetouch = startKeyframeRetouch;   // v3.5.09 -- TD-090
 module.exports.mirrorPicture = mirrorPicture;   // v3.5.24 -- Flip, for the Video tab's keyframes
+module.exports.copyPicture = copyPicture;   // v3.5.52 -- a keyframe's own copy, for the Video tab
 module.exports.generateReferenceImage = generateReferenceImage;
 // v3.0.586 -- TD-345(d). extract.js writes the marker; this file reads it. ONE definition.
 module.exports.charPromptWithHeight = charPromptWithHeight;

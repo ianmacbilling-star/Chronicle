@@ -3191,3 +3191,20 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 #prep-refresh-btn.prep-refresh-stale.prep-refresh-flash { animation:prepRefreshWiggle 0.6s ease-in-out 1, prepRefreshFlash 1.1s ease-out 1, prepRefreshGlow 1.8s ease-in-out 1.1s infinite; }
 @keyframes prepRefreshFlash { 0%,55% { background-color:var(--highlight-fill); border-color:var(--highlight); color:var(--panel); box-shadow:0 0 18px 6px rgba(var(--highlight-rgb),0.85); } }
 @media (prefers-reduced-motion: reduce) { #prep-refresh-btn.prep-refresh-stale, #prep-refresh-btn.prep-refresh-stale.prep-refresh-wiggle { animation:none; box-shadow:0 0 8px 1px rgba(var(--accent-bright-rgb),0.5); } #prep-refresh-btn.prep-refresh-stale.prep-refresh-flash { animation:prepRefreshFlash 1.1s ease-out 1; box-shadow:0 0 8px 1px rgba(var(--accent-bright-rgb),0.5); } }
+
+/* v3.5.35 -- VISIBLE BOXES (Ian, 2026-11-09: "any text boxes that are dark on dark in the application should have a
+   border on them that is visible", like the Pinned button's). Text boxes, text areas and menus on the dark panels get a
+   clear accent border at rest and the bright accent while typing. The light panels (.settings-section, .modal,
+   .panel-light) keep their own grey borders: their rules are more specific, so these do not reach them. */
+.form-input, .form-textarea, .panel-dark .form-input { border-color: rgba(var(--accent-rgb),0.55); }
+.form-input:focus, .form-textarea:focus, .panel-dark .form-input:focus { border-color: var(--accent-bright); }
+.narrative-inline-box { border: 1px solid rgba(var(--accent-rgb),0.55); border-radius: var(--radius); }
+.narrative-inline-box:focus { border-color: var(--accent-bright); }
+
+/* v3.5.35 -- Edit in Image Builder on an archived picture (bottom left of the picture, like its neighbours). */
+.archive-ib-thumb{position:absolute;bottom:8px;left:8px;padding:3px 8px;font-size:11px;background:rgba(var(--glass-rgb),0.7);color:rgba(var(--accent-text-rgb),0.9);border:1px solid rgba(var(--accent-rgb),0.4);border-radius:6px;cursor:pointer;opacity:0;transition:opacity .15s;}
+.archive-card:hover .archive-ib-thumb{opacity:1;}
+.archive-ib-thumb:hover{background:rgba(var(--glass-rgb),0.9);color:var(--accent-bright);}
+/* v3.5.60 -- our tooltip everywhere (Ian: like the ?s help's): every title shows in this, placed by app.js */
+#cg-tip{position:fixed;z-index:100000;display:none;max-width:340px;white-space:pre-line;background:var(--light-panel);color:var(--hover-fill-text);
+  font:400 13px/1.45 Georgia,serif;letter-spacing:0;text-transform:none;text-align:left;padding:7px 11px;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.5);pointer-events:none;}

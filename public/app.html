@@ -2185,6 +2185,15 @@
         <div id="passes-config-msg" class="settings-section-desc" style="margin-bottom:10px;"></div>
         <div id="passes-config-container">Loading passes...</div>
 
+        <!-- v3.5.88 (Ian, 2026-11-12): the four token packs, tokens and price, as the passes. -->
+        <div style="height:1px;background:rgba(var(--accent-rgb),0.18);margin:26px 0 20px;"></div>
+        <div class="settings-section-title" style="margin-bottom:6px;">Token Packs</div>
+        <div class="settings-section-desc" style="margin-bottom:14px;">
+          One-time token purchases. Set the tokens and the price; the whole price buys tokens (no access share). Blank a field to fall back to the code default. A checkout already open keeps the numbers it was shown.
+        </div>
+        <div id="packs-config-msg" class="settings-section-desc" style="margin-bottom:10px;"></div>
+        <div id="packs-config-container" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;align-items:stretch;">Loading token packs...</div>
+
         <div style="height:1px;background:rgba(var(--accent-rgb),0.18);margin:26px 0 20px;"></div>
 
         <div class="settings-section-title" style="margin-bottom:6px;">Subscription Tiers</div>
@@ -3043,6 +3052,17 @@
         <option value="npc">Supporting Character / NPC</option>
         <option value="item">Item</option>
       </select>
+    </div>
+    <!-- v3.5.61: an NPC's height, as on characters (Ian: "only on the NPC Asset Option"; "bigger than 25 ft") -->
+    <div class="form-group" id="asset-height-row" style="display:none;">
+      <label class="form-label">Height <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">Optional. Tells the artist how tall this NPC is in every picture and video, next to the others.</span></label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="range" id="asset-height" min="0" max="1000" step="1" value="0" oninput="assetHeightSync()" style="flex:1;" />
+        <div id="asset-height-out" class="form-label" style="margin-bottom:0;min-width:64px;text-align:left;white-space:nowrap;">Not set</div>
+        <input type="number" id="asset-height-num" class="form-input" min="1" max="1000" step="1" placeholder="ft" title="Slid all the way right: type the height in feet (up to 1000)" style="display:none;width:90px;padding:4px 8px;" oninput="assetHeightTyped()" />
+        <button type="button" class="btn btn-sm" onclick="assetHeightClear()" title="Leave the height unset. The NPC is drawn as it is today.">Clear</button>
+      </div>
+      <datalist id="asset-height-ticks"></datalist>
     </div>
     <div class="form-group">
       <label class="form-label">Description <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);">&mdash; what to generate from; editable anytime</span></label>

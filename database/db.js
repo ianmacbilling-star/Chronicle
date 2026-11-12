@@ -442,6 +442,7 @@ async function initPostgres() {
     'ALTER TABLE image_jobs ADD COLUMN IF NOT EXISTS temp_inputs TEXT',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS description TEXT',
     'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS revert_image_url TEXT',
+    'ALTER TABLE campaign_assets ADD COLUMN IF NOT EXISTS height_ft REAL',   // v3.5.61: an NPC asset's height, like characters.height_ft (no default)
     // v3.0.558 -- TD-345. NULL means "not set", and that is a real state that must survive: Ian
     // ruled that existing characters stay blank, so a cast with no heights renders exactly as it
     // does today and the feature appears only when someone opts in. NO DEFAULT -- a default of 6

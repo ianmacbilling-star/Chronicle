@@ -1,5 +1,5 @@
 {
   "deploy": {
-    "aptPackages": ["...", "ghostscript"]
+    "aptPackages": ["...", "ghostscript", "ffmpeg"]
   }
 }
