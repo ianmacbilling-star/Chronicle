@@ -1,5 +1,23 @@
 [
   {
+    "version": "3.5.84",
+    "staged_on": "2026-11-11",
+    "entries": [
+      {
+        "id": "3584-download-name",
+        "kind": "feature",
+        "public": true,
+        "summary": "Video tab: a downloaded take is named with its model and mode.",
+        "detail": "Ian, 2026-11-11: e.g. Third Go Episode (shot 3, take 57, Kling O3 Pro, Keyframes).mp4; a retouch says Kling O1 Edit, retouch or Seedance 2.0, retouch.",
+        "td": [
+          "TD-1121",
+          "TD-1113",
+          "TD-1128"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.83",
     "staged_on": "2026-11-11",
     "entries": [

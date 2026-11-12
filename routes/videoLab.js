@@ -1820,7 +1820,11 @@ router.get('/takes/:id/download', requireAuth, requireVideo, async function (req
     const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
     if (!x.ep || !x.t.video_url || !(await canSee(req, x.ep))) return res.status(404).json({ error: 'That take has no video.' });
     const sh = await db.prepare('SELECT position FROM shots WHERE id = ?').get(x.t.shot_id);
-    await sendVideo(res, x.t.video_url, baseName(x.ep.name) + ' (shot ' + (sh ? sh.position : '') + ', take ' + x.t.id + ').mp4');
+    // v3.5.84 (Ian, 2026-11-11: "When I download a video.. it has the model and mode in the name on it too"): e.g.
+    // "Third Go Episode (shot 3, take 57, Kling O3 Pro, Keyframes).mp4"; a retouch says which kind
+    const tm = MODELS[x.t.model];
+    const made = x.t.retouch_kind ? (x.t.retouch_kind === 'small' ? 'Kling O1 Edit, retouch' : 'Seedance 2.0, retouch') : (tm ? tm.label + ', ' + (tm.reference ? 'Reference' : 'Keyframes') : '');
+    await sendVideo(res, x.t.video_url, baseName(x.ep.name) + ' (shot ' + (sh ? sh.position : '') + ', take ' + x.t.id + (made ? ', ' + made : '') + ').mp4');
   } catch (e) {
     res.status(500).json({ error: 'Could not read the video.' });
   }
