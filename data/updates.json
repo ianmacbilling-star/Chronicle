@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.96",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3596-minimax-lessons",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video takes follow the words more closely.",
+        "detail": "Video tab: lessons from the MiniMax takes. \"The diamond vanishes\" no longer makes someone walk out or the frame empty; people who leave through a named door leave that way; a character's reference gives their looks and height, and the words decide what they carry; the end is where everyone must be by the last second. The Pre-production check and the Director's Notes now know the opening picture decides who is there, ask for entrances, check directions and depth, and spot things used up. A new take no longer takes the pin from a finished one, and a take is saved only by its download button, named by its code.",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.95",
     "staged_on": "2026-11-12",
     "entries": [

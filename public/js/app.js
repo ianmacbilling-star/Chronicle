@@ -43222,7 +43222,7 @@ function vlTakeInfoHTML(j) {
 function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
-    ? '<video src="' + escapeHtml(t.video_url) + '" controls preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'
+    ? '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" oncontextmenu="return false;" title="To save this take, use the &#8681; button: it names the file by the take\'s code." preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'   // v3.5.96 (Ian: "make the save as file names match"): the player's own Save named the file by its storage name, so only the code-named download is offered
     : '<div class="moment-img-placeholder" style="aspect-ratio:16/9;min-height:0;gap:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
         (making ? vlSpin(20) + '<div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.7);">' + escapeHtml(vlTakeProgress(t)) + ' &middot; ' + vlElapsed(t.created_at) + '</div>'
                 : '<div class="moment-img-inner" style="color:var(--danger);" data-no-words>' + escapeHtml(t.merge_error || t.error || ((t.moves || []).filter(function (x) { return x.error; }).map(function (x) { return x.error; })[0]) || 'Failed') + '</div>') +
@@ -44135,8 +44135,17 @@ function vlRefsFromWords(ep, w) {
 }
 // Actions are typed one per line ("1. ..." numbers optional) and kept as a list.
 // v3.5.47 -- the words that have someone leave the frame (the server's EXIT_RE, the same list).
-var VL_EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|behind|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|view|sight|picture)|off[- ]?(screen|frame)|disappears?|disappearing|vanish(es|ing)?|is gone\b)/i;
-function vlHasExit(text) { return VL_EXIT_RE.test(String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '')); }
+// v3.5.96: as the server's hasExit -- only people leave ("The diamond vanishes" is not someone leaving).
+var VL_EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|picture)|off[- ]?(screen|frame))/i;
+var VL_EXIT_WEAK_RE = /(^|[^A-Za-z'\u2019])(he|she|they|He|She|They|everyone|Everyone|both|Both|[A-Z][A-Za-z-]+)((?:\s+[a-z]+){0,2})\s+(disappears?|disappearing|vanish(?:es|ing)?|(?:is|are) gone|(?:is|are) out of (?:view|sight))\b/g;
+var VL_EXIT_NOT_SUBJECT = { The: 1, A: 1, An: 1, His: 1, Her: 1, Its: 1, Their: 1, This: 1, That: 1, These: 1, Those: 1, Then: 1, And: 1, But: 1, When: 1, As: 1, Suddenly: 1, Slowly: 1, Finally: 1 };
+function vlHasExit(text) {
+  var t = String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '');
+  if (VL_EXIT_RE.test(t)) return true;
+  VL_EXIT_WEAK_RE.lastIndex = 0; var m;
+  while ((m = VL_EXIT_WEAK_RE.exec(t))) { if (!VL_EXIT_NOT_SUBJECT[m[2]]) return true; }
+  return false;
+}
 function vlActionsList(text) {
   return String(text || '').split('\n').map(function (a) { return a.replace(/^\s*\d+\s*[.)]\s*/, '').trim(); }).filter(Boolean);
 }

@@ -1088,7 +1088,7 @@ function planReference(ep, kfs, shotNo, cast) {
   if (pics.length === 1) lines.push('@Image1 is how the shot opens: start the video looking like it, same place, same people, same art style.');
   else lines.push('@Image1 is how the shot opens: start the video looking like it. ' + pics.slice(1).map(function (u, i) { return '@Image' + (i + 2); }).join(', ') +
     (pics.length === 2 ? ' is a later moment' : ' are later moments, in order,') + ' of the same shot: pass through ' + (pics.length === 2 ? 'it' : 'them') + ' as the action reaches ' + (pics.length === 2 ? 'it' : 'them') + '. Keep the art style of these pictures.');
-  people.forEach(function (p, i) { lines.push('@Image' + (pics.length + i + 1) + ' is ' + p.name + ': ' + p.name + '\'s face, hair, build, clothes and gear must match @Image' + (pics.length + i + 1) + ' whenever ' + p.name + ' is on screen.'); });
+  people.forEach(function (p, i) { lines.push('@Image' + (pics.length + i + 1) + ' is ' + p.name + ': ' + p.name + '\'s face, hair, build and clothes must match @Image' + (pics.length + i + 1) + ' whenever ' + p.name + ' is on screen. ' + gearLine(p.name)); });   // v3.5.96
   if (overall) lines.push('Overall: ' + overall);
   lines.push('What happens, in order:');
   steps.forEach(function (w, i) { lines.push((i + 1) + '. ' + w); });
@@ -1131,8 +1131,20 @@ function voiceRules(w, onScreen) {
 // v3.5.47 -- EXITS (Ian, 2026-11-09: "when I mention I want someone to leave the frame... It often stops before the leave
 // the frame entirely... can we do something so if we say they leave the frame that they leave all the way?"). An action
 // or End that has someone leave gets a firm line: completely out of frame before the shot ends, then the empty frame held.
-const EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|behind|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|view|sight|picture)|off[- ]?(screen|frame)|disappears?|disappearing|vanish(es|ing)?|is gone\b)/i;
-function hasExit(text) { return EXIT_RE.test(String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '')); }
+// v3.5.96 (Ian, 2026-11-12, takes 58 and 84: "The diamond vanishes" was read as someone leaving, so Gubuk walked off in 58 and
+// Drel and Gubuk dissolved in 84's last second). Only people leave: words that only things do (vanishes, disappears, is gone,
+// out of sight) count only right after a name or he/she/they ("Gubuk vanishes", "he slowly disappears"); never after
+// "the diamond" or "Emanon's glow". The page's VL_EXIT_RE / vlHasExit are the same.
+const EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|picture)|off[- ]?(screen|frame))/i;
+const EXIT_WEAK_RE = /(^|[^A-Za-z'\u2019])(he|she|they|He|She|They|everyone|Everyone|both|Both|[A-Z][A-Za-z-]+)((?:\s+[a-z]+){0,2})\s+(disappears?|disappearing|vanish(?:es|ing)?|(?:is|are) gone|(?:is|are) out of (?:view|sight))\b/g;
+const EXIT_NOT_SUBJECT = { The: 1, A: 1, An: 1, His: 1, Her: 1, Its: 1, Their: 1, This: 1, That: 1, These: 1, Those: 1, Then: 1, And: 1, But: 1, When: 1, As: 1, Suddenly: 1, Slowly: 1, Finally: 1 };
+function hasExit(text) {
+  const t = String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '');
+  if (EXIT_RE.test(t)) return true;
+  EXIT_WEAK_RE.lastIndex = 0; let m;
+  while ((m = EXIT_WEAK_RE.exec(t))) { if (!EXIT_NOT_SUBJECT[m[2]]) return true; }
+  return false;
+}
 // v3.5.49 (Ian, 2026-11-09: the figure still did not get all the way out; "say one second"): a deadline in seconds, one
 // second before the end, when the shot is one move (reference mode), and the camera told not to follow them out.
 function exitLines(w, names, secs) {
@@ -1142,20 +1154,29 @@ function exitLines(w, names, secs) {
   if (!acts.length && !endExit) return [];
   const src = acts.map(function (n) { return w.actions[n - 1]; }).concat(endExit ? [w.end] : []).join(' ');
   const who = (names || []).filter(function (nm, i, all) { return all.indexOf(nm) === i; }).filter(function (nm) { const f = firstName(nm); return f && new RegExp('(^|[^a-z])' + f.toLowerCase().replace(/[^a-z0-9]/g, '') + '([^a-z]|$)').test(src.toLowerCase()); });
-  const whom = who.length === 1 ? who[0] : 'whoever leaves';
-  const out = ['Leaving the frame' + (acts.length ? ' (action ' + acts.join(', ') + ')' : '') + ': ' + whom + ' must keep moving until completely out of frame, with no part of them left in view, ' + (secs >= 4 ? 'by second ' + (secs - 1) + ' of this ' + secs + '-second shot' : 'well before the shot ends') + '. Do not stop at the edge of the frame. The camera does not follow them out: it holds still as they go. Hold the empty frame for the last second.'];
-  if (!endExit) out.push('The shot ends with ' + (who.length === 1 ? who[0] : 'the one who left') + ' gone from the frame.');
+  const whom = who.length === 1 ? who[0] : (acts.length > 1 || who.length > 1 ? 'everyone who leaves' : 'whoever leaves');   // v3.5.96: several
+  // v3.5.96 (Ian, take 80: "in the background" lost to "do not stop at the edge"; take 84: "hold the empty frame" emptied it of
+  // the people who stay): a way out the words name (a door, an archway) is used instead of the frame's edge, and the last second
+  // is held without the ones who left, not empty.
+  const door = /\b(through|into|out of|out through|up|down)\s+(the |a |an |his |her |their )?([a-z-]+ ){0,2}(door|doors|doorway|archway|arch|gate|gateway|stairs|stairway|stair|steps|corridor|passage|tunnel|hall|hallway|curtain|flap|portal|opening|gap)\b/i.test(src);
+  const out = ['Leaving the frame' + (acts.length ? ' (action ' + acts.join(', ') + ')' : '') + ': ' + whom + ' must keep moving until completely out of ' + (door ? 'view' : 'frame') + ', with no part of them left in view, ' + (secs >= 4 ? 'by second ' + (secs - 1) + ' of this ' + secs + '-second shot' : 'well before the shot ends') + '. ' +
+    (door ? 'They leave by the way the words name, not by the edge of the frame. ' : 'Do not stop at the edge of the frame. ') + 'The camera does not follow them out: it holds still as they go. Anyone who does not leave stays where they are; hold the last second without the ones who left.'];
+  if (!endExit) out.push('The shot ends with ' + (who.length === 1 ? who[0] : 'everyone who left') + ' gone from the frame.');
   return out;
 }
+function gearLine(name) { return 'What ' + name + ' carries or holds is up to the words; where they do not say, only what fits the scene, never anything belonging to another character; empty hands are fine.'; }   // v3.5.96
 function shotScript(ep, w, pics) {
   const out = [];
   out.push('One continuous shot, no cuts. Keep every character looking exactly the same from start to finish.');
   // v3.5.48 (Ian, 2026-11-09: "can you make it so nothing appears out of thin air unless we tell it to?" -- take 26's pestle)
-  out.push('Nothing appears or disappears out of thin air: any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
+  out.push('Nothing appears or disappears out of thin air unless the words say so (something used up, destroyed or vanishing, as they describe it): any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
   if (pics) {
     pics.cast.forEach(function (c) {
       if (c.kind === 'asset') out.push('@Image' + c.n + ' is ' + c.name + (c.height ? ', ' + c.height : '') + ': it must look like @Image' + c.n + ' whenever it is on screen.');   // v3.5.22; v3.5.61 an NPC's height
-      else out.push('@Image' + c.n + ' is ' + c.name + ': ' + c.name + '\'s face, hair, build, clothes and gear must match @Image' + c.n + ' whenever ' + c.name + ' is on screen.');
+      // v3.5.96 (Ian, 2026-11-12: "Just because their reference image says they have an item... that does not mean they have to be
+      // carrying it"; "I'd rather him carrying nothing than carrying the pick"): the reference is their looks and height; what they
+      // hold is the words' to say, never another character's things.
+      else out.push('@Image' + c.n + ' is ' + c.name + (c.height ? ', ' + c.height : '') + ': ' + c.name + '\'s face, hair, build and clothes must match @Image' + c.n + ' whenever ' + c.name + ' is on screen. ' + gearLine(c.name));
     });
     if (pics.cast.length) out.push('If a scene picture shows a character or thing differently, follow its own picture.');
     if (pics.scene.length) out.push('@Image' + pics.scene[0] + ' is how the shot opens: start the video looking like it, in its art style.');
@@ -1183,7 +1204,7 @@ function shotScript(ep, w, pics) {
   const ex = exitLines(w, (ep.castNames || []).concat(pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []), pics ? w.seconds : 0);   // v3.5.47; v3.5.49 the deadline
   if (ex.length) out.push(ex[0]);
   if (w.camera) out.push('Camera: ' + w.camera);
-  if (w.end) out.push('End: ' + w.end);
+  if (w.end) out.push('End (where everyone must be by the last second): ' + w.end);   // v3.5.96
   if (ex.length > 1) out.push(ex[1]);
   if (w.sounds) out.push('Sound: ' + w.sounds);
   if (w.around) out.push('Around them: ' + w.around);
@@ -1207,7 +1228,7 @@ function namedCast(text, cast, room) {
     if (people.length >= room || !c.url || !c.name) return;
     if (people.some(function (p) { return p.name === c.name || p.url === c.url; })) return;
     const first = String(c.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9'-]/g, '');
-    if (first.length >= 2 && new RegExp('(^|[^a-z0-9])' + first.replace(/[-']/g, '\\$&') + '([^a-z0-9]|$)').test(words)) people.push({ name: String(c.name).trim(), url: c.url });
+    if (first.length >= 2 && new RegExp('(^|[^a-z0-9])' + first.replace(/[-']/g, '\\$&') + '([^a-z0-9]|$)').test(words)) people.push({ name: String(c.name).trim(), url: c.url, height: c.height || '' });   // v3.5.96 height
   });
   return people;
 }
@@ -1245,7 +1266,7 @@ function shotRefs(shot) { const r = parseJson(shot && shot.refs, null); return A
 async function castRefs(db, ep, detail) {
   let rows = [];
   try {
-    rows = await db.prepare('SELECT ch.id, ch.name, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id);
+    rows = await db.prepare('SELECT ch.id, ch.name, ch.height_ft, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id);
   } catch (e) {
     console.error('[video] cast references could not be read: ' + (e && e.message));
     rows = [];
@@ -1254,7 +1275,7 @@ async function castRefs(db, ep, detail) {
   const usable = rows.filter(function (c) { return c.url && storage.isOurPublicUrl(c.url); });
   if (!detail) return usable;
   // v3.5.18 -- for debug mode: every character, and why one is not usable
-  return { usable: usable, all: rows.map(function (c) { return { id: c.id, name: c.name, url: c.url && storage.isOurPublicUrl(c.url) ? c.url : null, picture: c.url ? vlShortUrl(c.url) : null, usable: !!(c.url && storage.isOurPublicUrl(c.url)), why_not: !c.url ? 'no reference picture' : (!storage.isOurPublicUrl(c.url) ? 'not a Campaignia picture' : undefined) }; }) };
+  return { usable: usable, all: rows.map(function (c) { return { id: c.id, name: c.name, height: Number(c.height_ft) > 0 ? vlHeightPhrase(c.height_ft) : '', url: c.url && storage.isOurPublicUrl(c.url) ? c.url : null, picture: c.url ? vlShortUrl(c.url) : null, usable: !!(c.url && storage.isOurPublicUrl(c.url)), why_not: !c.url ? 'no reference picture' : (!storage.isOurPublicUrl(c.url) ? 'not a Campaignia picture' : undefined) }; }) };
 }
 // v3.5.22 -- THE REFERENCES A SHOT CAN SEND (Ian, 2026-11-08: "add the ability to add character and asset references... and
 // see the references that are already on that shot... just like we do on the Review tab, Storyboard and Image builder").
@@ -1275,7 +1296,7 @@ async function refsPool(db, ep) {
     assets = (await db.prepare("SELECT a.id, a.name, a.category, a.height_ft, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS url FROM campaign_assets a LEFT JOIN image_rights r ON r.image_url = a.image_url AND r.verdict = 'reject' WHERE a.campaign_id = ? ORDER BY LOWER(a.name)").all(ep.campaign_id))
       .map(function (a) { const ok = !!(a.url && storage.isOurPublicUrl(a.url)); return { id: a.id, name: a.name, url: ok ? a.url : null, usable: ok, why_not: ok ? null : (a.url ? 'not a Campaignia picture' : 'no usable picture'), height: (a.category === 'npc' && Number(a.height_ft) > 0) ? vlHeightPhrase(a.height_ft) : '' }; });   // v3.5.61 an NPC's height
   } catch (e) { console.error('[video] assets could not be read: ' + (e && e.message)); }
-  return { characters: cast.all.filter(function (c) { return c.name && c.id; }).map(function (c) { return { id: c.id, name: c.name, url: c.url || null, usable: !!c.usable, why_not: c.why_not || null }; }), assets: assets };
+  return { characters: cast.all.filter(function (c) { return c.name && c.id; }).map(function (c) { return { id: c.id, name: c.name, height: c.height || '', url: c.url || null, usable: !!c.usable, why_not: c.why_not || null }; }), assets: assets };
 }
 function cleanRefs(v) {
   if (!Array.isArray(v)) return [];
@@ -1300,7 +1321,7 @@ function refsToSend(ep, w, refs, pool, room) {
     });
     return out;
   }
-  return namedInShot(ep, w, pool.characters.filter(function (c) { return c.usable; }), room).map(function (p) { return { name: p.name, url: p.url, kind: 'character' }; });
+  return namedInShot(ep, w, pool.characters.filter(function (c) { return c.usable; }), room).map(function (p) { return { name: p.name, url: p.url, kind: 'character', height: p.height || '' }; });   // v3.5.96 height
 }
 // v3.5.44 -- a model with a prompt limit (Kling O3: 2500 characters) gets the script cut to fit: first the lines that
 // matter least to the picture (Sound, unless its own sound is on; Around them; Overall), then the end of the text at a
@@ -1386,7 +1407,9 @@ async function makeShot(db, req, ep0, shot, shotNo) {
     .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep0, kfs, shot), directions, cost, tokens);   // v3.5.34: signed as the episode reads it; v3.5.46 tokens
   if (!ins.lastInsertRowid) return { status: 409, error: 'Shot ' + shotNo + ' is already being made.' };
   const takeId = ins.lastInsertRowid;
-  await db.prepare('UPDATE shots SET chosen_take_id = ? WHERE id = ?').run(takeId, shot.id);
+  // v3.5.96 (Ian, 2026-11-12: "don't assume that the newest video should be the pinned take"): a new take is pinned only when the
+  // shot has no finished pinned take; otherwise the pin stays where the person put it.
+  await db.prepare("UPDATE shots SET chosen_take_id = ? WHERE id = ? AND (chosen_take_id IS NULL OR NOT EXISTS (SELECT 1 FROM takes t WHERE t.id = shots.chosen_take_id AND t.status = 'done'))").run(takeId, shot.id);
   try {   // v3.5.92: the shot as it was when this take was made, for the take's Info
     await db.prepare('UPDATE takes SET words_at = ? WHERE id = ?').run(JSON.stringify({ name: shot.name || '', purpose: shot.purpose || '', shot_model: shotModel(shot), shot_mode: shotMode(shot),
       words: shotWords(shot) || legacyWords(kfs, m), pictures: kfs.map(function (k) { return { url: k.image_url, label: k.label || '' }; }), overall: ep.overall || '', style: ep.style || '' }), takeId);
@@ -2423,19 +2446,19 @@ function shotListRequest(ctx, images) {
   } else {
     system = directorHead(ctx) +
       'YOUR JOB NOW: the episode is already divided into ' + ctx.shots.length + ' shots, shown below. Keep them exactly as they are and write the Director\'s Notes for each one.\n\n' +
-      (ref ? 'HOW THE MODEL USES THE PICTURES\nEach shot is ONE clip. Its first picture is how the shot opens; its later pictures only show the place, the light and who is there: the model does NOT copy their poses or positions, so say in the words what happens and how the shot ends. ' +
-        'The cast\'s own reference pictures are sent too, so describe what characters DO, not how they look.\n\n'
+      (ref ? 'HOW THE MODEL USES THE PICTURES\nEach shot is ONE clip. Its first picture is how the shot opens and decides who is there and where: write the start as that picture shows it. Anyone not in it must enter in a beat, through a place the picture shows and with a path ("through the far archway, toward us"), or be revealed by a camera move that names them; a reference picture alone never brings anyone in. Its later pictures only show the place, the light and who is there: the model does NOT copy their poses or positions, so say in the words what happens and how the shot ends. ' +
+        'The cast\'s own reference pictures are sent too, so describe what characters DO, not how they look. Those pictures give their looks, not what they must carry: when it matters, say what each one holds ("carries only the stone bowl").\n\n'
         : 'HOW THE MODEL USES THE PICTURES\nA shot of several pictures moves from each picture exactly to the next, so the action must flow through every picture of the shot.\n\n') +
       'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
       'FOR EACH SHOT write these, in plain words:\n' +
       '- name: 2 to 5 words naming the shot.\n' +
       '- start: who is where when the shot opens, and which way they face, and anything lying around that must stay in the shot (bodies, fallen weapons, props) as the shot\'s pictures show it: later pictures do not carry them (one to three sentences).\n' +
       '- actions: the shot\'s BEATS. Each item is one beat, either a string (what happens) or {"do": what happens, "camera": what the camera does during this beat, only when it does something then, "sound": a sound heard at this moment, only when there is one, "seconds": the beat\'s length, only when it must be set (a quick look 1.5, a long walk 4); leave it out and the beats share the shot\'s length}. A camera move or a sound tied to one moment goes on its beat; what lasts the whole shot goes in camera, sounds and around.\n' +
-      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning. Read the shot\'s pictures in order and write what they show being done (crumbling something, pouring, lighting) and every step that gets from one picture to the next: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there, something now lit or open), write the action that brings it in, in its place (for example "He picks up the stone pestle from beside the bowl."), so nothing appears out of thin air. When someone leaves the frame, say they walk completely out of frame and are gone, give that about 2 seconds, and make the end say the frame is empty of them.\n' +   // v3.5.47
+      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning. Read the shot\'s pictures in order and write what they show being done (crumbling something, pouring, lighting) and every step that gets from one picture to the next: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there, something now lit or open), write the action that brings it in, in its place (for example "He picks up the stone pestle from beside the bowl."), so nothing appears out of thin air. When something is used up or destroyed, say what happens to it ("bursts into glittering dust", "crumbles"), never only that it vanishes or disappears. When someone leaves the frame, say they walk completely out of frame and are gone, give that about 2 seconds, and make the end say the frame is empty of them.\n' +   // v3.5.47
       (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view; always name the speaker}. At most two short lines in a shot; an empty list when nobody should talk.\n'
         : '- lines: always an empty list in this style.\n') +
       '- camera: what the camera does across the whole shot (a move tied to one beat goes on that beat). If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
-      '- end: who is where when the shot ends, and which way they face.\n' +
+      '- end: who is where when the shot ends, and which way they face. Every change in where people are (someone sits back, stands, turns away) happens in a beat; the end only confirms it.\n' +
       '- sounds: sounds only, never actions.\n' +
       '- around: what the surroundings do (smoke, fire, weather, light), never the characters.\n' +
       '- seconds: the shot\'s length, a whole number from 4 to 15.\n\n' +
@@ -2999,7 +3022,7 @@ function precheckRequest(ctx, images) {
   const system = directorHead(ctx) +
     'YOUR JOB NOW: THE PRE-PRODUCTION CHECK. The shots, their words and their pictures are ready. Every take costs real money, so before any video is made, look at each shot and say plainly what will go wrong and how to fix it. Only real problems: if a shot is fine, say nothing about it.\n\n' +
     'THE TWO VIDEO MODES\n' +
-    '- REFERENCE: the model is given the shot\'s pictures and the cast\'s reference pictures as references and directs the shot itself from the words. The first picture is how it opens; later pictures only show the place, the light and who is there. Best when the pictures disagree on place, poses, facing or who is where.\n' +
+    '- REFERENCE: the model is given the shot\'s pictures and the cast\'s reference pictures as references and directs the shot from the words, but its first picture IS the opening frame: who is there, where they stand and how they are posed come from it, and the words move people on from there. A reference picture alone never brings anyone into the shot. Later pictures only show the place, the light and who is there. Best when the pictures disagree on place, poses, facing or who is where.\n' +
     '- KEYFRAMES: the video moves from each picture EXACTLY to the next one, morphing the first into the second. Best only when neighbouring pictures match closely: the same place, the same people in nearly the same poses and positions, a small change. When neighbouring pictures differ in place, in someone\'s pose or facing (a man carried with his head to the left in one picture and lying with his head to the right in the next), in who is holding what, or in who is where, a Keyframes take morphs nonsense.\n\n' +
     'WHAT TO LOOK FOR, SHOT BY SHOT\n' +
     '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
@@ -3007,9 +3030,18 @@ function precheckRequest(ctx, images) {
     // v3.5.83 (Ian: "should it recommend Keyframes when everyone is in the picture?... What I was hoping for was... to recommend
     // adding a reference image when someone isn't in the inital or any Keyframe"): the Keyframes preference is gone again.
     'NOT PICTURED (recommended): when someone or something that matters (a named character, an asset) appears in the shot but is in none of its pictures, the model can only guess what they look like. Say who, and in which beat they appear, and that they are not in the pictures. If the shot is in Keyframes mode, the fix is to switch to Reference (fix type "mode"); if it is already in Reference and they are not among the references sent, the fix is add_reference.\n' +
+    // v3.5.96 (Ian's MiniMax takes, 2026-11-12: the opening picture rules the shot in both modes; Ori's reference was sent and he
+    // never appeared; Emanon, Ori and Gubuk, in no picture, walked in on cue when a beat brought them in).
+    'NOT IN THE OPENING PICTURE (recommended): a reference picture alone never brings anyone into the shot. When someone named in the start, the beats or the end is not in the shot\'s FIRST picture, a beat must bring them in (they walk in, enter through a place the picture shows, arrive) or a camera move must reveal them BY NAME ("pans right to reveal Ori by the door"). When neither does, say who and that they will not appear, and give a beat fix that adds their entrance to the first beat they matter in (keeping that beat\'s own words), or suggest putting them in the opening picture.\n' +
+    'THE START AND THE OPENING PICTURE (recommended): the opening picture wins over the start words. When the start says something the first picture does not show (someone there who is not, sitting up when the picture has them lying down, another place or position), say what differs and give a words fix for the start box that describes the picture as it is, or suggest changing the picture.\n' +
+    'DIRECTIONS AND DEPTH (recommended): where someone comes from or goes ("from the left", "from the back of the room", "in the background", "through the archway") loses when the picture or the path words disagree. "In the background" or "from the back" needs a place in the picture to come from, named (a doorway, an archway, a gap), and a path in depth ("toward us", "away from us", "behind the fallen shelves"); "enters from the left edge ... exits right" is a crossing at the front, and walking past someone in the foreground brings them forward. Give a beat fix that names the place in the picture and a path that matches.\n' +
     '2. gap: the story says something happens that the video must show and no picture covers (between two pictures of a shot, or between two shots). Read the story: if it explains a change (someone healed in turn, a later moment), that is not a mistake, but the video still has to get from one picture to the next. Suggest the missing picture: say after which picture number it goes and describe it in one or two sentences.\n' +
     '3. continuity: a person or prop that appears from nowhere: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there) and no action brings it in, give a fix of type "words" for the actions box with the missing step written in its place (for example "He picks up the stone pestle from beside the bowl."); someone who leaves and is needed again in the same shot (a cut is the reliable fix); a change of place inside one shot.\n' +   // v3.5.48
     '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end (when there are more actions than the length allows, give a fix of type "seconds" with the length that fits, at most 15), someone who must leave the frame with too little time left to get all the way out at least 1 second before the shot ends (they stop at the edge; give a fix of type "seconds" or cut an action) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +
+    // v3.5.96 (shot 2: the camera line still named the diamond a beat had used up, so it stayed whole)
+    'USED UP (recommended): when a beat uses something up, destroys it or makes it vanish (a diamond pressed in and gone, a scroll burned), later camera, sound, around or end words that still name it keep it on screen. Give a fix that drops it from those words. Prefer words that say what happens to it ("bursts into glittering dust") over "vanishes" or "disappears".\n' +
+    'OUR ADDED LINES (recommended): a shot may list lines the video script adds by itself (leaving the frame). When one fights the words (it has someone leave who should not, or the words name a doorway), say so and give a beat fix that rewords the beat.\n' +
+    'GEAR: what a character carries is set by the words; their reference picture shows their looks, not what they must hold, and the video is told so. Never ask for reference gear to be explained or written in. Report only a real contradiction: the words have someone use an item that is in none of the pictures or references and no beat brings in.\n' +
     'BEATS: each action is a beat with its seconds (shown as "(0-3 s)"); judge crowding from those seconds, not by counting actions: a beat under about 2 seconds rarely shows a whole movement. A line shown inside a beat ([line said during this beat: ...]) is already tied to that beat and is sent with it: never say a line has no beat, never suggest moving a line, and never put a line in a sound box. People move and speak at the same time: never treat an action and a line as competing for the same seconds. Judge a line only by how long it takes to say, about 2.5 words a second (an 8-word line needs about 3 seconds).\n' +   // v3.5.76
     'KEEP THE USER\'S WORDS (v3.5.64, Ian: a suggestion threw away "run", a shouted line and a bloody flail): replacement words keep everything the user wrote, their verbs, details, lines and who does what, and change ONLY the part that causes the problem. Never rewrite a box to fix something in another box.\n' +
     'NO EMPTY FINDINGS: report only what needs changing. Never a finding that ends with "it is fine", "retain" or "no change needed", and never two findings with the same fix.\n' +
@@ -3020,7 +3052,7 @@ function precheckRequest(ctx, images) {
     // v3.5.81 (Ian, 2026-11-11): the fix takes the line away too; every beat with a line is looked at
     'SPOKEN BY MISTAKE (recommended): a line\'s words are spoken aloud exactly as written. A line that is really a direction ("Chanting under his breath.", "whispers a prayer", "(muttering)") will be read out: say so, and give a beat fix with "remove_line": true that puts the direction in the beat\'s action (or the chanting in its sound); using the fix takes the line away.\n' +
     'SILENT AND SPEAKING (recommended): look at EVERY beat that has a line. If that beat\'s words say the speaker speaks silently, "silently speaks", mouths the words, speaks "without sound" or "words without sound", the line will still be said aloud or dropped: say which beat, and give a beat fix whose words say how the line is said (quietly, under his breath, hoarsely) instead. The reverse too: a beat that says someone speaks or calls out a line but has no line on it.\n' +
-    'THE CLOSING (recommended): the end must match where the last beat leaves people: who is where, standing or kneeling, what is in their hands. When it does not, give a words fix for the end box.\n' +
+    'THE CLOSING (recommended): the end must match where the last beat leaves people: who is where, standing or kneeling, what is in their hands. The video acts on the beats and treats the end only as where people must be: when the end asks for a change no beat makes (someone sits back, stands, turns away), give a beat fix that adds that move to the last beat (keeping its own words) rather than changing the end (v3.5.96: take 84, Drel sat back once his last beat said so). When the beats contradict the end, give a words fix for the end box. When the camera ends close (a push-in, a close-up) and the end names people who will be outside that frame, say so: end the camera wider, or trim the end.\n' +
     'TOO LONG (recommended): when the beats add up to more than the most this model makes (given with each shot), the shot must be cut in two. Give a finding of kind "cut" with a fix {"type": "cut", "after_beat": N}: the shot is cut between beat N and beat N+1. Pick the natural break (a change of subject, one action finished before the next starts), with each half no longer than the model makes.\n' +
     'ALREADY DEALT WITH: findings listed under a shot as already dealt with by the user were fixed or dismissed. Do not raise them again, in any wording.\n' +
     '5. reference: someone clearly on screen AND named in the shot\'s words who is not among the references sent. Never someone already sent, a background figure or a guess.\n' +
@@ -3056,6 +3088,8 @@ function precheckRequest(ctx, images) {
     const inf = ctx.info[si], w = inf.words, first = n + 1, last = n + s.keyframes.length;
     const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
     lines.push('References sent: ' + (inf.refs.length ? inf.refs.join(', ') : 'none') + '.');
+    { const ours = exitLines(w, (ctx.cast || []).map(function (c) { return c.name; }).concat(inf.refs || []), w.seconds || 0);   // v3.5.96: our own added lines, so the check can see them fight the words
+      if (ours.length) lines.push('Lines our script adds for this shot: ' + ours.join(' ')); }
     { const bt0 = beatTimes(w), tot = bt0.length ? bt0[bt0.length - 1].to : 0;   // v3.5.79: too long for the model
       lines.push('The beats add up to ' + secsText(tot) + ' seconds; this model makes at most ' + inf.maxSecs + ' seconds' + (tot > inf.maxSecs + 0.25 ? ': TOO LONG, it must be cut.' : '.')); }
     if (inf.dealt.length) lines.push('Already dealt with by the user (do not raise again): ' + inf.dealt.map(function (t) { return '"' + t + '"'; }).join(' '));
