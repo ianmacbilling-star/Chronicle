@@ -9,6 +9,7 @@ const router = express.Router();
 const { requireAuth, requireAdmin, requireImpersonatorOrAdmin, endImpersonation, impersonationExpired, IMPERSONATION_MAX_MS, impersonationLastActive } = require('../middleware/auth');
 const tiers = require('../middleware/tiers');
 const passes = require('../services/billing/passes');
+const packs = require('../services/billing/packs');   // v3.5.88
 const { getDb } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
 
@@ -122,6 +123,43 @@ router.put('/pass-config', requireAuth, requireAdmin, async function (req, res) 
   } catch (e) {
     console.error('PUT pass-config error:', e.message);
     res.status(500).json({ error: 'Could not save pass config' });
+  }
+});
+
+// v3.5.88 -- TOKEN PACKS (Ian, 2026-11-12: "control how many tokens someone gets on the 4 different token purchases").
+// Tokens and price, as for the passes; the price in dollars here, cents in the catalog.
+function packToWire(p) {
+  return { id: p.id, name: p.name, tokens: p.tokens, price_dollars: Math.round(p.price_cents) / 100, price_cents: p.price_cents,
+    default_tokens: packs.PACKS[p.id].tokens, default_price_dollars: packs.PACKS[p.id].price_cents / 100 };
+}
+router.get('/pack-config', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const out = {};
+    packs.PACK_ORDER.forEach(function (id) { const p = packs.getPack(id); if (p) out[id] = packToWire(p); });
+    res.json({ packs: out, order: packs.PACK_ORDER });
+  } catch (e) {
+    console.error('GET pack-config error:', e.message);
+    res.status(500).json({ error: 'Could not load the token packs' });
+  }
+});
+// Body: { pack: 'small', values: { tokens: 85, price_dollars: 15 } }
+router.put('/pack-config', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const id = req.body && req.body.pack;
+    const values = (req.body && req.body.values) || {};
+    if (!id || !packs.getPack(id)) return res.status(400).json({ error: 'Unknown pack' });
+    const write = {};
+    if (Object.prototype.hasOwnProperty.call(values, 'tokens')) write.tokens = values.tokens;
+    if (Object.prototype.hasOwnProperty.call(values, 'price_dollars')) {
+      const d = values.price_dollars;
+      if (d === null || d === '' || d === undefined) write.price_cents = null;
+      else { const f = parseFloat(d); write.price_cents = (isNaN(f) || f < 0) ? null : Math.round(f * 100); }
+    }
+    const merged = await packs.savePackConfig(id, write);
+    res.json({ success: true, pack: id, values: packToWire(merged) });
+  } catch (e) {
+    console.error('PUT pack-config error:', e.message);
+    res.status(500).json({ error: 'Could not save the token pack' });
   }
 });
 

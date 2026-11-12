@@ -1101,15 +1101,19 @@ async function fulfillCheckout(session, eventId) {
   const userId = parseInt(md.user_id, 10);
   const pack = getPack(md.pack_id);
   if (!userId || !pack) return null;
+  // v3.5.88 -- what the buyer was quoted at checkout (packs are editable from the dashboard); an older
+  // session without the quote falls back to the catalog, as before.
+  const quotedTokens = parseInt(md.quoted_tokens, 10);
+  const packTokens = (isFinite(quotedTokens) && quotedTokens > 0) ? quotedTokens : pack.tokens;
   const attributed = md.attributed_campaign_id ? parseInt(md.attributed_campaign_id, 10) : null;
   const paid = (session.amount_total != null) ? session.amount_total : pack.price_cents;
   const insRes = await db.prepare(
     `INSERT INTO token_purchases
        (user_id, pack_tier, price_paid_cents, tokens_granted, stripe_session_id, stripe_payment_id, attributed_campaign_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(userId, pack.id, paid, pack.tokens, sessionId, session.payment_intent || null, attributed);
+  ).run(userId, pack.id, paid, packTokens, sessionId, session.payment_intent || null, attributed);
   const purchaseId = (insRes && insRes.lastInsertRowid) ? insRes.lastInsertRowid : null;
-  await creditTokens(userId, pack.tokens, {
+  await creditTokens(userId, packTokens, {
     bucket: 'cot', event_type: 'purchase', source: 'stripe',
     related_purchase_id: purchaseId, stripe_event_id: eventId
   });
@@ -1119,7 +1123,7 @@ async function fulfillCheckout(session, eventId) {
     try {
       const camp = await db.prepare('SELECT user_id FROM campaigns WHERE id = ?').get(attributed);
       const dmId = (camp && camp.user_id) ? camp.user_id : null;
-      const bonus = Math.floor(pack.tokens * 0.10);
+      const bonus = Math.floor(packTokens * 0.10);
       if (dmId && dmId !== userId && bonus > 0) {
         await creditTokens(dmId, bonus, {
           bucket: 'cot', event_type: 'dm_bonus', source: 'stripe',
@@ -1136,7 +1140,7 @@ async function fulfillCheckout(session, eventId) {
            purchaseNo: purchaseNo(purchaseId),
            itemName: pack.name ? (pack.name + ' token pack') : 'Token pack',
            amountCents: paid, currency: session.currency,
-           tokensGranted: pack.tokens };
+           tokensGranted: packTokens };
 }
 // ------------------------------------------------------------
 // ============================================================================

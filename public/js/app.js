@@ -577,9 +577,9 @@ function openTokensModal() {
       // paid SM). Absent field => older server => default permissive; the
       // backend /checkout gate is authoritative regardless.
       state.canPurchaseTokens = (data && data.can_purchase_tokens !== undefined) ? !!data.can_purchase_tokens : true;
-      renderTokenPacks();
+      syncTokenPacks(renderTokenPacks);   // v3.5.88: the live tokens and prices
     })
-    .catch(function() { renderTokenPacks(); });
+    .catch(function() { syncTokenPacks(renderTokenPacks); });
   // Hide any prior purchase message from a previous open.
   var pm = document.getElementById('token-purchase-msg');
   if (pm) pm.style.display = 'none';
@@ -656,6 +656,16 @@ function closeReactivatedModal() {
   if (m) m.classList.add('hidden');
 }
 
+// v3.5.88 -- the packs are set on the dashboard, so the window takes their tokens and prices from the server
+// (GET /api/tokens/packs); TOKEN_PACKS above keeps the names and taglines and is the fallback if that fails.
+function syncTokenPacks(then) {
+  fetch('/api/tokens/packs').then(function (r) { return r.json(); }).then(function (list) {
+    (Array.isArray(list) ? list : []).forEach(function (s) {
+      var p = TOKEN_PACKS.filter(function (x) { return x.id === s.id; })[0];
+      if (p && Number(s.tokens) > 0 && Number(s.price_cents) > 0) { p.tokens = Number(s.tokens); p.price = Number(s.price_cents) / 100; }
+    });
+  }).catch(function () {}).then(function () { if (then) then(); });
+}
 function renderTokenPacks() {
   var wrap = document.getElementById('token-packs');
   if (!wrap) return;
@@ -23733,7 +23743,7 @@ function switchSettingsTab(tab) {
   if (tab === 'general') { loadPrintMarkup(); loadSignupBonus(); loadMaxPagesPerPrint(); loadLifecycleConfig(); loadHelpEmailSettings(); loadGenerationSettings(); }
   // v3.0.920 -- TD-780 Push 4a. One tab, two things to load. Passes first, because they
   // render first and a slow tier fetch should not hold up the half Ian asked to put on top.
-  if (tab === 'tiers') { loadPassesConfig(); loadTiersConfig(); }
+  if (tab === 'tiers') { loadPassesConfig(); loadPacksConfig(); loadTiersConfig(); }   // v3.5.88 packs
   if (tab === 'stats') loadStats();
   if (tab === 'trends') loadTrends();
   if (tab === 'usertesting') initUserTestingTab();
@@ -24484,6 +24494,17 @@ function pricePerToken(priceDollars, tokens) {
   return '$' + (priceDollars / tokens).toFixed(3) + ' per token';
 }
 
+// v3.5.88 -- TWO THIRDS ACCESS, ONE THIRD TOKENS (Ian, 2026-11-12: "2/3 of the price of the pass and of the
+// subscription is for access to the system and storage.. only 1/3 is what covers the tokens"). So a plan's or a
+// pass's cost per token is a third of its price over its tokens (Gold $15, 50 tokens: $5 / 50 = $0.100), and the
+// access part is shown a month at a time. Hard-coded at two thirds for now (Ian). Token packs keep the whole price.
+var ACCESS_SHARE = 2 / 3;
+function accessSplitHTML(price, months, tokens) {
+  if (!(price > 0) || !(tokens > 0) || !(months > 0)) return '<strong>' + pricePerToken(price, tokens) + '</strong>';
+  var access = price * ACCESS_SHARE, forTokens = price - access;
+  return 'Access (2/3): $' + access.toFixed(2) + (months > 1 ? ', $' + (access / months).toFixed(2) + ' a month' : ' a month') +
+    '<br />Tokens (1/3): $' + forTokens.toFixed(2) + ' &rarr; <strong>$' + (forTokens / tokens).toFixed(3) + ' per token</strong>';
+}
 function passPerMonth(id) {
   var pEl = document.getElementById('pcf-' + id + '-price_dollars');
   var tEl = document.getElementById('pcf-' + id + '-tokens');
@@ -24508,7 +24529,7 @@ function passPerMonth(id) {
   }
   out.innerHTML = '$' + (price / months).toFixed(2) + ' per month  \u00b7  ' +
     Math.round(tokens / months) + ' tokens per month' + trialLine +
-    '<br /><strong>' + pricePerToken(price, tokens) + '</strong>';
+    '<br />' + accessSplitHTML(price, months, tokens);   // v3.5.88
 }
 
 function renderPassesConfig(data) {
@@ -24578,6 +24599,73 @@ function savePassPanel(id) {
     .catch(function (e) { if (msgEl) { msgEl.textContent = 'Save failed: ' + e.message; msgEl.style.color = 'var(--error)'; } });
 }
 
+// v3.5.88 -- TOKEN PACKS on Dashboard > Tiers and Passes (Ian, 2026-11-12): tokens and price per pack, the cost
+// per token as on the passes (the whole price: a pack buys no access), and how it compares with the Small pack.
+function loadPacksConfig(after) {
+  var box = document.getElementById('packs-config-container');
+  if (!box) return;
+  box.textContent = 'Loading token packs...';
+  fetch('/api/admin/pack-config').then(function (r) { return r.json(); }).then(function (data) {
+    if (!data || !data.packs) { box.textContent = (data && (data.message || data.error)) || 'Could not load the token packs.'; return; }
+    renderPacksConfig(data);
+    if (after) after();
+  }).catch(function (e) { box.textContent = 'Could not load the token packs: ' + e.message; });
+}
+function renderPacksConfig(data) {
+  var box = document.getElementById('packs-config-container');
+  if (!box) return;
+  var html = '';
+  (data.order || []).forEach(function (id) {
+    var p = data.packs[id]; if (!p) return;
+    html += '<div class="settings-section tier-config-panel panel-dark" id="pack-panel-' + id + '" style="margin-bottom:0;display:flex;flex-direction:column;">';
+    html += '<div class="settings-section-title">' + aimpEsc(p.name || id) + ' Pack</div>';
+    html += '<div class="settings-section-desc" style="margin-bottom:10px;">Default ' + p.default_tokens + ' tokens for $' + p.default_price_dollars + '.</div>';
+    [['tokens', 'Tokens', '1'], ['price_dollars', 'Price ($)', '0.01']].forEach(function (f) {
+      var val = (p[f[0]] === null || p[f[0]] === undefined) ? '' : p[f[0]];
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(var(--accent-rgb),0.12);">' +
+        '<label class="form-label" for="kcf-' + id + '-' + f[0] + '" style="margin:0;flex:1;font-size:12.5px;line-height:1.25;">' + f[1] + '</label>' +
+        '<input id="kcf-' + id + '-' + f[0] + '" class="form-input pack-config-input" type="number" min="0" step="' + f[2] + '" ' +
+        'data-pack="' + id + '" data-field="' + f[0] + '" value="' + val + '" oninput="packDerivedAll()" ' +
+        'style="width:88px;flex:0 0 auto;text-align:right;padding:5px 8px;" />' +
+        '</div>';
+    });
+    html += '<div class="settings-section-desc" id="pack-derived-' + id + '" style="margin:10px 0 0;color:var(--accent-bright);"></div>';
+    html += '<div style="padding-top:12px;margin-top:auto;">' +
+      '<button class="btn btn-primary btn-sm" onclick="savePackPanel(\'' + id + '\')">Save</button>' +
+      '<div class="settings-section-desc" id="pack-save-msg-' + id + '" style="margin:6px 0 0;"></div>' +
+      '</div>';
+    html += '</div>';
+  });
+  box.innerHTML = html;
+  box.setAttribute('data-order', (data.order || []).join(','));
+  packDerivedAll();
+}
+function packDerivedAll() {
+  var box = document.getElementById('packs-config-container'); if (!box) return;
+  var ids = String(box.getAttribute('data-order') || '').split(',').filter(Boolean);
+  function vals(id) { var p = document.getElementById('kcf-' + id + '-price_dollars'), t = document.getElementById('kcf-' + id + '-tokens'); return { price: p ? parseFloat(p.value) : NaN, tokens: t ? parseInt(t.value, 10) : NaN }; }
+  var first = ids.length ? vals(ids[0]) : null, baseRate = first && first.price > 0 && first.tokens > 0 ? first.tokens / first.price : 0;
+  ids.forEach(function (id, i) {
+    var out = document.getElementById('pack-derived-' + id); if (!out) return;
+    var v = vals(id);
+    if (isNaN(v.price) || isNaN(v.tokens)) { out.innerHTML = ''; return; }
+    var more = (i > 0 && baseRate && v.price > 0) ? Math.round((v.tokens / v.price / baseRate - 1) * 100) : 0;
+    out.innerHTML = '<strong>' + pricePerToken(v.price, v.tokens) + '</strong>' + (more ? '<br />' + (more > 0 ? '+' : '') + more + '% tokens per $ against the first pack (what buyers see)' : '');
+  });
+}
+function savePackPanel(id) {
+  var values = {};
+  document.querySelectorAll('.pack-config-input[data-pack="' + id + '"]').forEach(function (inp) { values[inp.getAttribute('data-field')] = inp.value === '' ? null : inp.value; });
+  var msgEl = document.getElementById('pack-save-msg-' + id);
+  if (msgEl) { msgEl.textContent = 'Saving...'; msgEl.style.color = ''; }
+  fetch('/api/admin/pack-config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pack: id, values: values }) })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.success) loadPacksConfig(function () { var m = document.getElementById('pack-save-msg-' + id); if (m) { m.textContent = 'Saved.'; m.style.color = 'var(--accent-bright)'; } });   // shown as the server stored it
+      else if (msgEl) { msgEl.textContent = (data && (data.message || data.error)) || 'Save failed.'; msgEl.style.color = 'var(--error)'; }
+    })
+    .catch(function (e) { if (msgEl) { msgEl.textContent = 'Save failed: ' + e.message; msgEl.style.color = 'var(--error)'; } });
+}
 function loadTiersConfig() {
   var box = document.getElementById('tiers-config-container');
   var msg = document.getElementById('tiers-config-msg');
@@ -24677,7 +24765,7 @@ function tierDerived(tierKey, noCascade) {
   }
   out.innerHTML = 'Monthly: <strong>' + tokens + ' tokens</strong> (' + utlt + ' UTLT + ' + cot + ' CO)' +
     '<br />' + signup + ' + (?? Promo Code)' +   // v3.3.60 -- TD-1072, Ian's wording: a code's tokens come on top
-    '<br /><strong>' + pricePerToken(price, tokens) + '</strong>' +
+    '<br />' + accessSplitHTML(price, 1, tokens) +   // v3.5.88: a third of the price over the tokens
     (tokens > 0 && price > 0 ? ' <span style="opacity:0.75;">incl. UTLT</span>' : '');
   // The Free Trial's numbers feed every paid plan's sign-up total.
   if (tierKey === 'trial' && !noCascade) {

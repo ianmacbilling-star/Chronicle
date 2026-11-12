@@ -177,6 +177,9 @@ async function createCheckoutSession(opts) {
     metadata: {
       user_id: String(opts.userId),
       pack_id: pack.id,
+      // v3.5.88 -- the frozen quote, as for passes: packs are editable from the dashboard now
+      quoted_tokens: String(pack.tokens),
+      quoted_price_cents: String(pack.price_cents),
       attributed_campaign_id: opts.attributedCampaignId != null ? String(opts.attributedCampaignId) : ''
     }
   };
