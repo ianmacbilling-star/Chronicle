@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.97",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3597-place-folds-link",
+        "kind": "feature",
+        "public": false,
+        "summary": "A shot keeps its place; folded shots stay folded; Copy link on a take.",
+        "detail": "Video tab: a take stays in the place its opening picture shows (a camera move shows more of the same place). Folded shots stay folded after a reload. Each take has Download and Copy link, and its Info shows the video address. The quick check spots seconds typed into a beat; the Pre-production check leaves a start alone when a beat explains it, compares the end with the last beat closely, checks a beat camera against the whole-shot camera, and says when Keyframes is the safe mode for an exact opening.",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.96",
     "staged_on": "2026-11-12",
     "entries": [

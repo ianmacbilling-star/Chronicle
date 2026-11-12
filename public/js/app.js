@@ -42508,11 +42508,25 @@ function vlCopyText(t, ok) {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, old); else old();
 }
 function vlFoldKey(s) { return s.id ? 'id' + s.id : 'ck' + s.ck; }
-function vlFolded(s) { return !!(VL.folded && s && VL.folded[vlFoldKey(s)]); }
+// v3.5.97 (Ian, 2026-11-12: "If I collapse a shot... keep it collapsed until I open it again"): saved shots' folds are kept in this
+// browser across reloads; a new shot's fold moves to its id once it is saved.
+function vlFoldMap() {
+  if (!VL.folded) { VL.folded = {}; try { var o = JSON.parse(window.localStorage.getItem('vl-folded') || '{}'); if (o && typeof o === 'object') VL.folded = o; } catch (e) {} }
+  return VL.folded;
+}
+function vlFoldSave() {
+  try { var o = {}; Object.keys(VL.folded || {}).forEach(function (k) { if (VL.folded[k] && /^id\d+$/.test(k)) o[k] = true; }); window.localStorage.setItem('vl-folded', JSON.stringify(o)); } catch (e) {}
+}
+function vlFolded(s) {
+  if (!s) return false;
+  var m = vlFoldMap();
+  if (s.id && m['ck' + s.ck] && !m['id' + s.id]) { m['id' + s.id] = true; delete m['ck' + s.ck]; vlFoldSave(); }
+  return !!m[vlFoldKey(s)];
+}
 function vlFold(si) {
   var s = VL.draft && VL.draft.shots[si]; if (!s) return;
-  VL.folded = VL.folded || {};
-  var k = vlFoldKey(s); VL.folded[k] = !VL.folded[k];
+  vlFoldMap();
+  var k = vlFoldKey(s); VL.folded[k] = !VL.folded[k]; vlFoldSave();   // v3.5.97
   var b = document.getElementById('vl-body-' + s.ck); if (b) b.style.display = VL.folded[k] ? 'none' : '';
   var shot = b && b.parentNode, t = shot && shot.querySelector('.vl-fold');
   if (t) { t.innerHTML = VL.folded[k] ? '&#9656;' : '&#9662;'; t.title = VL.folded[k] ? 'Open this shot' : 'Fold this shot away (its name and purpose stay)'; }
@@ -43124,6 +43138,12 @@ function vlTakeInfo(takeId, n) {
 // v3.5.94 (Ian, 2026-11-12: "a quick copy button at the top that puts all of the info in the clipboard... like we have on the shot.
 // Admin only."): the window's text as it reads, then every picture's address (the window shows them as pictures).
 function vlInfoAdmin() { return !!(typeof state !== 'undefined' && state.user && state.user.is_admin); }
+// v3.5.97: a take's video address to the clipboard (the right-click menu is off since v3.5.96)
+function vlCopyTakeLink(id) {
+  var url = '';
+  (VL.episodes || []).concat(VL.draft ? [VL.draft] : []).forEach(function (ep) { ((ep && ep.shots) || []).forEach(function (s) { (s.takes || []).forEach(function (t) { if (String(t.id) === String(id) && t.video_url) url = t.video_url; }); }); });
+  if (url) vlCopyText(url, 'Link copied');
+}
 function vlTakeInfoText(n) {
   var b = document.getElementById('vl-info-body'); if (!b) return '';
   var t = 'TAKE ' + n + ' INFO\n' + String(b.innerText || b.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
@@ -43158,6 +43178,7 @@ function vlTakeInfoHTML(j) {
   row('Episode', escapeHtml(j.episode.name || ''));
   row('Shot', sh ? (sh.position + (sh.name ? ': ' + escapeHtml(sh.name) : '')) : 'deleted');
   row('Status', escapeHtml(t.status));
+  if (t.video_url) row('Video', escapeHtml(t.video_url));   // v3.5.97: the address, in Copy too
   row('Model', escapeHtml(t.model_label || t.model || '') + (t.model ? ' <span style="opacity:0.6;">(' + escapeHtml(t.model) + ')</span>' : ''));
   row('Mode', escapeHtml(t.mode || ''));
   row('Sound', t.sound ? 'on' : 'off');
@@ -43222,7 +43243,7 @@ function vlTakeInfoHTML(j) {
 function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
-    ? '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" oncontextmenu="return false;" title="To save this take, use the &#8681; button: it names the file by the take\'s code." preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'   // v3.5.96 (Ian: "make the save as file names match"): the player's own Save named the file by its storage name, so only the code-named download is offered
+    ? '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" oncontextmenu="return false;" title="To save this take, use &#8681; Download under it: it names the file by the take\'s code. Copy link gives its address." preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'   // v3.5.96 (Ian: "make the save as file names match"): the player's own Save named the file by its storage name, so only the code-named download is offered
     : '<div class="moment-img-placeholder" style="aspect-ratio:16/9;min-height:0;gap:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
         (making ? vlSpin(20) + '<div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.7);">' + escapeHtml(vlTakeProgress(t)) + ' &middot; ' + vlElapsed(t.created_at) + '</div>'
                 : '<div class="moment-img-inner" style="color:var(--danger);" data-no-words>' + escapeHtml(t.merge_error || t.error || ((t.moves || []).filter(function (x) { return x.error; }).map(function (x) { return x.error; })[0]) || 'Failed') + '</div>') +
@@ -43240,7 +43261,8 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
     '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">' +
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + t.id + ')">Retouch</button>' : '') +   // v3.5.26
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Trim: choose the part of this take the episode uses. The take itself is not changed." onclick="vlTrimTake(' + t.id + ')">Trim</button>' : '') +   // v3.5.54
-      (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '">&#8681;</a>' : '') +
+      (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '">&#8681; Download</a>' : '') +   // v3.5.97: says what it is (Ian missed the bare arrow)
+      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Copy this take\'s video address" onclick="vlCopyTakeLink(' + t.id + ')">Copy link</button>' : '') +   // v3.5.97 (Ian: "make it so I can get the video\'s link")
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
       '<button type="button" class="narrative-regen-btn vl-info-btn" title="Everything we know about this take: model, mode, tokens, the words sent and used, the pictures" onclick="vlTakeInfo(' + t.id + ', ' + n + ')">Info</button>' +   // v3.5.92
       (!making ? '<button type="button" class="narrative-regen-btn" title="Delete this take" onclick="vlDeleteTake(' + t.id + ')">&#10005;</button>' : '') +
@@ -44573,6 +44595,8 @@ function vlChecks(si) {
     if (need > tm.d + 0.25) out.push({ p: 'beats', t: 'Beat ' + l.when + '\'s line (' + words + ' words) needs about ' + vlSecsText(need) + ' s to say and the beat has ' + vlSecsText(tm.d) + ' s. Lengthen the beat or shorten the line.' });
   });
   btm.forEach(function (tm, i) { if (acts[i] && tm.d < 1.5) out.push({ p: 'beats', t: 'Beat ' + (i + 1) + ' has only ' + vlSecsText(tm.d) + ' s. That is rarely enough for a whole movement.' }); });
+  // v3.5.97 (shot 3 carried "(0-2.5 s)" and "(5.5-7.5 s)" typed into its beats; the second disagreed with the beat's own time)
+  acts.forEach(function (a, i) { if (/\(\s*\d+(\.\d+)?\s*[-\u2013]\s*\d+(\.\d+)?\s*s\s*\)/.test(String(a || ''))) out.push({ p: 'beats', t: 'Beat ' + (i + 1) + ' has seconds typed into its words, like "(0-2.5 s)". The beat\u2019s own seconds are sent already: delete the typed ones so the model gets one timing.' }); });
   // v3.5.47 (Ian: someone told to leave stops at the edge): leaving needs about 2 seconds to get all the way out, and a
   // second of empty frame when it ends the shot.
   acts.forEach(function (a, i) {
