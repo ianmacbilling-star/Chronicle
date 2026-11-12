@@ -1184,7 +1184,8 @@ function shotScript(ep, w, pics) {
       // hold is the words' to say, never another character's things.
       else out.push('@Image' + c.n + ' is ' + c.name + (c.height ? ', ' + c.height : '') + ': ' + c.name + '\'s face, hair, build and clothes must match @Image' + c.n + ' whenever ' + c.name + ' is on screen. ' + gearLine(c.name));
     });
-    if (pics.cast.length) out.push('If a scene picture shows a character or thing differently, follow its own picture.');
+    if (pics.cast.length && pics.scene.length) out.push('If a scene picture shows a character or thing differently, follow its own picture.');
+    if (!pics.scene.length) out.push('There is no scene picture: the words set the place and where everyone is; the reference pictures show only how each one looks.');   // v3.6.01
     if (pics.scene.length) out.push('@Image' + pics.scene[0] + ' is how the shot opens: start the video looking like it, in its art style.');
     if (pics.scene.length > 1) out.push(pics.scene.slice(1).map(function (n) { return '@Image' + n; }).join(', ') + (pics.scene.length === 2 ? ' shows' : ' show') +
       ' the place, the light and who is there. Do not copy poses, positions or which way anyone faces from ' + (pics.scene.length === 2 ? 'it' : 'them') + '.');
@@ -1245,12 +1246,12 @@ function namedCast(text, cast, room) {
 // A reference shot in plain words: one move; the cast named first (they win), then up to 5 scene pictures.
 function planReferenceWords(ep, kfs, w, shotNo, pool, refs) {
   const m = MODELS[ep.model];
-  if (!kfs.length) return { error: 'Shot ' + shotNo + ' has no pictures.' };
-  if (!wordsHaveContent(ep, w)) return { error: 'Shot ' + shotNo + ' needs words: say what the characters do, or how the shot starts.' };
+  if (!wordsHaveContent(ep, w)) return { error: 'Shot ' + shotNo + ' needs words: say what the characters do, or how the shot starts.' };   // v3.6.01: no pictures is fine when someone is in its references
   const scenePics = kfs.slice(0, m.maxScene || REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });   // v3.5.42: a model's own limits
   const people = refsToSend(ep, w, refs, pool, (m.maxRefs || REF_MAX_IMAGES) - scenePics.length);   // v3.5.22: the shot's references
+  if (!kfs.length && !people.length) return { error: 'Shot ' + shotNo + ' has no pictures and no one in its References. Add a character or a place to its References, or a picture.' };   // v3.6.01
   const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1, kind: p.kind, height: p.height || '' }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };   // v3.5.61 height
-  return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics), duration: String(w.seconds),
+  return { moves: [{ position: 1, start: kfs.length ? kfs[0].image_url : null, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics),   // v3.6.01 kfs.length duration: String(w.seconds),
     images: people.map(function (p) { return p.url; }).concat(scenePics), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
 // A keyframe-model shot in plain words: the same script (no picture lines) for every move; the length shared out.
@@ -1485,7 +1486,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id, maxTakes(req))) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
-      const p = planShot(epForShot(ep, shots[i]), kfs, shots[i], i + 1, null);   // v3.5.16; v3.5.19; v3.5.34: the shot's mode
+      const p = planShot(epForShot(ep, shots[i]), kfs, shots[i], i + 1, kfs.length ? null : await refsPool(db, ep).catch(function () { return null; }));   // v3.5.16; v3.5.19; v3.5.34: the shot's mode; v3.6.01 a shot with no pictures plans from its references
       if (p.error) return res.status(400).json({ error: p.error });
       const pm = MODELS[epForShot(ep, shots[i]).model];   // v3.5.46: what they all cost together
       need += await takeTokens(db, p.moves.reduce(function (t, x) { return t + estCost(pm, x.duration, !!ep.sound); }, 0));
@@ -3054,6 +3055,7 @@ async function pcShape(url) {
 }
 async function precheckContext(db, ep) {
   const ctx = await shotListContext(db, ep);
+  ctx.shots = ctx.allShots;   // v3.6.01: shots with no pictures are checked too
   const pool = await refsPool(db, ep).catch(function () { return { characters: [], assets: [] }; });
   ctx.mode = 'precheck';
   ctx.sig = cutSig(ctx.shots);
@@ -3098,6 +3100,7 @@ function precheckRequest(ctx, images) {
     'BEATS: each action is a beat with its seconds (shown as "(0-3 s)"); judge crowding from those seconds, not by counting actions: a beat under about 2 seconds rarely shows a whole movement. A line shown inside a beat ([line said during this beat: ...]) is already tied to that beat and is sent with it: never say a line has no beat, never suggest moving a line, and never put a line in a sound box. People move and speak at the same time: never treat an action and a line as competing for the same seconds. Judge a line only by how long it takes to say, about 2.5 words a second (an 8-word line needs about 3 seconds).\n' +   // v3.5.76
     'KEEP THE USER\'S WORDS (v3.5.64, Ian: a suggestion threw away "run", a shouted line and a bloody flail): replacement words keep everything the user wrote, their verbs, details, lines and who does what, and change ONLY the part that causes the problem. Never rewrite a box to fix something in another box.\n' +
     'NO EMPTY FINDINGS: report only what needs changing. Never a finding that ends with "it is fine", "retain" or "no change needed", and never two findings with the same fix.\n' +
+    'A SHOT WITH NO PICTURES (v3.6.01): it can be made only in Reference mode, from its words and its references; if its mode is Keyframes, that is a "mode" finding (Reference). Skip every rule about an opening picture or keyframes for it. Its people come only from its references: anyone it names who is not among them will not appear. Its place comes only from the words, so its Opening must name the place and who is where.\n' +
     'CONCEPT (v3.5.99): a shot\'s Concept is the user\'s intent for how it looks and feels. When the words fight it (it asks for a slow push in and the camera whips around), that is a finding of kind "words" with a fix that changes only that part. Where a Purpose or Concept and the story disagree, the user\'s words win: never report that difference.\n' +
     'PURPOSE: each shot\'s Purpose is the user\'s intent. When the words leave out part of it (the purpose says Drel takes the mirror from Ori and Ori is not in the shot) or do something it does not ask for, that is a finding of kind "words" with a fix that adds only what is missing. When a purpose describes what happens in another shot, say which shot and suggest no words.\n' +
     'TITLE CARDS: a title, logo or text-on-black picture as a shot\'s first picture is meant: the shot opens on it and moves into the scene (clouds, a fade). Never report it as a different kind of art, never tell them to drop it, and never take "opens on the title" out of the words.\n' +
@@ -3140,7 +3143,7 @@ function precheckRequest(ctx, images) {
   let n = 0;
   ctx.shots.forEach(function (s, si) {
     const inf = ctx.info[si], w = inf.words, first = n + 1, last = n + s.keyframes.length;
-    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + (textOf(s.concept) ? ' Concept (how the user wants it to look and feel): ' + textOf(s.concept) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
+    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + (s.keyframes.length ? ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' : ': NO PICTURES (made from its words and its references only).') + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + (textOf(s.concept) ? ' Concept (how the user wants it to look and feel): ' + textOf(s.concept) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
     lines.push('References sent: ' + (inf.refs.length ? inf.refs.join(', ') : 'none') + '.');
     { const ours = exitLines(w, (ctx.cast || []).map(function (c) { return c.name; }).concat(inf.refs || []), w.seconds || 0);   // v3.5.96: our own added lines, so the check can see them fight the words
       if (ours.length) lines.push('Lines our script adds for this shot: ' + ours.join(' ')); }
@@ -3319,7 +3322,7 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     const shots = ep ? await tx.prepare('SELECT * FROM shots WHERE episode_id = ? ORDER BY position, id').all(episodeId) : [];
     const kfs = ep ? await tx.prepare('SELECT * FROM keyframes WHERE episode_id = ? ORDER BY shot_id, position, id').all(episodeId) : [];
     shots.forEach(function (s) { s.keyframes = kfs.filter(function (k) { return k.shot_id === s.id; }); });
-    const live = shots.filter(function (s) { return s.keyframes.length; });
+    const live = shots;   // v3.6.01: a shot with no pictures gets its findings too
     // v3.5.37: the episode stays open during the check, so a shot may have changed meanwhile. Each shot still there gets its
     // findings, signed to the shot as it was checked (a changed one reads "Changed since the check"); a shot removed since
     // gets none. Only when none of the checked shots is left does the check fail, with nothing charged.
@@ -3361,7 +3364,8 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
 // are written; everything the user wrote stays. The shots before and after are read so the words follow on. 1 token
 // (app_settings video_fill_tokens), charged only when something was written. Answered at once, no job.
 // =================================================================================================
-const FILL_BOXES = { start: 'Opening (the first frame: who is where, facing which way, and the place)', end: 'Closing (the last frame: where everyone is and how they stand)', camera: 'Camera across the whole shot', sounds: 'Sounds heard all the way through', around: 'What is happening around them (weather, fire, crowds)' };
+const FILL_BOXES = { start: 'Opening (the first frame only: who is where, facing which way, and the place; no one enters, moves or speaks in it, the entrances happen in the beats)',   // v3.6.01
+  end: 'Closing (the last frame: where everyone is and how they stand)', camera: 'Camera across the whole shot', sounds: 'Sounds heard all the way through', around: 'What is happening around them (weather, fire, crowds)' };
 async function fillTokens(db) {
   let v = null;
   try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_fill_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
@@ -3372,6 +3376,45 @@ function fillWordsText(w, label) {
   const t = beatTimes(w);
   return label + ':\n' + ['Opening: ' + (w.start || '(empty)'), 'Beats: ' + (w.actions.length ? w.actions.map(function (a, i) { return (i + 1) + '. (' + secsText(t[i].from) + '-' + secsText(t[i].to) + ' s) ' + a + w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return ' [' + (l.who || 'a voice') + (l.off ? ', off screen' : '') + ': "' + l.text + '"]'; }).join(''); }).join(' ') : '(none)'),
     'Camera: ' + (w.camera || '(empty)'), 'Sounds: ' + (w.sounds || '(empty)'), 'Around them: ' + (w.around || '(empty)'), 'Closing: ' + (w.end || '(empty)'), 'Length: ' + w.seconds + ' s'].join('\n');
+}
+// v3.6.01 -- A SHOT'S OWN NOTES WRITE REAL LINES (Ian, 2026-11-12: "I would have liked it to write the dialog in the beats from either
+// the story or from my concepts"). Shot 4's Notes had put the talk into the beats' words as [Drel: "..."], where no timing check,
+// voice rule or line ever saw it, and squeezed 22 seconds of talk into 15. Now the lines come back as lines, each beat lasts as long
+// as its lines take to say, and a shot that needs more than its model makes keeps all of it: the page says where to cut.
+const LINE_WPS = 2.5;   // words a second
+function lineSecs(text) { const n = String(text || '').trim().split(/\s+/).filter(Boolean).length; return n ? n / LINE_WPS + 1 : 0; }   // plus a breath: lines land about a second late (takes 69 to 77)
+// A line the Director still wrote into a beat ([Drel: "..."]) becomes a line of that beat.
+function liftLines(items, lines) {
+  items.forEach(function (it, i) {
+    it.a = it.a.replace(/\s*\[([^\]:"]{1,60}):\s*["\u201c]([^"\u201d]+)["\u201d]\s*\]\s*/g, function (all, who, text) {
+      if (!lines.some(function (l) { return l.text === text.trim(); })) lines.push({ who: who.trim(), text: text.trim(), when: i + 1, off: false });
+      return ' ';
+    }).replace(/\s{2,}/g, ' ').trim();
+  });
+  return lines;
+}
+// Each beat at least as long as its lines (2.5 s when it has none and gave none); never squeezed to the model's length.
+function fillSized(items, lines, maxSecs) {
+  const beats = items.map(function (it, i) {
+    const say = lines.filter(function (l) { return l.when === i + 1; }).reduce(function (t, l) { return t + lineSecs(l.text); }, 0);
+    const secs = Math.max(it.secs > 0 ? it.secs : 2.5, say);
+    return { camera: it.camera || '', sound: it.sound || '', secs: Math.min(SHOT_MAX_SECS, Math.ceil(secs * 2) / 2) };
+  });
+  let total = 0, cutAfter = 0;
+  beats.forEach(function (b, i) { total += b.secs; if (total <= maxSecs + 0.01) cutAfter = i + 1; });
+  return { beats: beats, total: total, over: total > maxSecs + 0.01, cutAfter: cutAfter >= 1 && cutAfter < beats.length ? cutAfter : 0 };
+}
+// The story behind one shot, as its Purpose and Concept window shows it, for the Director.
+function shotStoryText(x) {
+  if (!x) return '';
+  const out = [];
+  (x.pictures || []).forEach(function (p, i) {
+    if (p.kind !== 'story') return;
+    out.push('Picture ' + (i + 1) + ' "' + p.title + '"' + (p.shows ? ', showing: ' + p.shows : '') + (p.before ? '\nThe story before it: ' + p.before : '') + (p.after ? '\nThe story after it: ' + p.after : ''));
+  });
+  if (x.gap) out.push('This shot has no story pictures; the story where it sits' + (x.gap.after ? ':\n' + (x.gap.after_title ? 'After "' + x.gap.after_title + '": ' : '') + x.gap.after : '') +
+    (x.gap.before ? '\n' + (x.gap.before_title ? 'Before "' + x.gap.before_title + '" (that picture belongs to the next shot; only the part before it belongs here): ' : '') + x.gap.before : ''));
+  return out.join('\n\n');
 }
 router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, res) {
   const FN = 'POST /api/video-lab/shots/' + req.params.id + '/fill';
@@ -3396,11 +3439,20 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     const at = all.findIndex(function (x) { return x.id === shot.id; });
     const prev = at > 0 ? shotWords(all[at - 1]) : null, next = at >= 0 && at < all.length - 1 ? shotWords(all[at + 1]) : null;
     const pool = await refsPool(db, ep).catch(function () { return { characters: [], assets: [] }; });
-    const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of strings, about one for every 2.5 seconds of its ' + w.seconds + ' seconds'] : []);
-    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Reply with JSON only, with just the boxes asked for.';
+    const speech = !!styleFor(ep.style).speech, askLines = noBeats && speech && !w.lines.length;   // v3.6.01
+    const sKey = shotModelKey(ep.model, shotMode(shot), shotModel(shot)), sm = MODELS[sKey] || MODELS[ep.model] || {};
+    const maxSecs = Math.min(SHOT_MAX_SECS, Math.max.apply(null, (sm.durations || ['15']).map(Number)));
+    let story = '';
+    try { const ss = await shotStories(db, ep); story = shotStoryText(ss.shots.filter(function (x) { return x.id === shot.id; })[0]); } catch (e) { story = ''; }
+    const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of {"do": what happens, in plain words with no spoken words in it, "seconds": how long it takes}'] : [])
+      .concat(askLines ? ['"lines": what is said, in order, a list of {"who": a name from the Characters, "line": the exact words, "during": the number of the beat it is said in, "offscreen": false}'] : []);
+    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Reply with JSON only, with just the boxes asked for.' +
+      (noBeats ? ' THE BEATS (v3.6.01): what the user wants is in the Purpose and Concept; follow them, and the story where they say nothing. The Opening is the first frame only: entrances, moves and speech happen in the beats. Give every beat its seconds. A beat with a line lasts at least as long as the line takes to say (about 2.5 words a second, plus a second). Never squeeze: if it all needs more than ' + maxSecs + ' seconds, still write all of it with honest seconds; the user is told where to cut.' : '') +
+      (askLines ? ' THE LINES: when the Concept gives words to say, use them word for word, in its order, and fix only spelling; when it gives none, take them from the story; otherwise write none. Every line goes in "lines", never inside a beat\'s "do".' : '');
     const text = ['Overall direction: ' + (ep.overall || '(none)'), 'Characters: ' + (pool.characters.map(function (c) { return c.name; }).join(', ') || '(none)'),
       'Shot ' + (at + 1) + (shot.name ? ' "' + shot.name + '"' : '') + (shot.purpose ? '. Purpose: ' + shot.purpose : '') + (shot.concept ? '. Concept: ' + shot.concept : ''),   // v3.5.99 concept
       fillWordsText(w, 'THIS SHOT, as written so far'), prev ? fillWordsText(prev, 'THE SHOT BEFORE') : 'This is the first shot.', next ? fillWordsText(next, 'THE SHOT AFTER') : 'This is the last shot.',
+      story ? 'THE STORY BEHIND THIS SHOT:\n' + story : 'The story has nothing written for this shot.',   // v3.6.01
       'Write these boxes: {' + ask.join(', ') + '}'].join('\n\n');
     const prices = await shotListPrices(db);
     const r = await callShotListModel(key, { max_tokens: 1500, system: system, content: [{ type: 'text', text: text }] });
@@ -3408,9 +3460,24 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     const j = readJson(r.text) || {};
     const got = {};
     empty.forEach(function (k) { if (typeof j[k] === 'string' && j[k].trim()) got[k] = j[k].trim(); });
-    if (noBeats && Array.isArray(j.actions)) { const a = j.actions.map(textOf).filter(Boolean).slice(0, 12); if (a.length) got.actions = a; }
+    let sized = null;
+    if (noBeats && Array.isArray(j.actions)) {   // v3.6.01: beats with their seconds, and the lines as lines
+      const items = j.actions.map(function (a) {
+        if (a && typeof a === 'object') return { a: textOf(a.do != null ? a.do : (a.action != null ? a.action : a.text)), camera: textOf(a.camera), sound: textOf(a.sound), secs: parseFloat(a.seconds) || null };
+        return { a: textOf(a), camera: '', sound: '', secs: null };
+      }).filter(function (it) { return it.a; }).slice(0, 12);
+      let lines = askLines && Array.isArray(j.lines) ? j.lines.map(function (l) { l = l || {}; return { who: textOf(l.who), text: textOf(l.line != null ? l.line : l.text), when: parseInt(l.during != null ? l.during : l.when, 10) || 0, off: !!l.offscreen }; }).filter(function (l) { return l.text; }) : [];
+      if (askLines) lines = liftLines(items, lines);
+      if (items.length) {
+        sized = fillSized(items, lines, maxSecs);
+        got.actions = items.map(function (it) { return it.a; }).filter(Boolean);
+        got.beats = sized.beats;
+        got.seconds = Math.min(maxSecs, Math.max(SHOT_MIN_SECS, Math.ceil(sized.total)));
+        if (lines.length) got.lines = lines;
+      }
+    }
     if (!Object.keys(got).length) return vlRefuse(req, res, FN, 502, 'The Director\u2019s answer had nothing usable. Nothing was charged; try again.');
-    const merged = cleanWords(Object.assign({}, w, got, { beats: got.actions ? null : w.beats }));
+    const merged = cleanWords(Object.assign({}, w, got, { beats: got.actions ? got.beats : w.beats }));   // v3.6.01 the sized beats
     await db.transaction(async function (tx) {
       await writeWords(tx, shot.id, merged);
       await tx.prepare('UPDATE shots SET precheck = NULL WHERE id = ?').run(shot.id);
@@ -3419,7 +3486,9 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     await tk.spendTokens(req.session.userId, tokens, { source: 'video_shot_fill', event_type: 'generation_spend', related_campaign_id: ep.campaign_id });
     const usd = Math.round(usdFor(prices, Number((r.usage && r.usage.input_tokens) || 0), Number((r.usage && r.usage.output_tokens) || 0)) * 10000) / 10000;
     vlDebug(req.session.userId, 'info', FN, 'Filled ' + Object.keys(got).join(', ') + ' for ' + tokens + ' token(s), $' + usd + ' to Campaignia', { usage: r.usage });
-    res.json({ ok: true, filled: Object.keys(got), tokens: tokens, episode: await loadEpisode(db, ep.id) });
+    const note = sized && sized.over ? 'The beats need about ' + secsText(sized.total) + ' s and ' + (sm.label || 'this model') + ' makes at most ' + maxSecs + ' s, so nothing was squeezed: ' +   // v3.6.01
+      (sized.cutAfter ? 'press \u2702 Cut here under beat ' + sized.cutAfter + ' to make the rest a new shot, or shorten it.' : 'shorten it, or cut it into two shots.') : '';
+    res.json({ ok: true, filled: Object.keys(got).filter(function (k) { return k !== 'beats' && k !== 'seconds'; }), tokens: tokens, note: note, episode: await loadEpisode(db, ep.id) });
   } catch (e) {
     console.error('[video] shot fill error:', e && e.message);
     vlDebug(req.session && req.session.userId, 'error', FN, 'Could not fill: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });
@@ -3436,12 +3505,12 @@ router.post('/episodes/:id/precheck', requireAuth, requireVideo, async function 
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) return vlRefuse(req, res, FN, 500, 'The Director is not set up on this server (ANTHROPIC_API_KEY).');
     const ctx = await precheckContext(db, ep);
-    if (!ctx.pictures.length) return vlRefuse(req, res, FN, 400, 'This episode has no keyframes.');
+    if (!ctx.shots.length) return vlRefuse(req, res, FN, 400, 'This episode has no shots.');   // v3.6.01: shots with no pictures count
     // v3.5.38 (Ian, 2026-11-09): shot_id checks that one shot (1 token); none checks them all (2 tokens).
     const shotId = parseInt((req.body || {}).shot_id, 10) || null;
     if (shotId) {
       ctx.only = ctx.shots.findIndex(function (s) { return Number(s.id) === shotId; });
-      if (ctx.only < 0) return vlRefuse(req, res, FN, 400, 'That shot has no keyframes, or is not in this episode.');
+      if (ctx.only < 0) return vlRefuse(req, res, FN, 400, 'That shot is not in this episode.');   // v3.6.01
     }
     const tokens = shotId ? await precheckShotTokens(db) : await precheckTokens(db);
     const bal = await require('./tokens').getBalance(req.session.userId);

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.01",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3601-notes-lines",
+        "kind": "feature",
+        "public": false,
+        "summary": "A shot's own Director's Notes write real lines; the check and takes work for a shot with no pictures.",
+        "detail": "Video tab: a shot's Notes now write its dialogue as lines (word for word from the Concept, else from the story), give each beat time to say them, and when the shot needs more than the model makes they keep all of it and say where to cut. The Opening is only the first frame. The check covers shots with no pictures (Check this shot is there from the start, also in the shot's to do), and in Reference mode such a shot makes a take from its references.",
+        "td": [
+          "TD-1133"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.00",
     "staged_on": "2026-11-12",
     "entries": [

@@ -43515,7 +43515,7 @@ function vlShotBtnHTML(ep, ds, si) {
   var takes = s ? (s.takes || []) : [];
   var making = takes.some(function (t) { return t.status === 'making'; });
   var btn = !ds.id ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Saving...</button>'
-    : !(ds.kfs || []).length ? '<button class="btn btn-sm vl-gen" disabled title="Add a picture to this shot first">Generate take</button>'   // v3.5.57: a new, empty shot
+    : !(ds.kfs || []).length && !(vlShotM(VL.draft, ds) || {}).reference ? '<button class="btn btn-sm vl-gen" disabled title="Keyframes mode needs pictures: add a picture, or make this shot in Reference mode">Generate take</button>'   // v3.5.57: a new, empty shot; v3.6.01 Reference makes it from its references
     : making ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Being made</button>'
     : takes.length >= VL_MAX_TAKES ? '<span class="vl-full" style="' + VL_DESC + 'margin-right:8px;">' + VL_MAX_TAKES + ' takes max &mdash; delete one to make another.</span><button class="btn btn-sm vl-gen" disabled title="' + VL_MAX_TAKES + ' takes max: delete one to make another">Generate take</button>'   // v3.5.15
     : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now. The tokens come off when the take arrives; a take that fails costs nothing.">Generate take (' + vlShotTok(VL.draft, ds) + ' tokens)</button>';   // v3.5.46
@@ -45077,7 +45077,7 @@ function vlFillShot(si) {
           if (f && k >= 0) ['start', 'actions', 'lines', 'camera', 'end', 'sounds', 'around', 'seconds', 'beats', 'more'].forEach(function (key) { cur.shots[k][key] = f[key]; });
         }
         done();
-        msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.'));
+        msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', lines: 'the lines', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.') + (res.j.note ? '<br><span style="' + VL_WARN + '">' + escapeHtml(res.j.note) + '</span>' : ''));   // v3.6.01 lines, the note
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
       })
       .catch(function () { done(); msg('Could not reach the server.'); });
@@ -45134,7 +45134,7 @@ function vlBeatCutDo(si, bi) {
 }
 function vlShotCheckBtnHTML(si) {
   var d = VL.draft, s = d && d.shots[si];
-  if (!s || !s.id || !s.kfs.length) return '';
+  if (!s || !s.id) return '';   // v3.6.01: a shot with no pictures is checked too
   var info = VL.sl[d.id] || {}, writing = vlSlWriting(d.id);
   var mine = !!vlChecking(d.id)[s.id];   // v3.5.43: shots are checked side by side
   var tk = (info.estimate_precheck && info.estimate_precheck.shot_tokens) || 1;
@@ -45170,7 +45170,7 @@ function vlTodoPaint() {
   var pc = vlShotPc(si), quick = vlChecks(si);
   var B = 'btn btn-sm', rows = [];
   var head = '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Shot ' + (si + 1) + (s.name ? ': ' + escapeHtml(s.name) : '') + ' &middot; to do</div><button class="modal-close" onclick="vlTodoClose()">&times;</button></div>' + vlTodoModeHTML(si);   // v3.5.35 the mode here too
-  if (!pc) rows.push('<div style="' + VL_DESC + 'margin:10px 0;">This shot has not been checked. <b>Pre-production check</b>, at the top, has the Director look at every shot for 1 token.</div>');
+  if (!pc) rows.push('<div style="' + VL_DESC + 'margin:10px 0;">This shot has not been checked. ' + (s.id ? '<button type="button" class="btn btn-sm btn-primary" onclick="vlTodoClose();vlPrecheck(' + si + ')">Check this shot</button> has the Director look at it (1 token), or ' : '') + '<b>Pre-production check</b>, at the top, looks at every shot.</div>');   // v3.6.01
   else {
     if (pc.stale) rows.push('<div style="' + VL_WARN + 'margin:10px 0;">The shot changed since the check. Run the Pre-production check again to be sure.</div>');
     var cur = s.mode || '', ep = vlFindEp(d.id), em = vlShotM(d, s), curMode = em && em.reference ? 'reference' : 'keyframes';   // v3.5.86
