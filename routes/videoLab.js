@@ -164,13 +164,13 @@ const MODELS = {
     label: 'MiniMax H3 Max', group: 'keyframes', test: true, pair: 'h3maxref', endpoint: 'minimax/h3-max/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
     durationValue: function (d) { return Number(d); }, price: 0.08, priceSound: 0.08,
-    extra: { resolution: '768P', prompt_expansion_mode: 'balanced' }, promptRequired: true, audioField: null
+    extra: { resolution: '768P', prompt_expansion_mode: 'disabled' }, promptRequired: true, audioField: null   // v3.5.91: our words as written, no MiniMax rewrite (was 'balanced')
   },
   h3maxref: {
     label: 'MiniMax H3 Max', group: 'reference', test: true, pair: 'h3max', endpoint: 'minimax/h3-max/reference-to-video', reference: true,
     durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
     durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,   // $0.08 at 768p, plus a little for pictures past the fourth
-    extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'balanced' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'disabled' }, promptRequired: true, maxRefs: 9, maxScene: 5,   // v3.5.91: no rewrite (was 'balanced')
     audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
   },
   wan27: {

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.91",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3591-minimax-no-rewrite",
+        "kind": "feature",
+        "public": false,
+        "summary": "MiniMax uses our words as written.",
+        "detail": "Video tab: MiniMax H3 Max (both modes) is sent with its prompt rewrite switched off, so it gets the shot exactly as written (a test for following instructions).",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.90",
     "staged_on": "2026-11-12",
     "entries": [
