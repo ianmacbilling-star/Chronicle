@@ -43096,7 +43096,7 @@ function vlTakeInfo(takeId, n) {
   box.id = 'vl-info-modal';
   box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
   box.addEventListener('click', function (e) { if (e.target === box) vlTakeInfoClose(); });
-  box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:900px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:900px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +   // v3.5.93: light text on the panel
     '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Take ' + (n || takeId) + ' &middot; info</div><button class="modal-close" onclick="vlTakeInfoClose()">&times;</button></div>' +
     '<div id="vl-info-body" style="margin-top:10px;">' + vlSpin(14) + ' Loading...</div></div>';
   document.body.appendChild(box);
@@ -43120,7 +43120,7 @@ function vlTakeInfoHTML(j) {
   var t = j.take, sh = j.shot, H = [], P = 'margin:2px 0;font-size:13px;line-height:1.5;';
   function row(k, v) { if (v === null || v === undefined || v === '') return; H.push('<div style="' + P + '"><span style="color:var(--accent-pale);">' + k + ':</span> ' + v + '</div>'); }
   function head(k) { H.push('<div style="' + VL_BOX_LABEL + 'margin-top:14px;">' + k + '</div>'); }
-  function pre(s) { H.push('<pre style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;margin:4px 0;">' + escapeHtml(s) + '</pre>'); }
+  function pre(s) { H.push('<pre style="white-space:pre-wrap;word-break:break-word;color:rgb(var(--on-panel-rgb));background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;margin:4px 0;">' + escapeHtml(s) + '</pre>'); }
   var dir = t.directions || {}, mv0 = (dir.moves && dir.moves[0]) || {}, cast = mv0.cast || null;
   head('The take');
   row('Episode', escapeHtml(j.episode.name || ''));

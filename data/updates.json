@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.93",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3593-take-info-readable",
+        "kind": "feature",
+        "public": false,
+        "summary": "Take Info readable.",
+        "detail": "Video tab: the take Info window had dark text on its dark panel; its text is now light (measured contrast 13:1 with the theme).",
+        "td": [
+          "TD-1124"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.92",
     "staged_on": "2026-11-12",
     "entries": [
