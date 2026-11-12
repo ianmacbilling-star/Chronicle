@@ -1868,14 +1868,14 @@ router.get('/takes/:id/info', requireAuth, requireVideo, async function (req, re
     let maker = null; try { const u = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(t.user_id); maker = u ? (u.name || u.email || null) : null; } catch (e) { maker = null; }
     res.json({
       take: { id: t.id, status: t.status, model: t.model, model_label: made || (tm ? tm.label : t.model), mode: made ? 'Retouch' : (tm ? (tm.reference ? 'Reference' : 'Keyframes') : ''),
-        sound: !!t.sound, tokens: t.tokens, tokens_charged: t.tokens_charged, est_cost_usd: t.est_cost_usd, error: t.merge_error || t.error || null,
+        sound: !!t.sound, tokens: t.tokens, tokens_charged: t.tokens_charged, est_cost_usd: req.vlAdmin ? t.est_cost_usd : undefined, error: t.merge_error || t.error || null,   // v3.5.94: dollars for admins only
         created_at: t.created_at, finished_at: t.finished_at, trim_start: t.trim_start, trim_end: t.trim_end, made_by: maker,
         source_take_id: t.source_take_id, retouch_kind: t.retouch_kind, retouch_text: t.retouch_text, video_url: t.video_url,
         directions: parseJson(t.directions, null), words_at: parseJson(t.words_at, null) },
       shot: sh ? { id: sh.id, position: sh.position, name: sh.name || '' } : null,
       episode: { id: x.ep.id, name: x.ep.name || '' },
       moves: mvs.map(function (m) { return { position: m.position, model: m.model, endpoint: m.endpoint, duration: m.duration, sound: !!m.sound, status: m.status, request_id: m.request_id,
-        error: m.error, est_cost_usd: m.est_cost_usd, file_size: m.file_size, submitted_at: m.submitted_at, finished_at: m.finished_at, start_url: m.start_url, end_url: m.end_url,
+        error: m.error, est_cost_usd: req.vlAdmin ? m.est_cost_usd : undefined, file_size: m.file_size, submitted_at: m.submitted_at, finished_at: m.finished_at, start_url: m.start_url, end_url: m.end_url,
         prompt: m.prompt, sent: parseJson(m.sent_input, null), used_prompt: m.used_prompt || null }; })
     });
   } catch (e) {

@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.94",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3594-take-info-copy",
+        "kind": "feature",
+        "public": false,
+        "summary": "Take Info: Copy for admins; the fal cost for admins only.",
+        "detail": "Video tab: admins get a Copy button at the top of a take Info window (all the text and every picture address); the fal cost line, and the dollars behind it, are for admins only.",
+        "td": [
+          "TD-1124"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.93",
     "staged_on": "2026-11-12",
     "entries": [

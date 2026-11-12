@@ -43097,13 +43097,30 @@ function vlTakeInfo(takeId, n) {
   box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
   box.addEventListener('click', function (e) { if (e.target === box) vlTakeInfoClose(); });
   box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:900px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +   // v3.5.93: light text on the panel
-    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Take ' + (n || takeId) + ' &middot; info</div><button class="modal-close" onclick="vlTakeInfoClose()">&times;</button></div>' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Take ' + (n || takeId) + ' &middot; info</div>' +
+      (vlInfoAdmin() ? '<button type="button" class="narrative-regen-btn" id="vl-info-copy" title="Admin: copy all of this to the clipboard" onclick="vlTakeInfoCopy(' + (n || takeId) + ')">&#128203; Copy</button>' : '') +   // v3.5.94
+      '<span id="vl-info-copied" style="' + VL_DESC + '"></span><button class="modal-close" onclick="vlTakeInfoClose()">&times;</button></div>' +
     '<div id="vl-info-body" style="margin-top:10px;">' + vlSpin(14) + ' Loading...</div></div>';
   document.body.appendChild(box);
   fetch('/api/video-lab/takes/' + takeId + '/info').then(function (r) { return r.json(); }).then(function (j) {
     var b = document.getElementById('vl-info-body'); if (!b) return;
     b.innerHTML = j && j.take ? vlTakeInfoHTML(j) : '<div style="' + VL_WARN + '">' + escapeHtml((j && j.error) || 'Could not read the take.') + '</div>';
   }).catch(function () { var b = document.getElementById('vl-info-body'); if (b) b.innerHTML = '<div style="' + VL_WARN + '">Could not reach the server.</div>'; });
+}
+// v3.5.94 (Ian, 2026-11-12: "a quick copy button at the top that puts all of the info in the clipboard... like we have on the shot.
+// Admin only."): the window's text as it reads, then every picture's address (the window shows them as pictures).
+function vlInfoAdmin() { return !!(typeof state !== 'undefined' && state.user && state.user.is_admin); }
+function vlTakeInfoText(n) {
+  var b = document.getElementById('vl-info-body'); if (!b) return '';
+  var t = 'TAKE ' + n + ' INFO\n' + String(b.innerText || b.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+  var pics = Array.prototype.map.call(b.querySelectorAll('a[href]'), function (a) { return '  ' + (a.textContent || '').trim() + ' - ' + a.getAttribute('href'); });
+  return t + (pics.length ? '\n\nPicture addresses:\n' + pics.join('\n') : '');
+}
+function vlTakeInfoCopy(n) {
+  var t = vlTakeInfoText(n); if (!t) return;
+  var done = function () { var s = document.getElementById('vl-info-copied'); if (s) { s.textContent = 'Copied'; setTimeout(function () { if (s) s.textContent = ''; }, 3000); } };
+  var old = function () { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px;top:0;'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { showError('Could not copy.'); } document.body.removeChild(ta); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, old); else old();
 }
 function vlInfoWhen(v) { if (!v) return ''; var d = new Date(v); return isNaN(d.getTime()) ? String(v) : d.toLocaleString(); }
 // The pictures in a fal input, in order, each with the name the words give it.
@@ -43130,7 +43147,7 @@ function vlTakeInfoHTML(j) {
   row('Mode', escapeHtml(t.mode || ''));
   row('Sound', t.sound ? 'on' : 'off');
   row('Tokens', t.tokens_charged != null ? t.tokens_charged + ' charged' : (t.tokens != null ? t.tokens + ' (not charged' + (t.status === 'error' ? ': it failed' : ' yet') + ')' : 'not recorded'));
-  row('fal cost', t.est_cost_usd != null ? '$' + Number(t.est_cost_usd).toFixed(3) + ' (estimate)' : '');
+  if (vlInfoAdmin()) row('fal cost', t.est_cost_usd != null ? '$' + Number(t.est_cost_usd).toFixed(3) + ' (estimate)' : '');   // v3.5.94: admins only (the server sends it to admins only too)
   row('Made', escapeHtml(vlInfoWhen(t.created_at)) + (t.made_by ? ' by ' + escapeHtml(t.made_by) : ''));
   row('Finished', escapeHtml(vlInfoWhen(t.finished_at)) + (t.finished_at && t.created_at ? ' (' + Math.round((new Date(t.finished_at) - new Date(t.created_at)) / 1000) + ' s)' : ''));
   if (t.trim_start != null || t.trim_end != null) row('Trim', (t.trim_start || 0) + ' s to ' + (t.trim_end != null ? t.trim_end + ' s' : 'the end'));
