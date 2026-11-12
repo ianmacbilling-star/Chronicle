@@ -43555,10 +43555,38 @@ function vlEpVideoHTML(ep) {
 }
 // v3.5.62 (Ian, 2026-11-10: "dump the entire contents of an episode on the video tab into a text file so I can give it
 // to you... Download Outline"). Built from what is on screen; no server call.
-function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (admins, Ian: "get the outline of just the shot")
+// v3.6.00 (Ian, 2026-11-12: "add this section of the story too so you have it all"): a shot's story in the outline, as its
+// Purpose and Concept window shows it (GET /episodes/:id/shot-story).
+function vlOutlineStoryLines(x) {
+  var t = function (v) { return String(v || '').replace(/\s*\n\s*/g, ' / ').trim(); }, out = [];
+  if (!x) return ['Story: this shot is not saved yet'];
+  out.push('Story:');
+  (x.pictures || []).forEach(function (p, i) {
+    out.push('  Picture ' + (i + 1) + ': ' + (p.title || 'Untitled') + (p.kind === 'title' ? ' (the title picture, not in the story)' : p.kind === 'archive' ? ' (from the Archive, not in the story)' : ''));
+    if (p.kind !== 'story') return;
+    if (t(p.shows)) out.push('    What it shows: ' + t(p.shows));
+    if (t(p.before)) out.push('    The story before it: ' + t(p.before));
+    if (t(p.after)) out.push('    The story after it: ' + t(p.after));
+    if (!t(p.shows) && !t(p.before) && !t(p.after)) out.push('    The story has no words for this picture.');
+  });
+  if (x.gap) {
+    out.push('  ' + ((x.pictures || []).length ? 'No story pictures in this shot.' : 'No pictures in this shot yet.') + ' The story where it sits:');
+    if (t(x.gap.after)) out.push('    ' + (x.gap.after_title ? 'After "' + x.gap.after_title + '"' : 'At the start of the story') + ': ' + t(x.gap.after));
+    if (t(x.gap.before)) out.push('    ' + (x.gap.before_title ? 'Before "' + x.gap.before_title + '"' : 'At the end of the story') + ': ' + t(x.gap.before));
+    if (!t(x.gap.after) && !t(x.gap.before)) out.push('    The story has nothing written here.');
+  }
+  return out;
+}
+function vlOutline(onlySi, story) {   // v3.5.74: onlySi, one shot to the clipboard (admins, Ian: "get the outline of just the shot"); v3.6.00 story
   vlReadForm();
   var d = VL.draft, ep = d && vlFindEp(d.id);
   if (!d) return;
+  if (story === undefined && d.id) {   // v3.6.00: fetch the shots' story first, then build
+    fetch('/api/video-lab/episodes/' + d.id + '/shot-story').then(function (r) { return r.json(); })
+      .then(function (j) { vlOutline(onlySi, j && j.shots ? j : { error: 'could not be read' + (j && j.error ? ' (' + j.error + ')' : '') }); })
+      .catch(function () { vlOutline(onlySi, { error: 'could not be read (no answer from the server)' }); });
+    return;
+  }
   var m = vlModel(d.model), st = vlStyle(d.style), L = [];
   var line = function (k, v) { if (v != null && String(v).trim() !== '') L.push(k + ': ' + String(v).replace(/\s*\n\s*/g, ' / ').trim()); };
   L.push('EPISODE: ' + (d.name || 'Untitled'));
@@ -43566,6 +43594,8 @@ function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (ad
   line('Style', (st && (st.label || st.key)) || d.style);
   line('Model sound', d.sound ? 'on' : 'off');
   line('Overall direction', d.overall);
+  if (story && story.error) line('Story', story.error);   // v3.6.00
+  else if (story && !story.has_story) line('Story', 'this version has no written story yet; only the pictures\' own words');
   var miss = onlySi != null ? [] : vlMissingList(ep);
   if (miss.length) { L.push('Missing shots still open:'); miss.forEach(function (x) { L.push('  - ' + x.name + ': ' + x.what + (x.why ? ' (why: ' + x.why + ')' : '')); }); }
   var total = 0;
@@ -43576,6 +43606,7 @@ function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (ad
     L.push('SHOT ' + (i + 1) + (sh.name ? ': ' + sh.name : ''));
     line('Purpose', sh.purpose);
     line('Concept', sh.concept);   // v3.5.99
+    if (story && !story.error) vlOutlineStoryLines(sh.id ? (story.shots || []).filter(function (y) { return String(y.id) === String(sh.id); })[0] : null).forEach(function (x) { L.push(x); });   // v3.6.00
     line('Model', sh.model ? ((vlModel(sh.model) || {}).label || sh.model) + ((vlModel(sh.model) || {}).reference ? ' (Reference)' : ' (Keyframes)') : 'same as episode');   // v3.5.86
     line('Mode', sh.mode || 'same as episode');
     line('Length', (sh.seconds || '?') + ' s');

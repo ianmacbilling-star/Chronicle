@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.00",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3600-outline-story",
+        "kind": "feature",
+        "public": false,
+        "summary": "The episode outline now carries each shot's story.",
+        "detail": "Video tab: Download outline and a shot's copied outline list, under each shot's Purpose and Concept, the story behind it as the Purpose and Concept window shows it (each picture's title, what it shows and the story before and after it, or the story where a shot with no pictures sits).",
+        "td": [
+          "TD-1133"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.99",
     "staged_on": "2026-11-12",
     "entries": [
