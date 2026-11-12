@@ -475,6 +475,7 @@ function ensureTables() {
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_text TEXT');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');
     await db.exec('ALTER TABLE episodes ADD COLUMN IF NOT EXISTS missing_shots TEXT');   // v3.5.58
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS concept TEXT');   // v3.5.99: how the shot should look and feel (for the user and the Director; never sent to the video model)
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS purpose TEXT');   // v3.5.59: what the shot is for (for the user and the Director; never sent to the video model)   // v3.5.58: Create Shots' list of shots the story still needs
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS trim_start REAL');   // v3.5.54: the part of the take the episode uses
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS trim_end REAL');
@@ -796,7 +797,10 @@ async function writeWords(tx, sid, w) {
   await tx.prepare('UPDATE shots SET start_text = ?, actions = ?, lines = ?, camera = ?, end_text = ?, sounds = ?, around = ?, seconds = ?, beats = ? WHERE id = ?')
     .run(w.start, JSON.stringify(w.actions), JSON.stringify(w.lines), w.camera, w.end, w.sounds, w.around, w.seconds, w.beats ? JSON.stringify(w.beats) : null, sid);   // v3.5.63 beats
 }
-function cleanPurpose(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 300); }   // v3.5.59
+// v3.5.99: the Purpose and the Concept are written in a window with room, so they keep their line breaks
+function cleanLong(v, max) { return String(v == null ? '' : v).replace(/\r\n?/g, '\n').replace(/[ \t\f\v]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max); }
+function cleanPurpose(v) { return cleanLong(v, 600); }   // v3.5.59; v3.5.99 600 characters, line breaks kept
+function cleanConcept(v) { return cleanLong(v, 1000); }   // v3.5.99
 async function writeShots(tx, ep, shotsIn) {
   const have = await tx.prepare('SELECT id FROM shots WHERE episode_id = ?').all(ep.id);
   const haveIds = {}; have.forEach(function (s) { haveIds[s.id] = true; });
@@ -814,6 +818,7 @@ async function writeShots(tx, ep, shotsIn) {
       if (s.mode !== undefined) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode || null, sid);   // v3.5.34
       if (s.model !== undefined) await tx.prepare('UPDATE shots SET model = ? WHERE id = ?').run(s.model || null, sid);   // v3.5.86
       if (s.purpose !== undefined) await tx.prepare('UPDATE shots SET purpose = ? WHERE id = ?').run(s.purpose || null, sid);   // v3.5.59
+      if (s.concept !== undefined) await tx.prepare('UPDATE shots SET concept = ? WHERE id = ?').run(s.concept || null, sid);   // v3.5.99
     } else {
       const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style, name) VALUES (?, ?, ?, ?)').run(ep.id, pos, s.cut_style, s.name || null);
       sid = r.lastInsertRowid;
@@ -822,6 +827,7 @@ async function writeShots(tx, ep, shotsIn) {
       if (s.mode) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode, sid);   // v3.5.34
       if (s.model) await tx.prepare('UPDATE shots SET model = ? WHERE id = ?').run(s.model, sid);   // v3.5.86
       if (s.purpose) await tx.prepare('UPDATE shots SET purpose = ? WHERE id = ?').run(s.purpose, sid);   // v3.5.59
+      if (s.concept) await tx.prepare('UPDATE shots SET concept = ? WHERE id = ?').run(s.concept, sid);   // v3.5.99
     }
     keep[sid] = true;
     for (let i = 0; i < s.keyframes.length; i++) {
@@ -880,7 +886,7 @@ function cleanShots(list, m0, admin) {
     const room = MAX_KEYFRAMES - n;
     if (kfs.length && room <= 0) return;   // v3.5.57: a shot with no pictures yet is kept (Add new shot below)
     n += Math.max(0, Math.min(room, kfs.length));
-    out.push({ id: parseInt(s.id, 10) || null, model: own, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), purpose: s.purpose === undefined ? undefined : cleanPurpose(s.purpose), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
+    out.push({ id: parseInt(s.id, 10) || null, model: own, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), purpose: s.purpose === undefined ? undefined : cleanPurpose(s.purpose), concept: s.concept === undefined ? undefined : cleanConcept(s.concept), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
 }
@@ -1004,7 +1010,7 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
         const w = s.words || {};
-        return { name: s.name, purpose: s.purpose || '', mode: s.mode || '', model: s.model || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, beats: w.beats, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+        return { name: s.name, purpose: s.purpose || '', concept: s.concept || '', mode: s.mode || '', model: s.model || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, beats: w.beats, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m, !!req.vlAdmin));   // v3.5.86
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -1415,7 +1421,7 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   // shot has no finished pinned take; otherwise the pin stays where the person put it.
   await db.prepare("UPDATE shots SET chosen_take_id = ? WHERE id = ? AND (chosen_take_id IS NULL OR NOT EXISTS (SELECT 1 FROM takes t WHERE t.id = shots.chosen_take_id AND t.status = 'done'))").run(takeId, shot.id);
   try {   // v3.5.92: the shot as it was when this take was made, for the take's Info
-    await db.prepare('UPDATE takes SET words_at = ? WHERE id = ?').run(JSON.stringify({ name: shot.name || '', purpose: shot.purpose || '', shot_model: shotModel(shot), shot_mode: shotMode(shot),
+    await db.prepare('UPDATE takes SET words_at = ? WHERE id = ?').run(JSON.stringify({ name: shot.name || '', purpose: shot.purpose || '', concept: shot.concept || '', shot_model: shotModel(shot), shot_mode: shotMode(shot),
       words: shotWords(shot) || legacyWords(kfs, m), pictures: kfs.map(function (k) { return { url: k.image_url, label: k.label || '' }; }), overall: ep.overall || '', style: ep.style || '' }), takeId);
   } catch (e) { console.warn('[video] take ' + takeId + ': could not keep the words: ' + (e && e.message)); }
   const rows = [];
@@ -1881,6 +1887,47 @@ router.get('/episodes/:id/download', requireAuth, requireVideo, async function (
 });
 // v3.5.92 -- A TAKE'S INFO (Ian, 2026-11-12: model, mode, tokens, prompt sent, prompt used, references... "Everything we know
 // about the video"; for everyone for now, failed takes too). Read only; the page lays it out.
+// v3.5.99 -- WHAT THE STORY SAYS ABOUT EACH SHOT (Ian, 2026-11-12: "a way to view what the story currently says about this shot.
+// The story is getting fed into the shots but I don't think the user can see the details anywhere"). Read only, nothing charged.
+// Each picture: its title, what it shows, and its text in the story before and after it (what the Director reads with the
+// whole story). A shot with no story pictures gets the story where it sits: after the last story picture before it, before
+// the first one after it (the opening or the closing at the ends). Never sent to the video model.
+async function shotStories(db, ep) {
+  const shots = await db.prepare('SELECT id FROM shots WHERE episode_id = ? ORDER BY position, id').all(ep.id);
+  const kfs = await db.prepare('SELECT shot_id, source, moment_id, label FROM keyframes WHERE episode_id = ? ORDER BY shot_id, position, id').all(ep.id);
+  const story = await storyOfVersion(db, ep.fork_id);
+  const byId = {}; story.moments.forEach(function (mo) { byId[mo.id] = mo; });
+  const out = shots.map(function (s) {
+    const pictures = kfs.filter(function (k) { return k.shot_id === s.id; }).map(function (k) {
+      if (k.source === 'title') return { kind: 'title', title: 'The title picture' };
+      const mo = k.moment_id ? byId[k.moment_id] : null;
+      if (!mo) return { kind: 'archive', title: textOf(k.label) || 'A picture from the Archive' };
+      return { kind: 'story', title: textOf(mo.title) || 'Untitled', shows: textOf(mo.description), before: story.byMoment[mo.id] || '', after: story.afterByMoment[mo.id] || '' };
+    });
+    return { id: s.id, pictures: pictures };
+  });
+  function storyPics(s) { return s.pictures.filter(function (p) { return p.kind === 'story'; }); }
+  out.forEach(function (s, i) {
+    if (storyPics(s).length) return;
+    let prev = null, next = null;
+    for (let j = i - 1; j >= 0 && !prev; j--) { const st = storyPics(out[j]); if (st.length) prev = st[st.length - 1]; }
+    for (let j = i + 1; j < out.length && !next; j++) { const st = storyPics(out[j]); if (st.length) next = st[0]; }
+    s.gap = { after_title: prev ? prev.title : '', after: prev ? prev.after : story.intro, before_title: next ? next.title : '', before: next ? next.before : story.outro };
+  });
+  return { shots: out, has_story: !!story.text };
+}
+router.get('/episodes/:id/shot-story', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!ep || !(await canSee(req, ep))) return res.status(404).json({ error: 'Not found.' });
+    res.json(await shotStories(db, ep));
+  } catch (e) {
+    console.error('[video] shot story error:', e && e.message);
+    res.status(500).json({ error: 'Could not read the story.' });
+  }
+});
 router.get('/takes/:id/info', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
@@ -2327,7 +2374,7 @@ function textOf(v) { return String(v == null ? '' : v).replace(/\r\n/g, '\n').tr
 async function storyOfVersion(db, forkId) {
   const fork = await db.prepare('SELECT id, narrative_intro, narrative_sections, narrative_outro, art_style_override FROM session_forks WHERE id = ?').get(forkId);
   const moments = await db.prepare('SELECT id, kind, title, description FROM moments WHERE fork_id = ? ORDER BY panel_order ASC, id ASC').all(forkId);
-  const byMoment = {};
+  const byMoment = {}, afterByMoment = {};   // v3.5.99 afterByMoment
   const parts = [];
   if (fork && textOf(fork.narrative_intro)) parts.push(textOf(fork.narrative_intro));
   let blocks = null;
@@ -2342,14 +2389,14 @@ async function storyOfVersion(db, forkId) {
     if (own) byMoment[mo.id] = own;
     parts.push('[Picture: ' + textOf(mo.title || 'untitled') + ']' + (own ? '\n' + own : ''));
     const after = textOf(b.after);
-    if (after) parts.push(after);
+    if (after) { parts.push(after); afterByMoment[mo.id] = after; }   // v3.5.99
   });
   if (fork && textOf(fork.narrative_outro)) parts.push(textOf(fork.narrative_outro));
   let text = parts.join('\n\n');
   const hasStory = !!(blocks || (fork && (textOf(fork.narrative_intro) || textOf(fork.narrative_outro))));
   let trimmed = false;
   if (text.length > SL_STORY_CHARS) { text = text.slice(0, SL_STORY_CHARS); trimmed = true; }
-  return { fork: fork, moments: moments, text: hasStory ? text : '', byMoment: byMoment, trimmed: trimmed };
+  return { fork: fork, moments: moments, text: hasStory ? text : '', byMoment: byMoment, trimmed: trimmed, afterByMoment: afterByMoment, intro: fork ? textOf(fork.narrative_intro) : '', outro: fork ? textOf(fork.narrative_outro) : '' };   // v3.5.99
 }
 // The structure the writer was given: shots and their keyframes' pictures. If it differs when the answer comes back,
 // nothing is filled and nothing is charged.
@@ -2467,6 +2514,7 @@ function shotListRequest(ctx, images) {
       '- around: what the surroundings do (smoke, fire, weather, light), never the characters.\n' +
       '- seconds: the shot\'s length, a whole number from 4 to 15.\n\n' +
       'THE OVERALL DIRECTION is sent with every shot: one short paragraph (at most 600 characters) naming the setting, the mood and the light' + (ref ? '' : ', and each main character\'s look in words (build, hair, clothes, colours)') + '. Keep the art style as it is in the pictures.\n\n' +
+      'PURPOSE AND CONCEPT (v3.5.99): a shot\'s Purpose (what has to land in the story) and Concept (how it should look and feel) are the user\'s own words. Write the shot to deliver both. Where they and the story disagree, follow the user\'s words.\n\n' +
       'A SHOT WITH NO PICTURES YET was added for a moment the story needs; its first line below says what it is for. Write its notes from that and the story, as for any shot (it gets its pictures later).\n\n' +   // v3.5.58
       'RULES\n- Keep the names exactly as the story and the cast list write them.\n- Each action is at most 300 characters; every other field short.\n- Never describe a cut inside a shot; never move a picture to another shot.\n' +
       '- Write original words; never reproduce text from any published source.\n- Never put words, captions or titles on screen.\n\n' +
@@ -2506,10 +2554,10 @@ function shotListRequest(ctx, images) {
       const n = sh.keyframes.length, first = i + 1, last = i + n;
       if (!n) {
         const why = [textOf(sh.start_text), (function () { try { return (JSON.parse(sh.actions || '[]') || []).join(' '); } catch (e) { return ''; } })()].filter(Boolean).join(' ').slice(0, 800);
-        content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': NO PICTURES YET. It is for: ' + ([textOf(sh.purpose), why].filter(Boolean).join(' ') || 'a moment the story needs here') });
+        content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': NO PICTURES YET. It is for: ' + ([textOf(sh.purpose), why].filter(Boolean).join(' ') || 'a moment the story needs here') + (textOf(sh.concept) ? ' Its concept (how it should look and feel): ' + textOf(sh.concept) : '') });   // v3.5.99 concept
         return;
       }
-      content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(sh.purpose) ? ' Its purpose: ' + textOf(sh.purpose) : '') });   // v3.5.59
+      content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(sh.purpose) ? ' Its purpose: ' + textOf(sh.purpose) : '') + (textOf(sh.concept) ? ' Its concept (how it should look and feel): ' + textOf(sh.concept) : '') });   // v3.5.59; v3.5.99 concept
       for (let k = 0; k < n; k++) pushPicture(i + k);
       i += n;
     });
@@ -3050,6 +3098,7 @@ function precheckRequest(ctx, images) {
     'BEATS: each action is a beat with its seconds (shown as "(0-3 s)"); judge crowding from those seconds, not by counting actions: a beat under about 2 seconds rarely shows a whole movement. A line shown inside a beat ([line said during this beat: ...]) is already tied to that beat and is sent with it: never say a line has no beat, never suggest moving a line, and never put a line in a sound box. People move and speak at the same time: never treat an action and a line as competing for the same seconds. Judge a line only by how long it takes to say, about 2.5 words a second (an 8-word line needs about 3 seconds).\n' +   // v3.5.76
     'KEEP THE USER\'S WORDS (v3.5.64, Ian: a suggestion threw away "run", a shouted line and a bloody flail): replacement words keep everything the user wrote, their verbs, details, lines and who does what, and change ONLY the part that causes the problem. Never rewrite a box to fix something in another box.\n' +
     'NO EMPTY FINDINGS: report only what needs changing. Never a finding that ends with "it is fine", "retain" or "no change needed", and never two findings with the same fix.\n' +
+    'CONCEPT (v3.5.99): a shot\'s Concept is the user\'s intent for how it looks and feels. When the words fight it (it asks for a slow push in and the camera whips around), that is a finding of kind "words" with a fix that changes only that part. Where a Purpose or Concept and the story disagree, the user\'s words win: never report that difference.\n' +
     'PURPOSE: each shot\'s Purpose is the user\'s intent. When the words leave out part of it (the purpose says Drel takes the mirror from Ori and Ori is not in the shot) or do something it does not ask for, that is a finding of kind "words" with a fix that adds only what is missing. When a purpose describes what happens in another shot, say which shot and suggest no words.\n' +
     'TITLE CARDS: a title, logo or text-on-black picture as a shot\'s first picture is meant: the shot opens on it and moves into the scene (clouds, a fade). Never report it as a different kind of art, never tell them to drop it, and never take "opens on the title" out of the words.\n' +
     // v3.5.79 (Ian, 2026-11-11: the check should get people to an all clear; "Recommended vs Optional"; "It's too long you should cut between x and y beats")
@@ -3091,7 +3140,7 @@ function precheckRequest(ctx, images) {
   let n = 0;
   ctx.shots.forEach(function (s, si) {
     const inf = ctx.info[si], w = inf.words, first = n + 1, last = n + s.keyframes.length;
-    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
+    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + (textOf(s.concept) ? ' Concept (how the user wants it to look and feel): ' + textOf(s.concept) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
     lines.push('References sent: ' + (inf.refs.length ? inf.refs.join(', ') : 'none') + '.');
     { const ours = exitLines(w, (ctx.cast || []).map(function (c) { return c.name; }).concat(inf.refs || []), w.seconds || 0);   // v3.5.96: our own added lines, so the check can see them fight the words
       if (ours.length) lines.push('Lines our script adds for this shot: ' + ours.join(' ')); }
@@ -3350,7 +3399,7 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of strings, about one for every 2.5 seconds of its ' + w.seconds + ' seconds'] : []);
     const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Reply with JSON only, with just the boxes asked for.';
     const text = ['Overall direction: ' + (ep.overall || '(none)'), 'Characters: ' + (pool.characters.map(function (c) { return c.name; }).join(', ') || '(none)'),
-      'Shot ' + (at + 1) + (shot.name ? ' "' + shot.name + '"' : '') + (shot.purpose ? '. Purpose: ' + shot.purpose : ''),
+      'Shot ' + (at + 1) + (shot.name ? ' "' + shot.name + '"' : '') + (shot.purpose ? '. Purpose: ' + shot.purpose : '') + (shot.concept ? '. Concept: ' + shot.concept : ''),   // v3.5.99 concept
       fillWordsText(w, 'THIS SHOT, as written so far'), prev ? fillWordsText(prev, 'THE SHOT BEFORE') : 'This is the first shot.', next ? fillWordsText(next, 'THE SHOT AFTER') : 'This is the last shot.',
       'Write these boxes: {' + ask.join(', ') + '}'].join('\n\n');
     const prices = await shotListPrices(db);

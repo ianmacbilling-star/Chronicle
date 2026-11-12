@@ -42376,7 +42376,7 @@ function vlDraftFrom(ep) {
     style: (vlStyle(ep.style) || vlStyle(VL.defaultStyle) || {}).key || 'living',
     shots: (ep.shots || []).map(function (s) {
       var w = s.words || {};   // v3.5.19: the shot in plain words
-      return { ck: ++VL.ck, id: s.id, name: s.name || '', purpose: s.purpose || '', cut_style: s.cut_style || 'instant',   // v3.5.59 purpose
+      return { ck: ++VL.ck, id: s.id, name: s.name || '', purpose: s.purpose || '', concept: s.concept || '', cut_style: s.cut_style || 'instant',   // v3.5.59 purpose; v3.5.99 concept
         start: w.start || '', actions: vlActionsText(w.actions || []), lines: (w.lines || []).map(function (l) { return { who: l.who || '', text: l.text || '', when: Number(l.when) || 0, off: !!l.off }; }),
         camera: w.camera || '', end: w.end || '', sounds: w.sounds || '', around: w.around || '', seconds: Number(w.seconds) || VL_SHOT_SECS, more: !!(w.sounds || w.around),
         beats: vlBeatsNorm(w.beats, (w.actions || []).length),   // v3.5.63 -- TD-1121
@@ -42470,7 +42470,7 @@ function vlShotHTML(d, si, m, n0) {
       '<input id="vl-sn-' + si + '" class="form-input vl-shot-name" type="text" maxlength="120" value="' + escapeHtml(s.name || '') + '" placeholder="Name this shot" title="The shot\'s name" style="' + VL_SHOT_NAME + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
       // v3.5.59 (Ian, 2026-11-10: "every shot needs a Purpose field. It's more for the user and what the shot creating process can
       // fill in"): on the top line, so it stays readable when the shot is folded and the pictures stay right under it.
-      '<input id="vl-pu-' + si + '" class="form-input vl-purpose" type="text" maxlength="300" value="' + escapeHtml(s.purpose || '') + '" placeholder="Purpose: what this shot is for in the story"' + (s.purpose ? ' title="' + escapeHtml(s.purpose) + '"' : '') + ' style="flex:3 1 200px;min-width:110px;padding:4px 8px;font-size:13px;" oninput="vlEdit();if(this.value)this.title=this.value;else this.removeAttribute(\'title\');" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +   // v3.5.60: the tip is the whole purpose
+      '<span id="vl-pl-' + s.ck + '" style="flex:3 1 200px;min-width:110px;display:flex;">' + vlPurposeLabelHTML(s) + '</span>' +   // v3.5.99: a label that opens the Purpose and Concept window (was the v3.5.59 box)
       '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +   // v3.5.86: the length and the Mode moved to the row below
       '<span id="vl-todo-' + s.ck + '" style="flex:none;margin-left:auto;">' + vlTodoBtnHTML(si) + '</span>' +   // v3.5.34
       ((typeof state !== 'undefined' && state.user && state.user.is_admin) ? '<button type="button" class="narrative-regen-btn" style="flex:none;" title="Admin: copy this shot\'s outline to the clipboard" onclick="vlOutline(' + si + ')">&#128203;</button>' : '') +   // v3.5.74
@@ -42931,7 +42931,7 @@ function vlReadForm() {
   var sy = v('vl-style'); if (sy) d.style = sy;
   d.shots.forEach(function (sh, si) {
     var sn = v('vl-sn-' + si); if (sn != null) sh.name = sn;   // v3.5.15
-    var pu = v('vl-pu-' + si); if (pu != null) sh.purpose = pu;   // v3.5.59
+    // v3.5.99: the purpose and concept are set by their window (vlPurposeSave), not read from the shot
     var ml = v('vl-ml-' + si); if (ml != null) sh.model = ml;   // v3.5.86
     var mo = v('vl-mo-' + si); if (mo != null) vlSetShotMode(sh, mo);   // v3.5.34; v3.5.86 within the shot's model
     // v3.5.19 -- the shot's boxes
@@ -43059,7 +43059,7 @@ function vlSave(cb) {
   VL.saving = true; VL.savePending = false; VL.saveError = '';
   var keys = d.shots.map(function (s) { return s.ck; });
   var body = { name: d.name, overall: d.overall, model: d.model, sound: d.sound, style: d.style,
-    shots: d.shots.map(function (s) { return { id: s.id, name: s.name || '', purpose: s.purpose || '', cut_style: s.cut_style,   // v3.5.59 purpose
+    shots: d.shots.map(function (s) { return { id: s.id, name: s.name || '', purpose: s.purpose || '', concept: s.concept || '', cut_style: s.cut_style,   // v3.5.59 purpose; v3.5.99 concept
       refs: (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; }),   // v3.5.22
       mode: s.mode || '',   // v3.5.34
       model: s.model || '',   // v3.5.86
@@ -43267,6 +43267,88 @@ function vlTakeModelText(t) {
   var m = vlModel(t.model);
   return ((m && m.label) || t.model || 'Unknown model') + (m ? ' \u00b7 ' + (m.reference ? 'Reference' : 'Keyframes') : '') + (t.sound ? ' \u00b7 sound' : '');
 }
+// v3.5.99 -- A SHOT'S PURPOSE AND CONCEPT, IN A WINDOW (Ian, 2026-11-12: "Show it as more of a label at the top of the shot that can
+// be clicked on and opened in a Modal that has more room to type in... a purpose... and maybe a concept too... the User can write
+// what he wants to happen and then the director and pre prep can try to make it happen... a way to view what the story currently
+// says about this shot"). Your words win over the story (Ian: "Latest words win"). Neither box is sent to the video model.
+// The story part is read only; ticks to leave parts of it out come later, once Ian has seen it.
+function vlPuShot(ck) { var d = VL.draft; if (!d) return null; for (var i = 0; i < d.shots.length; i++) if (d.shots[i].ck === ck) return d.shots[i]; return null; }
+function vlPurposeLabelHTML(s) {
+  var p = String(s.purpose || '').trim(), c = String(s.concept || '').trim();
+  var tip = (p ? 'Purpose: ' + p : 'No purpose yet') + (c ? '\n\nConcept: ' + c : '') + '\n\nClick to open the Purpose and Concept, and what the story says about this shot';
+  return '<button type="button" class="vl-purpose-label" onclick="vlPurposeOpen(' + s.ck + ')" title="' + escapeHtml(tip) + '" style="flex:1;min-width:0;text-align:left;padding:5px 10px;font-size:13px;line-height:1.3;cursor:pointer;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.35);background:rgba(var(--accent-rgb),0.08);color:rgb(var(--accent-text-rgb));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+    (p ? '<b style="color:var(--accent-bright);">Purpose:</b> ' + escapeHtml(p.split('\n')[0]) : '<span style="opacity:0.7;">+ Purpose and Concept</span>') +
+    (c ? ' <span style="opacity:0.7;">&middot; Concept</span>' : '') + '</button>';
+}
+function vlPurposeClose() { var o = document.getElementById('vl-pu-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); }
+function vlPurposeOpen(ck) {
+  var s = vlPuShot(ck), d = VL.draft;
+  if (!s || !d) return;
+  vlPurposeClose();
+  var si = d.shots.indexOf(s);
+  var TA = 'width:100%;box-sizing:border-box;padding:8px 10px;font-size:14px;line-height:1.45;resize:vertical;';
+  var HINT = 'font-size:12px;color:rgba(var(--on-panel-rgb),0.75);margin:2px 0 6px;';
+  var box = document.createElement('div');
+  box.id = 'vl-pu-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:820px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Shot ' + (si + 1) + (s.name ? ': ' + escapeHtml(s.name) : '') + '</div><button class="modal-close" onclick="vlPurposeClose()">&times;</button></div>' +
+    '<label for="vl-pu-text" style="display:block;margin-top:12px;font-weight:600;">Purpose</label>' +
+    '<div style="' + HINT + '">What has to land in the story. The Director\'s Notes and the check work to make it happen.</div>' +
+    '<textarea id="vl-pu-text" class="form-input" rows="3" maxlength="600" style="' + TA + '" placeholder="For example: Drel wins over the crowd, and Gubuk sees it happen." data-no-words>' + escapeHtml(s.purpose || '') + '</textarea>' +
+    '<label for="vl-co-text" style="display:block;margin-top:12px;font-weight:600;">Concept</label>' +
+    '<div style="' + HINT + '">How it should look and feel: the camera, the mood, the pace.</div>' +
+    '<textarea id="vl-co-text" class="form-input" rows="4" maxlength="1000" style="' + TA + '" placeholder="For example: a low angle on Drel, a slow push in, the crowd roaring around him." data-no-words>' + escapeHtml(s.concept || '') + '</textarea>' +
+    '<div style="' + HINT + 'margin-top:8px;">Your words win: where they and the story disagree, the Director follows yours. Neither box is sent to the video model; the Director turns them into the shot\'s words.</div>' +
+    '<div id="vl-pu-msg" style="' + VL_WARN + '"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;"><button type="button" class="btn" onclick="vlPurposeClose()">Cancel</button><button type="button" class="btn btn-primary" onclick="vlPurposeSave(' + ck + ')">Save</button></div>' +
+    '<div style="border-top:1px solid rgba(var(--accent-rgb),0.25);margin-top:14px;padding-top:12px;">' +
+      '<div style="font-weight:600;">What the story says about this shot</div>' +
+      '<div style="' + HINT + '">Read only. The Director reads this, along with the whole story of the session.</div>' +
+      '<div id="vl-pu-story" style="font-size:13px;line-height:1.5;">' + vlSpin(14) + ' Loading...</div>' +
+    '</div></div>';
+  document.body.appendChild(box);
+  var ta = document.getElementById('vl-pu-text'); if (ta) ta.focus();
+  var put = function (h) { var b = document.getElementById('vl-pu-story'); if (b) b.innerHTML = h; };
+  if (!s.id) { put('<div style="' + HINT + '">This shot is new and not saved yet. Its story shows once it is saved.</div>'); return; }
+  fetch('/api/video-lab/episodes/' + d.id + '/shot-story').then(function (r) { return r.json(); }).then(function (j) {
+    var x = j && j.shots ? j.shots.filter(function (y) { return String(y.id) === String(s.id); })[0] : null;
+    put(j && j.shots ? vlPurposeStoryHTML(x, !!j.has_story) : '<div style="' + VL_WARN + '">' + escapeHtml((j && j.error) || 'Could not read the story.') + '</div>');
+  }).catch(function () { put('<div style="' + VL_WARN + '">Could not reach the server.</div>'); });
+}
+function vlPurposeSave(ck) {
+  var s = vlPuShot(ck), d = VL.draft;
+  if (!s || !d) { vlPurposeClose(); return; }
+  if (vlSlLocked(d.id)) { var m = document.getElementById('vl-pu-msg'); if (m) m.textContent = 'The Director is working on this episode. Save again when it has finished.'; return; }
+  var p = document.getElementById('vl-pu-text'), c = document.getElementById('vl-co-text');
+  if (p) s.purpose = p.value.trim();
+  if (c) s.concept = c.value.trim();
+  var lab = document.getElementById('vl-pl-' + ck); if (lab) lab.innerHTML = vlPurposeLabelHTML(s);
+  vlPurposeClose();
+  vlEdit();
+  vlFlushSave();
+}
+function vlPurposeStoryHTML(x, hasStory) {
+  var DIM = 'color:rgba(var(--on-panel-rgb),0.75);';
+  if (!x) return '<div style="' + DIM + '">This shot is not in the saved episode yet.</div>';
+  var BOX = 'margin-top:8px;padding:8px 10px;border-left:3px solid rgba(var(--accent-rgb),0.55);background:rgba(var(--accent-rgb),0.06);border-radius:4px;';
+  var para = function (label, t) { t = String(t || '').trim(); return t ? '<div style="margin-top:4px;"><span style="' + DIM + '">' + label + '</span> ' + escapeHtml(t).replace(/\n/g, '<br>') + '</div>' : ''; };
+  var h = [];
+  (x.pictures || []).forEach(function (p, i) {
+    var body;
+    if (p.kind === 'story') { body = para('What it shows:', p.shows) + para('The story before it:', p.before) + para('The story after it:', p.after); if (!body) body = '<div style="' + DIM + 'margin-top:4px;">The story has no words for this picture.</div>'; }
+    else body = '<div style="' + DIM + 'margin-top:4px;">' + (p.kind === 'title' ? 'The title picture: not part of the story.' : 'A picture from the Archive: not part of the story.') + '</div>';
+    h.push('<div style="' + BOX + '"><div style="font-weight:600;">Picture ' + (i + 1) + ': ' + escapeHtml(p.title || 'Untitled') + '</div>' + body + '</div>');
+  });
+  if (x.gap) {
+    var g = x.gap;
+    var a = para(g.after_title ? 'After "' + escapeHtml(g.after_title) + '":' : 'At the start of the story:', g.after);
+    var b = para(g.before_title ? 'Before "' + escapeHtml(g.before_title) + '":' : 'At the end of the story:', g.before);
+    h.push('<div style="' + BOX + '"><div style="font-weight:600;">' + ((x.pictures || []).length ? 'No story pictures in this shot.' : 'No pictures in this shot yet.') + ' The story where it sits:</div>' + ((a + b) || '<div style="' + DIM + 'margin-top:4px;">The story has nothing written here.</div>') + '</div>');
+  }
+  if (!hasStory) h.push('<div style="' + DIM + 'margin-top:8px;">This version has no written story yet, only the pictures\' own words.</div>');
+  return h.join('') || '<div style="' + DIM + '">Nothing to show.</div>';
+}
 // v3.5.92 -- A TAKE'S INFO (Ian, 2026-11-12: "a button that would open a modal that would have all the info on it... Model used,
 // Mode used, Tokens used, Prompt sent, Prompt used, References sent... Everything we know about the video"; for everyone for
 // now, failed takes too). Takes made before v3.5.92 did not keep the input sent or the shot's words: those say so.
@@ -43378,6 +43460,7 @@ function vlTakeInfoHTML(j) {
     var ww = w.words || {}, L = [];
     if (w.name) L.push('Name: ' + w.name);
     if (w.purpose) L.push('Purpose: ' + w.purpose);
+    if (w.concept) L.push('Concept: ' + w.concept);   // v3.5.99
     L.push('Shot model: ' + (w.shot_model || 'same as episode') + ' / mode: ' + (w.shot_mode || 'same as episode') + ' / ' + (ww.seconds || '?') + ' s');
     if (ww.start) L.push('Opening: ' + ww.start);
     (ww.actions || []).forEach(function (a, k) { var b = (ww.beats || [])[k] || {};
@@ -43492,6 +43575,7 @@ function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (ad
     L.push(''); L.push('================================================================');
     L.push('SHOT ' + (i + 1) + (sh.name ? ': ' + sh.name : ''));
     line('Purpose', sh.purpose);
+    line('Concept', sh.concept);   // v3.5.99
     line('Model', sh.model ? ((vlModel(sh.model) || {}).label || sh.model) + ((vlModel(sh.model) || {}).reference ? ' (Reference)' : ' (Keyframes)') : 'same as episode');   // v3.5.86
     line('Mode', sh.mode || 'same as episode');
     line('Length', (sh.seconds || '?') + ' s');
@@ -44045,7 +44129,7 @@ function vlWriteShotList(mode, chained) {
   notesGo();
   function notesGo() {
     if (!vlHasWords(d) && !nTakes) { go(); return; }
-    uiConfirm('The Director will rewrite the words of every shot: the overall direction, and each shot\'s Opening, beats, lines, Throughout and Closing, are replaced, and its references become the characters it names. What stays: the shots and their order, names, purposes, pictures and transitions.' +   // v3.5.64 (Ian: "Shots don\'t change but all the text inside them do")
+    uiConfirm('The Director will rewrite the words of every shot: the overall direction, and each shot\'s Opening, beats, lines, Throughout and Closing, are replaced, and its references become the characters it names. What stays: the shots and their order, names, purposes and concepts, pictures and transitions.' +   // v3.5.64 (Ian: "Shots don\'t change but all the text inside them do")
       (nTakes ? ' All your takes stay, marked out of date.' : '') + ' The book is not changed.', { okText: 'Write the notes' })
       .then(function (yes) { if (yes) go(); });
   }
@@ -44300,7 +44384,7 @@ var VL_BOX_LABEL = 'display:block;font-size:12px;font-weight:600;color:var(--acc
 var VL_BOX_STYLE = 'min-height:0;padding:6px 10px;line-height:1.45;resize:vertical;overflow:hidden;';
 var VL_WARN = 'color:#e8a85a;font-size:12px;line-height:1.45;';
 function vlNewShot(kfs, prev) {   // v3.5.86 prev: the shot before it, whose model it starts with (Ian, 2026-11-12)
-  return { ck: ++VL.ck, id: null, name: '', purpose: '', model: (prev && prev.model) || '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false, op: {}, refs: [], beats: [] };
+  return { ck: ++VL.ck, id: null, name: '', purpose: '', concept: '', model: (prev && prev.model) || '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false, op: {}, refs: [], beats: [] };
 }
 function vlPanelsOpenFor(id) { var o = {}; if (id && VL.panelsOpen) VL_PANELS.forEach(function (p) { if (VL.panelsOpen[id + ':' + p[0]]) o[p[0]] = true; }); return o; }
 // A shot never given references: the characters named in its words (as the server would send them).
@@ -45004,7 +45088,7 @@ function vlBeatCutDo(si, bi) {
   });
   var ns = vlNewShot(bKfs, s);
   ns.name = String(s.name || '').trim() ? String(s.name).trim() + ' (2)' : '';
-  ns.purpose = s.purpose || ''; ns.mode = s.mode; ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });
+  ns.purpose = s.purpose || ''; ns.concept = s.concept || ''; ns.mode = s.mode;   // v3.5.99 concept ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });
   ns.camera = s.camera || ''; ns.sounds = s.sounds || ''; ns.around = s.around || ''; ns.more = !!(ns.sounds || ns.around);
   ns.end = s.end || ''; ns.start = '';
   ns.actions = vlActionsText(texts.slice(bi + 1)); ns.beats = beats.slice(bi + 1);

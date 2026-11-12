@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.99",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3599-purpose-window",
+        "kind": "feature",
+        "public": false,
+        "summary": "A shot's Purpose and Concept in their own window, with what the story says about the shot.",
+        "detail": "Video tab: the Purpose box at the top of each shot is now a label; click it to open a window with room for the Purpose (what has to land) and a new Concept (how it should look and feel), and, read only, the story text behind the shot's pictures (or, for a shot with no pictures, the story where it sits). The Director's Notes and the check follow both, and your words win over the story. Neither is sent to the video model.",
+        "td": [
+          "TD-1133"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.98",
     "staged_on": "2026-11-12",
     "entries": [
