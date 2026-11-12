@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.98",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3598-episode-preview",
+        "kind": "feature",
+        "public": false,
+        "summary": "Preview the whole episode before compiling it.",
+        "detail": "Video tab: at the bottom of an episode, each shot's pinned take in order with the transition between them, and a Preview button that plays them all in your browser, with their trims and transitions. Click a shot to start from it. Nothing is made, saved or charged; Compile still makes the episode video.",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.97",
     "staged_on": "2026-11-12",
     "entries": [

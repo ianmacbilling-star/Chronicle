@@ -42641,6 +42641,159 @@ function vlPreviewAnim(key, A, B, d) {
   else B.animate([{ opacity: 0 }, { opacity: 1 }], o);   // dissolve
 }
 
+// v3.5.98 -- THE EPISODE PREVIEW (Ian, 2026-11-12: "At the bottom of the episode. Show each shot's pinned take in sequence...
+// With a Preview button... everything it can show with transitions... Hopefully it can just preview it and not finalize /
+// build it"). Played in the browser from the pinned takes, their trims and the transitions (the same animations as a
+// cut's preview); nothing is made, saved or charged. The compiled episode is still made by Compile on the server.
+function vlEpPvBoxHTML() {
+  var V = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;';
+  return '<div id="vl-eppv" style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;">' +
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<div style="font-weight:600;color:var(--accent-pale);flex:1;min-width:200px;">Episode preview: the pinned takes in order</div>' +
+      '<span id="vl-eppv-read" style="' + VL_DESC + '"></span>' +
+      '<button type="button" class="btn btn-sm" id="vl-eppv-stop" style="display:none;" onclick="vlEpPvStop()">Stop</button>' +
+      '<button type="button" class="btn btn-sm btn-primary" title="Play every shot\'s pinned take in order, with their trims and the transitions, here in your browser. Nothing is made or charged." onclick="vlEpPvPlay(0)">Preview</button>' +
+    '</div>' +
+    '<div id="vl-eppv-stage" style="display:none;position:relative;width:100%;max-width:960px;margin:10px auto 0;aspect-ratio:16/9;background:#000;border-radius:6px;overflow:hidden;">' +
+      '<video id="vl-eppv-a" playsinline preload="auto" style="' + V + '"></video>' +
+      '<video id="vl-eppv-b" playsinline preload="auto" style="' + V + 'opacity:0;"></video>' +
+      '<div id="vl-eppv-card" style="position:absolute;inset:0;z-index:3;display:none;align-items:center;justify-content:center;text-align:center;padding:20px;color:#ddd;font-size:16px;background:#000;"></div>' +
+      '<div id="vl-eppv-cap" style="position:absolute;left:8px;bottom:8px;z-index:4;font-size:12px;background:rgba(0,0,0,0.55);color:#fff;padding:2px 8px;border-radius:4px;"></div>' +
+    '</div>' +
+    '<div id="vl-eppv-strip" style="margin-top:10px;"></div>' +
+    '<div style="' + VL_DESC + 'margin-top:6px;">A preview in your browser: nothing is made, saved or charged. Click a shot to start from it. The compiled episode is put together on the server and may differ slightly.</div>' +
+  '</div>';
+}
+// Each shot of the draft, in order: its pinned take (finished, with a video) or why not, its trim, and the transition out.
+function vlEpPvList(ep, d) {
+  return ((d && d.shots) || []).map(function (ds, i) {
+    var es = ds.id ? vlEpShot(ep, ds.id) : null, t = vlChosen(es), n = 0;
+    ((es && es.takes) || []).forEach(function (x, k) { if (t && x.id === t.id) n = k + 1; });
+    var ok = !!(t && t.status === 'done' && t.video_url);
+    return { i: i, name: ds.name || '', t: ok ? t : null, why: ok ? '' : (t ? 'The pinned take is not finished' : 'No pinned take'), code: ok ? vlTakeCode(t, n) : '',
+      from: ok && t.trim_start != null ? Number(t.trim_start) || 0 : 0, to: ok && t.trim_end != null ? Number(t.trim_end) : null, cut: vlCutInfo(ds.cut_style || 'instant') };
+  });
+}
+function vlEpPvStripHTML(ep, d) {
+  var L = vlEpPvList(ep, d);
+  if (!L.length) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:stretch;">' + L.map(function (x, k) {
+    var trim = x.t && (x.t.trim_start != null || x.t.trim_end != null) ? ' &middot; trimmed ' + x.from.toFixed(1) + '-' + (x.to != null ? x.to.toFixed(1) + ' s' : 'end') : '';
+    var item = '<div class="vl-eppv-item" data-i="' + k + '" onclick="vlEpPvPlay(' + k + ')" title="Preview from shot ' + (k + 1) + '" style="width:150px;cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:4px;">' +
+      (x.t ? '<video src="' + escapeHtml(x.t.video_url) + '#t=' + x.from + '" preload="metadata" muted playsinline style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:4px;pointer-events:none;"></video>'
+           : '<div style="aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(0,0,0,0.3);border-radius:4px;font-size:11px;padding:4px;color:var(--danger);">' + escapeHtml(x.why) + '</div>') +
+      '<div style="font-size:12px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Shot ' + (k + 1) + (x.name ? ': ' + escapeHtml(x.name) : '') + '</div>' +
+      '<div style="' + VL_DESC + 'font-size:11px;">' + (x.t ? escapeHtml(x.code) + trim : '&nbsp;') + '</div></div>';
+    var cut = k < L.length - 1 ? '<div style="' + VL_DESC + 'align-self:center;text-align:center;width:64px;font-size:11px;">&#8594;<br>' + escapeHtml(x.cut.label) + (x.cut.secs ? '<br>' + x.cut.secs + ' s' : '') + '</div>' : '';
+    return item + cut;
+  }).join('') + '</div>';
+}
+function vlEpPvReset(v) {
+  if (!v) return;
+  if (v.getAnimations) v.getAnimations().forEach(function (x) { x.cancel(); });
+  v.style.opacity = ''; v.style.transform = ''; v.style.clipPath = ''; v.style.zIndex = '';
+}
+function vlEpPvStop(keep) {
+  if (VL.eppv && VL.eppv.timer) clearInterval(VL.eppv.timer);
+  if (VL.eppv && VL.eppv.wait) clearTimeout(VL.eppv.wait);
+  VL.eppv = null;
+  ['vl-eppv-a', 'vl-eppv-b'].forEach(function (id) { var v = document.getElementById(id); if (v) { try { v.pause(); } catch (e) {} } });
+  if (keep) return;
+  var st = document.getElementById('vl-eppv-stage'); if (st) st.style.display = 'none';
+  var sb = document.getElementById('vl-eppv-stop'); if (sb) sb.style.display = 'none';
+  var r = document.getElementById('vl-eppv-read'); if (r) r.textContent = '';
+  vlEpPvMark(-1);
+}
+function vlEpPvMark(k) {
+  document.querySelectorAll('.vl-eppv-item').forEach(function (el) { el.style.borderColor = String(el.getAttribute('data-i')) === String(k) ? 'rgba(var(--accent-rgb),0.9)' : 'rgba(var(--accent-rgb),0.25)'; });
+}
+function vlEpPvSay(x, n) {
+  var txt = 'Shot ' + (x.i + 1) + ' of ' + n + (x.code ? ' \u00b7 ' + x.code : '');
+  var c = document.getElementById('vl-eppv-cap'); if (c) c.textContent = txt;
+  var r = document.getElementById('vl-eppv-read'); if (r) r.textContent = txt;
+  vlEpPvMark(x.i);
+}
+// Load a take into a player at its trim start; resolves false when it cannot be read.
+function vlEpPvLoad(v, x) {
+  return new Promise(function (res) {
+    var done = false, fin = function (ok) { if (!done) { done = true; res(ok); } };
+    var seek = function () {   // ready once the trim start is on screen
+      if (Math.abs((v.currentTime || 0) - x.from) < 0.05) { fin(true); return; }
+      v.addEventListener('seeked', function () { fin(true); }, { once: true });
+      try { v.currentTime = x.from; } catch (e) { fin(true); }
+      setTimeout(function () { fin(v.readyState >= 1); }, 4000);
+    };
+    v.onerror = function () { fin(false); };
+    if (v.getAttribute('data-src') === x.t.video_url && v.readyState >= 1) { seek(); return; }
+    v.setAttribute('data-src', x.t.video_url);
+    v.addEventListener('loadedmetadata', seek, { once: true });
+    v.src = x.t.video_url; v.load();
+    setTimeout(function () { fin(v.readyState >= 1); }, 15000);
+  });
+}
+function vlEpPvEnd(v, x) { var dur = v.duration || 0; return x.to != null ? Math.min(x.to, dur || x.to) : dur; }
+function vlEpPvPlay(start) {
+  vlReadForm();
+  var d = VL.draft, ep = d && vlFindEp(d.id);
+  if (!ep) return;
+  vlEpPvStop(true);
+  var L = vlEpPvList(ep, d);
+  if (!L.some(function (x) { return x.t; })) { showError('No shot has a finished pinned take to preview yet.'); return; }
+  var st = document.getElementById('vl-eppv-stage'), A = document.getElementById('vl-eppv-a'), B = document.getElementById('vl-eppv-b'), card = document.getElementById('vl-eppv-card');
+  if (!st || !A || !B) return;
+  st.style.display = ''; document.getElementById('vl-eppv-stop').style.display = '';
+  [A, B].forEach(function (v) { vlEpPvReset(v); v.removeAttribute('src'); v.removeAttribute('data-src'); });
+  A.style.opacity = '1'; B.style.opacity = '0';
+  var P = VL.eppv = { list: L, k: Math.max(0, Math.min(L.length - 1, start || 0)), cur: A, nxt: B, timer: null, wait: null };
+  function alive() { return VL.eppv === P && document.getElementById('vl-eppv-a'); }
+  function showCard(text) { card.textContent = text; card.style.display = 'flex'; }
+  function hideCard() { card.style.display = 'none'; }
+  function finish() { if (!alive()) return; P.cur.pause(); showCard('The end of the episode preview.'); var r = document.getElementById('vl-eppv-read'); if (r) r.textContent = 'Done'; vlEpPvMark(-1); if (P.timer) clearInterval(P.timer); P.timer = null; }
+  // Start shot k from nothing (the first one, after a missing shot, or after a plain cut).
+  function begin(k) {
+    if (!alive()) return;
+    if (k >= L.length) { finish(); return; }
+    var x = L[k]; P.k = k; vlEpPvSay(x, L.length);
+    if (!x.t) { P.cur.pause(); P.nxt.pause(); showCard('Shot ' + (k + 1) + ': ' + x.why.toLowerCase() + '.'); P.wait = setTimeout(function () { begin(k + 1); }, 2000); return; }
+    vlEpPvLoad(P.cur, x).then(function (ok) {
+      if (!alive()) return;
+      if (!ok) { showCard('Shot ' + (k + 1) + ': its video could not be loaded.'); P.wait = setTimeout(function () { begin(k + 1); }, 2000); return; }
+      hideCard(); vlEpPvReset(P.cur); vlEpPvReset(P.nxt); P.cur.style.opacity = '1'; P.nxt.style.opacity = '0';
+      P.cur.play().catch(function () {});
+      run(k);
+    });
+  }
+  // Shot k is playing on P.cur: get the next one ready, run the transition at the right moment, then hand over.
+  function run(k) {
+    var x = L[k], y = L[k + 1], ready = false, started = false, trans = 0;
+    if (y && y.t) vlEpPvLoad(P.nxt, y).then(function (ok) { ready = ok; });   // ready ahead, for a plain cut too
+    if (P.timer) clearInterval(P.timer);
+    P.timer = setInterval(function () {
+      if (!alive()) { clearInterval(P.timer); return; }
+      var v = P.cur, end = vlEpPvEnd(v, x);
+      if (!end) return;
+      if (!started && y && y.t && x.cut.secs && ready) {
+        var yEnd = vlEpPvEnd(P.nxt, y);
+        trans = Math.min(x.cut.secs, (end - x.from) / 2, yEnd ? (yEnd - y.from) / 2 : x.cut.secs);
+        if (v.currentTime >= end - trans - 0.02) {
+          started = true;
+          st.style.background = x.cut.key === 'fadewhite' ? '#fff' : '#000';
+          vlEpPvReset(P.nxt); P.cur.style.zIndex = '0'; P.nxt.style.zIndex = '1';
+          P.nxt.play().catch(function () {});
+          vlPreviewAnim(x.cut.key, P.cur, P.nxt, trans);
+          vlEpPvSay(y, L.length);
+        }
+      }
+      if (v.currentTime >= end - 0.02 || v.ended) {
+        v.pause(); clearInterval(P.timer); P.timer = null;
+        if (started) { var o = P.cur; P.cur = P.nxt; P.nxt = o; vlEpPvReset(P.nxt); P.nxt.style.opacity = '0'; P.cur.style.opacity = '1'; P.k = k + 1; run(k + 1); }
+        else { var o2 = P.cur; P.cur = P.nxt; P.nxt = o2; vlEpPvReset(P.nxt); P.nxt.style.opacity = '0'; begin(k + 1); }
+      }
+    }, 30);
+  }
+  begin(P.k);
+}
+
 // v3.5.54 -- TRIM A TAKE (Ian, 2026-11-09: the "end at" trim). The part of the take the episode uses; the take itself is
 // never changed. Start here / End here at the playhead.
 function vlTrimClose() { var b = document.getElementById('vl-trim-modal'); if (b) { var v = b.querySelector('video'); if (v) try { v.pause(); } catch (e) {} if (b.parentNode) b.parentNode.removeChild(b); } VL.trim = null; }
@@ -42754,6 +42907,7 @@ function vlEditorHTML(ep) {
     '<datalist id="vl-cast-names">' + (ep.cast || []).map(function (c) { return '<option value="' + escapeHtml(c.name) + '">'; }).join('') + '</datalist>' +   // v3.5.19: who says a line
     (locked ? '<div style="' + VL_WARN + 'margin:0 0 8px;">' + vlSpin(12) + ' The Director is writing these shots. You can edit them when it is done.</div>' : '') +   // v3.5.37
     '<div id="vl-shots"' + (locked ? ' style="pointer-events:none;opacity:0.55;"' : '') + '>' + parts.join('') + '</div>' +
+    vlEpPvBoxHTML() +   // v3.5.98: the episode preview
     '<div style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
       '<span id="vl-cost" style="' + VL_DESC + 'flex:1;min-width:200px;"></span>' +
       '<span id="vl-saved" style="' + VL_DESC + '"></span>' +
@@ -43457,6 +43611,7 @@ function vlRenderLive() {
     vlSetLive(document.getElementById('vl-todo-' + ds.ck), 'todo-' + ds.ck, vlTodoBtnHTML(si));   // v3.5.34
   });
   vlSetLive(document.getElementById('vl-epvideo'), 'ep', vlEpVideoHTML(ep));
+  vlSetLive(document.getElementById('vl-eppv-strip'), 'eppv', vlEpPvStripHTML(ep, d));   // v3.5.98
   vlSetLive(document.getElementById('vl-epnote'), 'note', vlEpNoteHTML(ep));   // v3.5.33
   vlShapeTagsRefresh();   // v3.5.35
   if (vlBusyEp(ep)) vlStartTimer();
