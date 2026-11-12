@@ -42165,7 +42165,7 @@ var VL_SHOT_ODD = 'background:linear-gradient(rgba(150,150,150,0.16),rgba(150,15
 var VL_CUTMARK = 'position:absolute;top:0;left:50%;transform:translate(-50%,-50%);display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px);padding:3px 10px;background:rgb(var(--panel-rgb));border:1px solid rgba(var(--accent-rgb),0.45);border-radius:999px;z-index:1;';   // v3.5.15
 var VL_SHOT_NAME = 'flex:0 1 220px;min-width:140px;padding:4px 8px;font-size:13px;height:auto;';   // v3.5.15; v3.5.59 220px, to make room for the purpose
 var VL_PIN = 'background:none;border:none;cursor:pointer;line-height:0;padding:2px;display:inline-flex;align-items:center;';   // v3.5.17 (Ian: "replace the stars with our SOP Pins")
-var VL_MAX_TAKES = 10;   // v3.5.15: the server's MAX_TAKES (v3.5.25: 10)
+var VL_MAX_TAKES = 5;   // v3.5.15: the server's MAX_TAKES (v3.5.25: 10); v3.5.89: 5, set from /models (30 for admins)
 var VL_TITLE = 'font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);letter-spacing:0.5px;';
 var VL_DESC = 'font-size:12px;color:rgba(var(--accent-text-rgb),0.6);';
 var VL = { models: null, episodes: [], openId: null, draft: null, sid: null, fid: null, timer: null, saveTimer: null, saving: false, savePending: false, waiters: [],
@@ -42209,6 +42209,7 @@ function vlOpen() {
   else fetch('/api/video-lab/models', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
     VL.models = (d && d.models) || []; VL.cutInfo = (d && d.cutStyleInfo) || []; VL.webhook = !!(d && d.webhook);   // v3.5.54 cutInfo
     VL.cpt = (d && Number(d.cents_per_token) > 0) ? Number(d.cents_per_token) : 8;   // v3.5.39; v3.5.82 on its own line (it sat behind a comment and never ran)
+    if (d && Number(d.max_takes) > 0) VL_MAX_TAKES = Number(d.max_takes);   // v3.5.89: 5, or 30 for admins (the server's limit)
     VL.styles = (d && d.styles) || []; if (d && d.defaultStyle) VL.defaultStyle = d.defaultStyle;
     vlLoadEpisodes(true);
   }).catch(function () { VL.models = []; vlLoadEpisodes(true); });

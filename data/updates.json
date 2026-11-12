@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.5.89",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3589-take-limit",
+        "kind": "feature",
+        "public": false,
+        "summary": "Takes per shot: 5, admins 30.",
+        "detail": "Video tab: a shot holds up to 5 takes, or 30 for admins (for the model bake-off); the page reads the limit from the server.",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.88",
     "staged_on": "2026-11-12",
     "entries": [

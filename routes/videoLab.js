@@ -204,7 +204,10 @@ const MERGE_ENDPOINT = 'fal-ai/ffmpeg-api/merge-videos';   // joins clips in ord
 const MAX_KEYFRAMES = 60;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 const STUCK_MINUTES = 45;
-const MAX_TAKES = 10;   // v3.5.15 (Ian: "for now we limit them to 3 takes"); v3.5.25: 10 while Video is built out (Ian: "Let's lift the limit on 3 takes")
+const MAX_TAKES = 5;   // v3.5.15 (Ian: "for now we limit them to 3 takes"); v3.5.25: 10 while Video is built out (Ian: "Let's lift the limit on 3 takes")
+// v3.5.89 (Ian, 2026-11-12: "set it to 5 but only for non admin. Admin can have 30 for now. I'm doing the bake off")
+const MAX_TAKES_ADMIN = 30;
+function maxTakes(req) { return req && req.vlAdmin ? MAX_TAKES_ADMIN : MAX_TAKES; }
 // v3.5.54 (Ian, 2026-11-09: "Between the shots... we need to have some canned transitions"; spec
 // claude/VIDEO_TRANSITIONS_SPEC.md). The cut AFTER a shot: its name, its length in seconds and ffmpeg's xfade name.
 const CUT_STYLE_INFO = {
@@ -749,7 +752,7 @@ router.get('/models', requireAuth, requireVideo, async function (req, res) {
   vlDebug(req.session && req.session.userId, 'info', 'GET /api/video-lab/models', 'Models offered: ' + out.map(function (x) { return x.key; }).join(', '));   // v3.5.18
   let cpt = SL_DEFAULTS.shotlist_cents_per_token;   // v3.5.39 (Ian, 2026-11-09): the model menu shows tokens a second
   try { cpt = (await shotListPrices(await getDb())).shotlist_cents_per_token; } catch (e) { cpt = SL_DEFAULTS.shotlist_cents_per_token; }
-  res.json({ models: out, webhook: !!webhookUrl(), ffmpeg: FFMPEG_VERSION, styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES, cutStyleInfo: CUT_STYLES.map(function (k) { return { key: k, label: CUT_STYLE_INFO[k].label, secs: CUT_STYLE_INFO[k].secs }; }), cents_per_token: cpt });
+  res.json({ models: out, webhook: !!webhookUrl(), ffmpeg: FFMPEG_VERSION, styles: styles, defaultStyle: DEFAULT_STYLE, defaultModel: DEFAULT_MODEL, cutStyles: CUT_STYLES, cutStyleInfo: CUT_STYLES.map(function (k) { return { key: k, label: CUT_STYLE_INFO[k].label, secs: CUT_STYLE_INFO[k].secs }; }), cents_per_token: cpt, max_takes: maxTakes(req) });   // v3.5.89 max_takes
 });
 
 router.get('/episodes', requireAuth, requireVideo, async function (req, res) {
@@ -1340,9 +1343,9 @@ function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
 
 // Make one shot: a new take (it becomes the chosen one), its moves sent to fal side by side. One take of a shot is made
 // at a time (a partial unique index is the claim). Returns { take } or { status, error }.
-async function takesFull(db, shotId) {
+async function takesFull(db, shotId, max) {   // v3.5.89: max = maxTakes(req)
   const c = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ?').get(shotId);
-  return Number(c && c.n) >= MAX_TAKES;
+  return Number(c && c.n) >= max;
 }
 async function makeShot(db, req, ep0, shot, shotNo) {
   const ep = epForShot(ep0, shot);   // v3.5.34: the shot's own mode
@@ -1363,7 +1366,7 @@ async function makeShot(db, req, ep0, shot, shotNo) {
     })
   });
   if (plan.error) return { status: 400, error: plan.error };
-  if (await takesFull(db, shot.id)) return { status: 409, full: true, error: 'Shot ' + shotNo + ' already has ' + MAX_TAKES + ' takes. Delete one to make another.' };
+  if (await takesFull(db, shot.id, maxTakes(req))) return { status: 409, full: true, error: 'Shot ' + shotNo + ' already has ' + maxTakes(req) + ' takes. Delete one to make another.' };
   const hook = webhookUrl();
   if (!hook) return { status: 500, error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' };
   const sound = !!ep.sound;
@@ -1435,7 +1438,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
     let need = 0;
     for (let i = 0; i < shots.length; i++) {
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
-      if (await takesFull(db, shots[i].id)) { full[i] = true; continue; }
+      if (await takesFull(db, shots[i].id, maxTakes(req))) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
       const p = planShot(epForShot(ep, shots[i]), kfs, shots[i], i + 1, null);   // v3.5.16; v3.5.19; v3.5.34: the shot's mode
       if (p.error) return res.status(400).json({ error: p.error });
@@ -1454,7 +1457,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
     }
     const skipped = Object.keys(full).map(function (i) { return Number(i) + 1; }).sort(function (a, b) { return a - b; });
     const out = await loadEpisode(db, ep.id);
-    const fullText = skipped.length ? (skipped.length === 1 ? 'Shot ' + skipped[0] + ' already has ' : 'Shots ' + skipped.join(', ') + ' already have ') + MAX_TAKES + ' takes, so ' + (skipped.length === 1 ? 'it was' : 'they were') + ' skipped. Delete a take to make another.' : '';
+    const fullText = skipped.length ? (skipped.length === 1 ? 'Shot ' + skipped[0] + ' already has ' : 'Shots ' + skipped.join(', ') + ' already have ') + maxTakes(req) + ' takes, so ' + (skipped.length === 1 ? 'it was' : 'they were') + ' skipped. Delete a take to make another.' : '';
     const other = errors.filter(function (x) { return !/already ha(s|ve) \d+ takes/.test(x); });
     if (!made && other.length) return res.status(400).json({ error: other[0], episode: out, skipped: skipped });
     if (!made && skipped.length) return res.status(409).json({ error: fullText, episode: out, skipped: skipped });
@@ -1760,7 +1763,7 @@ router.post('/takes/:id/retouch', requireAuth, requireVideo, async function (req
     if (x.t.status !== 'done' || !x.t.video_url) return vlRefuse(req, res, FN, 409, 'Only a finished take can be retouched.');
     if (await runningWriter(db, x.ep.id, true)) return vlRefuse(req, res, FN, 409, 'The Director is working on this episode; retouch the take when it is done.');
     const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(x.t.shot_id);
-    if (await takesFull(db, shot.id)) return vlRefuse(req, res, FN, 409, 'This shot already has ' + MAX_TAKES + ' takes. Delete one to make another.');
+    if (await takesFull(db, shot.id, maxTakes(req))) return vlRefuse(req, res, FN, 409, 'This shot already has ' + maxTakes(req) + ' takes. Delete one to make another.');
     const mvs = await db.prepare('SELECT duration FROM moves WHERE take_id = ?').all(x.t.id);
     const secs = takeSecs(mvs);
     const R = RETOUCH[kind];
