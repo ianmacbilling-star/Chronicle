@@ -43827,7 +43827,7 @@ function vlCpkBtnHTML(ds, takes) {
 function vlCpkClose() { var o = document.getElementById('vl-cpk-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); VL_CPK = null; }
 function vlCpkOpen(shotId) {
   vlCpkClose();
-  VL_CPK = { shotId: shotId, takes: null, v: '', e: '', s: '', busy: false };
+  VL_CPK = { shotId: shotId, takes: null, v: '', e: '', s: '', p: false, busy: false };
   var box = document.createElement('div');
   box.id = 'vl-cpk-modal';
   box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -43854,6 +43854,7 @@ function vlCpkOptions(list, keyOf, labelOf) {
 }
 function vlCpkMatch(t, upTo) {
   var c = VL_CPK;
+  if (c.p && !t.pinned) return false;   // v3.6.06: Pinned only
   if (c.v && t.version_key !== c.v) return false;
   if (upTo === 'v') return true;
   if (c.e && String(t.episode_id) !== c.e) return false;
@@ -43869,6 +43870,7 @@ function vlCpkFilter() {
   var c = VL_CPK; if (!c) return;
   var v = document.getElementById('vl-cpk-v'), e = document.getElementById('vl-cpk-e'), s = document.getElementById('vl-cpk-s');
   var nv = v ? v.value : '', ne = e ? e.value : '', ns = s ? s.value : '';
+  var pp = document.getElementById('vl-cpk-p'); c.p = !!(pp && pp.checked);   // v3.6.06
   if (nv !== c.v) { ne = ''; ns = ''; }
   if (ne !== c.e) ns = '';
   c.v = nv; c.e = ne; c.s = ns;
@@ -43879,13 +43881,17 @@ function vlCpkRender() {
   var c = VL_CPK; if (!c || !c.takes) return;
   var f = document.getElementById('vl-cpk-filters'), l = document.getElementById('vl-cpk-list');
   if (!f || !l) return;
-  var vs = vlCpkOptions(c.takes, function (t) { return t.version_key; }, function (t) { return t.version_name + (t.canonical ? ' (main)' : ''); });
+  var vs = vlCpkOptions(c.takes.filter(function (t) { return !c.p || t.pinned; }), function (t) { return t.version_key; }, function (t) { return t.version_name + (t.canonical ? ' (main)' : ''); });
+  if (c.v && !vs.some(function (o) { return o.k === c.v; })) { c.v = ''; c.e = ''; c.s = ''; }   // v3.6.06: a choice Pinned only has hidden goes back to All
+  if (c.e && !c.takes.some(function (t) { return String(t.episode_id) === c.e && vlCpkMatch(t, 'v'); })) { c.e = ''; c.s = ''; }
   var es = vlCpkOptions(c.takes.filter(function (t) { return vlCpkMatch(t, 'v'); }), function (t) { return t.episode_id; }, function (t) { return t.episode_name || 'Episode ' + t.episode_id; });
+  if (c.s && !c.takes.some(function (t) { return String(t.shot_id) === c.s && vlCpkMatch(t, 'e'); })) c.s = '';
   var ss = c.e ? vlCpkOptions(c.takes.filter(function (t) { return vlCpkMatch(t, 'e'); }), function (t) { return t.shot_id; }, vlCpkLabel) : [];
   f.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
     '<label style="font-size:13px;">Version ' + vlCpkSelect('vl-cpk-v', 'All versions', vs, c.v, false) + '</label>' +
     '<label style="font-size:13px;">Episode ' + vlCpkSelect('vl-cpk-e', 'All episodes', es, c.e, false) + '</label>' +
-    '<label style="font-size:13px;" title="' + (c.e ? '' : 'Choose an episode first') + '">Shot ' + vlCpkSelect('vl-cpk-s', c.e ? 'All shots' : 'Choose an episode first', ss, c.s, !c.e) + '</label></div>';
+    '<label style="font-size:13px;" title="' + (c.e ? '' : 'Choose an episode first') + '">Shot ' + vlCpkSelect('vl-cpk-s', c.e ? 'All shots' : 'Choose an episode first', ss, c.s, !c.e) + '</label>' +
+    '<label style="font-size:13px;display:flex;align-items:center;gap:4px;cursor:pointer;" title="Only the take each shot uses in its episode"><input type="checkbox" id="vl-cpk-p" onchange="vlCpkFilter()"' + (c.p ? ' checked' : '') + '> Pinned only</label></div>';
   var list = c.takes.filter(function (t) { return vlCpkMatch(t, 's'); });
   if (!c.takes.length) { l.innerHTML = '<div style="font-size:13px;">There are no finished takes elsewhere in this campaign yet.</div>'; return; }
   if (!list.length) { l.innerHTML = '<div style="font-size:13px;">No finished takes match.</div>'; return; }
@@ -43901,7 +43907,7 @@ function vlCpkRender() {
     var code = vlTakeCodeOf(t.episode_id, t.shot_no, t.take_no, t.id, t.created_at);
     H.push('<div class="vl-cpk-take" data-take="' + t.id + '" style="width:230px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;padding:6px;">' +
       '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>' +
-      '<div style="font-size:12px;font-weight:600;margin-top:5px;">' + escapeHtml(vlCpkLabel(t)) + ' &middot; Take ' + t.take_no + '</div>' +
+      '<div style="font-size:12px;font-weight:600;margin-top:5px;">' + (t.pinned ? '<span class="vl-cpk-pin" title="Pinned: the take this shot uses in its episode" style="color:var(--accent-bright);display:inline-block;vertical-align:-3px;margin-right:3px;">' + _vpickPinSvg(true) + '</span>' : '') + escapeHtml(vlCpkLabel(t)) + ' &middot; Take ' + t.take_no + '</div>' +
       '<div style="font-family:monospace;font-size:11px;opacity:0.8;">' + escapeHtml(code) + '</div>' +
       '<div style="font-size:12px;opacity:0.8;">' + escapeHtml(t.model_label + (t.mode ? ' \u00b7 ' + t.mode : '') + ' \u00b7 ' + t.secs + ' s' + (t.sound ? ' \u00b7 sound' : '')) + '</div>' +
       '<div style="text-align:right;margin-top:6px;"><button type="button" class="btn btn-sm btn-primary vl-cpk-go"' + (c.full ? ' disabled' : '') + ' onclick="vlCpkGo(' + t.id + ')">Copy to this shot</button></div>' +

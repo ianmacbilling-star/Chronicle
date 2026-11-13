@@ -1582,7 +1582,7 @@ router.get('/shots/:id/copyable-takes', requireAuth, requireVideo, async functio
     if (!x) return res.status(404).json({ error: 'Not found.' });
     const rows = await db.prepare(
       'SELECT t.id, t.episode_id, t.shot_id, t.model, t.retouch_kind, t.sound, t.video_url, t.created_at, e.name AS episode_name, e.fork_id, ' +
-      's.position AS shot_no, s.name AS shot_name, cv.id AS version_id, cv.name AS version_name, cv.is_canonical ' +
+      's.position AS shot_no, s.name AS shot_name, s.chosen_take_id, cv.id AS version_id, cv.name AS version_name, cv.is_canonical ' +
       'FROM takes t JOIN episodes e ON e.id = t.episode_id JOIN shots s ON s.id = t.shot_id ' +
       'LEFT JOIN session_forks f ON f.id = e.fork_id LEFT JOIN campaign_versions cv ON cv.id = f.version_id ' +
       "WHERE e.campaign_id = ? AND t.status = 'done' AND t.video_url IS NOT NULL AND t.shot_id <> ? ORDER BY e.id, s.position, t.id").all(x.ep.campaign_id, x.shot.id);
@@ -1593,6 +1593,7 @@ router.get('/shots/:id/copyable-takes', requireAuth, requireVideo, async functio
       const ml = copyModelLabel(r.model, r.retouch_kind);
       return { id: r.id, episode_id: r.episode_id, episode_name: r.episode_name || '', version_key: r.version_id ? 'v' + r.version_id : 'f' + r.fork_id,
         version_name: copyVersionName(r), canonical: !!r.is_canonical, shot_id: r.shot_id, shot_no: r.shot_no, shot_name: r.shot_name || '',
+        pinned: Number(r.chosen_take_id) === Number(r.id),   // v3.6.06: the take its shot uses
         take_no: all.filter(function (a) { return Number(a.shot_id) === Number(r.shot_id) && Number(a.id) <= Number(r.id); }).length,
         model_label: ml.label, mode: ml.mode, sound: !!r.sound, video_url: r.video_url, created_at: r.created_at,
         secs: takeSecs(mvs.filter(function (m) { return Number(m.take_id) === Number(r.id); })) };

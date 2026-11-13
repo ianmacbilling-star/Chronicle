@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.06",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3606-cpk-pinned",
+        "kind": "feature",
+        "public": false,
+        "summary": "Copy a take: a Pinned only box shows just the take each shot uses.",
+        "detail": "Video tab, Copy a take window: tick Pinned only to see only the pinned take of each shot (the one its episode uses); it works with the Version, Episode and Shot filters. Pinned takes carry the pin on their card.",
+        "td": [
+          "TD-1136"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.05",
     "staged_on": "2026-11-13",
     "entries": [
