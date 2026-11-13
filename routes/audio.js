@@ -94,8 +94,8 @@ async function deleteAudio(job) {
   try {
     const axios = require('axios'), https = require('https');
     await axios.delete(presign('DELETE', job.bucket || audioBucket(), job.file_key, 300), { httpsAgent: new https.Agent({ minVersion: 'TLSv1.2' }), timeout: 30000, validateStatus: function (s) { return s < 500; } });
-    console.log('[audio] job ' + job.id + ': recording deleted');
-  } catch (e) { console.error('[audio] job ' + job.id + ': could not delete the recording: ' + (e && e.message)); }
+    audLog(job.user_id, 'info', 'delete', 'Job ' + job.id + ': recording deleted from ' + (job.bucket || audioBucket()) + '/' + job.file_key);
+  } catch (e) { audLog(job.user_id, 'error', 'delete', 'Job ' + job.id + ': could not delete the recording ' + job.file_key + ': ' + (e && e.message)); }
 }
 
 function falClient() {
@@ -113,6 +113,26 @@ function falWhy(e) {
     if (b && b.detail) return String(b.detail).slice(0, 500);
   } catch (x) {}
   return String((e && e.message) || e).slice(0, 500);
+}
+// v3.6.10 (Ian, 2026-11-13: "Show the real error and write everything you need to debug mode"): every step goes to the server
+// log and, for a person with Debug Mode on, to their debug log (Dashboard > Support > View log). Never the recording's signed
+// address and never the words of a transcript.
+function audLog(userId, level, fn, message, detail) {
+  try { console.log('[audio] ' + fn + ': ' + message + (detail ? ' ' + JSON.stringify(detail).slice(0, 4000) : '')); } catch (e) {}
+  try { require('./debug').logDebug(userId, { level: level, source: 'audio', page: 'Story tab: Transcribe a recording', fn: fn, message: String(message).slice(0, 500), detail: detail || null }).catch(function () {}); } catch (e) {}
+}
+function audRefuse(req, res, fn, status, error, detail) {
+  audLog(req.session && req.session.userId, 'warn', fn, 'Refused (' + status + '): ' + error, detail);
+  return res.status(status).json({ error: error });
+}
+// fal's reasons from a refusal's payload (detail[]: msg and the field it is about), else its error line.
+function falReasons(payload, error) {
+  try {
+    const p = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    const d = p && (Array.isArray(p.detail) ? p.detail : (p.detail ? [p.detail] : null));
+    if (d && d.length) return d.map(function (x) { if (!x || typeof x !== 'object') return String(x); const loc = Array.isArray(x.loc) ? x.loc.filter(function (l) { return l !== 'body'; }).join('.') : ''; return (loc ? loc + ': ' : '') + (x.msg || JSON.stringify(x)); }).join('; ');
+  } catch (e) {}
+  return String(error || (payload ? JSON.stringify(payload) : 'unknown error'));
 }
 function webhookUrl() {
   let base = String(process.env.PUBLIC_BASE_URL || '');
@@ -197,7 +217,7 @@ async function chargeJob(db, job) {
     if (charged > 0) await tk.spendTokens(job.user_id, charged, { source: 'audio_transcript', event_type: 'generation_spend', related_campaign_id: job.campaign_id });
     try { await tk.recordGeneration(job.user_id, { event_type: 'audio_transcript', tokens_redeemed: charged, quantity: Math.round((Number(job.secs_est) || 0) / 60), unit: 'minutes', model: 'scribe-v2', related_campaign_id: job.campaign_id, related_session_id: job.session_id }); } catch (e) {}
     await db.prepare('UPDATE audio_jobs SET tokens_charged = ? WHERE id = ?').run(charged, job.id);
-  } catch (e) { console.error('[audio] job ' + job.id + ' charge failed: ' + (e && e.message)); }
+  } catch (e) { audLog(job.user_id, 'error', 'charge', 'Job ' + job.id + ' charge failed: ' + (e && e.message)); }
 }
 
 // The words are in at fal: read them, keep them, delete the recording, charge. Claimed so a webhook and a poll never both do it.
@@ -206,21 +226,24 @@ async function finishJob(db, job, falError) {
   if (!claim.changes) return;
   let data = null, err = falError || null;
   if (!err) {
-    try { const r = await falClient().queue.result(ENDPOINT, { requestId: job.request_id }); data = r && (r.data || r); } catch (e) { err = 'fal: ' + falWhy(e); }
+    try { const r = await falClient().queue.result(ENDPOINT, { requestId: job.request_id }); data = r && (r.data || r); }
+    catch (e) { err = 'fal: ' + falWhy(e); audLog(job.user_id, 'error', 'result', 'Job ' + job.id + ': reading the result from fal failed', { request_id: job.request_id, message: e && e.message, status: e && (e.status || (e.response && e.response.status)), body: (e && (e.body || (e.response && e.response.data))) || null }); }   // v3.6.10
   }
   await deleteAudio(job);
   if (err || !data) {
     await db.prepare("UPDATE audio_jobs SET status = 'failed', error = ?, updated_at = NOW() WHERE id = ?").run(String(err || 'no result').slice(0, 1000), job.id);
-    console.log('[audio] job ' + job.id + ' failed: ' + err);
+    audLog(job.user_id, 'error', 'finish', 'Job ' + job.id + ' failed: ' + err);
     return;
   }
   const cw = compactWords(data.words);
   if (!cw.some(function (w) { return w[4] === 'w'; })) {
     await db.prepare("UPDATE audio_jobs SET status = 'failed', error = ?, updated_at = NOW() WHERE id = ?").run('No speech was found in that recording.', job.id);
+    audLog(job.user_id, 'warn', 'finish', 'Job ' + job.id + ': no speech found', { entries: Array.isArray(data.words) ? data.words.length : null, language: data.language_code || null });
     return;
   }
   await db.prepare("UPDATE audio_jobs SET status = 'ready', words = ?, text_len = ?, updated_at = NOW() WHERE id = ?").run(JSON.stringify(cw), String(data.text || '').length, job.id);
-  console.log('[audio] job ' + job.id + ' ready: ' + cw.length + ' word(s), language ' + (data.language_code || '?'));
+  { const sp = {}; cw.forEach(function (w) { if (w[4] === 'w') sp[w[0]] = (sp[w[0]] || 0) + 1; });
+    audLog(job.user_id, 'info', 'finish', 'Job ' + job.id + ' ready', { words: cw.filter(function (w) { return w[4] === 'w'; }).length, speakers: sp, language: data.language_code || null, language_probability: data.language_probability || null, last_word_end_s: cw.length ? cw[cw.length - 1][2] : null, secs_est: job.secs_est }); }
   await chargeJob(db, job);
 }
 
@@ -243,33 +266,33 @@ router.post('/start', requireAuth, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
-    if (!(await audioOn(db, req))) return res.status(403).json({ error: 'Transcribing a recording is not available yet.' });
-    if (req.session.impersonatorId) return res.status(403).json({ error: 'Not while signed in as another person.' });
+    if (!(await audioOn(db, req))) return audRefuse(req, res, 'start', 403, 'Transcribing a recording is not available yet.');
+    if (req.session.impersonatorId) return audRefuse(req, res, 'start', 403, 'Not while signed in as another person.');
     const b = req.body || {};
     const campaignId = parseInt(b.campaignId, 10), sessionId = parseInt(b.sessionId, 10);
-    if (!campaignId || !sessionId || !(await getCampaignRole(req.session.userId, campaignId))) return res.status(404).json({ error: 'Open a session of your campaign first.' });
+    if (!campaignId || !sessionId || !(await getCampaignRole(req.session.userId, campaignId))) return audRefuse(req, res, 'start', 404, 'Open a session of your campaign first.');
     const sess = await db.prepare('SELECT id FROM sessions WHERE id = ? AND campaign_id = ?').get(sessionId, campaignId);
-    if (!sess) return res.status(404).json({ error: 'That session was not found.' });
+    if (!sess) return audRefuse(req, res, 'start', 404, 'That session was not found.');
     const secs = Number(b.secs), bytes = Number(b.bytes);
-    if (!(secs > 0)) return res.status(400).json({ error: "The recording's length could not be read. Try converting it to mp3 or m4a." });
-    if (secs > MAX_SECS) return res.status(400).json({ error: 'That recording is longer than 6 hours. Split it and transcribe each part.' });
-    if (!(bytes > 0) || bytes > MAX_BYTES) return res.status(400).json({ error: 'That file is too large (the limit is 1.5 GB). Convert it to mp3 or m4a first.' });
-    if (!b.consent) return res.status(400).json({ error: 'Tick the box to confirm everyone agreed to be recorded.' });
+    if (!(secs > 0)) return audRefuse(req, res, 'start', 400, "The recording's length could not be read. Try converting it to mp3 or m4a.");
+    if (secs > MAX_SECS) return audRefuse(req, res, 'start', 400, 'That recording is longer than 6 hours. Split it and transcribe each part.');
+    if (!(bytes > 0) || bytes > MAX_BYTES) return audRefuse(req, res, 'start', 400, 'That file is too large (the limit is 1.5 GB). Convert it to mp3 or m4a first.');
+    if (!b.consent) return audRefuse(req, res, 'start', 400, 'Tick the box to confirm everyone agreed to be recorded.');
     const busy = await db.prepare("SELECT id FROM audio_jobs WHERE user_id = ? AND status IN ('uploading', 'transcribing', 'saving') AND updated_at > NOW() - INTERVAL '2 hours'").get(req.session.userId);
-    if (busy) return res.status(409).json({ error: 'You already have a recording being transcribed. Wait for it to finish.', job: busy.id });
+    if (busy) return audRefuse(req, res, 'start', 409, 'You already have a recording being transcribed. Wait for it to finish.', { job: busy.id });
     const tokens = audioTokens(secs);
     const bal = await require('./tokens').getBalance(req.session.userId);
-    if ((Number(bal.total) || 0) < tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'This recording costs ' + tokens + ' tokens, but you have ' + (Number(bal.total) || 0) + '. Add tokens and try again.' });
+    if ((Number(bal.total) || 0) < tokens) { audLog(req.session.userId, 'warn', 'start', 'Refused (402): not enough tokens', { need: tokens, have: Number(bal.total) || 0 }); return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'This recording costs ' + tokens + ' tokens, but you have ' + (Number(bal.total) || 0) + '. Add tokens and try again.' }); }
     const name = String(b.name || 'recording').slice(0, 200);
     const ext = ((/\.([A-Za-z0-9]{2,5})$/.exec(name) || [])[1] || 'bin').toLowerCase();
     const key = 'audio-in/' + crypto.randomBytes(16).toString('hex') + '.' + ext;
     const hint = parseInt(b.speakers, 10);
     const ins = await db.prepare("INSERT INTO audio_jobs (user_id, campaign_id, session_id, status, file_key, bucket, file_name, bytes, secs_est, tokens, speakers_hint, consent_at) VALUES (?, ?, ?, 'uploading', ?, ?, ?, ?, ?, ?, ?, NOW())")
       .run(req.session.userId, campaignId, sessionId, key, audioBucket(), name, Math.round(bytes), secs, tokens, hint >= 1 && hint <= 32 ? hint : null);
-    console.log('[audio] job ' + ins.lastInsertRowid + ' started: ' + Math.round(secs) + ' s, ' + Math.round(bytes / 1048576) + ' MB, ' + tokens + ' tokens');
+    audLog(req.session.userId, 'info', 'start', 'Job ' + ins.lastInsertRowid + ' started', { file: name, secs: secs, bytes: bytes, tokens: tokens, speakers_hint: hint || null, bucket: audioBucket(), key: key });
     res.json({ job: ins.lastInsertRowid, upload_url: presign('PUT', audioBucket(), key, PUT_SECS), tokens: tokens });
   } catch (e) {
-    console.error('[audio] start error:', e && e.message);
+    audLog(req.session && req.session.userId, 'error', 'start', 'Start failed: ' + (e && e.message), { stack: String((e && e.stack) || '').slice(0, 1500) });
     res.status(500).json({ error: 'Could not start: ' + String((e && e.message) || '').slice(0, 200) });
   }
 });
@@ -283,24 +306,26 @@ router.post('/jobs/:id/uploaded', requireAuth, async function (req, res) {
     if (!job) return res.status(404).json({ error: 'Not found.' });
     if (job.status !== 'uploading') return res.json({ job: jobView(job) });
     const hook = webhookUrl();
-    if (!hook) return res.status(500).json({ error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' });
+    if (!hook) return audRefuse(req, res, 'uploaded', 500, 'PUBLIC_BASE_URL is not set, so fal cannot report back.');
     const input = { audio_url: presign('GET', job.bucket, job.file_key, GET_SECS), diarize: true, tag_audio_events: false };
     const terms = await keytermsFor(db, job.campaign_id, job.session_id);
     if (terms.length) input.keyterms = terms;
     if (job.speakers_hint) input.num_speakers = job.speakers_hint;
+    audLog(job.user_id, 'info', 'uploaded', 'Job ' + job.id + ': sending to fal', { endpoint: ENDPOINT, input: Object.assign({}, input, { audio_url: '(signed address, 1 hour)' }), webhook: hook });
     let sub;
     try { sub = await falClient().queue.submit(ENDPOINT, { input: input, webhookUrl: hook }); }
     catch (e) {
       const why = falWhy(e);
+      audLog(job.user_id, 'error', 'uploaded', 'Job ' + job.id + ': fal refused the submission: ' + why, { message: e && e.message, status: e && (e.status || (e.response && e.response.status)), body: (e && (e.body || (e.response && e.response.data))) || null });
       await deleteAudio(job);
       await db.prepare("UPDATE audio_jobs SET status = 'failed', error = ?, updated_at = NOW() WHERE id = ?").run(('fal refused it: ' + why).slice(0, 1000), job.id);
       return res.status(502).json({ error: 'The transcription service refused it: ' + why });
     }
     await db.prepare("UPDATE audio_jobs SET status = 'transcribing', request_id = ?, updated_at = NOW() WHERE id = ? AND status = 'uploading'").run(sub.request_id, job.id);
-    console.log('[audio] job ' + job.id + ' sent to fal (' + sub.request_id + ', ' + terms.length + ' keyterm(s))');
+    audLog(job.user_id, 'info', 'uploaded', 'Job ' + job.id + ' sent to fal', { request_id: sub.request_id, keyterms: terms.length });
     res.json({ job: jobView(await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(job.id)) });
   } catch (e) {
-    console.error('[audio] uploaded error:', e && e.message);
+    audLog(req.session && req.session.userId, 'error', 'uploaded', 'Sending failed: ' + (e && e.message), { stack: String((e && e.stack) || '').slice(0, 1500) });
     res.status(500).json({ error: 'Could not send it for transcription.' });
   }
 });
@@ -313,6 +338,7 @@ router.post('/jobs/:id/cancel', requireAuth, async function (req, res) {
     if (!job) return res.status(404).json({ error: 'Not found.' });
     if (job.status === 'uploading') {
       await db.prepare("UPDATE audio_jobs SET status = 'failed', error = 'Cancelled before it was sent.', updated_at = NOW() WHERE id = ? AND status = 'uploading'").run(job.id);
+      audLog(job.user_id, 'warn', 'cancel', 'Job ' + job.id + ': the upload did not finish (cancelled by the page)', { reason: String((req.body || {}).reason || '').slice(0, 300) });
       await deleteAudio(job);
     }
     res.json({ ok: true });
@@ -331,10 +357,12 @@ router.get('/jobs/:id', requireAuth, async function (req, res) {
       try {
         const st = await falClient().queue.status(ENDPOINT, { requestId: job.request_id, logs: false });
         const s = String((st && st.status) || '').toUpperCase();
+        audLog(job.user_id, 'info', 'poll', 'Job ' + job.id + ': fal says ' + s, { request_id: job.request_id });
         if (s === 'COMPLETED') await finishJob(db, job, null);
         else await db.prepare('UPDATE audio_jobs SET updated_at = NOW() WHERE id = ?').run(job.id);
       } catch (e) {
         const st = e && (e.status || (e.response && e.response.status));
+        audLog(job.user_id, 'error', 'poll', 'Job ' + job.id + ': asking fal failed', { status: st || null, message: e && e.message, body: (e && (e.body || (e.response && e.response.data))) || null });
         if (st && st >= 400 && st < 500) await finishJob(db, job, 'fal: ' + falWhy(e));
       }
       job = await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(job.id);
@@ -394,7 +422,11 @@ router.post('/fal-webhook', async function (req, res) {
     const job = await db.prepare("SELECT * FROM audio_jobs WHERE request_id = ? AND status = 'transcribing'").get(rid);
     if (!job) return;
     const failed = String(b.status || '').toUpperCase() === 'ERROR';
-    await finishJob(db, job, failed ? ('fal: ' + String(b.error || JSON.stringify(b.payload || '')).slice(0, 800)) : null);
+    // v3.6.10 (Ian, 2026-11-13: a test failed with only "fal: Unexpected status code: 422"; "if you write to the log i'll send it"): on a
+    // failure, fal's whole answer goes to the log and its reasons to the job (never on success: the payload is the transcript).
+    if (failed) audLog(job.user_id, 'error', 'fal-webhook', 'Job ' + job.id + ': fal failed it: ' + falReasons(b.payload, b.error), { request_id: rid, status: b.status, error: b.error, payload: b.payload });
+    else audLog(job.user_id, 'info', 'fal-webhook', 'Job ' + job.id + ': fal says done', { request_id: rid });
+    await finishJob(db, job, failed ? ('fal: ' + falReasons(b.payload, b.error)).slice(0, 1000) : null);
   } catch (e) { console.error('[audio] webhook error:', e && e.message); }
 });
 

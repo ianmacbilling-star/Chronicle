@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.10",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3610-audio-reasons",
+        "kind": "fix",
+        "public": false,
+        "summary": "Transcribe a recording: when fal refuses, the window shows fal's reasons, and every step goes to the log and to Debug Mode.",
+        "detail": "A first test stopped at 'fal: Unexpected status code: 422' with no reason. Now each step (start and its refusals, the upload, what was sent to fal, fal's whole answer on a failure, the result's word and speaker counts, the deletion of the recording) is written to the server log and, with Debug Mode on, to the person's debug log. The signed address and the words of a transcript are never logged.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.09",
     "staged_on": "2026-11-13",
     "entries": [

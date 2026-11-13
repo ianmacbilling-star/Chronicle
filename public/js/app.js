@@ -26427,14 +26427,15 @@ function audTUpload(url) {
   x.upload.onprogress = function (e) { if (!e.lengthComputable) return; var p = Math.round(e.loaded * 100 / e.total); var b = document.getElementById('aud-t-bar'), t = document.getElementById('aud-t-pct'); if (b) b.style.width = p + '%'; if (t) t.textContent = p + '%'; };
   x.onload = function () {
     if (x.status >= 200 && x.status < 300) { audTUploaded(); return; }
-    audTFailUpload('The upload was refused (' + x.status + ').');
+    audTFailUpload('The upload was refused (' + x.status + ').', String(x.responseText || '').slice(0, 300));
   };
-  x.onerror = function () { audTFailUpload('The upload did not get through. (If this keeps happening, the storage needs its upload permission set: tell Claudia "CORS".)'); };
+  x.onerror = function () { audTFailUpload('The upload did not get through. (If this keeps happening, the storage needs its upload permission set: tell Claudia "CORS".)', 'network error at ' + Math.round((A.sent || 0) / 1048576) + ' MB'); };
+  x.upload.addEventListener('progress', function (e) { A.sent = e.loaded; });
   x.send(A.file);
 }
-function audTFailUpload(why) {
+function audTFailUpload(why, detail) {
   var A = AUD_T; if (!A || !A.job) return;
-  fetch('/api/audio/jobs/' + A.job.id + '/cancel', { method: 'POST' }).catch(function () {});
+  fetch('/api/audio/jobs/' + A.job.id + '/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: why + (detail ? ' ' + detail : '') }) }).catch(function () {});   // v3.6.10: the reason goes to the log
   audTBody('');
   audTSay(escapeHtml(why) + ' Nothing was charged.', true);
   setTimeout(function () { if (AUD_T && !document.getElementById('aud-t-zone')) audTPickView(); }, 50);
