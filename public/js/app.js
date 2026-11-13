@@ -26320,6 +26320,185 @@ function storyImportFromFile() {
   });
 }
 
+// ---- transcribe a recording (v3.6.09, TD-1046, first draft) ------------------------------------------
+// Ian, 2026-11-13: "a button that is next to the File Upload button over the story field on the Story tab. It opens a little modal
+// that allows you to drop or select a audio file. Then tell you based on its size roughly how many tokens it will cost. then
+// transcript it into the story field"; "if we have to tell it who people are we can do it on the modal". The browser reads the
+// recording's length itself (nothing is uploaded for the quote); the file goes straight to private storage, then to fal's
+// Scribe v2; the window shows the speakers it found, each with a few lines, to name or leave out; the text goes into the Story
+// box through the import's own Append / Replace. Shown only when /api/audio/config says it is on (admins, or the switch).
+var AUD_T = null;
+var AUD_T_CFG = null;
+function audTInit() {
+  fetch('/api/audio/config', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    AUD_T_CFG = j;
+    var b = document.getElementById('story-audio-btn');
+    if (b) b.style.display = j && j.enabled ? '' : 'none';
+  }).catch(function () {});
+}
+function audTTokens(secs) { var per = (AUD_T_CFG && AUD_T_CFG.tokens_per_half_hour) || 4; return per * Math.max(1, Math.ceil(secs / 1800 - 1e-9)); }
+function audTLen(secs) { secs = Math.round(secs); var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return h ? h + ' h ' + m + ' m' : (m ? m + ' m ' + s + ' s' : s + ' s'); }
+function audTClose() {
+  var o = document.getElementById('aud-t-modal'); if (o && o.parentNode) o.parentNode.removeChild(o);
+  if (AUD_T && AUD_T.timer) clearTimeout(AUD_T.timer);
+  AUD_T = null;
+}
+function audTBody(html) { var b = document.getElementById('aud-t-body'); if (b) b.innerHTML = html; }
+function audTSay(html, warn) { var m = document.getElementById('aud-t-msg'); if (m) m.innerHTML = warn ? '<span style="color:#e8a85a;">' + html + '</span>' : html; }
+function audTOpen() {
+  audTClose();
+  var sid = state.currentSession && state.currentSession.id, cid = state.currentCampaign && state.currentCampaign.id;
+  if (!sid || !cid) { showError('Open a session first.'); return; }
+  AUD_T = { sid: sid, cid: cid, file: null, secs: 0, job: null, timer: null };
+  var box = document.createElement('div');
+  box.id = 'aud-t-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:620px;width:100%;max-height:90vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);flex:1;">Transcribe a recording</div><button class="modal-close" onclick="audTClose()">&times;</button></div>' +
+    '<div id="aud-t-body" style="margin-top:10px;">' + vlSpin(14) + ' Loading...</div><div id="aud-t-msg" style="font-size:13px;margin-top:10px;"></div></div>';
+  document.body.appendChild(box);
+  fetch('/api/audio/active?session=' + sid, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!AUD_T) return;
+    if (j && j.job && j.job.status !== 'uploading') { AUD_T.job = j.job; audTShowJob(j.job); }
+    else audTPickView();
+  }).catch(function () { if (AUD_T) audTPickView(); });
+}
+function audTPickView() {
+  audTBody('<div id="aud-t-zone" ondragover="event.preventDefault();this.style.borderColor=\'var(--accent-bright)\';" ondragleave="this.style.borderColor=\'\';" ondrop="audTDrop(event)" onclick="document.getElementById(\'aud-t-input\').click()" ' +
+      'style="border:2px dashed rgba(var(--accent-rgb),0.45);border-radius:10px;padding:26px 14px;text-align:center;cursor:pointer;font-size:14px;">Drop a recording here, or click to choose one<div style="font-size:12px;opacity:0.75;margin-top:6px;">mp3, m4a, wav, ogg, aac, flac or webm; up to 6 hours</div></div>' +
+    '<input type="file" id="aud-t-input" accept="audio/*,.mp3,.m4a,.wav,.ogg,.oga,.opus,.aac,.flac,.webm" style="display:none;" onchange="audTTake(this.files && this.files[0])">' +
+    '<div style="font-size:12px;opacity:0.8;margin-top:10px;line-height:1.5;">Your recording goes to our transcription service (ElevenLabs, through fal) and is deleted as soon as the words come back. Only the text is kept.</div>');
+}
+function audTDrop(ev) { ev.preventDefault(); var f = ev.dataTransfer && ev.dataTransfer.files; audTTake(f && f[0]); }
+// The length is read from the file itself; if it cannot be, it is estimated from the size (as 128 kbps audio) and marked "about".
+function audTTake(file) {
+  if (!file || !AUD_T) return;
+  audTSay('');
+  if (AUD_T_CFG && file.size > AUD_T_CFG.max_bytes) { audTSay('That file is too large (the limit is 1.5 GB). Convert it to mp3 or m4a first.', true); return; }
+  AUD_T.file = file;
+  var url = URL.createObjectURL(file), a = document.createElement('audio'), done = false;
+  var finish = function (secs, exact) {
+    if (done || !AUD_T) return; done = true;
+    try { URL.revokeObjectURL(url); } catch (e) {}
+    AUD_T.secs = secs; AUD_T.exact = exact;
+    audTQuoteView();
+  };
+  a.preload = 'metadata';
+  a.onloadedmetadata = function () { if (isFinite(a.duration) && a.duration > 0) finish(a.duration, true); else finish(file.size * 8 / 128000, false); };
+  a.onerror = function () { finish(file.size * 8 / 128000, false); };
+  setTimeout(function () { finish(file.size * 8 / 128000, false); }, 8000);
+  a.src = url;
+}
+function audTQuoteView() {
+  var f = AUD_T.file, secs = AUD_T.secs, tok = audTTokens(secs), max = (AUD_T_CFG && AUD_T_CFG.max_secs) || 21600;
+  var tooLong = secs > max;
+  audTBody('<div style="font-size:14px;line-height:1.6;"><b>' + escapeHtml(f.name) + '</b><br>' + (Math.round(f.size / 104857.6) / 10) + ' MB &middot; ' + (AUD_T.exact ? '' : 'about ') + audTLen(secs) + '</div>' +
+    (tooLong ? '<div style="color:#e8a85a;margin-top:8px;">That is longer than 6 hours. Split it and transcribe each part.</div>' :
+    '<div style="margin-top:10px;font-size:14px;">This will cost <b>' + (AUD_T.exact ? '' : 'about ') + tok + ' tokens</b> (' + (AUD_T_CFG && AUD_T_CFG.tokens_per_half_hour || 4) * 2 + ' an hour), taken when the words come back. If it fails, it costs nothing.</div>' +
+    '<label style="display:block;margin-top:10px;font-size:13px;">How many people are speaking? <input id="aud-t-spk" type="number" min="1" max="32" placeholder="not sure" style="width:90px;margin-left:6px;"></label>' +
+    '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="aud-t-ok" style="margin-top:3px;"> Everyone in this recording agreed to be recorded and transcribed.</label>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-sm" onclick="audTPickView()">Choose another</button><button class="btn btn-sm btn-primary" id="aud-t-go" onclick="audTStart()">Transcribe (' + tok + ' tokens)</button></div>'));
+}
+function audTStart() {
+  var A = AUD_T; if (!A || !A.file) return;
+  if (!(document.getElementById('aud-t-ok') || {}).checked) { audTSay('Tick the box to confirm everyone agreed to be recorded.', true); return; }
+  var go = document.getElementById('aud-t-go'); if (go) go.disabled = true;
+  audTSay(vlSpin(12) + ' Starting...');
+  fetch('/api/audio/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId: A.cid, sessionId: A.sid, secs: A.secs, bytes: A.file.size, name: A.file.name, speakers: (document.getElementById('aud-t-spk') || {}).value || null, consent: true }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!AUD_T) return;
+      if (!res.ok) { if (go) go.disabled = false; audTSay(escapeHtml((res.j && (res.j.message || res.j.error)) || 'Could not start.'), true); return; }
+      AUD_T.job = { id: res.j.job, status: 'uploading' };
+      audTUpload(res.j.upload_url);
+    })
+    .catch(function () { if (go) go.disabled = false; audTSay('Could not reach the server.', true); });
+}
+// Straight to private storage, with a progress bar. The window must stay open until this finishes.
+function audTUpload(url) {
+  var A = AUD_T; if (!A) return;
+  audTBody('<div style="font-size:14px;">Uploading <b>' + escapeHtml(A.file.name) + '</b>... keep this window open until the upload finishes.</div>' +
+    '<div style="height:8px;background:rgba(var(--accent-rgb),0.15);border-radius:4px;margin-top:10px;overflow:hidden;"><div id="aud-t-bar" style="height:100%;width:0;background:var(--accent);"></div></div><div id="aud-t-pct" style="font-size:12px;margin-top:4px;">0%</div>');
+  audTSay('');
+  var x = new XMLHttpRequest();
+  A.xhr = x;
+  x.open('PUT', url);
+  x.setRequestHeader('Content-Type', A.file.type || 'application/octet-stream');
+  x.upload.onprogress = function (e) { if (!e.lengthComputable) return; var p = Math.round(e.loaded * 100 / e.total); var b = document.getElementById('aud-t-bar'), t = document.getElementById('aud-t-pct'); if (b) b.style.width = p + '%'; if (t) t.textContent = p + '%'; };
+  x.onload = function () {
+    if (x.status >= 200 && x.status < 300) { audTUploaded(); return; }
+    audTFailUpload('The upload was refused (' + x.status + ').');
+  };
+  x.onerror = function () { audTFailUpload('The upload did not get through. (If this keeps happening, the storage needs its upload permission set: tell Claudia "CORS".)'); };
+  x.send(A.file);
+}
+function audTFailUpload(why) {
+  var A = AUD_T; if (!A || !A.job) return;
+  fetch('/api/audio/jobs/' + A.job.id + '/cancel', { method: 'POST' }).catch(function () {});
+  audTBody('');
+  audTSay(escapeHtml(why) + ' Nothing was charged.', true);
+  setTimeout(function () { if (AUD_T && !document.getElementById('aud-t-zone')) audTPickView(); }, 50);
+}
+function audTUploaded() {
+  var A = AUD_T; if (!A) return;
+  audTSay(vlSpin(12) + ' Sending it for transcription...');
+  fetch('/api/audio/jobs/' + A.job.id + '/uploaded', { method: 'POST' }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    if (!AUD_T) return;
+    if (!res.ok || !res.j.job) { audTBody(''); audTSay(escapeHtml((res.j && res.j.error) || 'Could not send it.') + ' Nothing was charged.', true); return; }
+    AUD_T.job = res.j.job; audTShowJob(res.j.job);
+  }).catch(function () { audTSay('Could not reach the server.', true); });
+}
+function audTPoll() {
+  var A = AUD_T; if (!A || !A.job) return;
+  fetch('/api/audio/jobs/' + A.job.id, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!AUD_T || !j || !j.job) return;
+    AUD_T.job = j.job; audTShowJob(j.job);
+  }).catch(function () { if (AUD_T) AUD_T.timer = setTimeout(audTPoll, 8000); });
+}
+function audTShowJob(job) {
+  var A = AUD_T; if (!A) return;
+  if (A.timer) { clearTimeout(A.timer); A.timer = null; }
+  audTSay('');
+  if (job.status === 'transcribing' || job.status === 'saving') {
+    audTBody('<div style="font-size:14px;line-height:1.6;">' + vlSpin(14) + ' Transcribing <b>' + escapeHtml(job.file_name || 'your recording') + '</b>... usually a few minutes.</div><div style="font-size:12px;opacity:0.8;margin-top:6px;">You can close this window; press Transcribe a recording again to come back to it.</div>');
+    A.timer = setTimeout(audTPoll, 5000);
+    return;
+  }
+  if (job.status === 'failed') { audTBody(''); audTSay('It did not work: ' + escapeHtml(job.error || 'unknown') + ' Nothing was charged.', true); return; }
+  if (job.status !== 'ready') { audTPickView(); return; }
+  var sp = job.speakers || [];
+  audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
+    sp.map(function (s, i) {
+      return '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="min-width:80px;">' + escapeHtml(s.label) + '</b>' +
+        '<input class="aud-t-name" data-spk="' + escapeHtml(s.id) + '" type="text" maxlength="80" placeholder="Name (e.g. Ian, or Ian (Drel))" style="flex:1;min-width:180px;">' +
+        '<label style="font-size:12px;cursor:pointer;"><input type="checkbox" class="aud-t-leave" data-spk="' + escapeHtml(s.id) + '"> Leave out</label></div>' +
+        '<div style="font-size:12px;opacity:0.85;margin-top:6px;line-height:1.45;">' + (s.samples || []).map(function (t) { return '&ldquo;' + escapeHtml(t) + '&rdquo;'; }).join('<br>') + '</div></div>';
+    }).join('') +
+    '<div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-sm btn-primary" id="aud-t-put" onclick="audTApply()">Put it in the Story box</button></div>');
+}
+function audTApply() {
+  var A = AUD_T; if (!A || !A.job) return;
+  var names = {};
+  Array.prototype.forEach.call(document.querySelectorAll('#aud-t-modal .aud-t-name'), function (i) { names[i.getAttribute('data-spk')] = i.value || ''; });
+  Array.prototype.forEach.call(document.querySelectorAll('#aud-t-modal .aud-t-leave'), function (c) { if (c.checked) names[c.getAttribute('data-spk')] = '-'; });
+  var put = document.getElementById('aud-t-put'); if (put) put.disabled = true;
+  fetch('/api/audio/jobs/' + A.job.id + '/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ names: names }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(async function (res) {
+      if (!AUD_T) return;
+      if (!res.ok || typeof res.j.text !== 'string') { if (put) put.disabled = false; audTSay(escapeHtml((res.j && res.j.error) || 'Could not build the text.'), true); return; }
+      var jobId = A.job.id;
+      var m = document.getElementById('aud-t-modal'); if (m) m.style.display = 'none';
+      var ok = await fiApplyToField(fiEl('transcript-input'), res.j.text, { existsMessage: 'There is already text in the Story box.', after: function () { updateWordCounts(); } });
+      if (ok === false) { if (m) m.style.display = 'flex'; if (put) put.disabled = false; return; }
+      fetch('/api/audio/jobs/' + jobId + '/done', { method: 'POST' }).catch(function () {});
+      audTClose();
+    })
+    .catch(function () { if (put) put.disabled = false; audTSay('Could not reach the server.', true); });
+}
+setTimeout(audTInit, 1200);
+
 // ---- CALLER 2: Campaign Details -> Lore / Background ---------------------------------------
 // v3.0.866. The one thing that is NOT like the Story tab: this field autosaves through csDirty,
 // and a programmatic set fires no oninput, so the save has to be asked for explicitly. csDirty(true)

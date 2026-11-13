@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.09",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3609-transcribe",
+        "kind": "feature",
+        "public": false,
+        "summary": "Transcribe a recording: turn a recording of a session into text in the Story box (first draft, admins only).",
+        "detail": "Story tab: Transcribe a recording, beside Import from file, takes an audio file, shows its length and price (8 tokens an hour, charged only when the words come back), uploads it straight to private storage and has fal's ElevenLabs Scribe v2 write it out with speakers told apart. You name each speaker (or leave them out) and the text goes into the Story box. The recording is deleted as soon as the words are back.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.08",
     "staged_on": "2026-11-13",
     "entries": [

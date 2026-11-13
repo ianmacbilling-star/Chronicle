@@ -1213,7 +1213,7 @@
                  always visible, and it can never sit on top of the text. -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
               <label class="form-label">Story / Session Transcript</label>
-              <button class="btn btn-xs" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:5px;padding:0 8px;height:16px;line-height:14px;font-size:11px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
+              <button class="btn btn-xs" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:5px;padding:0 8px;height:16px;line-height:14px;font-size:11px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button><button class="btn btn-xs" type="button" id="story-audio-btn" onclick="audTOpen()" style="display:none;margin-bottom:5px;margin-left:6px;padding:0 8px;height:16px;line-height:14px;font-size:11px;" title="Turn a recording of your session into text in this box (v3.6.09). The recording is deleted as soon as the words come back.">&#127908; Transcribe a recording</button>
             </div>
             <!-- position:relative hosts the busy overlay, which is absolutely positioned. Inline
                  rather than a new class, so this batch touches no stylesheet. -->
