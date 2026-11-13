@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.08",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3608-take-view",
+        "kind": "change",
+        "public": false,
+        "summary": "A take's Trim button is now View: a bigger window you can resize from its corner, with Save frame and Last frame.",
+        "detail": "Video tab: View opens the take large (drag the bottom-right corner to resize). Save frame and Last frame moved there from the take card; trimming works as before (Save is now Save trim).",
+        "td": [
+          "TD-1135"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.07",
     "staged_on": "2026-11-13",
     "entries": [

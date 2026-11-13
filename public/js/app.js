@@ -42806,10 +42806,13 @@ function vlTrimTake(takeId) {
   box.id = 'vl-trim-modal';
   box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
   box.addEventListener('click', function (e) { if (e.target === box) vlTrimClose(); });
-  box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:640px;width:100%;padding:18px;">' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Trim take ' + f.n + '</div><button class="modal-close" onclick="vlTrimClose()">&times;</button></div>' +
-    '<video id="vl-trim-v" src="' + escapeHtml(f.t.video_url) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>' +
-    '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment, then set where the episode starts and ends this take. The take itself is not changed.</div>' +
+  box.innerHTML = '<div id="vl-trim-panel" style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;width:min(1100px,94vw);max-width:98vw;min-width:360px;max-height:96vh;overflow:auto;resize:both;padding:18px;box-sizing:border-box;" title="Drag the bottom-right corner to resize">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Take ' + f.n + '</div><button class="modal-close" onclick="vlTrimClose()">&times;</button></div>' +
+    '<video id="vl-trim-v" src="' + escapeHtml(f.t.video_url) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;max-height:calc(96vh - 230px);object-fit:contain;background:#000;border-radius:6px;"></video>' +
+    '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment. Save frame keeps that frame for another shot; Start here and End here trim the part the episode uses (the take itself is not changed).</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-sm btn-primary vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', false)">Save frame</button><button class="btn btn-sm vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', true)">Last frame</button><span style="' + VL_DESC + '">for the next shot, another shot or the Archive</span>' +
+      '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;"><a class="btn btn-sm vl-view-dl" style="text-decoration:none;" href="/api/video-lab/takes/' + takeId + '/download?code=' + encodeURIComponent(vlTakeCode(f.t, f.n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(f.t, f.n)) + '">&#8681; Download</a>' +
+      '<button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" onclick="vlCopyTakeLink(' + takeId + ')">Copy link</button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
       '<button class="btn btn-sm" onclick="vlTrimMark(\'st\')">Start here</button>' +
       '<button class="btn btn-sm" onclick="vlTrimMark(\'en\')">End here</button>' +
@@ -42818,7 +42821,7 @@ function vlTrimTake(takeId) {
       '<span id="vl-trim-read" style="' + VL_DESC + 'margin-left:auto;"></span>' +
     '</div>' +
     '<div id="vl-trim-msg" style="' + VL_DESC + 'margin-top:8px;"></div>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimClose()">Cancel</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save</button></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimClose()">Close</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save trim</button></div>' +
   '</div>';
   document.body.appendChild(box);
   var v = document.getElementById('vl-trim-v');
@@ -43497,10 +43500,7 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
     '</div>' +
     '<div style="' + VL_DESC + 'margin:2px 0 0 2px;">' + escapeHtml(vlTakeModelText(t)) + '</div>' +
     '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">' +
-      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + t.id + ')">Retouch</button>' : '') +   // v3.5.26
-      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Trim: choose the part of this take the episode uses. The take itself is not changed." onclick="vlTrimTake(' + t.id + ')">Trim</button>' : '') +   // v3.5.54
-      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-frm-btn" title="Save the frame this take\'s player is paused on, for the next shot, another shot or the Archive" onclick="vlFrmOpen(' + t.id + ', ' + n + ', false)">Save frame</button>' : '') +   // v3.6.07
-      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-frm-btn" title="Save this take\'s last frame, for the next shot, another shot or the Archive" onclick="vlFrmOpen(' + t.id + ', ' + n + ', true)">Last frame</button>' : '') +   // v3.6.07
+      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="View this take larger: save a frame for another shot, or trim the part the episode uses" onclick="vlTrimTake(' + t.id + ')">View</button>' : '') +   // v3.5.54 Trim; v3.6.08 View (Ian, 2026-11-13: "change it to view"), with Save frame and Last frame inside; Retouch moved there too (Ian: "take the retouch off the card")
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '">&#8681; Download</a>' : '') +   // v3.5.97: says what it is (Ian missed the bare arrow)
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Copy this take\'s video address" onclick="vlCopyTakeLink(' + t.id + ')">Copy link</button>' : '') +   // v3.5.97 (Ian: "make it so I can get the video\'s link")
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
@@ -43820,7 +43820,7 @@ function vlDeleteTake(id) {
 // Archive; this window then puts it in as the first picture of the next shot, of a shot picked here, or only in the Archive.
 var VL_FRM = null;
 function vlFrmSay(t) { var m = document.getElementById('vl-msg'); if (m) { m.textContent = t; setTimeout(function () { if (m.textContent === t) m.textContent = ''; }, 5000); } }
-function vlFrmPlayer(takeId) { return document.querySelector('.vl-takes-wrap [data-take="' + takeId + '"] video'); }
+function vlFrmPlayer(takeId) { var v = document.getElementById('vl-trim-v'); if (v && VL.trim && String(VL.trim.id) === String(takeId)) return v; return document.querySelector('.vl-takes-wrap [data-take="' + takeId + '"] video'); }
 function vlFrmClose() { var o = document.getElementById('vl-frm-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); VL_FRM = null; }
 function vlFrmOpen(takeId, n, last) {
   vlFrmClose();
@@ -43832,7 +43832,7 @@ function vlFrmOpen(takeId, n, last) {
   var at = 'end';
   if (!last) {
     var v = vlFrmPlayer(takeId);
-    if (!v || !isFinite(v.currentTime)) { vlFrmSay('Play the take and pause it on the frame you want, then press Save frame.'); return; }
+    if (!v || !isFinite(v.currentTime)) { vlFrmSay('Open the take with View, pause on the frame you want, then press Save frame.'); return; }
     at = Math.round(v.currentTime * 100) / 100;
     if (!v.paused) try { v.pause(); } catch (e) {}
   }
