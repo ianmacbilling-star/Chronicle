@@ -43499,6 +43499,8 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
     '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">' +
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + t.id + ')">Retouch</button>' : '') +   // v3.5.26
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Trim: choose the part of this take the episode uses. The take itself is not changed." onclick="vlTrimTake(' + t.id + ')">Trim</button>' : '') +   // v3.5.54
+      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-frm-btn" title="Save the frame this take\'s player is paused on, for the next shot, another shot or the Archive" onclick="vlFrmOpen(' + t.id + ', ' + n + ', false)">Save frame</button>' : '') +   // v3.6.07
+      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-frm-btn" title="Save this take\'s last frame, for the next shot, another shot or the Archive" onclick="vlFrmOpen(' + t.id + ', ' + n + ', true)">Last frame</button>' : '') +   // v3.6.07
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '">&#8681; Download</a>' : '') +   // v3.5.97: says what it is (Ian missed the bare arrow)
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Copy this take\'s video address" onclick="vlCopyTakeLink(' + t.id + ')">Copy link</button>' : '') +   // v3.5.97 (Ian: "make it so I can get the video\'s link")
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
@@ -43809,6 +43811,86 @@ function vlDeleteTake(id) {
   uiConfirm('Delete this take? Its video is removed from storage. This cannot be undone.', { okText: 'Delete', danger: true }).then(function (yes) {
     if (yes) vlEpAct('/api/video-lab/takes/' + id, 'DELETE', 'Could not delete the take.');
   });
+}
+
+// ---- use this frame (v3.6.07, TD-1135) ----------------------------------------------------------
+// Ian, 2026-11-13: "archive a frame in a take to use in the next shot or different shot"; "have options for all of them. next shot,
+// pick shot, archive"; "pausing the player is enough for now"; "it should be whatever they navigate to in the player". Save frame
+// takes the frame the take's player is paused on, Last frame the take's end. The server draws it and saves it in the campaign's
+// Archive; this window then puts it in as the first picture of the next shot, of a shot picked here, or only in the Archive.
+var VL_FRM = null;
+function vlFrmSay(t) { var m = document.getElementById('vl-msg'); if (m) { m.textContent = t; setTimeout(function () { if (m.textContent === t) m.textContent = ''; }, 5000); } }
+function vlFrmPlayer(takeId) { return document.querySelector('.vl-takes-wrap [data-take="' + takeId + '"] video'); }
+function vlFrmClose() { var o = document.getElementById('vl-frm-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); VL_FRM = null; }
+function vlFrmOpen(takeId, n, last) {
+  vlFrmClose();
+  var d = VL.draft, ep = d && vlFindEp(d.id), si = -1, t = null;
+  if (!d || !ep) return;
+  (ep.shots || []).forEach(function (s) { (s.takes || []).forEach(function (x) { if (String(x.id) === String(takeId)) t = x; }); });
+  if (!t) return;
+  d.shots.forEach(function (ds, i) { if (String(ds.id) === String(t.shot_id)) si = i; });
+  var at = 'end';
+  if (!last) {
+    var v = vlFrmPlayer(takeId);
+    if (!v || !isFinite(v.currentTime)) { vlFrmSay('Play the take and pause it on the frame you want, then press Save frame.'); return; }
+    at = Math.round(v.currentTime * 100) / 100;
+    if (!v.paused) try { v.pause(); } catch (e) {}
+  }
+  VL_FRM = { takeId: takeId, at: at, si: si, code: vlTakeCode(t, n), busy: false };
+  var shots = d.shots.map(function (ds, i) { return '<option value="' + i + '"' + (i === si + 1 ? ' selected' : '') + '>Shot ' + (i + 1) + (ds.name ? ': ' + escapeHtml(ds.name) : '') + (i === si ? ' (this shot)' : '') + '</option>'; }).join('');
+  var hasNext = si >= 0 && si + 1 < d.shots.length;
+  var box = document.createElement('div');
+  box.id = 'vl-frm-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.addEventListener('click', function (e) { if (e.target === box) vlFrmClose(); });
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:520px;width:100%;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">' + (last ? 'Last frame' : 'Save this frame') + '</div><button class="modal-close" onclick="vlFrmClose()">&times;</button></div>' +
+    '<div style="font-size:13px;line-height:1.5;margin:6px 0 12px;">' + escapeHtml(VL_FRM.code) + (last ? ', the last frame.' : ', at ' + at + ' s.') + ' It is saved in the campaign\'s Archive either way. Free.</div>' +
+    '<div style="display:flex;flex-direction:column;gap:10px;">' +
+      '<div><button type="button" class="btn btn-sm btn-primary vl-frm-go" id="vl-frm-next"' + (hasNext ? '' : ' disabled title="This is the last shot"') + ' onclick="vlFrmGo(\'next\')">Next shot' + (hasNext ? ' (shot ' + (si + 2) + ')' : '') + '</button> <span style="font-size:12px;opacity:0.8;">It becomes the first picture of the next shot.</span></div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><select id="vl-frm-shot" style="min-width:200px;">' + shots + '</select><button type="button" class="btn btn-sm vl-frm-go" onclick="vlFrmGo(\'pick\')">Put it in this shot</button> <span style="font-size:12px;opacity:0.8;">as its first picture.</span></div>' +
+      '<div><button type="button" class="btn btn-sm vl-frm-go" onclick="vlFrmGo(\'archive\')">Archive only</button> <span style="font-size:12px;opacity:0.8;">Add it to any shot later with Add picture.</span></div>' +
+    '</div><div id="vl-frm-msg" style="font-size:13px;margin-top:10px;"></div></div>';
+  document.body.appendChild(box);
+}
+// Where: 'next', 'pick' (the shot chosen in the window) or 'archive'. The frame goes in first; the shot's other pictures follow it.
+function vlFrmGo(where) {
+  var f = VL_FRM; if (!f || f.busy) return;
+  var d = VL.draft; if (!d) return;
+  var target = where === 'next' ? f.si + 1 : where === 'pick' ? Number((document.getElementById('vl-frm-shot') || {}).value) : -1;
+  if (where !== 'archive' && !(target >= 0 && target < d.shots.length)) return;
+  f.busy = true;
+  var btns = document.querySelectorAll('#vl-frm-modal .vl-frm-go'); Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
+  var msg = document.getElementById('vl-frm-msg'); if (msg) msg.innerHTML = vlSpin(12) + ' Saving the frame...';
+  var shotId = target >= 0 ? d.shots[target].id : null;
+  fetch('/api/video-lab/takes/' + f.takeId + '/frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: f.at, label: 'Frame of ' + f.code }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.archive) {
+        if (VL_FRM) VL_FRM.busy = false;
+        Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+        var nx = document.getElementById('vl-frm-next'); if (nx && !(f.si >= 0 && f.si + 1 < d.shots.length)) nx.disabled = true;
+        if (msg) msg.innerHTML = '<span style="' + VL_WARN + '">' + escapeHtml((res.j && res.j.error) || 'Could not save the frame.') + '</span>';
+        return;
+      }
+      var a = res.j.archive;
+      vlFrmClose();
+      if (where === 'archive') { vlFrmSay('Frame saved in the Archive'); return; }
+      var dd = VL.draft, i = -1;
+      if (!dd) return;
+      dd.shots.forEach(function (ds, k) { if (shotId && String(ds.id) === String(shotId)) i = k; });
+      if (i < 0) { vlFrmSay('Frame saved in the Archive (the shot was not found)'); return; }
+      vlReadForm();
+      var m = vlModel(dd.model);
+      dd.shots[i].kfs.unshift({ url: a.image_url, source: 'archive', moment_id: null, archive_id: a.id, label: a.title, prompt: '', duration: m ? m.defDuration : '' });
+      vlStructural();
+      vlFrmSay('Frame put in shot ' + (i + 1) + ' and saved in the Archive');
+    })
+    .catch(function () {
+      if (VL_FRM) VL_FRM.busy = false;
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+      if (msg) msg.innerHTML = '<span style="' + VL_WARN + '">Could not reach the server.</span>';
+    });
 }
 
 // ---- copy a take (v3.6.05) ----------------------------------------------------------------------

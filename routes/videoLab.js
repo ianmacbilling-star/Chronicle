@@ -1649,6 +1649,75 @@ router.post('/shots/:id/copy-take', requireAuth, requireVideo, async function (r
     if (!res.headersSent) res.status(500).json({ error: 'Could not copy the take.' });
   }
 });
+// v3.6.07 -- USE THIS FRAME (TD-1135; Ian, 2026-11-13: "archive a frame in a take to use in the next shot or different shot"; "have
+// options for all of them. next shot, pick shot, archive"; "pausing the player is enough"; "it should be whatever they navigate to in
+// the player"). The frame of a finished take at the time the player is paused on (or its last frame) is drawn here with ffmpeg and
+// saved in the campaign's Archive, where any shot of any episode can use it. The page puts it into a shot when asked. Free.
+async function grabFrame(url, at) {
+  const fs = require('fs'), path = require('path'), os = require('os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vlframe-'));
+  try {
+    const f = path.join(dir, 'take.mp4'), out = path.join(dir, 'frame.png');
+    fs.writeFileSync(f, await fetchVideo(url));
+    const p = await probeClip(f);
+    const last = Math.max(0, p.dur - 0.08);
+    let t = at === 'end' ? last : Math.max(0, Math.min(Number(at) || 0, last));
+    for (let tries = 0; tries < 3; tries++) {
+      try { fs.unlinkSync(out); } catch (e) {}
+      await runTool('ffmpeg', ['-y', '-loglevel', 'error', '-ss', t.toFixed(3), '-i', f, '-frames:v', '1', out], 60000);
+      if (fs.existsSync(out) && fs.statSync(out).size > 0) return { png: fs.readFileSync(out), at: Math.round(t * 10) / 10, w: p.w, h: p.h };
+      t = Math.max(0, t - 0.5);
+    }
+    throw new Error('no frame at that time');
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
+  }
+}
+router.post('/takes/:id/frame', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/takes/' + req.params.id + '/frame';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
+    if (!x.ep || !(await canChange(req, x.ep))) return vlRefuse(req, res, FN, 404, 'Not found.');
+    if (x.t.status !== 'done' || !x.t.video_url) return vlRefuse(req, res, FN, 409, 'Only a finished take has frames to save.');
+    const b = req.body || {};
+    const at = b.at === 'end' ? 'end' : Number(b.at);
+    if (at !== 'end' && !(at >= 0 && at < 3600)) return vlRefuse(req, res, FN, 400, 'Pause the player on the frame you want first.');
+    try {
+      const { getEffectiveTier, getTier } = require('../middleware/tiers');
+      const effTier = getTier(await getEffectiveTier(req.session.userId, x.ep.campaign_id));
+      const cap = effTier ? effTier.max_archives_per_campaign : null;
+      if (cap !== null && cap !== undefined) {
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(x.ep.campaign_id);
+        if (cnt && Number(cnt.c) >= cap) return vlRefuse(req, res, FN, 409, 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.');
+      }
+    } catch (capErr) { console.error('[video] archive cap check error:', capErr.message); }
+    const fr = await grabFrame(x.t.video_url, at);
+    const url = await storage.uploadFile(fr.png, 'vlframe-take-' + x.t.id + '-' + Date.now() + '.png', 'image/png', 'video-lab');
+    const label = String(b.label || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const title = (label || 'Frame of take ' + x.t.id) + ' at ' + fr.at + ' s';
+    const vs = await db.prepare('SELECT f.art_style_override AS fork_style, s.art_style AS session_style, c.art_style AS campaign_style FROM session_forks f JOIN sessions s ON s.id = f.session_id JOIN campaigns c ON c.id = s.campaign_id WHERE f.id = ?').get(x.ep.fork_id);
+    const style = vs ? (String(vs.fork_style || vs.session_style || vs.campaign_style || '').trim() || null) : null;
+    let styleName = null;
+    const cm = style ? /^custom:(\d+)$/i.exec(style) : null;
+    if (cm) { try { const r = await db.prepare('SELECT name FROM custom_art_styles WHERE id = ?').get(parseInt(cm[1], 10)); styleName = (r && r.name) || null; } catch (e) {} }
+    const shape = fr.w > fr.h * 1.15 ? 'wide' : (fr.h > fr.w * 1.15 ? 'tall' : 'square');
+    let ins;
+    try {
+      ins = await db.prepare('INSERT INTO campaign_archives (campaign_id, session_id, fork_id, image_type, title, image_url, source_url, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(x.ep.campaign_id, x.ep.session_id, x.ep.fork_id, 'moment', title.slice(0, 200), url, url, style, styleName, fr.w, fr.h, shape, req.session.userId, new Date().toISOString());
+    } catch (e) {
+      await deleteFiles([url], 'frame of take ' + x.t.id + ' not archived');
+      throw e;
+    }
+    vlDebug(req.session.userId, 'info', FN, 'Frame of take ' + x.t.id + ' at ' + fr.at + ' s archived', { url: vlShortUrl(url), asked: b.at, w: fr.w, h: fr.h });
+    res.json({ archive: { id: ins.lastInsertRowid, image_url: url, title: title.slice(0, 200), shape: shape, at: fr.at } });
+  } catch (e) {
+    console.error('[video] frame error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not save the frame: ' + String((e && e.message) || '').slice(0, 200) });
+  }
+});
 // Join the episode again after a failed join.
 router.post('/episodes/:id/join', requireAuth, requireVideo, async function (req, res) {
   try {

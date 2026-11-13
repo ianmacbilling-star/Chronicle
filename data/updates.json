@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.07",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3607-use-frame",
+        "kind": "feature",
+        "public": false,
+        "summary": "Use this frame: save a frame of a take for the next shot, another shot or the Archive.",
+        "detail": "Video tab: Save frame on a take saves the frame its player is paused on; Last frame saves its end. Either one asks where it goes: the next shot's first picture, a shot you pick (as its first picture), or the Archive only. It is always saved in the campaign's Archive, labelled with the take's code and the time, so any episode can use it. Free.",
+        "td": [
+          "TD-1135"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.06",
     "staged_on": "2026-11-13",
     "entries": [
