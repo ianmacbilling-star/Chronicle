@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.04",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3604-repo-tidy",
+        "kind": "ops",
+        "public": false,
+        "summary": "The project folder holds only the application: old delivery and undo scripts cleared, Claude outputs moved out.",
+        "detail": "No change to the app. .gitignore now covers apply/, apply_v*.sh and undo_v*.sh. Undo scripts are kept only for the work in hand and cleared when Ian says so.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.03",
     "staged_on": "2026-11-12",
     "entries": [

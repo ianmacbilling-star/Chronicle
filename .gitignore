@@ -4,4 +4,8 @@ node_modules/
 Claude outputs/
 version_dates_*.txt
 version_promotes.txt
-apply_v3_0_*.sh
+
+# v3.6.04 -- delivery scripts and their undos live only for the work in hand (Ian, 2026-11-13). Never tracked.
+apply/
+apply_v*.sh
+undo_v*.sh
