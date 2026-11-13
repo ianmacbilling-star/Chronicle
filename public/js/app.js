@@ -26367,7 +26367,7 @@ function audTPickView() {
   audTBody('<div id="aud-t-zone" ondragover="event.preventDefault();this.style.borderColor=\'var(--accent-bright)\';" ondragleave="this.style.borderColor=\'\';" ondrop="audTDrop(event)" onclick="document.getElementById(\'aud-t-input\').click()" ' +
       'style="border:2px dashed rgba(var(--accent-rgb),0.45);border-radius:10px;padding:26px 14px;text-align:center;cursor:pointer;font-size:14px;">Drop a recording here, or click to choose one<div style="font-size:12px;opacity:0.75;margin-top:6px;">mp3, m4a, wav, ogg, aac, flac or webm; up to 6 hours</div></div>' +
     '<input type="file" id="aud-t-input" accept="audio/*,.mp3,.m4a,.wav,.ogg,.oga,.opus,.aac,.flac,.webm" style="display:none;" onchange="audTTake(this.files && this.files[0])">' +
-    '<div style="font-size:12px;opacity:0.8;margin-top:10px;line-height:1.5;">Your recording goes to our transcription service (ElevenLabs, through fal) and is deleted as soon as the words come back. Only the text is kept.</div>');
+    '<div style="font-size:12px;opacity:0.8;margin-top:10px;line-height:1.5;">Your recording goes to our transcription service and is deleted as soon as the words come back.</div>');
 }
 function audTDrop(ev) { ev.preventDefault(); var f = ev.dataTransfer && ev.dataTransfer.files; audTTake(f && f[0]); }
 // The length is read from the file itself; if it cannot be, it is estimated from the size (as 128 kbps audio) and marked "about".

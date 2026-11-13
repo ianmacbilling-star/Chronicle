@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.11",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3611-audio-btn",
+        "kind": "change",
+        "public": false,
+        "summary": "Transcribe a recording sits beside Import from file, on the right above the Story box, with the same arrow.",
+        "detail": "Story tab: the two buttons are together on the right; the window says only that the recording goes to our transcription service and is deleted as soon as the words come back.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.10",
     "staged_on": "2026-11-13",
     "entries": [
