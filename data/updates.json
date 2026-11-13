@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.6.20",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3620-asset-done",
+        "kind": "fix",
+        "public": false,
+        "summary": "Done saves a new asset even without a picture.",
+        "detail": "Assets: a new asset with a name is created when you press Done, picture or not. Before, everything typed was thrown away unless you uploaded or generated a picture. An asset with no name says so instead of closing.",
+        "td": []
+      },
+      {
+        "id": "3620-dialog-race",
+        "kind": "fix",
+        "public": false,
+        "summary": "Adding an asset or a character can no longer overwrite the one before it.",
+        "detail": "If a picture upload, a generation or a character save finished after the dialog had been closed and opened again, its answer was written into the new dialog, and the next save renamed the previous asset or character. Late answers now leave a reopened dialog alone, and a change still waiting to save is sent when the asset dialog closes.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.19",
     "staged_on": "2026-11-13",
     "entries": [

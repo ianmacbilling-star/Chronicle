@@ -8835,6 +8835,7 @@ function openAssetModal(assetId) {
   var errEl = document.getElementById('asset-modal-error');
   if (errEl) errEl.classList.add('hidden');
   if (fileEl) fileEl.value = '';
+  state.assetModalSeq = (state.assetModalSeq || 0) + 1;   // v3.6.20: a reply for an earlier opening of this dialog leaves this one alone
   if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
 
   if (assetId) {
@@ -8982,8 +8983,40 @@ function handleAssetDrop(e) {
 function closeAssetModal() {
   var modal = document.getElementById('asset-modal');
   if (modal) modal.classList.add('hidden');
-  if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
+  // v3.6.20: a save still waiting for the typing to stop is sent now, not dropped
+  if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; if (state.modalAsset && state.modalAsset.id) saveAssetMeta(); }
   state.modalAsset = null;
+  state.assetModalSeq = (state.assetModalSeq || 0) + 1;
+}
+
+// v3.6.20 (a tester, 2026-11-13: "Adding an asset throws your typing away unless you give it a picture"): Done on a new asset
+// with a name creates it, with or without a picture (the server never needed one). A name is the one thing it must have.
+function assetDone() {
+  var a = state.modalAsset;
+  if (!a || a.id) { closeAssetModal(); return; }
+  var nameEl = document.getElementById('asset-name'), catEl = document.getElementById('asset-category'), descEl = document.getElementById('asset-description'), errEl = document.getElementById('asset-modal-error');
+  var name = nameEl ? nameEl.value.trim() : '', desc = descEl ? descEl.value.trim() : '';
+  if (!name && !desc) { closeAssetModal(); return; }
+  if (!name) { if (errEl) { errEl.textContent = 'Give the asset a name, or close it with the \u00d7 to leave it out.'; errEl.classList.remove('hidden'); } return; }
+  var fd = new FormData();
+  fd.append('name', name);
+  fd.append('category', catEl ? catEl.value : 'location');
+  fd.append('description', desc);
+  var h = assetHeightValue(), seq = state.assetModalSeq, btn = document.getElementById('asset-done-btn');
+  if (btn) btn.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (btn) btn.disabled = false;
+      if (!data || data.error || !data.id) { if (seq === state.assetModalSeq && errEl) { errEl.textContent = (data && data.error) || 'Could not save the asset.'; errEl.classList.remove('hidden'); } return; }
+      state.assets = (state.assets || []).concat([data]);
+      renderAssets();
+      _syncReviewAsset('upsert', data);
+      if (seq !== state.assetModalSeq) return;
+      if (h != null) { state.modalAsset = Object.assign({}, data, { height_ft: h }); saveAssetMeta(); }
+      closeAssetModal();
+    })
+    .catch(function () { if (btn) btn.disabled = false; if (errEl) { errEl.textContent = 'Could not reach the server.'; errEl.classList.remove('hidden'); } });
 }
 
 function assetPickFile() { var f = document.getElementById('asset-image'); if (f) f.click(); }
@@ -9076,7 +9109,7 @@ function assetGenerateFromModal() {
   if (!name) { if (errEl) { errEl.textContent = 'Give the asset a name first.'; errEl.classList.remove('hidden'); } return; }
   if (!description) { if (errEl) { errEl.textContent = 'Add a description to generate an image.'; errEl.classList.remove('hidden'); } return; }
   showBusyOverlay('asset-modal-image-body', 'Generating', 'Creating your image...');
-  var existingId = state.modalAsset && state.modalAsset.id;
+  var existingId = state.modalAsset && state.modalAsset.id, seq = state.assetModalSeq;   // v3.6.20
   var url, opts;
   if (existingId) {
     url = '/api/campaigns/' + state.currentCampaign.id + '/assets/' + existingId + '/regenerate';
@@ -9093,9 +9126,9 @@ function assetGenerateFromModal() {
         if (errEl) { errEl.textContent = data.message || data.error; errEl.classList.remove('hidden'); }
         return;
       }
-      if (data.asset) { state.modalAsset = data.asset; if (assetHeightValue() != null) scheduleAssetMetaSave(); }   // v3.5.61: a height set before the asset existed
+      if (data.asset && seq === state.assetModalSeq) { state.modalAsset = data.asset; if (assetHeightValue() != null) scheduleAssetMetaSave(); }   // v3.5.61: a height set before the asset existed; v3.6.20 only into the same opening
       var jobId = data.image_job_id || data.job_id;
-      var targetId = state.modalAsset ? state.modalAsset.id : (data.asset && data.asset.id);
+      var targetId = (data.asset && data.asset.id) || existingId;   // v3.6.20: this asset, not whatever the dialog holds now
       if (jobId) {
         pollRefJob(jobId, function(u){ reloadAndRenderModalAsset(targetId); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ hideBusyOverlay('asset-modal-image-body'); if (errEl) { errEl.textContent = 'Could not generate: ' + err; errEl.classList.remove('hidden'); } });
       } else {
@@ -9119,6 +9152,7 @@ function assetUploadFile(file) {
   if (errEl) errEl.classList.add('hidden');
   if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
   showBusyOverlay('asset-modal-image-body', 'Uploading', 'Saving your image...');
+  var seq = state.assetModalSeq;   // v3.6.20
   var fd = new FormData();
   fd.append('name', name);
   fd.append('category', catEl ? catEl.value : 'location');
@@ -9132,13 +9166,14 @@ function assetUploadFile(file) {
     .then(function(data){
       hideBusyOverlay('asset-modal-image-body');
       if (data && data.error) { if (errEl) { errEl.textContent = data.error; errEl.classList.remove('hidden'); } return; }
-      state.modalAsset = data;
-      if (assetHeightValue() != null) scheduleAssetMetaSave();   // v3.5.61
+      var mine = (seq === state.assetModalSeq);   // v3.6.20: the dialog was closed or reopened while this uploaded: leave it alone
+      if (mine) state.modalAsset = data;
+      if (mine && assetHeightValue() != null) scheduleAssetMetaSave();   // v3.5.61
       var found = false;
       state.assets = (state.assets || []).map(function(x){ if (String(x.id) === String(data.id)) { found = true; return data; } return x; });
       if (!found) state.assets.push(data);
       renderAssets();
-      renderAssetModalImage(data);
+      if (mine) renderAssetModalImage(data);
       _syncReviewAsset('upsert', data);
     })
     .catch(function(){ hideBusyOverlay('asset-modal-image-body'); if (errEl) { errEl.textContent = 'Could not upload the image.'; errEl.classList.remove('hidden'); } });
@@ -9531,9 +9566,11 @@ function createCharThenBuild(opts) {
     if (slotFiles[slot]) formData.append(slot, slotFiles[slot]);
   });
 
+  var _seq = state.charModalSeq;   // v3.6.20
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters', { method: 'POST', body: formData })
     .then(function (r) { return r.json(); })
     .then(function (data) {
+      if (data && data.id && _seq !== state.charModalSeq) { loadCharacters(); return; }   // v3.6.20: the dialog moved on; never give it this id
       if (!data || data.error || !data.id) {
         if (btn) { btn.disabled = false; btn.textContent = '\u27f3 Build character prompt'; }
         charPromptMsg('new', (data && (data.message || data.error)) || 'Could not save the character.');
@@ -10067,6 +10104,7 @@ function charHeightLoad(ft) {
   out.textContent = charHeightLabel(Math.round((+ft) * 10) / 10);
 }
 function openCharModal(editId) {
+  state.charModalSeq = (state.charModalSeq || 0) + 1;   // v3.6.20: a reply for an earlier opening of this dialog leaves this one alone
   var char = editId ? state.characters.find(function(c){return c.id===editId;}) : null;
   document.getElementById('char-edit-id').value = editId || '';
   document.getElementById('char-modal-title').textContent = editId ? 'Edit Character' : 'Add Character';
@@ -10102,6 +10140,7 @@ async function closeCharModal() {
   // v3.0.860 -- TD-724. Ian: "Maybe we add a Dirty flag when they try to close the
   // dialog without regenerating the image? Warn them."
   if (!(await charPromptStaleOk())) return;
+  state.charModalSeq = (state.charModalSeq || 0) + 1;   // v3.6.20
   try {
     var editId = (document.getElementById('char-edit-id') || {}).value || '';
     var nameEl = document.getElementById('char-name');
@@ -10229,10 +10268,12 @@ function saveChar() {
     ? '/api/campaigns/' + state.currentCampaign.id + '/characters/' + editId
     : '/api/campaigns/' + state.currentCampaign.id + '/characters';
 
+  var _seq = state.charModalSeq;   // v3.6.20
   fetch(url, {method: editId ? 'PUT' : 'POST', body: formData})
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) { showCharSaveError(data.error, data.code === 'CHARACTER_LIMIT'); return; }
+      if (_seq !== state.charModalSeq) { loadCharacters(); return; }   // v3.6.20: the dialog was closed or reopened meanwhile; never give it this id
 
       // If this was a NEW character that has no prompt yet, DON'T close —
       // the "Build character prompt" step is only available once the
