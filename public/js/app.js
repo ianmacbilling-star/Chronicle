@@ -45135,8 +45135,9 @@ function vlBeatsHTML(s, si) {
       '<div style="display:flex;gap:6px;align-items:center;margin-bottom:3px;">' +
         '<span style="font-weight:600;color:var(--accent-pale);font-size:12px;flex:none;">Beat ' + (bi + 1) + '</span>' +
         '<span id="vl-btm-' + si + '-' + bi + '" style="' + (tm.to > Number(s.seconds) + 0.05 ? VL_BEAT_OVER : VL_DESC) + 'flex:none;">' + vlSecsText(tm.from) + '&ndash;' + vlSecsText(tm.to) + ' s</span>' +
-        '<label style="' + VL_DESC + 'display:inline-flex;gap:4px;align-items:center;margin-left:auto;" title="How long this beat takes. Empty: an equal share of what the other beats leave.">Seconds' +
+        '<label style="' + VL_DESC + 'display:inline-flex;gap:4px;align-items:center;margin-left:8px;" title="How long this beat takes. Empty: an equal share of what the other beats leave.">Seconds' +
           '<input id="vl-bs-' + si + '-' + bi + '" class="form-input" type="number" min="0.5" max="15" step="0.5" style="width:64px;padding:2px 6px;font-size:12px;height:auto;" placeholder="' + vlSecsText(tm.d) + '" value="' + (b.secs ? b.secs : '') + '" oninput="vlBeatSecs(' + si + ')"></label>' +
+        '<span style="flex:1 1 auto;"></span>' +   // v3.6.19 (Ian: "I've hit the up arrow many times thinking i was changing the seconds"): Seconds sits by the beat's label, away from the arrows
         (bi > 0 ? '<button type="button" class="narrative-regen-btn" title="Move this beat up (its camera, sound and lines go with it)" onclick="vlBeatMove(' + si + ',' + bi + ',-1)">&#9650;</button>' : '') +   // v3.5.65 (Ian: reorder beats)
         (bi < texts.length - 1 ? '<button type="button" class="narrative-regen-btn" title="Move this beat down (its camera, sound and lines go with it)" onclick="vlBeatMove(' + si + ',' + bi + ',1)">&#9660;</button>' : '') +
         '<button type="button" class="narrative-regen-btn" title="Remove this beat (its lines stay, said at any time)" onclick="vlBeatRemove(' + si + ',' + bi + ')">&#10005;</button>' +

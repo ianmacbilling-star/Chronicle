@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.19",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3619-beat-secs",
+        "kind": "change",
+        "public": false,
+        "summary": "A beat's Seconds box now sits by the beat's label, away from the up and down arrows.",
+        "detail": "Video, a shot's beats: the arrows that move a beat were too easy to hit when meaning to change its seconds.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.18",
     "staged_on": "2026-11-13",
     "entries": [
