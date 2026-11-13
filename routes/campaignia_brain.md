@@ -1047,7 +1047,9 @@ is spent it shows the cost: **4 tokens for each started half hour** (8 an hour),
 the words come back; if it fails, nothing is charged. You tick that everyone recorded agreed to it.
 A long recording takes a few minutes; you can close the window and press the button again to come
 back to it. When the words are back you name each speaker (the window shows a few of their lines so
-you can tell who is who) or tick **Leave out**, then **Put it in the Story box** (if the box already
+you can tell who is who) or tick **Leave out**. **For a game session, use the player's Player Name from
+their character**; each box offers the campaign's Player Names to pick from, and you can type any
+other name (a guest, an interviewer, a narrator). Then **Put it in the Story box** (if the box already
 has text it asks whether to add or replace). In a long recording one person can now and then show up
 as two speakers; give both the same name. **The recording goes to our transcription service and is
 deleted as soon as the words come back**; only the text is kept, and only until it is put in the box.

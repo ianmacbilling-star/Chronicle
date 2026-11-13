@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.14",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3614-audio-players",
+        "kind": "change",
+        "public": false,
+        "summary": "Audio Transcription's name boxes offer your campaign's Player Names.",
+        "detail": "When the words are back, each speaker's box lists the Player Names from the campaign's characters to pick from, or you can type any name. For a game session, use the Player Name.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.13",
     "staged_on": "2026-11-13",
     "entries": [

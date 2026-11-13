@@ -26475,10 +26475,12 @@ function audTShowJob(job) {
   var sp = job.speakers || [];
   audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
     (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
+    '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14
+    '<datalist id="aud-t-players">' + (job.players || []).map(function (p) { return '<option value="' + escapeHtml(p) + '"></option>'; }).join('') + '</datalist>' +
     sp.map(function (s, i) {
       return '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' +
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="min-width:80px;">' + escapeHtml(s.label) + '</b>' +
-        '<input class="form-input aud-t-name" data-spk="' + escapeHtml(s.id) + '" type="text" maxlength="80" placeholder="Name (e.g. Ian, or Ian (Drel))" style="flex:1;min-width:180px;width:auto;padding:6px 10px;">' +
+        '<input class="form-input aud-t-name" data-spk="' + escapeHtml(s.id) + '" type="text" maxlength="80" list="aud-t-players" autocomplete="off" placeholder="' + ((job.players || []).length ? 'Pick a player or type a name' : 'Name') + '" style="flex:1;min-width:180px;width:auto;padding:6px 10px;">' +
         '<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;"><input type="checkbox" class="aud-t-leave" data-spk="' + escapeHtml(s.id) + '" style="margin:0;width:14px;height:14px;accent-color:var(--accent-bright);cursor:pointer;"> Leave out</label></div>' +
         '<div style="font-size:12px;opacity:0.85;margin-top:6px;line-height:1.45;">' + (s.samples || []).map(function (t) { return '&ldquo;' + escapeHtml(t) + '&rdquo;'; }).join('<br>') + '</div></div>';
     }).join('') +

@@ -278,6 +278,22 @@ function jobView(job) {
   return v;
 }
 
+// v3.6.14 (Ian, 2026-11-13: "The name you assign a person talking should (if it's a game session) match the Player Name on a
+// character ... a drop down with player names in it or they can type in it"; "Just the player name"): the campaign's Player
+// Names, for the name boxes of a ready job.
+async function withPlayers(db, job) {
+  const v = jobView(job);
+  if (job.status !== 'ready') return v;
+  try {
+    const seen = {};
+    v.players = (await db.prepare("SELECT player_name FROM characters WHERE campaign_id = ? AND player_name IS NOT NULL AND player_name <> '' ORDER BY id").all(job.campaign_id))
+      .map(function (r) { return String(r.player_name).replace(/\s+/g, ' ').trim().slice(0, 80); })
+      .filter(function (n) { const k = n.toLowerCase(); if (!n || seen[k]) return false; seen[k] = true; return true; })
+      .sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+  } catch (e) { v.players = []; }
+  return v;
+}
+
 async function chargeJob(db, job) {
   const claim = await db.prepare('UPDATE audio_jobs SET tokens_charged = 0 WHERE id = ? AND tokens_charged IS NULL').run(job.id);
   if (!claim.changes) return;
@@ -646,7 +662,7 @@ router.get('/jobs/:id', requireAuth, async function (req, res) {
       }
       job = await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(job.id);
     }
-    res.json({ job: jobView(job) });
+    res.json({ job: await withPlayers(db, job) });
   } catch (e) {
     console.error('[audio] job read error:', e && e.message);
     res.status(500).json({ error: 'Could not read the job.' });
@@ -658,7 +674,7 @@ router.get('/active', requireAuth, async function (req, res) {
     await ensureTables();
     const db = await getDb();
     const job = await db.prepare("SELECT * FROM audio_jobs WHERE user_id = ? AND session_id = ? AND status IN ('uploading', 'preparing', 'transcribing', 'saving', 'ready') AND created_at > NOW() - INTERVAL '7 days' ORDER BY id DESC LIMIT 1").get(req.session.userId, parseInt(req.query.session, 10) || 0);
-    res.json({ job: job ? jobView(job) : null });
+    res.json({ job: job ? await withPlayers(db, job) : null });
   } catch (e) { res.json({ job: null }); }
 });
 
