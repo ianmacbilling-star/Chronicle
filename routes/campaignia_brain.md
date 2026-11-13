@@ -167,7 +167,7 @@ Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Plat
   Silver, more moments per session, more art *and* narrative style options,
   **multiple versions of a book**, the full **Writing Coach** (Feedback, Rewrite and Word; see
   10.9) and **Audio Transcription** (a recording turned into text; see 10.1). Platinum and the Free
-  Trial have both too, and members get both from their Story Master's plan; Regen works on every plan.
+  Trial have both too; Regen works on every plan.
 - **Platinum** — unlimited campaigns/sessions/characters, the largest monthly token
   grant, the highest moment caps, all styling options, **multiple versions of a book**,
   and the ability to build **custom art styles**.
@@ -1043,8 +1043,8 @@ before you generate.
 **Import from a file** and turns a recording of your {session}, an interview or a narrated story into
 text in the box, one paragraph per turn as "Name: what they said". Drop or choose an audio or video
 file (mp3, m4a, wav, ogg, aac, flac, webm and the like), **up to 6 hours** and 1.5 GB. Before anything
-is spent it shows the cost: **4 tokens for each started half hour** (8 an hour), charged only when
-the words come back; if it fails, nothing is charged. You tick that everyone recorded agreed to it.
+is spent it shows the cost: **2 tokens for each started 15 minutes** (so 2 at the least; 8 an hour),
+charged only when the words come back; if it fails, nothing is charged. You tick that everyone recorded agreed to it.
 A long recording takes a few minutes; you can close the window and press the button again to come
 back to it. When the words are back you name each speaker (the window shows a few of their lines so
 you can tell who is who) or tick **Leave out**. **For a game session, use the player's Player Name from
@@ -1053,8 +1053,7 @@ other name (a guest, an interviewer, a narrator). Then **Put it in the Story box
 has text it asks whether to add or replace). In a long recording one person can now and then show up
 as two speakers; give both the same name. **The recording goes to our transcription service and is
 deleted as soon as the words come back**; only the text is kept, and only until it is put in the box.
-**Plans:** Gold, Platinum and the Free Trial; a member of a campaign whose Story Master has Gold or
-Platinum can use it there too, paying with their own tokens.
+**Who:** the Story Master, since the Story box is theirs, on Gold, Platinum or the Free Trial.
 
 **Pick your styles before you generate.** The **Narrative style** and **Art style** buttons sit on
 the Story tab, beside Generate Story (they show the current pick; which styles you can choose depends
@@ -2475,7 +2474,8 @@ Friction points and what's actually going on.
 - **"Why can't I edit the story text?"** The **transcript belongs to the Story Master** —
   members can edit their own **Notes** and their own **version**, but not the canonical
   transcript. Also, once any session is marked **Ready**, members edit characters inside
-  their own version rather than the canonical ones.
+  their own version rather than the canonical ones. The **Player Name** stays editable even then:
+  the **Player name** button on your character's card.
 - **"Why can't my player see the session?"** It's still in **Draft**. Mark it **Ready**
   and they can see it and make their own version.
 - **"Why can't I delete my campaign?"** Delete only works when the campaign is completely

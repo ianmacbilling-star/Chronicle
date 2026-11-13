@@ -32,14 +32,14 @@ const { getDb } = require('../database/db');
 const storage = require('../storage/storage');
 
 const ENDPOINT = 'fal-ai/elevenlabs/speech-to-text/scribe-v2';
-const TOKENS_PER_HALF_HOUR = 4;   // 8 tokens an hour with keyterms (Ian, 2026-11-13: a token covers 8 cents; Scribe v2 + keyterms ~ $0.62 an hour)
+const TOKENS_PER_QUARTER_HOUR = 2;   // v3.6.18 (Ian, 2026-11-13: "Charge per 15 minutes ... with a 2 token minimum and round up"); still 8 an hour (a token covers 8 cents; Scribe v2 + keyterms ~ $0.62 an hour)
 const MAX_SECS = 6 * 3600;        // 6 hours (Ian, 2026-11-13)
 const MAX_BYTES = 1536 * 1024 * 1024;
 const PUT_SECS = 3600, GET_SECS = 3600;
 const PART_SECS = 1140, OVERLAP_SECS = 90;   // v3.6.12: parts of 19 minutes overlapping by 90 s (fal's limit is 1200 s a request)
 const PREP_STALE_MINS = 45;                  // a recording still being prepared after this long was lost (a restart): failed, nothing charged
 
-function audioTokens(secs) { return TOKENS_PER_HALF_HOUR * Math.max(1, Math.ceil((Number(secs) || 0) / 1800 - 1e-9)); }
+function audioTokens(secs) { return TOKENS_PER_QUARTER_HOUR * Math.max(1, Math.ceil((Number(secs) || 0) / 900 - 1e-9)); }
 function audioBucket() { return String(process.env.AUDIO_BUCKET || '').trim() || storage.holdingBucket(); }
 
 let tablesReady = null;
@@ -248,7 +248,7 @@ function loreNames(text) {
   return order.sort(function (a, b) { return counts[b] - counts[a] || first[a] - first[b]; });
 }
 async function keytermsFor(db, campaignId, sessionId) {
-  const out = [], seen = {}, src = { characters: 0, assets: 0, campaign: 0, session: 0, lore: 0 };
+  const out = [], seen = {}, src = { characters: 0, assets: 0, campaign: 0, session: 0, app: 0, lore: 0 };
   const add = function (s, from) {
     s = String(s || '').replace(/\s+/g, ' ').trim();
     if (out.length >= 100 || !s || s.length >= 50 || s.split(' ').length > 5 || /[<>{}\[\]\\]/.test(s)) return;
@@ -264,6 +264,7 @@ async function keytermsFor(db, campaignId, sessionId) {
   try { (await db.prepare('SELECT name FROM campaign_assets WHERE campaign_id = ? ORDER BY id').all(campaignId)).forEach(function (r) { add(r.name, 'assets'); }); } catch (e) {}
   try { const c = await db.prepare('SELECT name, lore FROM campaigns WHERE id = ?').get(campaignId); if (c) { add(c.name, 'campaign'); lore = (c.lore || '') + '\n' + lore; } } catch (e) {}
   try { const s = await db.prepare('SELECT name FROM sessions WHERE id = ?').get(sessionId); if (s) add(s.name, 'session'); } catch (e) {}
+  ['Campaignia', 'Story Master'].forEach(function (n) { add(n, 'app'); });   // v3.6.18: a tester heard "Campaign" and "story master"
   loreNames(lore).forEach(function (n) { add(n, 'lore'); });
   out.sources = src;
   return out;
@@ -314,7 +315,7 @@ function buildText(turns, speakers, names) {
 }
 
 function jobView(job) {
-  const v = { id: job.id, status: job.status, file_name: job.file_name, secs_est: job.secs_est, tokens: job.tokens, tokens_charged: job.tokens_charged, error: job.error || null, created_at: job.created_at, parts: Number(job.parts) || null };
+  const v = { id: job.id, status: job.status, file_name: job.file_name, secs_est: job.secs_est, tokens: job.tokens, tokens_charged: job.tokens_charged, error: job.error || null, created_at: job.created_at, parts: Number(job.parts) || null, speakers_hint: Number(job.speakers_hint) || null };
   if (job.status === 'ready' && job.words) {
     try { const turns = turnsOf(JSON.parse(job.words)); v.speakers = speakersOf(turns); v.turns = turns.length; } catch (e) { v.speakers = []; }
   }
@@ -587,7 +588,7 @@ router.get('/config', requireAuth, async function (req, res) {
     await ensureTables();
     const db = await getDb();
     const cid = parseInt(req.query.campaign, 10);   // v3.6.13: whether this campaign's plan has it
-    res.json({ enabled: await audioOn(db, req), allowed: cid ? await planAllows(db, req, cid) : null, plan_message: PLAN_MSG, tokens_per_half_hour: TOKENS_PER_HALF_HOUR, max_secs: MAX_SECS, max_bytes: MAX_BYTES });
+    res.json({ enabled: await audioOn(db, req), allowed: cid ? await planAllows(db, req, cid) : null, plan_message: PLAN_MSG, tokens_per_quarter_hour: TOKENS_PER_QUARTER_HOUR, max_secs: MAX_SECS, max_bytes: MAX_BYTES });
   } catch (e) { res.json({ enabled: false }); }
 });
 
@@ -600,7 +601,11 @@ router.post('/start', requireAuth, async function (req, res) {
     if (req.session.impersonatorId) return audRefuse(req, res, 'start', 403, 'Not while signed in as another person.');
     const b = req.body || {};
     const campaignId = parseInt(b.campaignId, 10), sessionId = parseInt(b.sessionId, 10);
-    if (!campaignId || !sessionId || !(await getCampaignRole(req.session.userId, campaignId))) return audRefuse(req, res, 'start', 404, 'Open a session of your campaign first.');
+    const role = campaignId ? await getCampaignRole(req.session.userId, campaignId) : null;
+    if (!campaignId || !sessionId || !role) return audRefuse(req, res, 'start', 404, 'Open a session of your campaign first.');
+    // v3.6.18 (a tester, 2026-11-13: a player paid for a transcript their read-only Story box could not keep): the Story box is
+    // the Story Master's, so only they may transcribe into it.
+    if (role !== 'dm') return audRefuse(req, res, 'start', 403, "Only the Story Master can put a transcript in this session's Story box.");
     if (!(await planAllows(db, req, campaignId))) return audRefuse(req, res, 'start', 403, PLAN_MSG);   // v3.6.13 Gold and up
     const sess = await db.prepare('SELECT id FROM sessions WHERE id = ? AND campaign_id = ?').get(sessionId, campaignId);
     if (!sess) return audRefuse(req, res, 'start', 404, 'That session was not found.');

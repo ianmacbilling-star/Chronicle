@@ -9935,6 +9935,8 @@ function renderCharacters() {
             var btns = '';
             if (canEdit) {
               btns += '<button class="char-btn" onclick="openCharModal(' + c.id + ')">Edit</button>';
+            } else if (isOwner && locked) {   // v3.6.18 (Ian): the Player Name stays editable while the campaign is locked
+              btns += '<button class="char-btn" onclick="charPlayerNameEdit(' + c.id + ')" title="Change who plays this character. The character itself is locked.">Player name</button>';
             }
             // Delete stays DM-only — players cannot delete any character.
             btns += '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>';
@@ -10118,6 +10120,19 @@ async function closeCharModal() {
     }
   } catch (e) {}
   document.getElementById('char-modal').classList.add('hidden');
+}
+
+// v3.6.18 (Ian, 2026-11-13: "it can be editable while locked"; "a player name can be empty"): a note about a real person,
+// not story canon, so the owner may change it on a locked campaign. Only that field is sent.
+async function charPlayerNameEdit(id) {
+  var c = (state.characters || []).find(function (x) { return String(x.id) === String(id); });
+  if (!c || !state.currentCampaign) return;
+  var v = await uiPrompt('Player name', 'Who plays ' + charDisplayName(c.name) + '? Leave it empty if nobody does.', c.player_name || '');
+  if (v === null || v === undefined || v === false) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + id + '/player-name', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player_name: String(v) }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { if (!res.ok || res.j.error) { showError((res.j && res.j.error) || 'Could not save the player name.'); return; } loadCharacters(); })
+    .catch(function () { showError('Could not reach the server.'); });
 }
 
 function previewCharImage() {
@@ -19604,6 +19619,8 @@ function renderCharacters() {
             var btns = '';
             if (canEdit) {
               btns += '<button class="char-btn" onclick="openCharModal(' + c.id + ')">Edit</button>';
+            } else if (isOwner && locked) {   // v3.6.18 (Ian): the Player Name stays editable while the campaign is locked
+              btns += '<button class="char-btn" onclick="charPlayerNameEdit(' + c.id + ')" title="Change who plays this character. The character itself is locked.">Player name</button>';
             }
             // Delete stays DM-only — players cannot delete any character.
             btns += '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>';
@@ -26148,6 +26165,9 @@ function fiTrimToLimit(text, limit) {
 async function fiApplyToField(box, text, opts) {
   opts = opts || {};
   if (!box) return false;
+  // v3.6.18 (a tester, 2026-11-13: a player's transcript went into the read-only Story box, never saved, and was paid for):
+  // a box this person cannot change takes nothing, and says so.
+  if (box.readOnly || box.disabled) { showError('This box is read-only for you, so nothing was put in it.'); return false; }
   var next = text;
   if ((box.value || '').trim()) {
     // Three honest answers, so three buttons. Append is the PRIMARY: Enter must never be the key
@@ -26336,7 +26356,7 @@ function audTInit() {
     if (b) b.style.display = j && j.enabled ? '' : 'none';
   }).catch(function () {});
 }
-function audTTokens(secs) { var per = (AUD_T_CFG && AUD_T_CFG.tokens_per_half_hour) || 4; return per * Math.max(1, Math.ceil(secs / 1800 - 1e-9)); }
+function audTTokens(secs) { var per = (AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2; return per * Math.max(1, Math.ceil(secs / 900 - 1e-9)); }   // v3.6.18: per started 15 minutes (Ian)
 function audTLen(secs) { secs = Math.round(secs); var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return h ? h + ' h ' + m + ' m' : (m ? m + ' m ' + s + ' s' : s + ' s'); }
 function audTClose() {
   var o = document.getElementById('aud-t-modal'); if (o && o.parentNode) o.parentNode.removeChild(o);
@@ -26399,7 +26419,7 @@ function audTQuoteView() {
   var tooLong = secs > max;
   audTBody('<div style="font-size:14px;line-height:1.6;"><b>' + escapeHtml(f.name) + '</b><br>' + (Math.round(f.size / 104857.6) / 10) + ' MB &middot; ' + (AUD_T.exact ? '' : 'about ') + audTLen(secs) + '</div>' +
     (tooLong ? '<div style="color:#e8a85a;margin-top:8px;">That is longer than 6 hours. Split it and transcribe each part.</div>' :
-    '<div style="margin-top:10px;font-size:14px;">This will cost <b>' + (AUD_T.exact ? '' : 'about ') + tok + ' tokens</b> (' + (AUD_T_CFG && AUD_T_CFG.tokens_per_half_hour || 4) * 2 + ' an hour), taken when the words come back. If it fails, it costs nothing.</div>' +
+    '<div style="margin-top:10px;font-size:14px;">This will cost <b>' + (AUD_T.exact ? '' : 'about ') + tok + ' tokens</b> (' + ((AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2) + ' for each started 15 minutes), taken when the words come back. If it fails, it costs nothing.</div>' +
     '<label style="display:block;margin-top:10px;font-size:13px;">How many people are speaking? <input id="aud-t-spk" type="number" min="1" max="32" placeholder="not sure" style="width:90px;margin-left:6px;"></label>' +
     '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="aud-t-ok" style="margin-top:3px;"> Everyone in this recording agreed to be recorded and transcribed.</label>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-sm" onclick="audTPickView()">Choose another</button><button class="btn btn-sm btn-primary" id="aud-t-go" onclick="audTStart()">Transcribe (' + tok + ' tokens)</button></div>'));
@@ -26473,9 +26493,11 @@ function audTShowJob(job) {
   if (job.status === 'failed') { audTBody(''); audTSay('It did not work: ' + escapeHtml(job.error || 'unknown') + ' Nothing was charged.', true); return; }
   if (job.status !== 'ready') { audTPickView(); return; }
   var sp = job.speakers || [];
+  if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.6.18: the top bar shows the charge at once
   audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
     (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
     '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14
+    (job.speakers_hint && sp.length < job.speakers_hint ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">You said ' + job.speakers_hint + ' people were speaking; we could tell ' + sp.length + ' apart. Voices that sound alike can come back as one.</div>' : '') +   // v3.6.18
     '<datalist id="aud-t-players">' + (job.players || []).map(function (p) { return '<option value="' + escapeHtml(p) + '"></option>'; }).join('') + '</datalist>' +
     sp.map(function (s, i) {
       return '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' +

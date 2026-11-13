@@ -1,5 +1,39 @@
 [
   {
+    "version": "3.6.18",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3618-story-box-sm",
+        "kind": "fix",
+        "public": false,
+        "summary": "Import from file and Transcribe a recording are for the Story Master only.",
+        "detail": "The Story box is the Story Master's. A member could see both buttons, put text into a box that cannot save, and with Transcribe pay for it. The buttons are now the Story Master's, a read-only box takes nothing, and the server refuses a transcription from anyone else.",
+        "td": [
+          "TD-1046"
+        ]
+      },
+      {
+        "id": "3618-audio-price",
+        "kind": "change",
+        "public": false,
+        "summary": "Audio Transcription costs 2 tokens for each started 15 minutes.",
+        "detail": "Still 8 tokens an hour, but a short clip now costs 2 tokens instead of 4. The top bar shows the charge straight away, and if fewer speakers come back than you said, the window says so.",
+        "td": [
+          "TD-1046"
+        ]
+      },
+      {
+        "id": "3618-player-name-locked",
+        "kind": "change",
+        "public": false,
+        "summary": "You can change the Player Name on your character even when the campaign is locked.",
+        "detail": "Characters tab: a Player name button on your own character's card while a session is Ready. It names a real person, so it is not part of the locked story.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.17",
     "staged_on": "2026-11-13",
     "entries": [
