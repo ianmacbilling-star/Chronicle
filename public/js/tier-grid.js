@@ -135,6 +135,8 @@
     { label: 'Multiple Versions', sub: NOT_INHERITED, cell: function (t) { return mark(t.multi_version); } },
     // v3.2.43 -- TD-999. v3.2.44 (Ian, 2026-10-23): moved here, and a plain cross below Gold.
     { label: 'Writing Coach', cell: function (t) { return mark(t.writing_coach); } },
+    // v3.6.13 -- TD-1046 (Ian: Gold and up, inherited from the Story Master).
+    { label: 'Audio Transcription', cell: function (t) { return mark(t.audio_transcription); } },
     // v3.4.02 -- TD-1080 (Ian: under the Writing Coach, above Custom Art Styles). Inherited from a Platinum Story Master.
     { label: 'Image Builder', cell: function (t) { return mark(t.image_builder); } },
     { label: 'Custom Art Styles', sub: NOT_INHERITED, cell: function (t) { return mark(t.custom_art_styles); } },

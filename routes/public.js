@@ -220,6 +220,8 @@ router.get('/tier-grid', function (req, res) {
         // routes/narrative.js (accessRank >= 3, Gold), so the grid says what the gate does. Regen is every plan.
         // It is a creative capability, so a member inherits it from the Story Master's plan like the styles.
         writing_coach: accessRank(name) >= 3,
+        // v3.6.13 -- TD-1046. Audio Transcription: the SAME test as planAllows in routes/audio.js (Gold, inherited, like the Writing Coach).
+        audio_transcription: accessRank(name) >= 3,
         // v3.4.02 -- TD-1080. The Image Builder: the SAME test as ibAllowed in routes/images.js -- getEffectiveTier for
         // the campaign is Platinum -- so a member inherits it from a Platinum Story Master, like the Writing Coach.
         image_builder: name === 'platinum',

@@ -26359,8 +26359,13 @@ function audTOpen() {
   document.body.appendChild(box);
   fetch('/api/audio/active?session=' + sid, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
     if (!AUD_T) return;
-    if (j && j.job && j.job.status !== 'uploading') { AUD_T.job = j.job; audTShowJob(j.job); }
-    else audTPickView();
+    if (j && j.job && j.job.status !== 'uploading') { AUD_T.job = j.job; audTShowJob(j.job); return; }
+    // v3.6.13 Gold and up (inherited from the Story Master's plan): say so instead of the drop zone
+    return fetch('/api/audio/config?campaign=' + cid, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (c) {
+      if (!AUD_T) return;
+      if (c && c.allowed === false) audTBody('<div style="font-size:14px;line-height:1.6;">' + escapeHtml(c.plan_message || 'Audio Transcription comes with Gold and Platinum.') + '</div>');
+      else audTPickView();
+    });
   }).catch(function () { if (AUD_T) audTPickView(); });
 }
 function audTPickView() {
@@ -26473,8 +26478,8 @@ function audTShowJob(job) {
     sp.map(function (s, i) {
       return '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' +
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="min-width:80px;">' + escapeHtml(s.label) + '</b>' +
-        '<input class="aud-t-name" data-spk="' + escapeHtml(s.id) + '" type="text" maxlength="80" placeholder="Name (e.g. Ian, or Ian (Drel))" style="flex:1;min-width:180px;">' +
-        '<label style="font-size:12px;cursor:pointer;"><input type="checkbox" class="aud-t-leave" data-spk="' + escapeHtml(s.id) + '"> Leave out</label></div>' +
+        '<input class="form-input aud-t-name" data-spk="' + escapeHtml(s.id) + '" type="text" maxlength="80" placeholder="Name (e.g. Ian, or Ian (Drel))" style="flex:1;min-width:180px;width:auto;padding:6px 10px;">' +
+        '<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;"><input type="checkbox" class="aud-t-leave" data-spk="' + escapeHtml(s.id) + '" style="margin:0;width:14px;height:14px;accent-color:var(--accent-bright);cursor:pointer;"> Leave out</label></div>' +
         '<div style="font-size:12px;opacity:0.85;margin-top:6px;line-height:1.45;">' + (s.samples || []).map(function (t) { return '&ldquo;' + escapeHtml(t) + '&rdquo;'; }).join('<br>') + '</div></div>';
     }).join('') +
     '<div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-sm btn-primary" id="aud-t-put" onclick="audTApply()">Put it in the Story box</button></div>');

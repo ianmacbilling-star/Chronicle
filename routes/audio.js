@@ -11,6 +11,8 @@
 // row, and the tokens are charged. A failed job charges nothing. The words are deleted once they are put into the Story box.
 //
 // Who may use it: admins always; everyone else only while app_settings.audio_transcribe_on is '1' (a draft, off by default).
+// v3.6.13 (Ian, 2026-11-13: "it should not be admin only at this point"): open to everyone whose plan has it (Gold and up,
+// planAllows); audio_transcribe_on = '0' is now only an off switch.
 //
 // v3.6.12 -- LONG RECORDINGS. fal's Scribe v2 takes at most 1200 s a request (a 422 "Audio duration exceeds the maximum allowed.
 // Maximum is 1200 seconds", Ian's test, 2026-11-13). Ian: "go with it ... the users won't know the difference and doing it async
@@ -25,6 +27,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { requireAuth, isAdminEmail, getCampaignRole } = require('../middleware/auth');
+const { getEffectiveTier, accessRank } = require('../middleware/tiers');   // v3.6.13
 const { getDb } = require('../database/db');
 const storage = require('../storage/storage');
 
@@ -97,7 +100,18 @@ async function audioOn(db, req) {
   const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
   if (u && isAdminEmail(u.email)) return true;
   const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('audio_transcribe_on');
-  return !!(r && String(r.value) === '1');
+  return !(r && String(r.value) === '0');   // v3.6.13: on unless switched off
+}
+
+// v3.6.13 (Ian, 2026-11-13: "make this a Gold and up feature"; "Inheritable from the story master. So option 1"): the same
+// test as the Writing Coach (wtAccess in routes/narrative.js): the campaign's effective plan has accessRank 3 or more -- Gold,
+// Platinum and the Free Trial, and a member gets it from the Story Master's plan. The tokens are still the presser's. Admins
+// always. The launch switch (audioOn) still comes first.
+const PLAN_MSG = 'Audio Transcription comes with Gold and Platinum, and with any campaign whose Story Master has one of them.';
+async function planAllows(db, req, campaignId) {
+  const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+  if (u && isAdminEmail(u.email)) return true;
+  try { return accessRank(await getEffectiveTier(req.session.userId, campaignId)) >= 3; } catch (e) { return false; }
 }
 
 // A signed address (SigV4 query string) for one object of an R2 bucket: anyone holding it may do `method` on that key until
@@ -513,7 +527,8 @@ router.get('/config', requireAuth, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
-    res.json({ enabled: await audioOn(db, req), tokens_per_half_hour: TOKENS_PER_HALF_HOUR, max_secs: MAX_SECS, max_bytes: MAX_BYTES });
+    const cid = parseInt(req.query.campaign, 10);   // v3.6.13: whether this campaign's plan has it
+    res.json({ enabled: await audioOn(db, req), allowed: cid ? await planAllows(db, req, cid) : null, plan_message: PLAN_MSG, tokens_per_half_hour: TOKENS_PER_HALF_HOUR, max_secs: MAX_SECS, max_bytes: MAX_BYTES });
   } catch (e) { res.json({ enabled: false }); }
 });
 
@@ -527,6 +542,7 @@ router.post('/start', requireAuth, async function (req, res) {
     const b = req.body || {};
     const campaignId = parseInt(b.campaignId, 10), sessionId = parseInt(b.sessionId, 10);
     if (!campaignId || !sessionId || !(await getCampaignRole(req.session.userId, campaignId))) return audRefuse(req, res, 'start', 404, 'Open a session of your campaign first.');
+    if (!(await planAllows(db, req, campaignId))) return audRefuse(req, res, 'start', 403, PLAN_MSG);   // v3.6.13 Gold and up
     const sess = await db.prepare('SELECT id FROM sessions WHERE id = ? AND campaign_id = ?').get(sessionId, campaignId);
     if (!sess) return audRefuse(req, res, 'start', 404, 'That session was not found.');
     const secs = Number(b.secs), bytes = Number(b.bytes);

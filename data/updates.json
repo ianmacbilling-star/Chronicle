@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.13",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3613-audio-gold",
+        "kind": "feature",
+        "public": false,
+        "summary": "Audio Transcription is open to Gold, Platinum and the Free Trial.",
+        "detail": "Turn a recording of a session, an interview or a narrated story (up to 6 hours) into text in the Story box. Members get it from their Story Master's plan and pay with their own tokens. It is on the tier grid and the speaker-name boxes look like the rest of the app.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.12",
     "staged_on": "2026-11-13",
     "entries": [
