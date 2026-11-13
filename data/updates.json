@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.12",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3612-audio-long",
+        "kind": "fix",
+        "public": false,
+        "summary": "Transcribe a recording now takes long recordings (up to 6 hours).",
+        "detail": "The transcription service takes 20 minutes at a time, so our server now makes a small speech copy, cuts it into overlapping parts, sends them all at once and joins the words back, keeping each speaker the same person across the parts. The original is deleted as soon as the copy is made.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.11",
     "staged_on": "2026-11-13",
     "entries": [

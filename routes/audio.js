@@ -11,6 +11,16 @@
 // row, and the tokens are charged. A failed job charges nothing. The words are deleted once they are put into the Story box.
 //
 // Who may use it: admins always; everyone else only while app_settings.audio_transcribe_on is '1' (a draft, off by default).
+//
+// v3.6.12 -- LONG RECORDINGS. fal's Scribe v2 takes at most 1200 s a request (a 422 "Audio duration exceeds the maximum allowed.
+// Maximum is 1200 seconds", Ian's test, 2026-11-13). Ian: "go with it ... the users won't know the difference and doing it async
+// might be quicker". Once the upload is in, our server (ffmpeg, one recording at a time) reads it straight from the bucket and
+// makes one small speech-quality copy (mono, 16 kHz, 48 kbps mp3); the original is deleted at once. The copy is cut into parts of
+// 19 minutes that overlap by 90 s; every part goes to fal at the same time. When all are back the words are joined in order: in each
+// overlap the same words heard by both parts tie part 1's speaker labels to part 2's (stitchParts), and the join is made in the
+// longest pause of the overlap so no word is doubled or lost. A speaker who says nothing in an overlap stays a separate speaker;
+// the window then says one person may show up twice. A recording of 20 minutes or less is one part. Parts are deleted as their
+// words come back; a failed part fails the job (nothing charged, every file deleted).
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -23,6 +33,8 @@ const TOKENS_PER_HALF_HOUR = 4;   // 8 tokens an hour with keyterms (Ian, 2026-1
 const MAX_SECS = 6 * 3600;        // 6 hours (Ian, 2026-11-13)
 const MAX_BYTES = 1536 * 1024 * 1024;
 const PUT_SECS = 3600, GET_SECS = 3600;
+const PART_SECS = 1140, OVERLAP_SECS = 90;   // v3.6.12: parts of 19 minutes overlapping by 90 s (fal's limit is 1200 s a request)
+const PREP_STALE_MINS = 45;                  // a recording still being prepared after this long was lost (a restart): failed, nothing charged
 
 function audioTokens(secs) { return TOKENS_PER_HALF_HOUR * Math.max(1, Math.ceil((Number(secs) || 0) / 1800 - 1e-9)); }
 function audioBucket() { return String(process.env.AUDIO_BUCKET || '').trim() || storage.holdingBucket(); }
@@ -57,6 +69,26 @@ function ensureTables() {
       )`);
     await db.exec('CREATE INDEX IF NOT EXISTS idx_audio_jobs_user ON audio_jobs(user_id, id)');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_audio_jobs_request ON audio_jobs(request_id)');
+    // v3.6.12: the parts of a recording, and the recording's real length and number of parts.
+    await db.exec('ALTER TABLE audio_jobs ADD COLUMN IF NOT EXISTS secs_real REAL');
+    await db.exec('ALTER TABLE audio_jobs ADD COLUMN IF NOT EXISTS parts INTEGER');
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS audio_parts (
+        id SERIAL PRIMARY KEY,
+        job_id INTEGER NOT NULL,
+        idx INTEGER NOT NULL,
+        offset_s REAL NOT NULL DEFAULT 0,
+        len_s REAL,
+        file_key TEXT,
+        request_id TEXT,
+        status TEXT NOT NULL DEFAULT 'cut',
+        words TEXT,
+        error TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`);
+    await db.exec('CREATE INDEX IF NOT EXISTS idx_audio_parts_job ON audio_parts(job_id, idx)');
+    await db.exec('CREATE INDEX IF NOT EXISTS idx_audio_parts_request ON audio_parts(request_id)');
   })().catch(function (e) { tablesReady = null; throw e; });
   return tablesReady;
 }
@@ -89,11 +121,36 @@ function presign(method, bucket, key, expiresSecs, now) {
   const sig = crypto.createHmac('sha256', sk).update(sts).digest('hex');
   return 'https://' + host + uri + '?' + cq + '&X-Amz-Signature=' + sig;
 }
+// v3.6.12: everything that leaves this server goes through IO, so the tests can stand in for the bucket, fal and ffmpeg.
+const IO = {
+  url: function (bucket, key) { return presign('GET', bucket, key, GET_SECS); },
+  put: async function (bucket, key, buf, type) {
+    const axios = require('axios'), https = require('https');
+    const r = await axios.put(presign('PUT', bucket, key, 900), buf, { headers: { 'Content-Type': type }, httpsAgent: new https.Agent({ minVersion: 'TLSv1.2' }), timeout: 180000, maxBodyLength: Infinity, maxContentLength: Infinity, validateStatus: function () { return true; } });
+    if (r.status >= 300) throw new Error('storage refused a part (' + r.status + ')');
+  },
+  del: async function (bucket, key) {
+    const axios = require('axios'), https = require('https');
+    await axios.delete(presign('DELETE', bucket, key, 300), { httpsAgent: new https.Agent({ minVersion: 'TLSv1.2' }), timeout: 30000, validateStatus: function (s) { return s < 500; } });
+  },
+  submit: function (input, hook) { return falClient().queue.submit(ENDPOINT, { input: input, webhookUrl: hook }); },
+  status: function (rid) { return falClient().queue.status(ENDPOINT, { requestId: rid, logs: false }); },
+  result: function (rid) { return falClient().queue.result(ENDPOINT, { requestId: rid }); },
+  run: function (cmd, args, ms) {
+    return new Promise(function (resolve, reject) {
+      require('child_process').execFile(cmd, args, { timeout: ms, maxBuffer: 8 * 1024 * 1024 }, function (err, out, errOut) {
+        if (err) return reject(new Error(cmd + ' failed: ' + scrubUrls(String(errOut || '').trim().split('\n').slice(-3).join(' ') || err.message).slice(0, 400)));
+        resolve(String(out || ''));
+      });
+    });
+  }
+};
+function scrubUrls(s) { return String(s || '').replace(/https?:\/\/\S+/g, '(signed address)'); }
+
 async function deleteAudio(job) {
   if (!job || !job.file_key) return;
   try {
-    const axios = require('axios'), https = require('https');
-    await axios.delete(presign('DELETE', job.bucket || audioBucket(), job.file_key, 300), { httpsAgent: new https.Agent({ minVersion: 'TLSv1.2' }), timeout: 30000, validateStatus: function (s) { return s < 500; } });
+    await IO.del(job.bucket || audioBucket(), job.file_key);
     audLog(job.user_id, 'info', 'delete', 'Job ' + job.id + ': recording deleted from ' + (job.bucket || audioBucket()) + '/' + job.file_key);
   } catch (e) { audLog(job.user_id, 'error', 'delete', 'Job ' + job.id + ': could not delete the recording ' + job.file_key + ': ' + (e && e.message)); }
 }
@@ -200,7 +257,7 @@ function buildText(turns, speakers, names) {
 }
 
 function jobView(job) {
-  const v = { id: job.id, status: job.status, file_name: job.file_name, secs_est: job.secs_est, tokens: job.tokens, tokens_charged: job.tokens_charged, error: job.error || null, created_at: job.created_at };
+  const v = { id: job.id, status: job.status, file_name: job.file_name, secs_est: job.secs_est, tokens: job.tokens, tokens_charged: job.tokens_charged, error: job.error || null, created_at: job.created_at, parts: Number(job.parts) || null };
   if (job.status === 'ready' && job.words) {
     try { const turns = turnsOf(JSON.parse(job.words)); v.speakers = speakersOf(turns); v.turns = turns.length; } catch (e) { v.speakers = []; }
   }
@@ -215,7 +272,7 @@ async function chargeJob(db, job) {
     const bal = await tk.getBalance(job.user_id);
     const charged = Math.min(Number(job.tokens) || 0, Math.max(0, Number(bal.total) || 0));
     if (charged > 0) await tk.spendTokens(job.user_id, charged, { source: 'audio_transcript', event_type: 'generation_spend', related_campaign_id: job.campaign_id });
-    try { await tk.recordGeneration(job.user_id, { event_type: 'audio_transcript', tokens_redeemed: charged, quantity: Math.round((Number(job.secs_est) || 0) / 60), unit: 'minutes', model: 'scribe-v2', related_campaign_id: job.campaign_id, related_session_id: job.session_id }); } catch (e) {}
+    try { await tk.recordGeneration(job.user_id, { event_type: 'audio_transcript', tokens_redeemed: charged, quantity: Math.round((Number(job.secs_real) || Number(job.secs_est) || 0) / 60), unit: 'minutes', model: 'scribe-v2', related_campaign_id: job.campaign_id, related_session_id: job.session_id }); } catch (e) {}
     await db.prepare('UPDATE audio_jobs SET tokens_charged = ? WHERE id = ?').run(charged, job.id);
   } catch (e) { audLog(job.user_id, 'error', 'charge', 'Job ' + job.id + ' charge failed: ' + (e && e.message)); }
 }
@@ -244,6 +301,205 @@ async function finishJob(db, job, falError) {
   await db.prepare("UPDATE audio_jobs SET status = 'ready', words = ?, text_len = ?, updated_at = NOW() WHERE id = ?").run(JSON.stringify(cw), String(data.text || '').length, job.id);
   { const sp = {}; cw.forEach(function (w) { if (w[4] === 'w') sp[w[0]] = (sp[w[0]] || 0) + 1; });
     audLog(job.user_id, 'info', 'finish', 'Job ' + job.id + ' ready', { words: cw.filter(function (w) { return w[4] === 'w'; }).length, speakers: sp, language: data.language_code || null, language_probability: data.language_probability || null, last_word_end_s: cw.length ? cw[cw.length - 1][2] : null, secs_est: job.secs_est }); }
+  await chargeJob(db, job);
+}
+
+// v3.6.12 -- THE PARTS. planParts: where each part starts and how long it is (seconds), for a recording of dur seconds.
+function planParts(dur) {
+  dur = Number(dur) || 0;
+  if (dur <= PART_SECS + 50) return [{ idx: 0, offset: 0, len: dur }];
+  const out = [], step = PART_SECS - OVERLAP_SECS;
+  for (let s = 0; s + OVERLAP_SECS < dur; s += step) out.push({ idx: out.length, offset: s, len: Math.min(PART_SECS, dur - s) });
+  return out;
+}
+function normWord(t) { return String(t || '').toLowerCase().replace(/[^a-z0-9']/g, ''); }
+// Joins the parts' words (compact, times from the start of each part) into one list for the whole recording. In each overlap a
+// word heard by both parts (the same word within 0.6 s) is a vote that their two speaker labels are one person; a pair with 3 or
+// more votes, the strongest first and each label used once, is tied. Then the fill-in: once as many people have been heard as
+// the busiest part holds, a part left with exactly one unmatched voice (20+ words) and exactly one known person missing from it
+// ties those two (someone silent through the overlap). A newcomer while everyone known is present stays new. The join is made
+// in the longest pause of the overlap.
+// Speakers come out as speaker_0, speaker_1, ... in the order they first speak.
+function stitchParts(parts) {
+  parts = parts.slice().sort(function (a, b) { return a.idx - b.idx; });
+  const P = parts.map(function (p) { return (p.words || []).map(function (w) { return ['p' + p.idx + ':' + w[0], w[1] + p.offset, w[2] + p.offset, w[3], w[4]]; }); });
+  const parent = {};
+  const find = function (l) { while (parent[l] && parent[l] !== l) l = parent[l]; return l; };
+  const ties = [];
+  let fills = 0;
+  const counts = P.map(function (ws) { const c = {}; ws.forEach(function (w) { if (w[4] === 'w') c[w[0]] = (c[w[0]] || 0) + 1; }); return c; });
+  const big = function (c) { return Object.keys(c).filter(function (l) { return c[l] >= 20; }); };
+  const people = Math.max.apply(null, counts.map(function (c) { return big(c).length; }).concat([0]));
+  let out = [], from = -Infinity;
+  for (let k = 0; k < P.length; k++) {
+    let upto = Infinity;
+    if (k + 1 < P.length) {
+      const a = P[k], b = P[k + 1];
+      const lo = parts[k + 1].offset, hi = parts[k].offset + parts[k].len;
+      const bw = b.filter(function (w) { return w[4] === 'w' && w[1] < hi + 1; });
+      const votes = {};
+      a.forEach(function (w) {
+        if (w[4] !== 'w' || w[1] < lo - 1) return;
+        const n = normWord(w[3]);
+        if (!n) return;
+        let best = null, bd = 0.6;
+        bw.forEach(function (x) { const d = Math.abs(x[1] - w[1]); if (d < bd && normWord(x[3]) === n) { best = x; bd = d; } });
+        if (best) { const key = w[0] + '|' + best[0]; votes[key] = (votes[key] || 0) + 1; }
+      });
+      const pairs = Object.keys(votes).map(function (key) { const ab = key.split('|'); return { a: ab[0], b: ab[1], n: votes[key] }; }).sort(function (x, y) { return y.n - x.n; });
+      const usedA = {}, usedB = {};
+      pairs.forEach(function (p) { if (p.n < 3 || usedA[p.a] || usedB[p.b]) return; usedA[p.a] = usedB[p.b] = true; parent[p.b] = p.a; ties.push(p); });
+      const known = {};
+      for (let q = 0; q <= k; q++) big(counts[q]).forEach(function (l) { known[find(l)] = true; });
+      const nb = big(counts[k + 1]), present = {};
+      nb.forEach(function (l) { if (parent[l]) present[find(l)] = true; });
+      const loose = nb.filter(function (l) { return !parent[l]; }), missing = Object.keys(known).filter(function (x) { return !present[x]; });
+      if (loose.length === 1 && missing.length === 1 && Object.keys(known).length >= people) { parent[loose[0]] = missing[0]; fills++; }
+      const aw = a.filter(function (w) { return w[4] === 'w'; });
+      let cut = (lo + hi) / 2, gap = -1;
+      for (let i = 0; i + 1 < aw.length; i++) {
+        const g0 = aw[i][2], g1 = aw[i + 1][1], mid = (g0 + g1) / 2;
+        if (mid < lo + 5 || mid > hi - 5) continue;
+        if (g1 - g0 > gap) { gap = g1 - g0; cut = mid; }
+      }
+      upto = cut;
+    }
+    P[k].forEach(function (w) { if (w[1] >= from && w[1] < upto) out.push(w); });
+    from = upto;
+  }
+  const names = {};
+  let n = 0;
+  out = out.map(function (w) { const r = find(w[0]); if (!Object.prototype.hasOwnProperty.call(names, r)) names[r] = 'speaker_' + (n++); return [names[r], w[1], w[2], w[3], w[4]]; });
+  return { words: out, ties: ties.length, fills: fills, speakers: n };
+}
+
+// A job that cannot finish: failed, nothing charged, the recording and every part deleted.
+async function failJob(db, job, why) {
+  await db.prepare("UPDATE audio_jobs SET status = 'failed', error = ?, updated_at = NOW() WHERE id = ? AND status IN ('uploading', 'preparing', 'transcribing', 'saving')").run(String(why || 'unknown error').slice(0, 1000), job.id);
+  audLog(job.user_id, 'error', 'fail', 'Job ' + job.id + ' failed: ' + why);
+  const fresh = await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(job.id);
+  if (fresh && fresh.file_key) { await deleteAudio(fresh); await db.prepare('UPDATE audio_jobs SET file_key = NULL WHERE id = ?').run(job.id); }
+  const parts = await db.prepare('SELECT * FROM audio_parts WHERE job_id = ? AND file_key IS NOT NULL').all(job.id);
+  for (const p of parts) await deletePart(db, job, p);
+}
+async function deletePart(db, job, p) {
+  if (!p.file_key) return;
+  try {
+    await IO.del(job.bucket || audioBucket(), p.file_key);
+    await db.prepare('UPDATE audio_parts SET file_key = NULL WHERE id = ?').run(p.id);
+    audLog(job.user_id, 'info', 'delete', 'Job ' + job.id + ': part ' + (p.idx + 1) + ' deleted from storage');
+  } catch (e) { audLog(job.user_id, 'error', 'delete', 'Job ' + job.id + ': could not delete part ' + (p.idx + 1) + ' (' + p.file_key + '): ' + (e && e.message)); }
+}
+
+// One recording is prepared at a time on this server (ffmpeg is heavy); the rest wait their turn.
+let prepChain = Promise.resolve();
+function queuePrep(jobId) {
+  prepChain = prepChain.then(function () { return prepareJob(jobId); }).catch(function (e) { console.error('[audio] prepare error:', e && e.message); });
+  return prepChain;
+}
+async function prepareJob(jobId) {
+  const db = await getDb();
+  const job = await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(jobId);
+  if (!job || job.status !== 'preparing') return;
+  await db.prepare('UPDATE audio_jobs SET updated_at = NOW() WHERE id = ?').run(job.id);
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aud-'));
+  const bucket = job.bucket || audioBucket();
+  try {
+    const all = path.join(dir, 'all.mp3');
+    const t0 = Date.now();
+    audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': making the speech copy');
+    await IO.run('ffmpeg', ['-nostdin', '-y', '-loglevel', 'error', '-i', IO.url(bucket, job.file_key), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '48k', all], 45 * 60 * 1000);
+    await deleteAudio(job);
+    await db.prepare('UPDATE audio_jobs SET file_key = NULL WHERE id = ?').run(job.id);
+    job.file_key = null;
+    const dur = parseFloat(String(await IO.run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', all], 60000)).trim());
+    if (!(dur > 1)) throw new Error('No sound could be read from that recording.');
+    if (dur > MAX_SECS + 60) throw new Error('That recording is longer than 6 hours. Split it and transcribe each part.');
+    const plan = planParts(dur);
+    audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': speech copy made', { secs: Math.round(dur), secs_est: job.secs_est, bytes: fs.statSync(all).size, took_s: Math.round((Date.now() - t0) / 1000), parts: plan.length });
+    await db.prepare('UPDATE audio_jobs SET secs_real = ?, parts = ?, updated_at = NOW() WHERE id = ?').run(dur, plan.length, job.id);
+    const hex = crypto.randomBytes(16).toString('hex');
+    for (const p of plan) {
+      const f = path.join(dir, 'p' + p.idx + '.mp3');
+      await IO.run('ffmpeg', ['-nostdin', '-y', '-loglevel', 'error', '-ss', p.offset.toFixed(3), '-t', p.len.toFixed(3), '-i', all, '-c', 'copy', f], 10 * 60 * 1000);
+      const key = 'audio-in/' + hex + '-p' + p.idx + '.mp3';
+      await IO.put(bucket, key, fs.readFileSync(f), 'audio/mpeg');
+      await db.prepare("INSERT INTO audio_parts (job_id, idx, offset_s, len_s, file_key, status) VALUES (?, ?, ?, ?, ?, 'cut')").run(job.id, p.idx, p.offset, p.len, key);
+      try { fs.unlinkSync(f); } catch (e) {}
+    }
+    const hook = webhookUrl();
+    if (!hook) throw new Error('PUBLIC_BASE_URL is not set, so fal cannot report back.');
+    const terms = await keytermsFor(db, job.campaign_id, job.session_id);
+    const parts = await db.prepare('SELECT * FROM audio_parts WHERE job_id = ? ORDER BY idx').all(job.id);
+    const base = { diarize: true, tag_audio_events: false };
+    if (terms.length) base.keyterms = terms;
+    if (job.speakers_hint) base.num_speakers = job.speakers_hint;
+    audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': sending ' + parts.length + ' part(s) to fal', { endpoint: ENDPOINT, input: Object.assign({ audio_url: '(signed address, 1 hour)' }, base), webhook: hook });
+    const refused = (await Promise.all(parts.map(async function (p) {
+      try {
+        const sub = await IO.submit(Object.assign({ audio_url: IO.url(bucket, p.file_key) }, base), hook);
+        await db.prepare("UPDATE audio_parts SET status = 'sent', request_id = ?, updated_at = NOW() WHERE id = ?").run(sub.request_id, p.id);
+        return null;
+      } catch (e) {
+        audLog(job.user_id, 'error', 'prepare', 'Job ' + job.id + ': fal refused part ' + (p.idx + 1) + ': ' + falWhy(e), { message: e && e.message, status: e && (e.status || (e.response && e.response.status)), body: (e && (e.body || (e.response && e.response.data))) || null });
+        return 'part ' + (p.idx + 1) + ': ' + falWhy(e);
+      }
+    }))).filter(Boolean);
+    if (refused.length) throw new Error('The transcription service refused it (' + refused[0] + ')');
+    await db.prepare("UPDATE audio_jobs SET status = 'transcribing', updated_at = NOW() WHERE id = ? AND status = 'preparing'").run(job.id);
+    audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': all ' + parts.length + ' part(s) sent to fal', { keyterms: terms.length });
+    await checkJob(db, job.id);   // a part may already be back
+  } catch (e) {
+    await failJob(db, job, scrubUrls(e && e.message));
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
+  }
+}
+// One part's words are in at fal (or it failed). Claimed so a webhook and a poll never both do it.
+async function finishPart(db, part, falError) {
+  const claim = await db.prepare("UPDATE audio_parts SET status = 'saving', updated_at = NOW() WHERE id = ? AND status = 'sent'").run(part.id);
+  if (!claim.changes) return;
+  const job = await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(part.job_id);
+  const live = !!(job && (job.status === 'preparing' || job.status === 'transcribing'));
+  let data = null, err = falError || null;
+  if (!err && live) {
+    try { const r = await IO.result(part.request_id); data = r && (r.data || r); }
+    catch (e) { err = 'fal: ' + falWhy(e); audLog(job.user_id, 'error', 'result', 'Job ' + job.id + ': reading part ' + (part.idx + 1) + ' from fal failed', { request_id: part.request_id, message: e && e.message, status: e && (e.status || (e.response && e.response.status)), body: (e && (e.body || (e.response && e.response.data))) || null }); }
+  }
+  if (job) await deletePart(db, job, part);
+  if (!live) { await db.prepare("UPDATE audio_parts SET status = 'dropped', updated_at = NOW() WHERE id = ?").run(part.id); return; }
+  if (err || !data) {
+    await db.prepare("UPDATE audio_parts SET status = 'failed', error = ?, updated_at = NOW() WHERE id = ?").run(String(err || 'no result').slice(0, 1000), part.id);
+    await failJob(db, job, (Number(job.parts) > 1 ? 'Part ' + (part.idx + 1) + ' of ' + job.parts + ': ' : '') + (err || 'no result'));
+    return;
+  }
+  const cw = compactWords(data.words);
+  await db.prepare("UPDATE audio_parts SET status = 'done', words = ?, updated_at = NOW() WHERE id = ?").run(JSON.stringify(cw), part.id);
+  audLog(job.user_id, 'info', 'finish', 'Job ' + job.id + ': part ' + (part.idx + 1) + ' back', { words: cw.filter(function (w) { return w[4] === 'w'; }).length, language: data.language_code || null, language_probability: data.language_probability || null });
+  await checkJob(db, job.id);
+}
+// Every part is back: join them, keep the words, charge.
+async function checkJob(db, jobId) {
+  const parts = await db.prepare('SELECT id, idx, offset_s, len_s, status, words FROM audio_parts WHERE job_id = ? ORDER BY idx').all(jobId);
+  if (!parts.length || parts.some(function (p) { return p.status !== 'done'; })) return;
+  const claim = await db.prepare("UPDATE audio_jobs SET status = 'saving', updated_at = NOW() WHERE id = ? AND status = 'transcribing'").run(jobId);
+  if (!claim.changes) return;
+  const job = await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(jobId);
+  let st;
+  try { st = stitchParts(parts.map(function (p) { return { idx: Number(p.idx), offset: Number(p.offset_s) || 0, len: Number(p.len_s) || 0, words: JSON.parse(p.words || '[]') }; })); }
+  catch (e) { await db.prepare("UPDATE audio_jobs SET status = 'transcribing' WHERE id = ?").run(jobId); await failJob(db, job, 'Joining the parts failed: ' + (e && e.message)); return; }
+  const cw = st.words;
+  await db.prepare('UPDATE audio_parts SET words = NULL WHERE job_id = ?').run(jobId);
+  if (!cw.some(function (w) { return w[4] === 'w'; })) {
+    await db.prepare("UPDATE audio_jobs SET status = 'failed', error = ?, updated_at = NOW() WHERE id = ?").run('No speech was found in that recording.', jobId);
+    audLog(job.user_id, 'warn', 'finish', 'Job ' + jobId + ': no speech found');
+    return;
+  }
+  const textLen = cw.reduce(function (n, w) { return n + String(w[3]).length; }, 0);
+  await db.prepare("UPDATE audio_jobs SET status = 'ready', words = ?, text_len = ?, updated_at = NOW() WHERE id = ?").run(JSON.stringify(cw), textLen, jobId);
+  { const sp = {}; cw.forEach(function (w) { if (w[4] === 'w') sp[w[0]] = (sp[w[0]] || 0) + 1; });
+    audLog(job.user_id, 'info', 'finish', 'Job ' + jobId + ' ready', { parts: parts.length, ties: st.ties, fills: st.fills, speakers: sp, words: cw.filter(function (w) { return w[4] === 'w'; }).length, last_word_end_s: cw[cw.length - 1][2], secs: job.secs_real }); }
   await chargeJob(db, job);
 }
 
@@ -278,7 +534,7 @@ router.post('/start', requireAuth, async function (req, res) {
     if (secs > MAX_SECS) return audRefuse(req, res, 'start', 400, 'That recording is longer than 6 hours. Split it and transcribe each part.');
     if (!(bytes > 0) || bytes > MAX_BYTES) return audRefuse(req, res, 'start', 400, 'That file is too large (the limit is 1.5 GB). Convert it to mp3 or m4a first.');
     if (!b.consent) return audRefuse(req, res, 'start', 400, 'Tick the box to confirm everyone agreed to be recorded.');
-    const busy = await db.prepare("SELECT id FROM audio_jobs WHERE user_id = ? AND status IN ('uploading', 'transcribing', 'saving') AND updated_at > NOW() - INTERVAL '2 hours'").get(req.session.userId);
+    const busy = await db.prepare("SELECT id FROM audio_jobs WHERE user_id = ? AND status IN ('uploading', 'preparing', 'transcribing', 'saving') AND updated_at > NOW() - INTERVAL '2 hours'").get(req.session.userId);
     if (busy) return audRefuse(req, res, 'start', 409, 'You already have a recording being transcribed. Wait for it to finish.', { job: busy.id });
     const tokens = audioTokens(secs);
     const bal = await require('./tokens').getBalance(req.session.userId);
@@ -297,7 +553,7 @@ router.post('/start', requireAuth, async function (req, res) {
   }
 });
 
-// The upload is done: hand the recording to fal.
+// The upload is done. v3.6.12: our server prepares it (the speech copy and the parts) in the background and sends the parts to fal.
 router.post('/jobs/:id/uploaded', requireAuth, async function (req, res) {
   try {
     await ensureTables();
@@ -305,24 +561,9 @@ router.post('/jobs/:id/uploaded', requireAuth, async function (req, res) {
     const job = await jobFor(req, db, parseInt(req.params.id, 10));
     if (!job) return res.status(404).json({ error: 'Not found.' });
     if (job.status !== 'uploading') return res.json({ job: jobView(job) });
-    const hook = webhookUrl();
-    if (!hook) return audRefuse(req, res, 'uploaded', 500, 'PUBLIC_BASE_URL is not set, so fal cannot report back.');
-    const input = { audio_url: presign('GET', job.bucket, job.file_key, GET_SECS), diarize: true, tag_audio_events: false };
-    const terms = await keytermsFor(db, job.campaign_id, job.session_id);
-    if (terms.length) input.keyterms = terms;
-    if (job.speakers_hint) input.num_speakers = job.speakers_hint;
-    audLog(job.user_id, 'info', 'uploaded', 'Job ' + job.id + ': sending to fal', { endpoint: ENDPOINT, input: Object.assign({}, input, { audio_url: '(signed address, 1 hour)' }), webhook: hook });
-    let sub;
-    try { sub = await falClient().queue.submit(ENDPOINT, { input: input, webhookUrl: hook }); }
-    catch (e) {
-      const why = falWhy(e);
-      audLog(job.user_id, 'error', 'uploaded', 'Job ' + job.id + ': fal refused the submission: ' + why, { message: e && e.message, status: e && (e.status || (e.response && e.response.status)), body: (e && (e.body || (e.response && e.response.data))) || null });
-      await deleteAudio(job);
-      await db.prepare("UPDATE audio_jobs SET status = 'failed', error = ?, updated_at = NOW() WHERE id = ?").run(('fal refused it: ' + why).slice(0, 1000), job.id);
-      return res.status(502).json({ error: 'The transcription service refused it: ' + why });
-    }
-    await db.prepare("UPDATE audio_jobs SET status = 'transcribing', request_id = ?, updated_at = NOW() WHERE id = ? AND status = 'uploading'").run(sub.request_id, job.id);
-    audLog(job.user_id, 'info', 'uploaded', 'Job ' + job.id + ' sent to fal', { request_id: sub.request_id, keyterms: terms.length });
+    if (!webhookUrl()) return audRefuse(req, res, 'uploaded', 500, 'PUBLIC_BASE_URL is not set, so fal cannot report back.');
+    const claim = await db.prepare("UPDATE audio_jobs SET status = 'preparing', updated_at = NOW() WHERE id = ? AND status = 'uploading'").run(job.id);
+    if (claim.changes) { audLog(job.user_id, 'info', 'uploaded', 'Job ' + job.id + ': upload done, waiting to be prepared'); queuePrep(job.id); }
     res.json({ job: jobView(await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(job.id)) });
   } catch (e) {
     audLog(req.session && req.session.userId, 'error', 'uploaded', 'Sending failed: ' + (e && e.message), { stack: String((e && e.stack) || '').slice(0, 1500) });
@@ -352,6 +593,28 @@ router.get('/jobs/:id', requireAuth, async function (req, res) {
     const db = await getDb();
     let job = await jobFor(req, db, parseInt(req.params.id, 10));
     if (!job) return res.status(404).json({ error: 'Not found.' });
+    if (job.status === 'preparing') {   // v3.6.12
+      const stale = await db.prepare("SELECT id FROM audio_jobs WHERE id = ? AND updated_at < NOW() - INTERVAL '" + PREP_STALE_MINS + " minutes'").get(job.id);
+      if (stale) { await failJob(db, job, 'Preparing the recording stopped part way (the server restarted). Please try again.'); job = await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(job.id); }
+    }
+    if (job.status === 'transcribing' && !job.request_id) {   // v3.6.12: ask fal about any part not heard from for 20 s
+      const due = await db.prepare("SELECT * FROM audio_parts WHERE job_id = ? AND status = 'sent' AND updated_at < NOW() - INTERVAL '20 seconds' ORDER BY idx").all(job.id);
+      for (const p of due) {
+        try {
+          const st = await IO.status(p.request_id);
+          const s = String((st && st.status) || '').toUpperCase();
+          audLog(job.user_id, 'info', 'poll', 'Job ' + job.id + ': fal says part ' + (p.idx + 1) + ' is ' + s, { request_id: p.request_id });
+          if (s === 'COMPLETED') await finishPart(db, p, null);
+          else await db.prepare('UPDATE audio_parts SET updated_at = NOW() WHERE id = ?').run(p.id);
+        } catch (e) {
+          const st = e && (e.status || (e.response && e.response.status));
+          audLog(job.user_id, 'error', 'poll', 'Job ' + job.id + ': asking fal about part ' + (p.idx + 1) + ' failed', { status: st || null, message: e && e.message, body: (e && (e.body || (e.response && e.response.data))) || null });
+          if (st && st >= 400 && st < 500) await finishPart(db, p, 'fal: ' + falWhy(e));
+        }
+      }
+      await checkJob(db, job.id);
+      job = await db.prepare('SELECT * FROM audio_jobs WHERE id = ?').get(job.id);
+    }
     const due = job.status === 'transcribing' && job.request_id ? await db.prepare("SELECT id FROM audio_jobs WHERE id = ? AND updated_at < NOW() - INTERVAL '20 seconds'").get(job.id) : null;   // the age in SQL: TIMESTAMP columns read in JS shift with the server's time zone
     if (due) {
       try {
@@ -378,7 +641,7 @@ router.get('/active', requireAuth, async function (req, res) {
   try {
     await ensureTables();
     const db = await getDb();
-    const job = await db.prepare("SELECT * FROM audio_jobs WHERE user_id = ? AND session_id = ? AND status IN ('uploading', 'transcribing', 'saving', 'ready') AND created_at > NOW() - INTERVAL '7 days' ORDER BY id DESC LIMIT 1").get(req.session.userId, parseInt(req.query.session, 10) || 0);
+    const job = await db.prepare("SELECT * FROM audio_jobs WHERE user_id = ? AND session_id = ? AND status IN ('uploading', 'preparing', 'transcribing', 'saving', 'ready') AND created_at > NOW() - INTERVAL '7 days' ORDER BY id DESC LIMIT 1").get(req.session.userId, parseInt(req.query.session, 10) || 0);
     res.json({ job: job ? jobView(job) : null });
   } catch (e) { res.json({ job: null }); }
 });
@@ -419,9 +682,18 @@ router.post('/fal-webhook', async function (req, res) {
     const rid = String(b.request_id || b.requestId || '');
     if (!rid) return;
     const db = await getDb();
-    const job = await db.prepare("SELECT * FROM audio_jobs WHERE request_id = ? AND status = 'transcribing'").get(rid);
-    if (!job) return;
     const failed = String(b.status || '').toUpperCase() === 'ERROR';
+    const part = await db.prepare("SELECT * FROM audio_parts WHERE request_id = ? AND status = 'sent'").get(rid);   // v3.6.12
+    if (part) {
+      const pj = await db.prepare('SELECT user_id FROM audio_jobs WHERE id = ?').get(part.job_id);
+      const uid = pj && pj.user_id;
+      if (failed) audLog(uid, 'error', 'fal-webhook', 'Job ' + part.job_id + ': fal failed part ' + (part.idx + 1) + ': ' + falReasons(b.payload, b.error), { request_id: rid, status: b.status, error: b.error, payload: b.payload });
+      else audLog(uid, 'info', 'fal-webhook', 'Job ' + part.job_id + ': fal says part ' + (part.idx + 1) + ' is done', { request_id: rid });
+      await finishPart(db, part, failed ? ('fal: ' + falReasons(b.payload, b.error)).slice(0, 1000) : null);
+      return;
+    }
+    const job = await db.prepare("SELECT * FROM audio_jobs WHERE request_id = ? AND status = 'transcribing'").get(rid);   // a job sent whole before v3.6.12
+    if (!job) return;
     // v3.6.10 (Ian, 2026-11-13: a test failed with only "fal: Unexpected status code: 422"; "if you write to the log i'll send it"): on a
     // failure, fal's whole answer goes to the log and its reasons to the job (never on success: the payload is the transcript).
     if (failed) audLog(job.user_id, 'error', 'fal-webhook', 'Job ' + job.id + ': fal failed it: ' + falReasons(b.payload, b.error), { request_id: rid, status: b.status, error: b.error, payload: b.payload });
@@ -431,4 +703,4 @@ router.post('/fal-webhook', async function (req, res) {
 });
 
 module.exports = router;
-module.exports._test = { presign: presign, audioTokens: audioTokens, compactWords: compactWords, turnsOf: turnsOf, speakersOf: speakersOf, buildText: buildText, keytermsFor: keytermsFor };
+module.exports._test = { presign: presign, audioTokens: audioTokens, compactWords: compactWords, turnsOf: turnsOf, speakersOf: speakersOf, buildText: buildText, keytermsFor: keytermsFor, planParts: planParts, stitchParts: stitchParts, IO: IO, prepareJob: prepareJob, queuePrep: queuePrep, finishPart: finishPart, checkJob: checkJob, ensureTables: ensureTables };

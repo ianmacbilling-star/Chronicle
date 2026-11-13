@@ -26460,8 +26460,8 @@ function audTShowJob(job) {
   var A = AUD_T; if (!A) return;
   if (A.timer) { clearTimeout(A.timer); A.timer = null; }
   audTSay('');
-  if (job.status === 'transcribing' || job.status === 'saving') {
-    audTBody('<div style="font-size:14px;line-height:1.6;">' + vlSpin(14) + ' Transcribing <b>' + escapeHtml(job.file_name || 'your recording') + '</b>... usually a few minutes.</div><div style="font-size:12px;opacity:0.8;margin-top:6px;">You can close this window; press Transcribe a recording again to come back to it.</div>');
+  if (job.status === 'preparing' || job.status === 'transcribing' || job.status === 'saving') {   // v3.6.12 preparing: our server readies a long recording first
+    audTBody('<div style="font-size:14px;line-height:1.6;">' + vlSpin(14) + (job.status === 'preparing' ? ' Getting <b>' : ' Transcribing <b>') + escapeHtml(job.file_name || 'your recording') + (job.status === 'preparing' ? '</b> ready' : '</b>') + '... usually a few minutes.</div><div style="font-size:12px;opacity:0.8;margin-top:6px;">You can close this window; press Transcribe a recording again to come back to it.</div>');
     A.timer = setTimeout(audTPoll, 5000);
     return;
   }
@@ -26469,6 +26469,7 @@ function audTShowJob(job) {
   if (job.status !== 'ready') { audTPickView(); return; }
   var sp = job.speakers || [];
   audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
+    (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
     sp.map(function (s, i) {
       return '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' +
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="min-width:80px;">' + escapeHtml(s.label) + '</b>' +
