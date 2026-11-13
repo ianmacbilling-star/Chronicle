@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.21",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3621-audio-length",
+        "kind": "fix",
+        "public": false,
+        "summary": "Transcribe a recording shows the length to the second.",
+        "detail": "A 5 h 45 m 36 s file showed as 5 h 45 m, so the price (2 tokens for each started 15 minutes) looked 2 tokens too high. The length is now shown in full, rounded up the same way as the price.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.20",
     "staged_on": "2026-11-13",
     "entries": [

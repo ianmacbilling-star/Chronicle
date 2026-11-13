@@ -26398,7 +26398,7 @@ function audTInit() {
   }).catch(function () {});
 }
 function audTTokens(secs) { var per = (AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2; return per * Math.max(1, Math.ceil(secs / 900 - 1e-9)); }   // v3.6.18: per started 15 minutes (Ian)
-function audTLen(secs) { secs = Math.round(secs); var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return h ? h + ' h ' + m + ' m' : (m ? m + ' m ' + s + ' s' : s + ' s'); }
+function audTLen(secs) { secs = Math.ceil(secs - 1e-9); var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return h ? h + ' h ' + m + ' m ' + s + ' s' : (m ? m + ' m ' + s + ' s' : s + ' s'); }   // v3.6.21 (tester): seconds always shown, rounded up like the price
 function audTClose() {
   var o = document.getElementById('aud-t-modal'); if (o && o.parentNode) o.parentNode.removeChild(o);
   if (AUD_T && AUD_T.timer) clearTimeout(AUD_T.timer);
