@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.03",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3603-length-refs",
+        "kind": "fix",
+        "public": false,
+        "summary": "Reference takes go out at the shot's length again; a shot cut between beats keeps its references.",
+        "detail": "Video tab: since v3.6.01 every Reference take was sent at the model's default length (take 91: 12 s of beats made in 5 s); since v3.5.99 the new shot made by Cut here had no References. Both were code lost behind a comment.",
+        "td": [
+          "TD-1133"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.02",
     "staged_on": "2026-11-12",
     "entries": [

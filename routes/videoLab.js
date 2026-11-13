@@ -1251,7 +1251,7 @@ function planReferenceWords(ep, kfs, w, shotNo, pool, refs) {
   const people = refsToSend(ep, w, refs, pool, (m.maxRefs || REF_MAX_IMAGES) - scenePics.length);   // v3.5.22: the shot's references
   if (!kfs.length && !people.length) return { error: 'Shot ' + shotNo + ' has no pictures and no one in its References. Add a character or a place to its References, or a picture.' };   // v3.6.01
   const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1, kind: p.kind, height: p.height || '' }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };   // v3.5.61 height
-  return { moves: [{ position: 1, start: kfs.length ? kfs[0].image_url : null, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics),   // v3.6.01 kfs.length duration: String(w.seconds),
+  return { moves: [{ position: 1, start: kfs.length ? kfs[0].image_url : null, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics), duration: String(w.seconds),   // v3.6.01 kfs.length; v3.6.03 the length back (a comment had swallowed it)
     images: people.map(function (p) { return p.url; }).concat(scenePics), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
 // A keyframe-model shot in plain words: the same script (no picture lines) for every move; the length shared out.

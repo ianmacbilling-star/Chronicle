@@ -45119,7 +45119,7 @@ function vlBeatCutDo(si, bi) {
   });
   var ns = vlNewShot(bKfs, s);
   ns.name = String(s.name || '').trim() ? String(s.name).trim() + ' (2)' : '';
-  ns.purpose = s.purpose || ''; ns.concept = s.concept || ''; ns.mode = s.mode;   // v3.5.99 concept ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });
+  ns.purpose = s.purpose || ''; ns.concept = s.concept || ''; ns.mode = s.mode; ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });   // v3.5.99 concept; v3.6.03 the references back (a comment had swallowed them)
   ns.camera = s.camera || ''; ns.sounds = s.sounds || ''; ns.around = s.around || ''; ns.more = !!(ns.sounds || ns.around);
   ns.end = s.end || ''; ns.start = '';
   ns.actions = vlActionsText(texts.slice(bi + 1)); ns.beats = beats.slice(bi + 1);
