@@ -211,19 +211,62 @@ function webhookUrl() {
   return base ? base + '/api/audio/fal-webhook' : '';
 }
 
-// Names the recording is likely to contain: the campaign's characters, then the campaign and the session (keyterms, capped,
-// each under 50 characters and at most 5 words, none of < > { } [ ] \).
+// Names the recording is likely to contain (keyterms; capped at 100, each under 50 characters and at most 5 words, none of
+// < > { } [ ] \). v3.6.15 (Ian, 2026-11-13: "we only have Campaign name, lore and character info"; "mAYBE ASSETS"; "yes build
+// it"), in this order: the characters (NPCs too), the Asset Library's names, the campaign and the session, then proper names
+// found in the campaign's lore and the characters' descriptions, the most mentioned first. Free: no AI, only our own text.
+// out.sources counts each source, for the log.
+const LORE_STOP = new Set(('the a an and or but nor of in on at to for with from by as is are was were be been being it its this that these those he she ' +
+  'they we you i his her hers their theirs our ours your yours my mine me him them us not no yes so if then than when where who whom whose what which ' +
+  'while after before into onto over under up down out about all any each every some many more most other others such only own same few both very ' +
+  'can will just do does did has have had may might must shall should would could also there here how why one two three four five first second third ' +
+  'new old great once now later still even though although because since until unless however therefore meanwhile perhaps maybe none nothing ' +
+  'everyone someone anyone everything something anything lord lady sir king queen god goddess chapter part session dm gm npc pc ' +
+  'hello hi hey oh ok okay well thanks thank please sorry yeah wait look listen').split(' '));
+function loreNames(text) {
+  const counts = {}, first = {}, order = [];
+  const cap = /^[A-Z][A-Za-z'\-]*[A-Za-z]$/;
+  const name = function (w) { return cap.test(w) && !LORE_STOP.has(w.toLowerCase().replace(/'s$/, '')); };
+  String(text || '').split(/[.!?;:\n\r"()\[\]{}“”]+/).forEach(function (sent) {
+    const w = sent.split(/[\s,]+/).filter(Boolean);
+    let i = 1;   // the first word of a sentence is capitalised anyway
+    while (i < w.length) {
+      if (!name(w[i])) { i++; continue; }
+      const ph = [w[i]];
+      let j = i + 1;
+      while (j < w.length && ph.length < 5) {
+        if (name(w[j])) { ph.push(w[j]); j++; continue; }
+        if ((w[j] === 'of' || w[j] === 'the') && j + 1 < w.length && name(w[j + 1])) { ph.push(w[j]); j++; continue; }
+        break;
+      }
+      while (ph.length && (ph[ph.length - 1] === 'of' || ph[ph.length - 1] === 'the')) ph.pop();
+      const s = ph.join(' ').replace(/'s$/, '');
+      if (s.length >= 3) { if (!Object.prototype.hasOwnProperty.call(counts, s)) { counts[s] = 0; first[s] = order.length; order.push(s); } counts[s]++; }
+      i = j;
+    }
+  });
+  return order.sort(function (a, b) { return counts[b] - counts[a] || first[a] - first[b]; });
+}
 async function keytermsFor(db, campaignId, sessionId) {
-  const out = [];
-  const add = function (s) {
+  const out = [], seen = {}, src = { characters: 0, assets: 0, campaign: 0, session: 0, lore: 0 };
+  const add = function (s, from) {
     s = String(s || '').replace(/\s+/g, ' ').trim();
-    if (!s || s.length >= 50 || s.split(' ').length > 5 || /[<>{}\[\]\\]/.test(s)) return;
-    if (out.map(function (x) { return x.toLowerCase(); }).indexOf(s.toLowerCase()) < 0) out.push(s);
+    if (out.length >= 100 || !s || s.length >= 50 || s.split(' ').length > 5 || /[<>{}\[\]\\]/.test(s)) return;
+    const k = s.toLowerCase();
+    if (seen[k]) return;
+    seen[k] = true; out.push(s); src[from]++;
   };
-  try { (await db.prepare('SELECT name FROM characters WHERE campaign_id = ? ORDER BY id').all(campaignId)).forEach(function (r) { add(r.name); }); } catch (e) {}
-  try { const c = await db.prepare('SELECT name FROM campaigns WHERE id = ?').get(campaignId); if (c) add(c.name); } catch (e) {}
-  try { const s = await db.prepare('SELECT name FROM sessions WHERE id = ?').get(sessionId); if (s) add(s.name); } catch (e) {}
-  return out.slice(0, 100);
+  let lore = '';
+  let chars = [];
+  try { chars = await db.prepare('SELECT name, description FROM characters WHERE campaign_id = ? ORDER BY id').all(campaignId); }
+  catch (e) { try { chars = await db.prepare('SELECT name FROM characters WHERE campaign_id = ? ORDER BY id').all(campaignId); } catch (x) {} }
+  chars.forEach(function (r) { add(r.name, 'characters'); lore += '\n' + (r.description || ''); });
+  try { (await db.prepare('SELECT name FROM campaign_assets WHERE campaign_id = ? ORDER BY id').all(campaignId)).forEach(function (r) { add(r.name, 'assets'); }); } catch (e) {}
+  try { const c = await db.prepare('SELECT name, lore FROM campaigns WHERE id = ?').get(campaignId); if (c) { add(c.name, 'campaign'); lore = (c.lore || '') + '\n' + lore; } } catch (e) {}
+  try { const s = await db.prepare('SELECT name FROM sessions WHERE id = ?').get(sessionId); if (s) add(s.name, 'session'); } catch (e) {}
+  loreNames(lore).forEach(function (n) { add(n, 'lore'); });
+  out.sources = src;
+  return out;
 }
 
 // The words, compact: [speaker, start, end, text, type] for every word and space (no sound tags).
@@ -463,7 +506,7 @@ async function prepareJob(jobId) {
     const terms = await keytermsFor(db, job.campaign_id, job.session_id);
     const parts = await db.prepare('SELECT * FROM audio_parts WHERE job_id = ? ORDER BY idx').all(job.id);
     const base = { diarize: true, tag_audio_events: false };
-    if (terms.length) base.keyterms = terms;
+    if (terms.length) base.keyterms = terms.slice();
     if (job.speakers_hint) base.num_speakers = job.speakers_hint;
     audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': sending ' + parts.length + ' part(s) to fal', { endpoint: ENDPOINT, input: Object.assign({ audio_url: '(signed address, 1 hour)' }, base), webhook: hook });
     const refused = (await Promise.all(parts.map(async function (p) {
@@ -478,7 +521,7 @@ async function prepareJob(jobId) {
     }))).filter(Boolean);
     if (refused.length) throw new Error('The transcription service refused it (' + refused[0] + ')');
     await db.prepare("UPDATE audio_jobs SET status = 'transcribing', updated_at = NOW() WHERE id = ? AND status = 'preparing'").run(job.id);
-    audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': all ' + parts.length + ' part(s) sent to fal', { keyterms: terms.length });
+    audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': all ' + parts.length + ' part(s) sent to fal', { keyterms: terms.length, keyterm_sources: terms.sources || null });
     await checkJob(db, job.id);   // a part may already be back
   } catch (e) {
     await failJob(db, job, scrubUrls(e && e.message));
@@ -735,4 +778,4 @@ router.post('/fal-webhook', async function (req, res) {
 });
 
 module.exports = router;
-module.exports._test = { presign: presign, audioTokens: audioTokens, compactWords: compactWords, turnsOf: turnsOf, speakersOf: speakersOf, buildText: buildText, keytermsFor: keytermsFor, planParts: planParts, stitchParts: stitchParts, IO: IO, prepareJob: prepareJob, queuePrep: queuePrep, finishPart: finishPart, checkJob: checkJob, ensureTables: ensureTables };
+module.exports._test = { presign: presign, audioTokens: audioTokens, compactWords: compactWords, turnsOf: turnsOf, speakersOf: speakersOf, buildText: buildText, keytermsFor: keytermsFor, loreNames: loreNames, planParts: planParts, stitchParts: stitchParts, IO: IO, prepareJob: prepareJob, queuePrep: queuePrep, finishPart: finishPart, checkJob: checkJob, ensureTables: ensureTables };

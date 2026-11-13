@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.15",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3615-audio-keyterms",
+        "kind": "change",
+        "public": false,
+        "summary": "Audio Transcription listens for your Asset names and the names in your lore.",
+        "detail": "Besides the character, campaign and session names, the transcription service is now told the Asset Library's names and the proper names in the campaign lore and character descriptions, so made-up places and people come out spelled right.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.14",
     "staged_on": "2026-11-13",
     "entries": [
