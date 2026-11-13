@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.16",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3616-gen-story-tip",
+        "kind": "change",
+        "public": false,
+        "summary": "Generate Story now says what it does when you hover over it.",
+        "detail": "Story tab: the Generate Story button's tooltip explains that this is where it begins: the key moments, the characters and the outline to review, before the narrative and the illustrations.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.15",
     "staged_on": "2026-11-13",
     "entries": [
