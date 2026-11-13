@@ -43424,6 +43424,7 @@ function vlTakeInfoHTML(j) {
   row('Finished', escapeHtml(vlInfoWhen(t.finished_at)) + (t.finished_at && t.created_at ? ' (' + Math.round((new Date(t.finished_at) - new Date(t.created_at)) / 1000) + ' s)' : ''));
   if (t.trim_start != null || t.trim_end != null) row('Trim', (t.trim_start || 0) + ' s to ' + (t.trim_end != null ? t.trim_end + ' s' : 'the end'));
   if (t.source_take_id) { row('Retouch of', 'take id ' + t.source_take_id + ' (' + (t.retouch_kind === 'small' ? 'Small fix' : 'Bigger change') + ')'); row('Asked for', escapeHtml(t.retouch_text || '')); }
+  if (dir.copy) row('Copied from', escapeHtml(vlCpkCodeOf(dir.copy) + ' (' + (dir.copy.episode_name || 'episode ' + dir.copy.episode_id) + ', shot ' + dir.copy.shot_no + ', take ' + dir.copy.take_no + ')') + '. A copy: nothing was sent to fal for it and nothing was charged. What follows is what was sent for the original.');   // v3.6.05
   if (t.error) { head('Why it failed'); H.push('<div style="' + VL_WARN + 'font-size:13px;">' + escapeHtml(t.error) + '</div>'); }
   (j.moves || []).forEach(function (m, i) {
     var many = (j.moves || []).length > 1;
@@ -43491,7 +43492,7 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
     '<div style="display:flex;gap:4px;align-items:center;margin-top:5px;flex-wrap:wrap;">' +
       '<button type="button" class="vl-pin vl-take-pin" title="' + (chosen ? 'Pinned: the take this shot uses in the episode' : 'Pin this take: use it in the episode') + '" ' + (t.status === 'done' && !chosen ? 'onclick="vlChooseTake(' + t.id + ')"' : 'disabled') +
         ' style="' + VL_PIN + 'cursor:' + (t.status === 'done' && !chosen ? 'pointer' : 'default') + ';color:' + (chosen ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.45)') + ';">' + _vpickPinSvg(chosen) + '</button>' +   // v3.5.17: the standard pin
-      '<span style="' + VL_DESC + 'flex:1 0 auto;white-space:nowrap;">Take ' + n + (t.source_take_id ? ' <span title="' + escapeHtml('Retouched: ' + (t.retouch_text || '')) + '">&middot; retouched from ' + (fromN ? 'take ' + fromN : 'a deleted take') + '</span>' : '') + (t.status === 'done' ? (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : ' <span title="Made from the shot as it is now">&middot; current</span>') : '') + (t.trim_start != null || t.trim_end != null ? ' <span title="The episode uses only this part of the take">&middot; trimmed ' + (Number(t.trim_start) || 0).toFixed(1) + '&ndash;' + (t.trim_end != null ? Number(t.trim_end).toFixed(1) : 'end') + ' s</span>' : '') + '</span>' +   // v3.5.54
+      '<span style="' + VL_DESC + 'flex:1 0 auto;white-space:nowrap;">Take ' + n + (t.source_take_id ? ' <span title="' + escapeHtml('Retouched: ' + (t.retouch_text || '')) + '">&middot; retouched from ' + (fromN ? 'take ' + fromN : 'a deleted take') + '</span>' : '') + (t.copy ? ' <span title="' + escapeHtml('Copied from ' + vlCpkCodeOf(t.copy) + (t.copy.episode_name ? ' (' + t.copy.episode_name + ')' : '')) + '">&middot; copied</span>' : '') + (t.status === 'done' ? (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : ' <span title="Made from the shot as it is now">&middot; current</span>') : '') + (t.trim_start != null || t.trim_end != null ? ' <span title="The episode uses only this part of the take">&middot; trimmed ' + (Number(t.trim_start) || 0).toFixed(1) + '&ndash;' + (t.trim_end != null ? Number(t.trim_end).toFixed(1) : 'end') + ' s</span>' : '') + '</span>' +   // v3.5.54
       '<span class="vl-take-code" style="' + VL_DESC + 'flex:none;white-space:nowrap;" title="' + escapeHtml(vlTakeWhen(t, true)) + '">' + escapeHtml(vlTakeCode(t, n)) + ' &middot; ' + escapeHtml(vlTakeWhen(t).split(', ').pop()) + '</span>' +   // v3.5.95: the take's code, then the time
     '</div>' +
     '<div style="' + VL_DESC + 'margin:2px 0 0 2px;">' + escapeHtml(vlTakeModelText(t)) + '</div>' +
@@ -43527,7 +43528,7 @@ function vlShotBtnHTML(ep, ds, si) {
         var fi = -1; takes.forEach(function (o, j) { if (t.source_take_id && String(o.id) === String(t.source_take_id)) fi = j; });
         return vlTakeCardHTML(t, String(t.id) === String(s.chosen_take_id), i + 1, fi >= 0 ? fi + 1 : 0);
       }).join('') + '</div>' +
-    '<div style="flex:none;align-self:flex-end;">' + btn + '</div>' +
+    '<div style="flex:none;align-self:flex-end;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' + vlCpkBtnHTML(ds, takes) + btn + '</div>' +   // v3.6.05: Copy a take beside Generate take
   '</div>';
 }
 function vlLiveShotHTML(ep, ds, si, m) {
@@ -43809,6 +43810,130 @@ function vlDeleteTake(id) {
     if (yes) vlEpAct('/api/video-lab/takes/' + id, 'DELETE', 'Could not delete the take.');
   });
 }
+
+// ---- copy a take (v3.6.05) ----------------------------------------------------------------------
+// Ian, 2026-11-13: "go find another take in the same campaign but maybe a different version, or different episode and maybe a
+// different shot and copy it into the shot i'm currently working on. It would be a copy."; "You should be able to filter by
+// version, episode, shot." A window over the page lists every finished take of the campaign (not this shot's own), each one
+// playable; Copy to this shot makes a new take of the shot with its own copy of the video. Free; not pinned.
+var VL_CPK = null;
+var VL_CPK_SHOW = 60;
+function vlCpkBtnHTML(ds, takes) {
+  var full = takes.length >= VL_MAX_TAKES;
+  var off = !ds.id || full;
+  return '<button type="button" class="btn btn-sm vl-cpk-btn"' + (off ? ' disabled' : ' onclick="vlCpkOpen(' + ds.id + ')"') +
+    ' title="' + (full ? VL_MAX_TAKES + ' takes max: delete one to copy another in' : 'Copy a finished take from anywhere in this campaign (any version, episode or shot) into this shot. Free; the copy is not pinned.') + '">Copy a take</button>';
+}
+function vlCpkClose() { var o = document.getElementById('vl-cpk-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); VL_CPK = null; }
+function vlCpkOpen(shotId) {
+  vlCpkClose();
+  VL_CPK = { shotId: shotId, takes: null, v: '', e: '', s: '', busy: false };
+  var box = document.createElement('div');
+  box.id = 'vl-cpk-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.addEventListener('click', function (e) { if (e.target === box) vlCpkClose(); });
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:1000px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Copy a take into this shot</div><button class="modal-close" onclick="vlCpkClose()">&times;</button></div>' +
+    '<div style="font-size:13px;line-height:1.5;margin:6px 0 10px;">Any finished take from this campaign: any version, episode or shot. The copy gets its own video, costs nothing, and is not pinned.</div>' +
+    '<div id="vl-cpk-filters"></div><div id="vl-cpk-msg" style="font-size:13px;margin:6px 0;"></div>' +
+    '<div id="vl-cpk-list">' + vlSpin(14) + ' Loading...</div></div>';
+  document.body.appendChild(box);
+  fetch('/api/video-lab/shots/' + shotId + '/copyable-takes').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    if (!VL_CPK || VL_CPK.shotId !== shotId) return;
+    if (!res.ok || !res.j || !Array.isArray(res.j.takes)) { var l = document.getElementById('vl-cpk-list'); if (l) l.innerHTML = '<div style="' + VL_WARN + '">' + escapeHtml((res.j && res.j.error) || 'Could not list the takes.') + '</div>'; return; }
+    VL_CPK.takes = res.j.takes;
+    VL_CPK.full = !!res.j.full;
+    vlCpkRender();
+  }).catch(function () { var l = document.getElementById('vl-cpk-list'); if (l) l.innerHTML = '<div style="' + VL_WARN + '">Could not reach the server.</div>'; });
+}
+// The three filters: Version, then Episode (of the chosen version), then Shot (of the chosen episode).
+function vlCpkOptions(list, keyOf, labelOf) {
+  var seen = {}, out = [];
+  list.forEach(function (t) { var k = String(keyOf(t)); if (!seen[k]) { seen[k] = 1; out.push({ k: k, label: labelOf(t) }); } });
+  return out;
+}
+function vlCpkMatch(t, upTo) {
+  var c = VL_CPK;
+  if (c.v && t.version_key !== c.v) return false;
+  if (upTo === 'v') return true;
+  if (c.e && String(t.episode_id) !== c.e) return false;
+  if (upTo === 'e') return true;
+  if (c.s && String(t.shot_id) !== c.s) return false;
+  return true;
+}
+function vlCpkSelect(id, all, opts, cur, off) {
+  return '<select id="' + id + '" onchange="vlCpkFilter()"' + (off ? ' disabled' : '') + ' style="min-width:180px;max-width:300px;">' +
+    '<option value="">' + all + '</option>' + opts.map(function (o) { return '<option value="' + escapeHtml(o.k) + '"' + (o.k === cur ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>'; }).join('') + '</select>';
+}
+function vlCpkFilter() {
+  var c = VL_CPK; if (!c) return;
+  var v = document.getElementById('vl-cpk-v'), e = document.getElementById('vl-cpk-e'), s = document.getElementById('vl-cpk-s');
+  var nv = v ? v.value : '', ne = e ? e.value : '', ns = s ? s.value : '';
+  if (nv !== c.v) { ne = ''; ns = ''; }
+  if (ne !== c.e) ns = '';
+  c.v = nv; c.e = ne; c.s = ns;
+  vlCpkRender();
+}
+function vlCpkLabel(t) { return 'Shot ' + t.shot_no + (t.shot_name ? ': ' + t.shot_name : ''); }
+function vlCpkRender() {
+  var c = VL_CPK; if (!c || !c.takes) return;
+  var f = document.getElementById('vl-cpk-filters'), l = document.getElementById('vl-cpk-list');
+  if (!f || !l) return;
+  var vs = vlCpkOptions(c.takes, function (t) { return t.version_key; }, function (t) { return t.version_name + (t.canonical ? ' (main)' : ''); });
+  var es = vlCpkOptions(c.takes.filter(function (t) { return vlCpkMatch(t, 'v'); }), function (t) { return t.episode_id; }, function (t) { return t.episode_name || 'Episode ' + t.episode_id; });
+  var ss = c.e ? vlCpkOptions(c.takes.filter(function (t) { return vlCpkMatch(t, 'e'); }), function (t) { return t.shot_id; }, vlCpkLabel) : [];
+  f.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+    '<label style="font-size:13px;">Version ' + vlCpkSelect('vl-cpk-v', 'All versions', vs, c.v, false) + '</label>' +
+    '<label style="font-size:13px;">Episode ' + vlCpkSelect('vl-cpk-e', 'All episodes', es, c.e, false) + '</label>' +
+    '<label style="font-size:13px;" title="' + (c.e ? '' : 'Choose an episode first') + '">Shot ' + vlCpkSelect('vl-cpk-s', c.e ? 'All shots' : 'Choose an episode first', ss, c.s, !c.e) + '</label></div>';
+  var list = c.takes.filter(function (t) { return vlCpkMatch(t, 's'); });
+  if (!c.takes.length) { l.innerHTML = '<div style="font-size:13px;">There are no finished takes elsewhere in this campaign yet.</div>'; return; }
+  if (!list.length) { l.innerHTML = '<div style="font-size:13px;">No finished takes match.</div>'; return; }
+  var shown = list.slice(0, VL_CPK_SHOW), H = [], lastEp = null;
+  if (c.full) H.push('<div style="' + VL_WARN + 'margin-bottom:8px;">This shot already has ' + VL_MAX_TAKES + ' takes. Delete one to copy another in.</div>');
+  shown.forEach(function (t) {
+    if (t.episode_id !== lastEp) {
+      if (lastEp !== null) H.push('</div>');
+      lastEp = t.episode_id;
+      H.push('<div style="' + VL_BOX_LABEL + 'margin:12px 0 6px;">' + escapeHtml(t.episode_name || 'Episode ' + t.episode_id) + ' <span style="font-weight:400;opacity:0.75;">&middot; ' + escapeHtml(t.version_name) + '</span></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;">');
+    }
+    var code = vlTakeCodeOf(t.episode_id, t.shot_no, t.take_no, t.id, t.created_at);
+    H.push('<div class="vl-cpk-take" data-take="' + t.id + '" style="width:230px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;padding:6px;">' +
+      '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>' +
+      '<div style="font-size:12px;font-weight:600;margin-top:5px;">' + escapeHtml(vlCpkLabel(t)) + ' &middot; Take ' + t.take_no + '</div>' +
+      '<div style="font-family:monospace;font-size:11px;opacity:0.8;">' + escapeHtml(code) + '</div>' +
+      '<div style="font-size:12px;opacity:0.8;">' + escapeHtml(t.model_label + (t.mode ? ' \u00b7 ' + t.mode : '') + ' \u00b7 ' + t.secs + ' s' + (t.sound ? ' \u00b7 sound' : '')) + '</div>' +
+      '<div style="text-align:right;margin-top:6px;"><button type="button" class="btn btn-sm btn-primary vl-cpk-go"' + (c.full ? ' disabled' : '') + ' onclick="vlCpkGo(' + t.id + ')">Copy to this shot</button></div>' +
+    '</div>');
+  });
+  if (lastEp !== null) H.push('</div>');
+  if (list.length > shown.length) H.push('<div style="font-size:13px;margin-top:10px;">Showing ' + shown.length + ' of ' + list.length + '. Narrow it with the filters.</div>');
+  l.innerHTML = H.join('');
+}
+function vlCpkGo(takeId) {
+  var c = VL_CPK; if (!c || c.busy) return;
+  c.busy = true;
+  var btns = document.querySelectorAll('#vl-cpk-modal .vl-cpk-go'); Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
+  var msg = document.getElementById('vl-cpk-msg'); if (msg) msg.innerHTML = vlSpin(12) + ' Copying the take...';
+  fetch('/api/video-lab/shots/' + c.shotId + '/copy-take', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ take_id: takeId }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.j && res.j.episode) vlPutEp(res.j.episode);
+      vlRenderList(); vlRenderLive();
+      if (res.ok) { vlCpkClose(); return; }
+      if (VL_CPK) VL_CPK.busy = false;
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+      if (msg) msg.innerHTML = '<span style="' + VL_WARN + '">' + escapeHtml((res.j && res.j.error) || 'Could not copy the take.') + '</span>';
+    })
+    .catch(function () {
+      if (VL_CPK) VL_CPK.busy = false;
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+      if (msg) msg.innerHTML = '<span style="' + VL_WARN + '">Could not reach the server.</span>';
+    });
+}
+// The code of the take a copy was made from (as its own card showed it), for the copy's card and Info.
+function vlCpkCodeOf(c) { return c ? vlTakeCodeOf(c.episode_id, c.shot_no || 0, c.take_no || 0, c.take_id, c.created_at) : ''; }
 
 // ---- retouch a take (v3.5.26, TD-1112) ----------------------------------------------------------
 // Ian, 2026-11-08: "we are going to need a retouch for sure so build it". A window over the page: the take, what to

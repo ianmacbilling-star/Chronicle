@@ -661,6 +661,7 @@ async function loadEpisodes(db, where, params) {
       s.takes.forEach(function (t) {
         t.moves = moves.filter(function (m) { return m.take_id === t.id; });
         t.stale = t.sig !== s.sig;
+        t.copy = (parseJson(t.directions, null) || {}).copy || null;   // v3.6.05: a copy of a take from elsewhere in the campaign (its card says so)
       });
     });
     const cs = joinSig(ep.shots.map(function (s) { const t = s.takes.filter(function (x) { return x.id === s.chosen_take_id; })[0]; return { chosen_take_id: s.chosen_take_id, cut_style: s.cut_style, trim_start: t ? t.trim_start : null, trim_end: t ? t.trim_end : null }; }));   // v3.5.54
@@ -1554,6 +1555,97 @@ router.delete('/takes/:id', requireAuth, requireVideo, async function (req, res)
     res.json({ episode: await loadEpisode(db, x.ep.id) });
   } catch (e) {
     res.status(500).json({ error: 'Could not delete the take.' });
+  }
+});
+// v3.6.05 -- COPY A TAKE (Ian, 2026-11-13: "go find another take in the same campaign but maybe a different version, or different
+// episode and maybe a different shot and copy it into the shot i'm currently working on. It would be a copy."; "any version any
+// episode of the same campaign"; "filter by version, episode, shot"). Any finished take of the campaign becomes a new take of this
+// shot. Its video is copied to a file of its own, so deleting either take never touches the other. Nothing is charged, it counts
+// toward the shot's takes, and it is not pinned. Its Info comes with it (words, model, references, what was sent); its trim does not.
+async function copyTarget(req, db, shotId) {
+  const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(shotId);
+  const ep = shot ? await db.prepare('SELECT * FROM episodes WHERE id = ?').get(shot.episode_id) : null;
+  if (!ep || !(await canChange(req, ep))) return null;
+  return { shot: shot, ep: ep };
+}
+function copyVersionName(r) { return r.version_name ? String(r.version_name) : 'Version ' + (r.fork_id || '?'); }
+function copyModelLabel(model, retouchKind) {
+  if (retouchKind) return { label: retouchKind === 'small' ? 'Kling O1 Edit' : 'Seedance 2.0', mode: 'Retouch' };
+  const tm = MODELS[model];
+  return { label: tm ? tm.label : String(model || ''), mode: tm ? (tm.reference ? 'Reference' : 'Keyframes') : '' };
+}
+router.get('/shots/:id/copyable-takes', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await copyTarget(req, db, parseInt(req.params.id, 10));
+    if (!x) return res.status(404).json({ error: 'Not found.' });
+    const rows = await db.prepare(
+      'SELECT t.id, t.episode_id, t.shot_id, t.model, t.retouch_kind, t.sound, t.video_url, t.created_at, e.name AS episode_name, e.fork_id, ' +
+      's.position AS shot_no, s.name AS shot_name, cv.id AS version_id, cv.name AS version_name, cv.is_canonical ' +
+      'FROM takes t JOIN episodes e ON e.id = t.episode_id JOIN shots s ON s.id = t.shot_id ' +
+      'LEFT JOIN session_forks f ON f.id = e.fork_id LEFT JOIN campaign_versions cv ON cv.id = f.version_id ' +
+      "WHERE e.campaign_id = ? AND t.status = 'done' AND t.video_url IS NOT NULL AND t.shot_id <> ? ORDER BY e.id, s.position, t.id").all(x.ep.campaign_id, x.shot.id);
+    const shotIds = rows.map(function (r) { return Number(r.shot_id); }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    const all = shotIds.length ? await db.prepare('SELECT id, shot_id FROM takes WHERE shot_id = ANY(?) ORDER BY id').all([shotIds]) : [];
+    const mvs = rows.length ? await db.prepare('SELECT take_id, duration FROM moves WHERE take_id = ANY(?)').all([rows.map(function (r) { return r.id; })]) : [];
+    const takes = rows.map(function (r) {
+      const ml = copyModelLabel(r.model, r.retouch_kind);
+      return { id: r.id, episode_id: r.episode_id, episode_name: r.episode_name || '', version_key: r.version_id ? 'v' + r.version_id : 'f' + r.fork_id,
+        version_name: copyVersionName(r), canonical: !!r.is_canonical, shot_id: r.shot_id, shot_no: r.shot_no, shot_name: r.shot_name || '',
+        take_no: all.filter(function (a) { return Number(a.shot_id) === Number(r.shot_id) && Number(a.id) <= Number(r.id); }).length,
+        model_label: ml.label, mode: ml.mode, sound: !!r.sound, video_url: r.video_url, created_at: r.created_at,
+        secs: takeSecs(mvs.filter(function (m) { return Number(m.take_id) === Number(r.id); })) };
+    });
+    res.json({ takes: takes, full: await takesFull(db, x.shot.id, maxTakes(req)), max: maxTakes(req) });
+  } catch (e) {
+    console.error('[video] copyable takes error:', e && e.message);
+    res.status(500).json({ error: 'Could not list the takes.' });
+  }
+});
+router.post('/shots/:id/copy-take', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/shots/' + req.params.id + '/copy-take';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await copyTarget(req, db, parseInt(req.params.id, 10));
+    if (!x) return vlRefuse(req, res, FN, 404, 'Not found.');
+    const src = await takeAndEpisode(db, parseInt((req.body || {}).take_id, 10));
+    if (!src.ep || Number(src.ep.campaign_id) !== Number(x.ep.campaign_id) || !(await canSee(req, src.ep))) return vlRefuse(req, res, FN, 404, 'That take is not there any more.');
+    if (src.t.status !== 'done' || !src.t.video_url) return vlRefuse(req, res, FN, 409, 'Only a finished take can be copied.');
+    if (Number(src.t.shot_id) === Number(x.shot.id)) return vlRefuse(req, res, FN, 409, 'That take is already on this shot.');
+    if (await takesFull(db, x.shot.id, maxTakes(req))) return vlRefuse(req, res, FN, 409, 'This shot already has ' + maxTakes(req) + ' takes. Delete one to copy another in.');
+    const buf = await storage.fetchFile(src.t.video_url);
+    if (!buf || !buf.length) return vlRefuse(req, res, FN, 502, 'Could not read the video of that take.');
+    const stored = await storage.uploadFile(buf, 'ep-' + x.ep.id + '-copy-of-take-' + src.t.id + '-' + Date.now() + '.mp4', 'video/mp4', 'video-lab');
+    let takeId = null;
+    try {
+      const mvs = await db.prepare('SELECT * FROM moves WHERE take_id = ? ORDER BY position, id').all(src.t.id);
+      const sSh = await db.prepare('SELECT position FROM shots WHERE id = ?').get(src.t.shot_id);
+      const nRow = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ? AND id <= ?').get(src.t.shot_id, src.t.id);
+      const dEp = await loadEpisode(db, x.ep.id);
+      const dSh = dEp ? dEp.shots.filter(function (s) { return Number(s.id) === Number(x.shot.id); })[0] : null;
+      const dir = parseJson(src.t.directions, {}) || {};
+      dir.copy = { take_id: src.t.id, episode_id: src.ep.id, episode_name: src.ep.name || '', shot_no: sSh ? sSh.position : null, take_no: Number(nRow && nRow.n) || null, created_at: src.t.created_at };
+      await db.transaction(async function (tx) {
+        const ins = await tx.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, video_url, merge_status, est_cost_usd, retouch_text, retouch_kind, tokens, tokens_charged, words_at, finished_at) VALUES (?, ?, ?, 'done', ?, ?, ?, ?, ?, 'single', 0, ?, ?, 0, 0, ?, NOW())")
+          .run(x.ep.id, x.shot.id, req.session.userId, src.t.model, !!src.t.sound, dSh ? dSh.sig : src.t.sig, JSON.stringify(dir), stored, src.t.retouch_text, src.t.retouch_kind, src.t.words_at);
+        takeId = ins.lastInsertRowid;
+        if (!takeId) throw new Error('the take was not saved');
+        for (const m of mvs) {
+          await tx.prepare("INSERT INTO moves (take_id, episode_id, position, start_url, end_url, prompt, model, endpoint, duration, sound, status, est_cost_usd, sent_input, used_prompt, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'done', 0, ?, ?, NOW())")
+            .run(takeId, x.ep.id, m.position, m.start_url, m.end_url, m.prompt, m.model, m.endpoint, m.duration, !!m.sound, m.sent_input, m.used_prompt);
+        }
+      });
+    } catch (e) {
+      await deleteFiles([stored], 'copy of take ' + src.t.id + ' not saved');
+      throw e;
+    }
+    vlDebug(req.session.userId, 'info', FN, 'Take ' + src.t.id + ' (episode ' + src.ep.id + ') copied to shot ' + x.shot.id + ' (episode ' + x.ep.id + ') as take ' + takeId, { file: vlShortUrl(stored) });
+    res.json({ episode: await loadEpisode(db, x.ep.id), take: takeId });
+  } catch (e) {
+    console.error('[video] copy take error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not copy the take.' });
   }
 });
 // Join the episode again after a failed join.

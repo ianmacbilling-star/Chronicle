@@ -1,5 +1,29 @@
 [
   {
+    "version": "3.6.05",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3605-copy-take",
+        "kind": "feature",
+        "public": false,
+        "summary": "Copy a take: bring a finished take from anywhere in the campaign into the shot you are working on.",
+        "detail": "Video tab: Copy a take, beside Generate take, opens a window listing every finished take of the campaign (any version, episode or shot), filtered by version, episode and shot, each one playable. Copy to this shot makes a new take of the shot with its own copy of the video, so deleting either never touches the other. Free, not pinned, counts toward the shot's takes; its Info comes with it, its trim does not.",
+        "td": [
+          "TD-1136"
+        ]
+      },
+      {
+        "id": "3605-repo-tidy",
+        "kind": "ops",
+        "public": false,
+        "summary": "promote_production.sh is tracked in git; test files and SQL probes moved out of the project folder.",
+        "detail": "No change to the app. The promote script is committed. vertex_test.js, anime_guard_test.js, two SQL probes and fix_claude_ontop are moved to Dev Files beside the repo.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.04",
     "staged_on": "2026-11-13",
     "entries": [
