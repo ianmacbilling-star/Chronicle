@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.17",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3617-gen-tips",
+        "kind": "change",
+        "public": false,
+        "summary": "Generate Narrative and Generate Images now say what they do when you hover over them.",
+        "detail": "Review: Generate Narrative & Images. Storyboard: Generate Narrative (your pictures stay as they are) and Generate Images (locked pictures are kept, the rest are regenerated).",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.16",
     "staged_on": "2026-11-13",
     "entries": [

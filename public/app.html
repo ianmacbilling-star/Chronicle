@@ -1280,7 +1280,7 @@
             <div id="review-action-row" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:flex-end;">
               <button class="btn btn-sm dm-only" id="review-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="review-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
-              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" data-idle="Generate Narrative &amp; Images" onclick="generateNarrativeAndImages()">Generate Narrative &amp; Images</button>
+              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" data-idle="Generate Narrative &amp; Images" onclick="generateNarrativeAndImages()" title="Happy with the outline? We work up the narrative and illustrations based on your selections, building your storyboard in one go.">Generate Narrative &amp; Images</button>
               <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;">Cancel</button>
             </div>
           </div>
@@ -1307,9 +1307,9 @@
               <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="sb-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
               <span style="flex:1 1 auto;"></span>
-              <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" data-idle="Generate Narrative" onclick="generateNarrativeOnly()">Generate Narrative</button>
+              <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" data-idle="Generate Narrative" onclick="generateNarrativeOnly()" title="We work up the narrative for the whole story from your outline and style selection. Your pictures stay as they are.">Generate Narrative</button>
               <button class="btn btn-xs" id="sb-narr-cancel-btn" onclick="cancelNarrOnly()" style="display:none;">Cancel</button>
-              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">Generate Images</button>
+              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()" title="We work up the illustrations for every panel. Pictures you've locked are kept; the rest are regenerated.">Generate Images</button>
               <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">Cancel</button>
             </div>
             <div id="gen-bars-row" style="display:flex;gap:14px;margin-top:10px;align-items:flex-start;">
