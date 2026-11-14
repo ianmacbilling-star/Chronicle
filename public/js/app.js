@@ -43064,7 +43064,7 @@ function vlTrimTake(takeId) {
   box.addEventListener('click', function (e) { if (e.target === box) vlTrimClose(); });
   box.innerHTML = '<div id="vl-trim-panel" style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;width:min(1100px,94vw);max-width:98vw;min-width:360px;max-height:96vh;overflow:auto;resize:both;padding:18px;box-sizing:border-box;" title="Drag the bottom-right corner to resize">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Take ' + f.n + '</div><button class="modal-close" onclick="vlTrimClose()">&times;</button></div>' +
-    '<video id="vl-trim-v" src="' + escapeHtml(f.t.video_url) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;max-height:calc(96vh - 230px);object-fit:contain;background:#000;border-radius:6px;"></video>' +
+    '<video id="vl-trim-v" src="' + escapeHtml(vlViewSrc(f.t.video_url)) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;max-height:calc(96vh - 230px);object-fit:contain;background:#000;border-radius:6px;"></video>' +
     '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment. Save frame keeps that frame for another shot; Start here and End here trim the part the episode uses (the take itself is not changed).</div>' +
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-sm btn-primary vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', false)">Save frame</button><button class="btn btn-sm vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', true)">Last frame</button><span style="' + VL_DESC + '">for the next shot, another shot or the Archive</span>' +
       '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;"><a class="btn btn-sm vl-view-dl" style="text-decoration:none;" href="/api/video-lab/takes/' + takeId + '/download?code=' + encodeURIComponent(vlTakeCode(f.t, f.n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(f.t, f.n)) + '">&#8681; Download</a>' +
@@ -43079,10 +43079,30 @@ function vlTrimTake(takeId) {
     '<div id="vl-trim-msg" style="' + VL_DESC + 'margin-top:8px;"></div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimClose()">Close</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save trim</button></div>' +
   '</div>';
+  // v3.6.22+ (Ian, 2026-11-14, take 107: the link and the card played it, View showed 0:00 with no error): Chrome lets one player
+  // at a time read a video address from its cache, so View waited behind the card's player. Pause the page's other videos
+  // and give View's copy its own address; say so if it still does not load.
+  try { document.querySelectorAll('video').forEach(function (x) { try { x.pause(); } catch (e) {} }); } catch (e) {}
   document.body.appendChild(box);
   var v = document.getElementById('vl-trim-v');
-  v.addEventListener('loadedmetadata', function () { if (VL.trim && v.duration) { VL.trim.len = v.duration; vlTrimRead(); } });
+  v.addEventListener('loadedmetadata', function () { if (VL.trim && v.duration) { VL.trim.len = v.duration; vlTrimRead(); } var m = document.getElementById('vl-trim-msg'); if (m && m.getAttribute('data-load') === '1') { m.textContent = ''; m.removeAttribute('data-load'); } });
+  var slow = function (why) {
+    var m = document.getElementById('vl-trim-msg');
+    if (!m || !document.getElementById('vl-trim-v') || v.readyState >= 1) return;
+    m.setAttribute('data-load', '1');
+    m.innerHTML = escapeHtml(why) + ' <button class="btn btn-sm" onclick="vlTrimRetry(' + takeId + ')">Retry</button>';
+  };
+  v.addEventListener('error', function () { slow('The video could not be loaded here. Copy link opens it on its own.'); });
+  setTimeout(function () { slow('The video is slow to load.'); }, 8000);
   vlTrimRead();
+}
+function vlViewSrc(url) { return String(url || '') + (String(url || '').indexOf('?') >= 0 ? '&' : '?') + 'view=' + Date.now(); }
+function vlTrimRetry(takeId) {
+  var v = document.getElementById('vl-trim-v'), f = vlRtFind(takeId), m = document.getElementById('vl-trim-msg');
+  if (!v || !f) return;
+  if (m) { m.textContent = 'Loading...'; m.setAttribute('data-load', '1'); }
+  v.src = vlViewSrc(f.t.video_url);
+  v.load();
 }
 function vlTrimEnd() { return VL.trim ? (VL.trim.en != null ? VL.trim.en : VL.trim.len) : 0; }
 function vlTrimRead() {

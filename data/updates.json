@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.23",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3623-view-load",
+        "kind": "fix",
+        "public": false,
+        "summary": "A take's View window now plays a video that the card has already started.",
+        "detail": "Video: the browser lets one player at a time read a video from its cache, so View could sit at 0:00 behind the card's player with no error. View now pauses the page's other videos and loads its own copy, and if a video still does not load it says so and offers Retry.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.22",
     "staged_on": "2026-11-13",
     "entries": [
