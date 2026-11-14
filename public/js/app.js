@@ -43638,7 +43638,10 @@ function vlTakeInfo(takeId, n) {
   var box = document.createElement('div');
   box.id = 'vl-info-modal';
   box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
-  box.addEventListener('click', function (e) { if (e.target === box) vlTakeInfoClose(); });
+  // v3.6.26 (Ian: "the double click didn't work"): the first click opens this window, so the second lands on its backdrop, not the
+  // button. A backdrop click within half a second of opening is that double-click: copy the info instead of closing.
+  var opened = Date.now();
+  box.addEventListener('click', function (e) { if (e.target === box) { if (Date.now() - opened < 500 && vlInfoAdmin()) { vlTakeInfoQuick(takeId, n); return; } vlTakeInfoClose(); } });
   box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:900px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +   // v3.5.93: light text on the panel
     '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Take ' + (n || takeId) + ' &middot; info</div>' +
       (vlInfoAdmin() ? '<button type="button" class="narrative-regen-btn" id="vl-info-copy" title="Admin: copy all of this to the clipboard" onclick="vlTakeInfoCopy(' + (n || takeId) + ')">&#128203; Copy</button>' : '') +   // v3.5.94

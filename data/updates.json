@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.6.26",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3626-vid-prompt-cap",
+        "kind": "fix",
+        "public": false,
+        "summary": "Long video prompts are no longer cut off mid-word.",
+        "detail": "Words over 6,000 characters were cut wherever they reached the limit. Now the least needed lines are left out first (Around them, then Overall, then Sound), and any cut ends at a full stop.",
+        "td": []
+      },
+      {
+        "id": "3626-info-dblclick-fix",
+        "kind": "fix",
+        "public": false,
+        "summary": "Double-clicking a take's Info button now copies its info.",
+        "detail": "The first click opened the window, so the second missed the button; it is caught on the window's backdrop instead.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.25",
     "staged_on": "2026-11-13",
     "entries": [

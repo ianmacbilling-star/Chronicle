@@ -1099,7 +1099,7 @@ function planReference(ep, kfs, shotNo, cast) {
   if (overall) lines.push('Overall: ' + overall);
   lines.push('What happens, in order:');
   steps.forEach(function (w, i) { lines.push((i + 1) + '. ' + w); });
-  const full = lines.join('\n').slice(0, 6000);
+  const full = capScript(lines);   // v3.6.26: whole lines left out, never cut mid-word
   const own = steps.join('\n\n');
   return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: own, full: full, duration: String(secs), images: pics.concat(people.map(function (p) { return p.url; })), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
@@ -1227,7 +1227,18 @@ function shotScript(ep, w, pics) {
   if (ex.length > 1) out.push(ex[1]);
   if (w.sounds) out.push('Sound: ' + w.sounds);
   if (w.around) out.push('Around them: ' + w.around);
-  return out.join('\n').slice(0, 6000);
+  return capScript(out);
+}
+// v3.6.26 (take 110: the words were cut mid-word at 6000 characters, "otherwise ab"): over the cap, leave out whole lines,
+// the least needed first (Around them, then Overall, then Sound), and only then cut, at the end of a sentence.
+const SCRIPT_MAX = 6000;
+function capScript(lines) {
+  let ls = lines.slice();
+  if (ls.join('\n').length <= SCRIPT_MAX) return ls.join('\n');
+  [/^Around them:/, /^Overall:/, /^Sound:/].forEach(function (re) { if (ls.join('\n').length > SCRIPT_MAX) ls = ls.filter(function (l) { return !re.test(l); }); });
+  let out = ls.join('\n');
+  if (out.length > SCRIPT_MAX) { out = out.slice(0, SCRIPT_MAX); const k = Math.max(out.lastIndexOf('. '), out.lastIndexOf('.\n')); if (k > SCRIPT_MAX * 0.6) out = out.slice(0, k + 1); }
+  return out;
 }
 function wordsHaveContent(ep, w) { return !!(String(ep.overall || '').trim() || w.start || w.actions.length || w.lines.length || w.camera || w.end); }
 // v3.5.25 -- for naming the cast: what a line SAYS names no one in the shot ("Where is Emanon?"), and only the speakers
