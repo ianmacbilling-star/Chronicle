@@ -37,6 +37,7 @@ const MAX_SECS = 6 * 3600;        // 6 hours (Ian, 2026-11-13)
 const MAX_BYTES = 1536 * 1024 * 1024;
 const PUT_SECS = 3600, GET_SECS = 3600;
 const PART_SECS = 1140, OVERLAP_SECS = 90;   // v3.6.12: parts of 19 minutes overlapping by 90 s (fal's limit is 1200 s a request)
+const TRIAL_SECS = 1180;   // v3.6.22 (Ian, 2026-11-14: "Make it so the free trial only does the first 20 minutes ... this is an expensive feature ... here is the quick proof"); one part, under fal's 1200 s
 const PREP_STALE_MINS = 45;                  // a recording still being prepared after this long was lost (a restart): failed, nothing charged
 
 function audioTokens(secs) { return TOKENS_PER_QUARTER_HOUR * Math.max(1, Math.ceil((Number(secs) || 0) / 900 - 1e-9)); }
@@ -75,6 +76,7 @@ function ensureTables() {
     // v3.6.12: the parts of a recording, and the recording's real length and number of parts.
     await db.exec('ALTER TABLE audio_jobs ADD COLUMN IF NOT EXISTS secs_real REAL');
     await db.exec('ALTER TABLE audio_jobs ADD COLUMN IF NOT EXISTS parts INTEGER');
+    await db.exec('ALTER TABLE audio_jobs ADD COLUMN IF NOT EXISTS cap_secs REAL');   // v3.6.22: the Free Trial's first 20 minutes
     await db.exec(`
       CREATE TABLE IF NOT EXISTS audio_parts (
         id SERIAL PRIMARY KEY,
@@ -107,7 +109,13 @@ async function audioOn(db, req) {
 // test as the Writing Coach (wtAccess in routes/narrative.js): the campaign's effective plan has accessRank 3 or more -- Gold,
 // Platinum and the Free Trial, and a member gets it from the Story Master's plan. The tokens are still the presser's. Admins
 // always. The launch switch (audioOn) still comes first.
-const PLAN_MSG = 'Audio Transcription comes with Gold and Platinum, and with any campaign whose Story Master has one of them.';
+const PLAN_MSG = 'Audio Transcription comes with Gold and Platinum. On the Free Trial it does the first 20 minutes of a recording.';   // v3.6.22: members never had it (the Story box is the Story Master's; a tester, 2026-11-14)
+// v3.6.22: the Free Trial transcribes only the first TRIAL_SECS (trial tokens cannot be topped up). Admins are never capped.
+async function isTrialPlan(db, req, campaignId) {
+  const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
+  if (u && isAdminEmail(u.email)) return false;
+  try { return (await getEffectiveTier(req.session.userId, campaignId)) === 'trial'; } catch (e) { return false; }
+}
 async function planAllows(db, req, campaignId) {
   const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
   if (u && isAdminEmail(u.email)) return true;
@@ -315,7 +323,7 @@ function buildText(turns, speakers, names) {
 }
 
 function jobView(job) {
-  const v = { id: job.id, status: job.status, file_name: job.file_name, secs_est: job.secs_est, tokens: job.tokens, tokens_charged: job.tokens_charged, error: job.error || null, created_at: job.created_at, parts: Number(job.parts) || null, speakers_hint: Number(job.speakers_hint) || null };
+  const v = { id: job.id, status: job.status, file_name: job.file_name, secs_est: job.secs_est, tokens: job.tokens, tokens_charged: job.tokens_charged, error: job.error || null, created_at: job.created_at, parts: Number(job.parts) || null, speakers_hint: Number(job.speakers_hint) || null, cap_secs: Number(job.cap_secs) || null };
   if (job.status === 'ready' && job.words) {
     try { const turns = turnsOf(JSON.parse(job.words)); v.speakers = speakersOf(turns); v.turns = turns.length; } catch (e) { v.speakers = []; }
   }
@@ -483,7 +491,7 @@ async function prepareJob(jobId) {
     const all = path.join(dir, 'all.mp3');
     const t0 = Date.now();
     audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': making the speech copy');
-    await IO.run('ffmpeg', ['-nostdin', '-y', '-loglevel', 'error', '-i', IO.url(bucket, job.file_key), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '48k', all], 45 * 60 * 1000);
+    await IO.run('ffmpeg', ['-nostdin', '-y', '-loglevel', 'error', '-i', IO.url(bucket, job.file_key), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '48k'].concat(Number(job.cap_secs) > 0 ? ['-t', String(Number(job.cap_secs))] : []).concat([all]), 45 * 60 * 1000);   // v3.6.22 the trial's first 20 minutes only
     await deleteAudio(job);
     await db.prepare('UPDATE audio_jobs SET file_key = NULL WHERE id = ?').run(job.id);
     job.file_key = null;
@@ -525,7 +533,10 @@ async function prepareJob(jobId) {
     audLog(job.user_id, 'info', 'prepare', 'Job ' + job.id + ': all ' + parts.length + ' part(s) sent to fal', { keyterms: terms.length, keyterm_sources: terms.sources || null });
     await checkJob(db, job.id);   // a part may already be back
   } catch (e) {
-    await failJob(db, job, scrubUrls(e && e.message));
+    // v3.6.22 (a tester: a text file named .mp3 showed ffmpeg's own output): plain words for the person, the raw text in Debug Mode
+    let why = scrubUrls(e && e.message);
+    if (/^ff(mpeg|probe) failed/.test(why)) { audLog(job.user_id, 'error', 'prepare', 'Job ' + job.id + ': the file could not be read as audio', { detail: why }); why = "We couldn't read that file as audio. Try an mp3, m4a or wav file."; }
+    await failJob(db, job, why);
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
   }
@@ -588,7 +599,7 @@ router.get('/config', requireAuth, async function (req, res) {
     await ensureTables();
     const db = await getDb();
     const cid = parseInt(req.query.campaign, 10);   // v3.6.13: whether this campaign's plan has it
-    res.json({ enabled: await audioOn(db, req), allowed: cid ? await planAllows(db, req, cid) : null, plan_message: PLAN_MSG, tokens_per_quarter_hour: TOKENS_PER_QUARTER_HOUR, max_secs: MAX_SECS, max_bytes: MAX_BYTES });
+    res.json({ enabled: await audioOn(db, req), allowed: cid ? await planAllows(db, req, cid) : null, plan_message: PLAN_MSG, trial_secs: cid && (await isTrialPlan(db, req, cid)) ? TRIAL_SECS : null, tokens_per_quarter_hour: TOKENS_PER_QUARTER_HOUR, max_secs: MAX_SECS, max_bytes: MAX_BYTES });
   } catch (e) { res.json({ enabled: false }); }
 });
 
@@ -616,16 +627,17 @@ router.post('/start', requireAuth, async function (req, res) {
     if (!b.consent) return audRefuse(req, res, 'start', 400, 'Tick the box to confirm everyone agreed to be recorded.');
     const busy = await db.prepare("SELECT id FROM audio_jobs WHERE user_id = ? AND status IN ('uploading', 'preparing', 'transcribing', 'saving') AND updated_at > NOW() - INTERVAL '2 hours'").get(req.session.userId);
     if (busy) return audRefuse(req, res, 'start', 409, 'You already have a recording being transcribed. Wait for it to finish.', { job: busy.id });
-    const tokens = audioTokens(secs);
+    const capSecs = (await isTrialPlan(db, req, campaignId)) ? TRIAL_SECS : null;   // v3.6.22
+    const tokens = audioTokens(capSecs ? Math.min(secs, capSecs) : secs);
     const bal = await require('./tokens').getBalance(req.session.userId);
     if ((Number(bal.total) || 0) < tokens) { audLog(req.session.userId, 'warn', 'start', 'Refused (402): not enough tokens', { need: tokens, have: Number(bal.total) || 0 }); return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'This recording costs ' + tokens + ' tokens, but you have ' + (Number(bal.total) || 0) + '. Add tokens and try again.' }); }
     const name = String(b.name || 'recording').slice(0, 200);
     const ext = ((/\.([A-Za-z0-9]{2,5})$/.exec(name) || [])[1] || 'bin').toLowerCase();
     const key = 'audio-in/' + crypto.randomBytes(16).toString('hex') + '.' + ext;
     const hint = parseInt(b.speakers, 10);
-    const ins = await db.prepare("INSERT INTO audio_jobs (user_id, campaign_id, session_id, status, file_key, bucket, file_name, bytes, secs_est, tokens, speakers_hint, consent_at) VALUES (?, ?, ?, 'uploading', ?, ?, ?, ?, ?, ?, ?, NOW())")
-      .run(req.session.userId, campaignId, sessionId, key, audioBucket(), name, Math.round(bytes), secs, tokens, hint >= 1 && hint <= 32 ? hint : null);
-    audLog(req.session.userId, 'info', 'start', 'Job ' + ins.lastInsertRowid + ' started', { file: name, secs: secs, bytes: bytes, tokens: tokens, speakers_hint: hint || null, bucket: audioBucket(), key: key });
+    const ins = await db.prepare("INSERT INTO audio_jobs (user_id, campaign_id, session_id, status, file_key, bucket, file_name, bytes, secs_est, tokens, speakers_hint, cap_secs, consent_at) VALUES (?, ?, ?, 'uploading', ?, ?, ?, ?, ?, ?, ?, ?, NOW())")
+      .run(req.session.userId, campaignId, sessionId, key, audioBucket(), name, Math.round(bytes), secs, tokens, hint >= 1 && hint <= 32 ? hint : null, capSecs);
+    audLog(req.session.userId, 'info', 'start', 'Job ' + ins.lastInsertRowid + ' started', { file: name, secs: secs, bytes: bytes, tokens: tokens, cap_secs: capSecs, speakers_hint: hint || null, bucket: audioBucket(), key: key });
     res.json({ job: ins.lastInsertRowid, upload_url: presign('PUT', audioBucket(), key, PUT_SECS), tokens: tokens });
   } catch (e) {
     audLog(req.session && req.session.userId, 'error', 'start', 'Start failed: ' + (e && e.message), { stack: String((e && e.stack) || '').slice(0, 1500) });

@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.6.22",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3622-audio-trial",
+        "kind": "change",
+        "public": false,
+        "summary": "On the Free Trial, Audio Transcription does the first 20 minutes of a recording.",
+        "detail": "A quick proof it works, for 4 tokens at most: it is an expensive feature and trial tokens cannot be topped up. The window says so before you start and again when the words come back; Gold and Platinum transcribe the whole recording. The tier grid shows it, and the window's plan message no longer mentions members: transcribing is the Story Master's, since the Story box is theirs.",
+        "td": [
+          "TD-1046"
+        ]
+      },
+      {
+        "id": "3622-audio-junk",
+        "kind": "fix",
+        "public": false,
+        "summary": "A file that is not audio now gets a plain message.",
+        "detail": "Instead of the converter's own output, the window says it could not read the file as audio and suggests mp3, m4a or wav. A tiny file that cannot be read is refused before it uploads.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.21",
     "staged_on": "2026-11-13",
     "entries": [

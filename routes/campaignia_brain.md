@@ -166,8 +166,8 @@ Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Plat
 - **Gold** — 3 campaigns, unlimited sessions and characters, more free tokens than
   Silver, more moments per session, more art *and* narrative style options,
   **multiple versions of a book**, the full **Writing Coach** (Feedback, Rewrite and Word; see
-  10.9) and **Audio Transcription** (a recording turned into text; see 10.1). Platinum and the Free
-  Trial have both too; Regen works on every plan.
+  10.9) and **Audio Transcription** (a recording turned into text; see 10.1). Platinum has both too;
+  the Free Trial has the Writing Coach and the first 20 minutes of a recording; Regen works on every plan.
 - **Platinum** — unlimited campaigns/sessions/characters, the largest monthly token
   grant, the highest moment caps, all styling options, **multiple versions of a book**,
   and the ability to build **custom art styles**.
@@ -1053,7 +1053,11 @@ other name (a guest, an interviewer, a narrator). Then **Put it in the Story box
 has text it asks whether to add or replace). In a long recording one person can now and then show up
 as two speakers; give both the same name. **The recording goes to our transcription service and is
 deleted as soon as the words come back**; only the text is kept, and only until it is put in the box.
-**Who:** the Story Master, since the Story box is theirs, on Gold, Platinum or the Free Trial.
+**Who:** the Story Master, since the Story box is theirs, on Gold or Platinum: the whole recording.
+**On the Free Trial only the first 20 minutes** of a recording are transcribed (4 tokens at most), as a
+quick proof that it works: it is an expensive feature and trial tokens cannot be topped up, so they
+are better spent on the rest of Campaignia. The window says so before you start and again when the
+words come back.
 
 **Pick your styles before you generate.** The **Narrative style** and **Art style** buttons sit on
 the Story tab, beside Generate Story (they show the current pick; which styles you can choose depends

@@ -26424,6 +26424,7 @@ function audTOpen() {
     // v3.6.13 Gold and up (inherited from the Story Master's plan): say so instead of the drop zone
     return fetch('/api/audio/config?campaign=' + cid, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (c) {
       if (!AUD_T) return;
+      if (c) AUD_T_CFG = c;   // v3.6.22: this campaign's plan (the Free Trial's limit) for the quote
       if (c && c.allowed === false) audTBody('<div style="font-size:14px;line-height:1.6;">' + escapeHtml(c.plan_message || 'Audio Transcription comes with Gold and Platinum.') + '</div>');
       else audTPickView();
     });
@@ -26447,6 +26448,7 @@ function audTTake(file) {
     if (done || !AUD_T) return; done = true;
     try { URL.revokeObjectURL(url); } catch (e) {}
     AUD_T.secs = secs; AUD_T.exact = exact;
+    if (!exact && file.size < 1024) { AUD_T.file = null; audTSay("We couldn't read that file as audio. Try an mp3, m4a or wav file.", true); return; }   // v3.6.22: nothing readable, and too small to be a recording
     audTQuoteView();
   };
   a.preload = 'metadata';
@@ -26456,10 +26458,12 @@ function audTTake(file) {
   a.src = url;
 }
 function audTQuoteView() {
-  var f = AUD_T.file, secs = AUD_T.secs, tok = audTTokens(secs), max = (AUD_T_CFG && AUD_T_CFG.max_secs) || 21600;
+  var cap = (AUD_T_CFG && AUD_T_CFG.trial_secs) || 0;   // v3.6.22: the Free Trial's first 20 minutes
+  var f = AUD_T.file, secs = AUD_T.secs, tok = audTTokens(cap ? Math.min(secs, cap) : secs), max = (AUD_T_CFG && AUD_T_CFG.max_secs) || 21600;
   var tooLong = secs > max;
   audTBody('<div style="font-size:14px;line-height:1.6;"><b>' + escapeHtml(f.name) + '</b><br>' + (Math.round(f.size / 104857.6) / 10) + ' MB &middot; ' + (AUD_T.exact ? '' : 'about ') + audTLen(secs) + '</div>' +
     (tooLong ? '<div style="color:#e8a85a;margin-top:8px;">That is longer than 6 hours. Split it and transcribe each part.</div>' :
+    (cap && secs > cap ? '<div style="margin-top:10px;font-size:13px;padding:8px 10px;border-radius:6px;background:rgba(var(--accent-rgb, 201,168,76),0.12);">On the Free Trial we transcribe just the first 20 minutes, as a quick proof it works. It is an expensive feature, so save your tokens for the rest of Campaignia. Gold and Platinum transcribe the whole recording, up to 6 hours.</div>' : '') +
     '<div style="margin-top:10px;font-size:14px;">This will cost <b>' + (AUD_T.exact ? '' : 'about ') + tok + ' tokens</b> (' + ((AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2) + ' for each started 15 minutes), taken when the words come back. If it fails, it costs nothing.</div>' +
     '<label style="display:block;margin-top:10px;font-size:13px;">How many people are speaking? <input id="aud-t-spk" type="number" min="1" max="32" placeholder="not sure" style="width:90px;margin-left:6px;"></label>' +
     '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="aud-t-ok" style="margin-top:3px;"> Everyone in this recording agreed to be recorded and transcribed.</label>' +
@@ -26536,6 +26540,7 @@ function audTShowJob(job) {
   var sp = job.speakers || [];
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.6.18: the top bar shows the charge at once
   audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
+    (job.cap_secs ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Gold and Platinum transcribe the whole recording.</div>' : '') +   // v3.6.22
     (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
     '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14
     (job.speakers_hint && sp.length < job.speakers_hint ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">You said ' + job.speakers_hint + ' people were speaking; we could tell ' + sp.length + ' apart. Voices that sound alike can come back as one.</div>' : '') +   // v3.6.18
