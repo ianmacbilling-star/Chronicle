@@ -1,5 +1,35 @@
 [
   {
+    "version": "3.6.31",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3631-vid-keep-pictures",
+        "kind": "fix",
+        "public": false,
+        "summary": "Taking a picture out of the Archive no longer deletes it from a video shot that uses it.",
+        "detail": "A Save frame picture is both the shot's picture and its Archive entry; turning its Archived pill off deleted the file, and the shot's takes then failed at fal. The file is now kept while any shot (or its Revert) uses it.",
+        "td": []
+      },
+      {
+        "id": "3631-vid-check-pictures",
+        "kind": "fix",
+        "public": false,
+        "summary": "A take checks its pictures before anything is charged.",
+        "detail": "A picture missing from storage but still in the cache is saved back to its address; one that is gone is named, and nothing is charged.",
+        "td": []
+      },
+      {
+        "id": "3631-vid-where-named",
+        "kind": "change",
+        "public": false,
+        "summary": "The References hint says where a character is named.",
+        "detail": "For example: Emanon is named in the Closing but not in References.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.30",
     "staged_on": "2026-11-14",
     "entries": [

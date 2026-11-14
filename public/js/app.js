@@ -45330,6 +45330,16 @@ function vlShotText(s) {
   return [VL.draft ? VL.draft.overall : '', s.start, s.actions, s.camera, s.end, s.sounds, s.around].concat(s.lines.filter(function (l) { return !vlLineOff(l); }).map(function (l) { return l.who; })).join(' ');
 }
 function vlLineOff(l) { return !!l.off || !String(l.who || '').trim(); }
+// v3.6.31 (Ian, 2026-11-14: "the warnings should always say Where something is"): the boxes of a shot that name someone.
+function vlWhereNamed(s, name) {
+  var boxes = [['the Overall direction', VL.draft ? VL.draft.overall : ''], ['the Opening', s.start]];
+  vlActionsList(s.actions).forEach(function (a, i) { boxes.push(['Beat ' + (i + 1), a]); });
+  boxes.push(['the Camera', s.camera], ['the Closing', s.end], ['the Sound', s.sounds], ['Around them', s.around]);
+  (s.lines || []).forEach(function (l) { if (!vlLineOff(l)) boxes.push(['a line', l.who]); });
+  var at = [];
+  boxes.forEach(function (b) { if (String(b[1] || '').trim() && vlNamed(name, b[1]) && at.indexOf(b[0]) < 0) at.push(b[0]); });
+  return at.length > 2 ? at.slice(0, 2).join(', ') + ' and ' + (at.length - 2) + ' more' : at.join(' and ');
+}
 function vlFirst(n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
 // Who is only a voice in this shot (heard off-screen, never on screen): not in the shot, so never offered as a reference.
 function vlVoiceOnly(lines, text) {
@@ -45495,7 +45505,8 @@ function vlRefsHTML(si) {
       '<button type="button" class="review-add-btn" onclick="vlRefPicker(' + si + ',\'asset\')">+ Add asset</button>' +
     '</div>' +
     (named.length ? '<div style="' + VL_WARN + 'margin-top:4px;">' + named.map(function (c) {
-      return escapeHtml(String(c.name).split(/\s+/)[0]) + ' is named but not in References. <button type="button" class="review-add-btn" onclick="vlRefAdd(' + si + ',\'character\',' + c.id + ')">Add</button>';
+      var where = vlWhereNamed(s, c.name);   // v3.6.31: say where
+      return escapeHtml(String(c.name).split(/\s+/)[0]) + ' is named' + (where ? ' in ' + escapeHtml(where) : '') + ' but not in References. <button type="button" class="review-add-btn" onclick="vlRefAdd(' + si + ',\'character\',' + c.id + ')">Add</button>';
     }).join(' ') + '</div>' : '');
 }
 // =================================================================================================

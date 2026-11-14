@@ -1406,6 +1406,43 @@ function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
 
 // Make one shot: a new take (it becomes the chosen one), its moves sent to fal side by side. One take of a shot is made
 // at a time (a partial unique index is the claim). Returns { take } or { status, error }.
+// v3.6.31 -- THE PICTURES A TAKE WILL SEND MUST BE IN STORAGE. fal downloads each one from storage itself; a picture
+// deleted from the bucket can still show on the page from Cloudflare's cache, so the take failed at fal with "Failed to
+// download the file" (shot 8, takes 122-126). Our own pictures are asked about by key; one that is missing but still in
+// the cache is saved back to the same address; one that cannot be found is named. Returns the message, or null.
+async function missingPictures(req, moves, kfs, shotNo) {
+  const urls = [];
+  (moves || []).forEach(function (x) { [x.start, x.end].concat(x.images || []).forEach(function (u) { if (u && urls.indexOf(u) < 0) urls.push(u); }); });
+  const gone = [];
+  for (const u of urls) {
+    if (!storage.isOurPublicUrl(u)) continue;
+    const key = storage.keyFromUrl(u);
+    if (!key) continue;
+    let head;
+    try { head = await storage.headObject(null, key); } catch (e) { console.warn('[video] could not check ' + key + ': ' + (e && e.message)); continue; }   // cannot tell: let fal try
+    if (head) continue;
+    let back = false;
+    try {
+      const axios = require('axios');
+      const r = await axios.get(u, { responseType: 'arraybuffer', timeout: 30000, validateStatus: function () { return true; } });
+      const type = String((r.headers && r.headers['content-type']) || '');
+      if (r.status === 200 && /^image\//i.test(type) && r.data && r.data.byteLength > 0) {
+        const cut = key.indexOf('/');
+        await storage.uploadFile(Buffer.from(r.data), key.slice(cut + 1), type.split(';')[0], key.slice(0, cut));
+        back = !!(await storage.headObject(null, key));
+      }
+    } catch (e) { console.warn('[video] could not save ' + key + ' back: ' + (e && e.message)); }
+    console.log('[video] shot ' + shotNo + ': ' + key + ' was missing from storage; ' + (back ? 'saved back from the cache' : 'not in the cache either'));
+    vlDebug(req.session && req.session.userId, back ? 'info' : 'warn', 'makeShot', 'Shot ' + shotNo + ': ' + key + (back ? ' was missing from storage and was saved back from the cache' : ' is missing from storage'), { url: u });
+    if (!back) {
+      const ki = (kfs || []).findIndex(function (k) { return k.image_url === u; });
+      gone.push(ki >= 0 ? 'picture ' + (ki + 1) + (kfs[ki].label ? ' (' + String(kfs[ki].label).slice(0, 60) + ')' : '') : 'a reference picture');
+    }
+  }
+  if (!gone.length) return null;
+  return 'Shot ' + shotNo + '\u2019s ' + gone.join(' and ') + (gone.length === 1 ? ' is' : ' are') + ' missing from storage, so the video model cannot load ' + (gone.length === 1 ? 'it' : 'them') +
+    '. Put the picture in again (Add a picture, from the Archive) and remove the old one. Nothing was charged.';
+}
 async function takesFull(db, shotId, max) {   // v3.5.89: max = maxTakes(req)
   const c = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ?').get(shotId);
   return Number(c && c.n) >= max;
@@ -1430,6 +1467,10 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   });
   if (plan.error) return { status: 400, error: plan.error };
   if (await takesFull(db, shot.id, maxTakes(req))) return { status: 409, full: true, error: 'Shot ' + shotNo + ' already has ' + maxTakes(req) + ' takes. Delete one to make another.' };
+  // v3.6.31 (Ian, 2026-11-14): every picture is checked in storage before anything is charged or sent; one only in the cache is
+  // saved back; one that is gone is named ("if it is only in the cache, resave it").
+  const lost = await missingPictures(req, plan.moves, kfs, shotNo);
+  if (lost) return { status: 409, error: lost };
   const hook = webhookUrl();
   if (!hook) return { status: 500, error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' };
   const sound = !!ep.sound;
