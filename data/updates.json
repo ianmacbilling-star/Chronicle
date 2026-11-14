@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.27",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3627-take-icons",
+        "kind": "change",
+        "public": false,
+        "summary": "A take's Download and Copy link buttons are now icons.",
+        "detail": "Video: the download arrow and a chain link, with their tooltips, so a take's buttons fit on one line.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.26",
     "staged_on": "2026-11-13",
     "entries": [
