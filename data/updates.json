@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.28",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3628-vid-no-copy",
+        "kind": "change",
+        "public": false,
+        "summary": "Video takes are told that anyone who moves leaves no copy behind.",
+        "detail": "A character who got up could also stay where they had been. Every prompt now says anyone who moves or leaves their place goes entirely, and the spot they left stays empty.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.27",
     "staged_on": "2026-11-13",
     "entries": [

@@ -1178,6 +1178,9 @@ function shotScript(ep, w, pics) {
   // v3.6.24 (Ian, 2026-11-14, take 108: as the camera turned to the mirror, extra people appeared lying on the left; and Oya
   // spoke in the mirror though her beat said she says nothing -- the shot's Sound line mentioned "each time Oya speaks")
   out.push('Everyone is in the shot once only: when the camera moves or turns, those already seen keep their places, nobody appears twice, and no one is added who is not in the words or pictures.');
+  // v3.6.28 (Ian, 2026-11-14, take 111: Ori got up and a second Ori stayed on the ground; "anyone that moves or leaves their
+  // place should not leave a copy behind and leaves the space entirely")
+  out.push('Anyone who moves or leaves their place goes entirely: no copy of them is left behind, and the spot they left stays empty.');
   if ((w.lines || []).length) out.push('Only the lines written here are spoken, each by the one named; no one else speaks or moves their mouth as if talking.');
   // v3.5.48 (Ian, 2026-11-09: "can you make it so nothing appears out of thin air unless we tell it to?" -- take 26's pestle)
   out.push('Nothing appears or disappears out of thin air unless the words say so (something used up, destroyed or vanishing, as they describe it): any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
