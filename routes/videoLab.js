@@ -2714,6 +2714,8 @@ function directorHead(ctx) {
   return 'You are the Director of a short video made from the illustrations of a story, for the video model ' + ctx.m.label + (ctx.m.reference ? ' (reference mode)' : '') + '.\n\n' +
     'SHOTS AND CUTS\nThe video is a series of SHOTS joined by CUTS. A shot is one continuous camera run in one place: the camera never cuts away inside it.\n\n' +
     // v3.6.30 (Ian, 2026-11-14: "The director writing should always name people not use vague words"; take 117's strangers came from "the others")
+    // v3.6.33 (Ian, 2026-11-14: "when writing it should specifically name the people in the opening ... for the first keyframe image")
+    'THE OPENING NAMES WHO IS IN THE FIRST PICTURE\nThe start (Opening) names every person who can be seen in the shot\'s first picture, by name, where each one is and which way they face ("Ori stands on the right, side-on, holding the mirror up to her face"). Someone seen only as a face in a mirror, a vision or a sending is said to be only that. Name no one who is not in the first picture there: anyone else comes in during a beat.\n\n' +
     'NAME EVERYONE\nIn everything you write, name each person on screen by name (Ori, Drel and Gubuk). Never use vague words for people, such as the others, the party, the group, people, everyone, the rest of them, companions, allies or each character: the video model invents people to fill them. The only exception is a nameless crowd (a crowd, townsfolk, soldiers).\n\n';
 }
 function shotListRequest(ctx, images) {
@@ -3298,7 +3300,8 @@ async function precheckContext(db, ep) {
   ctx.info = ctx.shots.map(function (s) {
     const w = shotWords(s) || legacyWords(s.keyframes, MODELS[ep.model]);
     const key = shotModelKey(ep.model, shotMode(s), shotModel(s)), mm = MODELS[key];   // v3.5.86: the shot's own model
-    return { id: s.id, name: s.name || '', words: w, refs: refsToSend(ep, w, shotRefs(s), pool, 12).map(function (p) { return p.name; }),
+    const rs = refsToSend(ep, w, shotRefs(s), pool, 12);   // v3.6.33: their pictures too, for a one-shot check
+    return { id: s.id, name: s.name || '', words: w, refs: rs.map(function (p) { return p.name; }), refPics: rs.filter(function (p) { return p.kind !== 'asset'; }).slice(0, 6).map(function (p) { return { name: p.name, url: p.url }; }),
       mode: mm.reference ? 'reference' : 'keyframes', modeSet: shotMode(s), model: mm.label + (mm.reference ? ' (Reference)' : ' (Keyframes)'),
       maxSecs: Math.min(SHOT_MAX_SECS, Math.max.apply(null, (mm.durations || ['15']).map(Number))),   // v3.5.79
       dealt: pcDealt(s) };
@@ -3347,6 +3350,9 @@ function precheckRequest(ctx, images) {
     'TOO LONG (recommended): when the beats add up to more than the most this model makes (given with each shot), the shot must be cut in two. Give a finding of kind "cut" with a fix {"type": "cut", "after_beat": N}: the shot is cut between beat N and beat N+1. Pick the natural break (a change of subject, one action finished before the next starts), with each half no longer than the model makes.\n' +
     'ALREADY DEALT WITH: findings listed under a shot as already dealt with by the user were fixed or dismissed. Do not raise them again, in any wording.\n' +
     '5. reference: someone clearly on screen AND named in the shot\'s words who is not among the references sent. Never someone already sent, a background figure or a guess.\n' +
+    // v3.6.33 (Ian, 2026-11-14, shot 8: the Opening did not say who the first picture shows; Ori in the opening picture AND sent as a reference made two Oris in takes 127-128)
+    'WHO IS IN THE FIRST PICTURE (recommended): the start must name every person who can be seen in the shot\'s first picture, by name, where each is and which way they face, and no one else. When reference pictures are shown, use them to tell who is who. When the start leaves someone out, names someone who is not there, or puts someone in the wrong place, give a words fix for the start box that keeps the user\'s words and adds or corrects only that.\n' +
+    'IN THE PICTURE AND IN THE REFERENCES (optional): when someone is plainly in the shot\'s first picture and their reference picture is sent as well, the model may now and then add a second copy of them. Say so in one sentence, as optional, with no fix: if a take shows two of them, untick their reference.\n' +
     '6. style: only a picture that is plainly a different kind of art from the shot\'s other pictures (a photo among paintings, a flat cartoon among painted pictures, black and white among colour). The art style\'s name' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' is a loose label, not a test: never report that a picture is not that style, and never report differences of colour, light or detail.\n' +
     'LIKENESS: never judge whether a character in a picture looks like their reference (build, height, proportions, face, hair, clothing details): the reference picture is sent and the video follows it. Report only a picture where it plainly cannot be them (another skin colour, another kind of creature, a man where a woman should be).\n\n' +   // v3.5.50 (Ian, 2026-11-09: "it\'s saying this isn\'t Emanon because he\'s too bulky... a little over the top")
     'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
@@ -3400,6 +3406,10 @@ function precheckRequest(ctx, images) {
       content.push({ type: 'text', text: 'Picture ' + (n + 1) + '. ' + p.words });
       if (images[n]) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: images[n] } });
       n++;
+    });
+    if (ctx.only === si && (ctx.refImages || []).length) ctx.refImages.forEach(function (r) {   // v3.6.33
+      content.push({ type: 'text', text: 'Reference picture of ' + r.name + ' (sent with this shot; shows how they look):' });
+      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: r.b64 } });
     });
   });
   content.push({ type: 'text', text: ctx.only != null ? 'Now the pre-production check for shot ' + (ctx.only + 1) + ' only, as JSON.' : 'Now the pre-production check for these ' + ctx.shots.length + ' shots, as JSON.' });
@@ -3513,6 +3523,11 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     if (ctx.only != null) { let a = 0; for (let k = 0; k < ctx.only; k++) a += ctx.shots[k].keyframes.length; lo = Math.max(0, a - 1); hi = Math.min(ctx.pictures.length - 1, a + ctx.shots[ctx.only].keyframes.length); }
     for (let i = 0; i < ctx.pictures.length; i++) shapes.push(i >= lo && i <= hi ? await pcShape(ctx.pictures[i].url) : null);
     const images = shapes.map(function (s, i) { return s && (ctx.only != null || i < SL_MAX_IMAGES) ? s.b64 : null; });
+    // v3.6.33: checking one shot, its characters' reference pictures are shown too, so the check can say who is in the first picture
+    if (ctx.only != null && ctx.info[ctx.only]) {
+      ctx.refImages = [];
+      for (const p of (ctx.info[ctx.only].refPics || [])) { const b = await pictureForModel(p.url); if (b) ctx.refImages.push({ name: p.name, b64: b }); }
+    }
     const req = precheckRequest(ctx, images);
     for (let attempt = 1; attempt <= 2 && !result; attempt++) {
       const r = await callShotListModel(key, req);
@@ -3680,7 +3695,7 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     try { const ss = await shotStories(db, ep); story = shotStoryText(ss.shots.filter(function (x) { return x.id === shot.id; })[0]); } catch (e) { story = ''; }
     const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of {"do": what happens, in plain words with no spoken words in it, "seconds": how long it takes}'] : [])
       .concat(askLines ? ['"lines": what is said, in order, a list of {"who": a name from the Characters, "line": the exact words, "during": the number of the beat it is said in, "offscreen": false}'] : []);
-    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Name each person on screen by name; never vague words for people (the others, the party, the group, people, everyone, each character), as the video model invents people to fill them; a nameless crowd is the only exception. Reply with JSON only, with just the boxes asked for.' +
+    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Name each person on screen by name; never vague words for people (the others, the party, the group, people, everyone, each character), as the video model invents people to fill them; a nameless crowd is the only exception. The Opening names every person who can be seen in the shot\'s first picture (shown below), by name, where each one is and which way they face; tell who is who from the reference pictures shown; someone seen only as a face in a mirror or a vision is said to be only that; name no one who is not in the first picture. Reply with JSON only, with just the boxes asked for.' +
       (noBeats ? ' THE BEATS (v3.6.01): what the user wants is in the Purpose and Concept; follow them, and the story where they say nothing. The Opening is the first frame only: entrances, moves and speech happen in the beats. Give every beat its seconds. A beat with a line lasts at least as long as the line takes to say (about 2.5 words a second, plus a second). Never squeeze: if it all needs more than ' + maxSecs + ' seconds, still write all of it with honest seconds; the user is told where to cut.' : '') +
       (askLines ? ' THE LINES: when the Concept gives words to say, use them word for word, in its order, and fix only spelling; when it gives none, take them from the story; otherwise write none. Every line goes in "lines", never inside a beat\'s "do".' : '');
     const text = ['Overall direction: ' + (ep.overall || '(none)'), 'Characters: ' + (pool.characters.map(function (c) { return c.name; }).join(', ') || '(none)'),
@@ -3689,7 +3704,16 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
       story ? 'THE STORY BEHIND THIS SHOT:\n' + story : 'The story has nothing written for this shot.',   // v3.6.01
       'Write these boxes: {' + ask.join(', ') + '}'].join('\n\n');
     const prices = await shotListPrices(db);
-    const r = await callShotListModel(key, { max_tokens: 1500, system: system, content: [{ type: 'text', text: text }] });
+    // v3.6.33 (Ian, 2026-11-14): the Director sees the shot's first and last pictures and its characters' reference pictures, so the
+    // Opening it writes names who is in the first picture. A picture that cannot be read is left out.
+    const fillPics = [];
+    try {
+      const kf = await db.prepare('SELECT image_url FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
+      const picks = kf.length ? [{ url: kf[0].image_url, label: 'The shot\'s FIRST picture (how it opens):' }].concat(kf.length > 1 ? [{ url: kf[kf.length - 1].image_url, label: 'The shot\'s LAST picture:' }] : []) : [];
+      refsToSend(ep, w, shotRefs(shot), pool, 6).filter(function (p) { return p.kind !== 'asset'; }).forEach(function (p) { picks.push({ url: p.url, label: 'Reference picture of ' + p.name + ' (how they look, to tell who is who; it adds no one):' }); });
+      for (const p of picks) { const b = await pictureForModel(p.url); if (b) fillPics.push({ type: 'text', text: p.label }, { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b } }); }
+    } catch (e) { console.warn('[video] shot notes: pictures not read (' + (e && e.message) + ')'); }
+    const r = await callShotListModel(key, { max_tokens: 1500, system: system, content: [{ type: 'text', text: text }].concat(fillPics) });
     if (r.error) return vlRefuse(req, res, FN, 502, 'The Director could not be reached (' + r.error + '). Nothing was charged.');
     const j = readJson(r.text) || {};
     const got = {};

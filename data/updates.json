@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.6.33",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3633-vid-opening-names",
+        "kind": "change",
+        "public": false,
+        "summary": "The Director's Opening names everyone in the shot's first picture.",
+        "detail": "Episode and shot Notes write who can be seen in the first picture, where each is and which way they face, and no one else. A shot's Notes now see its first and last pictures and its characters' reference pictures.",
+        "td": []
+      },
+      {
+        "id": "3633-vid-check-who",
+        "kind": "change",
+        "public": false,
+        "summary": "Checking one shot looks at who is in its first picture.",
+        "detail": "The check sees the shot's reference pictures, fixes an Opening that leaves someone out or names someone who is not there, and notes (optional) when someone is in the picture and sent as a reference too.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.32",
     "staged_on": "2026-11-14",
     "entries": [
