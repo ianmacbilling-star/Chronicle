@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.6.24",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3624-vid-once",
+        "kind": "change",
+        "public": false,
+        "summary": "Video takes are told that everyone is in the shot once only, and that only the written lines are spoken.",
+        "detail": "As the camera turned, a take could add extra copies of people, and a character with no line could still talk. Every prompt now says those already seen keep their places and nobody appears twice, and when a shot has lines, that no one else speaks.",
+        "td": []
+      },
+      {
+        "id": "3624-view-play",
+        "kind": "change",
+        "public": false,
+        "summary": "A take's View window starts playing as soon as it opens.",
+        "detail": "Video: press View and the take plays.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.23",
     "staged_on": "2026-11-13",
     "entries": [

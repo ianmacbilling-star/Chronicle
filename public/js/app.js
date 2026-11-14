@@ -43094,6 +43094,7 @@ function vlTrimTake(takeId) {
   };
   v.addEventListener('error', function () { slow('The video could not be loaded here. Copy link opens it on its own.'); });
   setTimeout(function () { slow('The video is slow to load.'); }, 8000);
+  try { var pl = v.play(); if (pl && pl.catch) pl.catch(function () {}); } catch (e) {}   // v3.6.24 (Ian: "when you hit the view button... go ahead and play the video")
   vlTrimRead();
 }
 function vlViewSrc(url) { return String(url || '') + (String(url || '').indexOf('?') >= 0 ? '&' : '?') + 'view=' + Date.now(); }
