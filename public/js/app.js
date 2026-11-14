@@ -8835,6 +8835,7 @@ function openAssetModal(assetId) {
   var errEl = document.getElementById('asset-modal-error');
   if (errEl) errEl.classList.add('hidden');
   if (fileEl) fileEl.value = '';
+  state.assetModalSeq = (state.assetModalSeq || 0) + 1;   // v3.6.20: a reply for an earlier opening of this dialog leaves this one alone
   if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
 
   if (assetId) {
@@ -8982,8 +8983,40 @@ function handleAssetDrop(e) {
 function closeAssetModal() {
   var modal = document.getElementById('asset-modal');
   if (modal) modal.classList.add('hidden');
-  if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
+  // v3.6.20: a save still waiting for the typing to stop is sent now, not dropped
+  if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; if (state.modalAsset && state.modalAsset.id) saveAssetMeta(); }
   state.modalAsset = null;
+  state.assetModalSeq = (state.assetModalSeq || 0) + 1;
+}
+
+// v3.6.20 (a tester, 2026-11-13: "Adding an asset throws your typing away unless you give it a picture"): Done on a new asset
+// with a name creates it, with or without a picture (the server never needed one). A name is the one thing it must have.
+function assetDone() {
+  var a = state.modalAsset;
+  if (!a || a.id) { closeAssetModal(); return; }
+  var nameEl = document.getElementById('asset-name'), catEl = document.getElementById('asset-category'), descEl = document.getElementById('asset-description'), errEl = document.getElementById('asset-modal-error');
+  var name = nameEl ? nameEl.value.trim() : '', desc = descEl ? descEl.value.trim() : '';
+  if (!name && !desc) { closeAssetModal(); return; }
+  if (!name) { if (errEl) { errEl.textContent = 'Give the asset a name, or close it with the \u00d7 to leave it out.'; errEl.classList.remove('hidden'); } return; }
+  var fd = new FormData();
+  fd.append('name', name);
+  fd.append('category', catEl ? catEl.value : 'location');
+  fd.append('description', desc);
+  var h = assetHeightValue(), seq = state.assetModalSeq, btn = document.getElementById('asset-done-btn');
+  if (btn) btn.disabled = true;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/assets', { method: 'POST', body: fd })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (btn) btn.disabled = false;
+      if (!data || data.error || !data.id) { if (seq === state.assetModalSeq && errEl) { errEl.textContent = (data && data.error) || 'Could not save the asset.'; errEl.classList.remove('hidden'); } return; }
+      state.assets = (state.assets || []).concat([data]);
+      renderAssets();
+      _syncReviewAsset('upsert', data);
+      if (seq !== state.assetModalSeq) return;
+      if (h != null) { state.modalAsset = Object.assign({}, data, { height_ft: h }); saveAssetMeta(); }
+      closeAssetModal();
+    })
+    .catch(function () { if (btn) btn.disabled = false; if (errEl) { errEl.textContent = 'Could not reach the server.'; errEl.classList.remove('hidden'); } });
 }
 
 function assetPickFile() { var f = document.getElementById('asset-image'); if (f) f.click(); }
@@ -9076,7 +9109,7 @@ function assetGenerateFromModal() {
   if (!name) { if (errEl) { errEl.textContent = 'Give the asset a name first.'; errEl.classList.remove('hidden'); } return; }
   if (!description) { if (errEl) { errEl.textContent = 'Add a description to generate an image.'; errEl.classList.remove('hidden'); } return; }
   showBusyOverlay('asset-modal-image-body', 'Generating', 'Creating your image...');
-  var existingId = state.modalAsset && state.modalAsset.id;
+  var existingId = state.modalAsset && state.modalAsset.id, seq = state.assetModalSeq;   // v3.6.20
   var url, opts;
   if (existingId) {
     url = '/api/campaigns/' + state.currentCampaign.id + '/assets/' + existingId + '/regenerate';
@@ -9093,9 +9126,9 @@ function assetGenerateFromModal() {
         if (errEl) { errEl.textContent = data.message || data.error; errEl.classList.remove('hidden'); }
         return;
       }
-      if (data.asset) { state.modalAsset = data.asset; if (assetHeightValue() != null) scheduleAssetMetaSave(); }   // v3.5.61: a height set before the asset existed
+      if (data.asset && seq === state.assetModalSeq) { state.modalAsset = data.asset; if (assetHeightValue() != null) scheduleAssetMetaSave(); }   // v3.5.61: a height set before the asset existed; v3.6.20 only into the same opening
       var jobId = data.image_job_id || data.job_id;
-      var targetId = state.modalAsset ? state.modalAsset.id : (data.asset && data.asset.id);
+      var targetId = (data.asset && data.asset.id) || existingId;   // v3.6.20: this asset, not whatever the dialog holds now
       if (jobId) {
         pollRefJob(jobId, function(u){ reloadAndRenderModalAsset(targetId); if (typeof refreshTokenBalance === 'function') refreshTokenBalance(); }, function(err){ hideBusyOverlay('asset-modal-image-body'); if (errEl) { errEl.textContent = 'Could not generate: ' + err; errEl.classList.remove('hidden'); } });
       } else {
@@ -9119,6 +9152,7 @@ function assetUploadFile(file) {
   if (errEl) errEl.classList.add('hidden');
   if (state.assetMetaTimer) { clearTimeout(state.assetMetaTimer); state.assetMetaTimer = null; }
   showBusyOverlay('asset-modal-image-body', 'Uploading', 'Saving your image...');
+  var seq = state.assetModalSeq;   // v3.6.20
   var fd = new FormData();
   fd.append('name', name);
   fd.append('category', catEl ? catEl.value : 'location');
@@ -9132,13 +9166,14 @@ function assetUploadFile(file) {
     .then(function(data){
       hideBusyOverlay('asset-modal-image-body');
       if (data && data.error) { if (errEl) { errEl.textContent = data.error; errEl.classList.remove('hidden'); } return; }
-      state.modalAsset = data;
-      if (assetHeightValue() != null) scheduleAssetMetaSave();   // v3.5.61
+      var mine = (seq === state.assetModalSeq);   // v3.6.20: the dialog was closed or reopened while this uploaded: leave it alone
+      if (mine) state.modalAsset = data;
+      if (mine && assetHeightValue() != null) scheduleAssetMetaSave();   // v3.5.61
       var found = false;
       state.assets = (state.assets || []).map(function(x){ if (String(x.id) === String(data.id)) { found = true; return data; } return x; });
       if (!found) state.assets.push(data);
       renderAssets();
-      renderAssetModalImage(data);
+      if (mine) renderAssetModalImage(data);
       _syncReviewAsset('upsert', data);
     })
     .catch(function(){ hideBusyOverlay('asset-modal-image-body'); if (errEl) { errEl.textContent = 'Could not upload the image.'; errEl.classList.remove('hidden'); } });
@@ -9531,9 +9566,11 @@ function createCharThenBuild(opts) {
     if (slotFiles[slot]) formData.append(slot, slotFiles[slot]);
   });
 
+  var _seq = state.charModalSeq;   // v3.6.20
   fetch('/api/campaigns/' + state.currentCampaign.id + '/characters', { method: 'POST', body: formData })
     .then(function (r) { return r.json(); })
     .then(function (data) {
+      if (data && data.id && _seq !== state.charModalSeq) { loadCharacters(); return; }   // v3.6.20: the dialog moved on; never give it this id
       if (!data || data.error || !data.id) {
         if (btn) { btn.disabled = false; btn.textContent = '\u27f3 Build character prompt'; }
         charPromptMsg('new', (data && (data.message || data.error)) || 'Could not save the character.');
@@ -9935,6 +9972,8 @@ function renderCharacters() {
             var btns = '';
             if (canEdit) {
               btns += '<button class="char-btn" onclick="openCharModal(' + c.id + ')">Edit</button>';
+            } else if (isOwner && locked) {   // v3.6.18 (Ian): the Player Name stays editable while the campaign is locked
+              btns += '<button class="char-btn" onclick="charPlayerNameEdit(' + c.id + ')" title="Change who plays this character. The character itself is locked.">Player name</button>';
             }
             // Delete stays DM-only — players cannot delete any character.
             btns += '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>';
@@ -10065,6 +10104,7 @@ function charHeightLoad(ft) {
   out.textContent = charHeightLabel(Math.round((+ft) * 10) / 10);
 }
 function openCharModal(editId) {
+  state.charModalSeq = (state.charModalSeq || 0) + 1;   // v3.6.20: a reply for an earlier opening of this dialog leaves this one alone
   var char = editId ? state.characters.find(function(c){return c.id===editId;}) : null;
   document.getElementById('char-edit-id').value = editId || '';
   document.getElementById('char-modal-title').textContent = editId ? 'Edit Character' : 'Add Character';
@@ -10100,6 +10140,7 @@ async function closeCharModal() {
   // v3.0.860 -- TD-724. Ian: "Maybe we add a Dirty flag when they try to close the
   // dialog without regenerating the image? Warn them."
   if (!(await charPromptStaleOk())) return;
+  state.charModalSeq = (state.charModalSeq || 0) + 1;   // v3.6.20
   try {
     var editId = (document.getElementById('char-edit-id') || {}).value || '';
     var nameEl = document.getElementById('char-name');
@@ -10118,6 +10159,19 @@ async function closeCharModal() {
     }
   } catch (e) {}
   document.getElementById('char-modal').classList.add('hidden');
+}
+
+// v3.6.18 (Ian, 2026-11-13: "it can be editable while locked"; "a player name can be empty"): a note about a real person,
+// not story canon, so the owner may change it on a locked campaign. Only that field is sent.
+async function charPlayerNameEdit(id) {
+  var c = (state.characters || []).find(function (x) { return String(x.id) === String(id); });
+  if (!c || !state.currentCampaign) return;
+  var v = await uiPrompt('Player name', 'Who plays ' + charDisplayName(c.name) + '? Leave it empty if nobody does.', c.player_name || '');
+  if (v === null || v === undefined || v === false) return;
+  fetch('/api/campaigns/' + state.currentCampaign.id + '/characters/' + id + '/player-name', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ player_name: String(v) }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) { if (!res.ok || res.j.error) { showError((res.j && res.j.error) || 'Could not save the player name.'); return; } loadCharacters(); })
+    .catch(function () { showError('Could not reach the server.'); });
 }
 
 function previewCharImage() {
@@ -10214,10 +10268,12 @@ function saveChar() {
     ? '/api/campaigns/' + state.currentCampaign.id + '/characters/' + editId
     : '/api/campaigns/' + state.currentCampaign.id + '/characters';
 
+  var _seq = state.charModalSeq;   // v3.6.20
   fetch(url, {method: editId ? 'PUT' : 'POST', body: formData})
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) { showCharSaveError(data.error, data.code === 'CHARACTER_LIMIT'); return; }
+      if (_seq !== state.charModalSeq) { loadCharacters(); return; }   // v3.6.20: the dialog was closed or reopened meanwhile; never give it this id
 
       // If this was a NEW character that has no prompt yet, DON'T close —
       // the "Build character prompt" step is only available once the
@@ -19604,6 +19660,8 @@ function renderCharacters() {
             var btns = '';
             if (canEdit) {
               btns += '<button class="char-btn" onclick="openCharModal(' + c.id + ')">Edit</button>';
+            } else if (isOwner && locked) {   // v3.6.18 (Ian): the Player Name stays editable while the campaign is locked
+              btns += '<button class="char-btn" onclick="charPlayerNameEdit(' + c.id + ')" title="Change who plays this character. The character itself is locked.">Player name</button>';
             }
             // Delete stays DM-only — players cannot delete any character.
             btns += '<button class="char-btn char-btn-delete dm-only" onclick="deleteChar(' + c.id + ')">Delete</button>';
@@ -26148,6 +26206,9 @@ function fiTrimToLimit(text, limit) {
 async function fiApplyToField(box, text, opts) {
   opts = opts || {};
   if (!box) return false;
+  // v3.6.18 (a tester, 2026-11-13: a player's transcript went into the read-only Story box, never saved, and was paid for):
+  // a box this person cannot change takes nothing, and says so.
+  if (box.readOnly || box.disabled) { showError('This box is read-only for you, so nothing was put in it.'); return false; }
   var next = text;
   if ((box.value || '').trim()) {
     // Three honest answers, so three buttons. Append is the PRIMARY: Enter must never be the key
@@ -26319,6 +26380,215 @@ function storyImportFromFile() {
     }
   });
 }
+
+// ---- transcribe a recording (v3.6.09, TD-1046, first draft) ------------------------------------------
+// Ian, 2026-11-13: "a button that is next to the File Upload button over the story field on the Story tab. It opens a little modal
+// that allows you to drop or select a audio file. Then tell you based on its size roughly how many tokens it will cost. then
+// transcript it into the story field"; "if we have to tell it who people are we can do it on the modal". The browser reads the
+// recording's length itself (nothing is uploaded for the quote); the file goes straight to private storage, then to fal's
+// Scribe v2; the window shows the speakers it found, each with a few lines, to name or leave out; the text goes into the Story
+// box through the import's own Append / Replace. Shown only when /api/audio/config says it is on (admins, or the switch).
+var AUD_T = null;
+var AUD_T_CFG = null;
+function audTInit() {
+  fetch('/api/audio/config', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    AUD_T_CFG = j;
+    var b = document.getElementById('story-audio-btn');
+    if (b) b.style.display = j && j.enabled ? '' : 'none';
+  }).catch(function () {});
+}
+function audTTokens(secs) { var per = (AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2; return per * Math.max(1, Math.ceil(secs / 900 - 1e-9)); }   // v3.6.18: per started 15 minutes (Ian)
+function audTLen(secs) { secs = Math.ceil(secs - 1e-9); var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return h ? h + ' h ' + m + ' m ' + s + ' s' : (m ? m + ' m ' + s + ' s' : s + ' s'); }   // v3.6.21 (tester): seconds always shown, rounded up like the price
+function audTClose() {
+  var o = document.getElementById('aud-t-modal'); if (o && o.parentNode) o.parentNode.removeChild(o);
+  if (AUD_T && AUD_T.timer) clearTimeout(AUD_T.timer);
+  AUD_T = null;
+}
+function audTBody(html) { var b = document.getElementById('aud-t-body'); if (b) b.innerHTML = html; }
+function audTSay(html, warn) { var m = document.getElementById('aud-t-msg'); if (m) m.innerHTML = warn ? '<span style="color:#e8a85a;">' + html + '</span>' : html; }
+function audTOpen() {
+  audTClose();
+  var sid = state.currentSession && state.currentSession.id, cid = state.currentCampaign && state.currentCampaign.id;
+  if (!sid || !cid) { showError('Open a session first.'); return; }
+  AUD_T = { sid: sid, cid: cid, file: null, secs: 0, job: null, timer: null };
+  var box = document.createElement('div');
+  box.id = 'aud-t-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:620px;width:100%;max-height:90vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="font-size:16px;font-weight:600;color:var(--accent-pale);font-family:var(--font-display);flex:1;">Transcribe a recording</div><button class="modal-close" onclick="audTClose()">&times;</button></div>' +
+    '<div id="aud-t-body" style="margin-top:10px;">' + vlSpin(14) + ' Loading...</div><div id="aud-t-msg" style="font-size:13px;margin-top:10px;"></div></div>';
+  document.body.appendChild(box);
+  fetch('/api/audio/active?session=' + sid, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!AUD_T) return;
+    if (j && j.job && j.job.status !== 'uploading') { AUD_T.job = j.job; audTShowJob(j.job); return; }
+    // v3.6.13 Gold and up (inherited from the Story Master's plan): say so instead of the drop zone
+    return fetch('/api/audio/config?campaign=' + cid, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (c) {
+      if (!AUD_T) return;
+      if (c) AUD_T_CFG = c;   // v3.6.22: this campaign's plan (the Free Trial's limit) for the quote
+      if (c && c.allowed === false) audTBody('<div style="font-size:14px;line-height:1.6;">' + escapeHtml(c.plan_message || 'Audio Transcription comes with Gold and Platinum.') + '</div>');
+      else audTPickView();
+    });
+  }).catch(function () { if (AUD_T) audTPickView(); });
+}
+function audTPickView() {
+  audTBody('<div id="aud-t-zone" ondragover="event.preventDefault();this.style.borderColor=\'var(--accent-bright)\';" ondragleave="this.style.borderColor=\'\';" ondrop="audTDrop(event)" onclick="document.getElementById(\'aud-t-input\').click()" ' +
+      'style="border:2px dashed rgba(var(--accent-rgb),0.45);border-radius:10px;padding:26px 14px;text-align:center;cursor:pointer;font-size:14px;">Drop a recording here, or click to choose one<div style="font-size:12px;opacity:0.75;margin-top:6px;">mp3, m4a, wav, ogg, aac, flac or webm; up to 6 hours</div></div>' +
+    '<input type="file" id="aud-t-input" accept="audio/*,.mp3,.m4a,.wav,.ogg,.oga,.opus,.aac,.flac,.webm" style="display:none;" onchange="audTTake(this.files && this.files[0])">' +
+    '<div style="font-size:12px;opacity:0.8;margin-top:10px;line-height:1.5;">Your recording goes to our transcription service and is deleted as soon as the words come back.</div>');
+}
+function audTDrop(ev) { ev.preventDefault(); var f = ev.dataTransfer && ev.dataTransfer.files; audTTake(f && f[0]); }
+// The length is read from the file itself; if it cannot be, it is estimated from the size (as 128 kbps audio) and marked "about".
+function audTTake(file) {
+  if (!file || !AUD_T) return;
+  audTSay('');
+  if (AUD_T_CFG && file.size > AUD_T_CFG.max_bytes) { audTSay('That file is too large (the limit is 1.5 GB). Convert it to mp3 or m4a first.', true); return; }
+  AUD_T.file = file;
+  var url = URL.createObjectURL(file), a = document.createElement('audio'), done = false;
+  var finish = function (secs, exact) {
+    if (done || !AUD_T) return; done = true;
+    try { URL.revokeObjectURL(url); } catch (e) {}
+    AUD_T.secs = secs; AUD_T.exact = exact;
+    if (!exact && file.size < 1024) { AUD_T.file = null; audTSay("We couldn't read that file as audio. Try an mp3, m4a or wav file.", true); return; }   // v3.6.22: nothing readable, and too small to be a recording
+    audTQuoteView();
+  };
+  a.preload = 'metadata';
+  a.onloadedmetadata = function () { if (isFinite(a.duration) && a.duration > 0) finish(a.duration, true); else finish(file.size * 8 / 128000, false); };
+  a.onerror = function () { finish(file.size * 8 / 128000, false); };
+  setTimeout(function () { finish(file.size * 8 / 128000, false); }, 8000);
+  a.src = url;
+}
+function audTQuoteView() {
+  var cap = (AUD_T_CFG && AUD_T_CFG.trial_secs) || 0;   // v3.6.22: the Free Trial's first 20 minutes
+  var f = AUD_T.file, secs = AUD_T.secs, tok = audTTokens(cap ? Math.min(secs, cap) : secs), max = (AUD_T_CFG && AUD_T_CFG.max_secs) || 21600;
+  var tooLong = secs > max;
+  audTBody('<div style="font-size:14px;line-height:1.6;"><b>' + escapeHtml(f.name) + '</b><br>' + (Math.round(f.size / 104857.6) / 10) + ' MB &middot; ' + (AUD_T.exact ? '' : 'about ') + audTLen(secs) + '</div>' +
+    (tooLong ? '<div style="color:#e8a85a;margin-top:8px;">That is longer than 6 hours. Split it and transcribe each part.</div>' :
+    (cap && secs > cap ? '<div style="margin-top:10px;font-size:13px;padding:8px 10px;border-radius:6px;background:rgba(var(--accent-rgb, 201,168,76),0.12);">On the Free Trial we transcribe just the first 20 minutes, as a quick proof it works. It is an expensive feature, so save your tokens for the rest of Campaignia. Gold and Platinum transcribe the whole recording, up to 6 hours.</div>' : '') +
+    '<div style="margin-top:10px;font-size:14px;">This will cost <b>' + (AUD_T.exact ? '' : 'about ') + tok + ' tokens</b> (' + ((AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2) + ' for each started 15 minutes), taken when the words come back. If it fails, it costs nothing.</div>' +
+    '<label style="display:block;margin-top:10px;font-size:13px;">How many people are speaking? <input id="aud-t-spk" type="number" min="1" max="32" placeholder="not sure" style="width:90px;margin-left:6px;"></label>' +
+    '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="aud-t-ok" style="margin-top:3px;"> Everyone in this recording agreed to be recorded and transcribed.</label>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-sm" onclick="audTPickView()">Choose another</button><button class="btn btn-sm btn-primary" id="aud-t-go" onclick="audTStart()">Transcribe (' + tok + ' tokens)</button></div>'));
+}
+function audTStart() {
+  var A = AUD_T; if (!A || !A.file) return;
+  if (!(document.getElementById('aud-t-ok') || {}).checked) { audTSay('Tick the box to confirm everyone agreed to be recorded.', true); return; }
+  var go = document.getElementById('aud-t-go'); if (go) go.disabled = true;
+  audTSay(vlSpin(12) + ' Starting...');
+  fetch('/api/audio/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ campaignId: A.cid, sessionId: A.sid, secs: A.secs, bytes: A.file.size, name: A.file.name, speakers: (document.getElementById('aud-t-spk') || {}).value || null, consent: true }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!AUD_T) return;
+      if (!res.ok) { if (go) go.disabled = false; audTSay(escapeHtml((res.j && (res.j.message || res.j.error)) || 'Could not start.'), true); return; }
+      AUD_T.job = { id: res.j.job, status: 'uploading' };
+      audTUpload(res.j.upload_url);
+    })
+    .catch(function () { if (go) go.disabled = false; audTSay('Could not reach the server.', true); });
+}
+// Straight to private storage, with a progress bar. The window must stay open until this finishes.
+function audTUpload(url) {
+  var A = AUD_T; if (!A) return;
+  audTBody('<div style="font-size:14px;">Uploading <b>' + escapeHtml(A.file.name) + '</b>... keep this window open until the upload finishes.</div>' +
+    '<div style="height:8px;background:rgba(var(--accent-rgb),0.15);border-radius:4px;margin-top:10px;overflow:hidden;"><div id="aud-t-bar" style="height:100%;width:0;background:var(--accent);"></div></div><div id="aud-t-pct" style="font-size:12px;margin-top:4px;">0%</div>');
+  audTSay('');
+  var x = new XMLHttpRequest();
+  A.xhr = x;
+  x.open('PUT', url);
+  x.setRequestHeader('Content-Type', A.file.type || 'application/octet-stream');
+  x.upload.onprogress = function (e) { if (!e.lengthComputable) return; var p = Math.round(e.loaded * 100 / e.total); var b = document.getElementById('aud-t-bar'), t = document.getElementById('aud-t-pct'); if (b) b.style.width = p + '%'; if (t) t.textContent = p + '%'; };
+  x.onload = function () {
+    if (x.status >= 200 && x.status < 300) { audTUploaded(); return; }
+    audTFailUpload('The upload was refused (' + x.status + ').', String(x.responseText || '').slice(0, 300));
+  };
+  x.onerror = function () { audTFailUpload('The upload did not get through. (If this keeps happening, the storage needs its upload permission set: tell Claudia "CORS".)', 'network error at ' + Math.round((A.sent || 0) / 1048576) + ' MB'); };
+  x.upload.addEventListener('progress', function (e) { A.sent = e.loaded; });
+  x.send(A.file);
+}
+function audTFailUpload(why, detail) {
+  var A = AUD_T; if (!A || !A.job) return;
+  fetch('/api/audio/jobs/' + A.job.id + '/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: why + (detail ? ' ' + detail : '') }) }).catch(function () {});   // v3.6.10: the reason goes to the log
+  audTBody('');
+  audTSay(escapeHtml(why) + ' Nothing was charged.', true);
+  setTimeout(function () { if (AUD_T && !document.getElementById('aud-t-zone')) audTPickView(); }, 50);
+}
+function audTUploaded() {
+  var A = AUD_T; if (!A) return;
+  audTSay(vlSpin(12) + ' Sending it for transcription...');
+  fetch('/api/audio/jobs/' + A.job.id + '/uploaded', { method: 'POST' }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    if (!AUD_T) return;
+    if (!res.ok || !res.j.job) { audTBody(''); audTSay(escapeHtml((res.j && res.j.error) || 'Could not send it.') + ' Nothing was charged.', true); return; }
+    AUD_T.job = res.j.job; audTShowJob(res.j.job);
+  }).catch(function () { audTSay('Could not reach the server.', true); });
+}
+function audTPoll() {
+  var A = AUD_T; if (!A || !A.job) return;
+  fetch('/api/audio/jobs/' + A.job.id, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!AUD_T || !j || !j.job) return;
+    AUD_T.job = j.job; audTShowJob(j.job);
+  }).catch(function () { if (AUD_T) AUD_T.timer = setTimeout(audTPoll, 8000); });
+}
+function audTShowJob(job) {
+  var A = AUD_T; if (!A) return;
+  if (A.timer) { clearTimeout(A.timer); A.timer = null; }
+  audTSay('');
+  if (job.status === 'preparing' || job.status === 'transcribing' || job.status === 'saving') {   // v3.6.12 preparing: our server readies a long recording first
+    audTBody('<div style="font-size:14px;line-height:1.6;">' + vlSpin(14) + (job.status === 'preparing' ? ' Getting <b>' : ' Transcribing <b>') + escapeHtml(job.file_name || 'your recording') + (job.status === 'preparing' ? '</b> ready' : '</b>') + '... usually a few minutes.</div><div style="font-size:12px;opacity:0.8;margin-top:6px;">You can close this window; press Transcribe a recording again to come back to it.</div>');
+    A.timer = setTimeout(audTPoll, 5000);
+    return;
+  }
+  if (job.status === 'failed') { audTBody(''); audTSay('It did not work: ' + escapeHtml(job.error || 'unknown') + ' Nothing was charged.', true); return; }
+  if (job.status !== 'ready') { audTPickView(); return; }
+  var sp = job.speakers || [];
+  if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.6.18: the top bar shows the charge at once
+  audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
+    (job.cap_secs && Number(job.secs_est) > Number(job.cap_secs) ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Gold and Platinum transcribe the whole recording.</div>' : '') +   // v3.6.22
+    (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
+    '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14
+    (job.speakers_hint && sp.length < job.speakers_hint ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">You said ' + job.speakers_hint + ' people were speaking; we could tell ' + sp.length + ' apart. Voices that sound alike can come back as one.</div>' : '') +   // v3.6.18
+    '<datalist id="aud-t-players">' + (job.players || []).map(function (p) { return '<option value="' + escapeHtml(p) + '"></option>'; }).join('') + '</datalist>' +
+    sp.map(function (s, i) {
+      return '<div style="border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="min-width:80px;">' + escapeHtml(s.label) + '</b>' +
+        '<input class="form-input aud-t-name" data-spk="' + escapeHtml(s.id) + '" type="text" maxlength="80" list="aud-t-players" autocomplete="off" placeholder="' + ((job.players || []).length ? 'Pick a player or type a name' : 'Name') + '" style="flex:1;min-width:180px;width:auto;padding:6px 10px;">' +
+        '<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;"><input type="checkbox" class="aud-t-leave" data-spk="' + escapeHtml(s.id) + '" style="margin:0;width:14px;height:14px;accent-color:var(--accent-bright);cursor:pointer;"> Leave out</label></div>' +
+        '<div data-no-words style="font-size:12px;opacity:0.85;margin-top:6px;line-height:1.45;">' + (s.samples || []).map(function (t) { return '&ldquo;' + escapeHtml(t) + '&rdquo;'; }).join('<br>') + '</div></div>';
+    }).join('') +
+    '<div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-sm btn-primary" id="aud-t-put" onclick="audTApply()">Put it in the Story box</button></div>');
+}
+function audTApply() {
+  var A = AUD_T; if (!A || !A.job) return;
+  var names = {};
+  Array.prototype.forEach.call(document.querySelectorAll('#aud-t-modal .aud-t-name'), function (i) { names[i.getAttribute('data-spk')] = i.value || ''; });
+  Array.prototype.forEach.call(document.querySelectorAll('#aud-t-modal .aud-t-leave'), function (c) { if (c.checked) names[c.getAttribute('data-spk')] = '-'; });
+  var put = document.getElementById('aud-t-put'); if (put) put.disabled = true;
+  function fail(msg) { if (put) put.disabled = false; audTSay(msg, true); }
+  // v3.6.29 (a tester, 2026-11-14: the window closed, the Story box did not change, and nothing was said). The window no longer
+  // hides itself before the Append / Replace question (that question sits above it), so whatever goes wrong is said in a window
+  // the reader can see, with the reason. Finishing the job is waited for and checked as well.
+  fetch('/api/audio/jobs/' + A.job.id + '/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ names: names }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(async function (res) {
+      if (!AUD_T) return;
+      if (!res.ok || typeof res.j.text !== 'string') { fail(escapeHtml((res.j && res.j.error) || 'Could not build the text.')); return; }
+      var jobId = A.job.id;
+      if (!fiEl('transcript-input')) { fail('The Story box is not on this page. Open the session\'s Story tab and try again; the transcript is kept.'); return; }
+      var ok;
+      try {
+        ok = await fiApplyToField(fiEl('transcript-input'), res.j.text, { existsMessage: 'There is already text in the Story box.', after: function () { updateWordCounts(); } });
+      } catch (e) {
+        console.error('transcript into the Story box failed:', e);
+        fail('It could not be put in the Story box (' + escapeHtml((e && e.message) || 'unknown error') + '). The transcript is kept; try again.');
+        return;
+      }
+      if (ok === false) { if (put) put.disabled = false; return; }
+      var done = null;
+      try { done = await fetch('/api/audio/jobs/' + jobId + '/done', { method: 'POST' }); } catch (e) { done = null; }
+      if (!done || !done.ok) { fail('The words are in the Story box, but the transcript could not be marked as used' + (done ? ' (' + done.status + ')' : '') + '. Close this window; it may offer the same transcript again.'); return; }
+      audTClose();
+    })
+    .catch(function (e) { fail('Could not reach the server' + (e && e.message ? ' (' + escapeHtml(e.message) + ')' : '') + '.'); });
+}
+
+setTimeout(audTInit, 1200);
 
 // ---- CALLER 2: Campaign Details -> Lore / Background ---------------------------------------
 // v3.0.866. The one thing that is NOT like the Story tab: this field autosaves through csDirty,
@@ -42376,7 +42646,7 @@ function vlDraftFrom(ep) {
     style: (vlStyle(ep.style) || vlStyle(VL.defaultStyle) || {}).key || 'living',
     shots: (ep.shots || []).map(function (s) {
       var w = s.words || {};   // v3.5.19: the shot in plain words
-      return { ck: ++VL.ck, id: s.id, name: s.name || '', purpose: s.purpose || '', cut_style: s.cut_style || 'instant',   // v3.5.59 purpose
+      return { ck: ++VL.ck, id: s.id, name: s.name || '', purpose: s.purpose || '', concept: s.concept || '', cut_style: s.cut_style || 'instant',   // v3.5.59 purpose; v3.5.99 concept
         start: w.start || '', actions: vlActionsText(w.actions || []), lines: (w.lines || []).map(function (l) { return { who: l.who || '', text: l.text || '', when: Number(l.when) || 0, off: !!l.off }; }),
         camera: w.camera || '', end: w.end || '', sounds: w.sounds || '', around: w.around || '', seconds: Number(w.seconds) || VL_SHOT_SECS, more: !!(w.sounds || w.around),
         beats: vlBeatsNorm(w.beats, (w.actions || []).length),   // v3.5.63 -- TD-1121
@@ -42470,7 +42740,7 @@ function vlShotHTML(d, si, m, n0) {
       '<input id="vl-sn-' + si + '" class="form-input vl-shot-name" type="text" maxlength="120" value="' + escapeHtml(s.name || '') + '" placeholder="Name this shot" title="The shot\'s name" style="' + VL_SHOT_NAME + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
       // v3.5.59 (Ian, 2026-11-10: "every shot needs a Purpose field. It's more for the user and what the shot creating process can
       // fill in"): on the top line, so it stays readable when the shot is folded and the pictures stay right under it.
-      '<input id="vl-pu-' + si + '" class="form-input vl-purpose" type="text" maxlength="300" value="' + escapeHtml(s.purpose || '') + '" placeholder="Purpose: what this shot is for in the story"' + (s.purpose ? ' title="' + escapeHtml(s.purpose) + '"' : '') + ' style="flex:3 1 200px;min-width:110px;padding:4px 8px;font-size:13px;" oninput="vlEdit();if(this.value)this.title=this.value;else this.removeAttribute(\'title\');" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +   // v3.5.60: the tip is the whole purpose
+      '<span id="vl-pl-' + s.ck + '" style="flex:3 1 200px;min-width:110px;display:flex;">' + vlPurposeLabelHTML(s) + '</span>' +   // v3.5.99: a label that opens the Purpose and Concept window (was the v3.5.59 box)
       '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +   // v3.5.86: the length and the Mode moved to the row below
       '<span id="vl-todo-' + s.ck + '" style="flex:none;margin-left:auto;">' + vlTodoBtnHTML(si) + '</span>' +   // v3.5.34
       ((typeof state !== 'undefined' && state.user && state.user.is_admin) ? '<button type="button" class="narrative-regen-btn" style="flex:none;" title="Admin: copy this shot\'s outline to the clipboard" onclick="vlOutline(' + si + ')">&#128203;</button>' : '') +   // v3.5.74
@@ -42508,11 +42778,25 @@ function vlCopyText(t, ok) {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, old); else old();
 }
 function vlFoldKey(s) { return s.id ? 'id' + s.id : 'ck' + s.ck; }
-function vlFolded(s) { return !!(VL.folded && s && VL.folded[vlFoldKey(s)]); }
+// v3.5.97 (Ian, 2026-11-12: "If I collapse a shot... keep it collapsed until I open it again"): saved shots' folds are kept in this
+// browser across reloads; a new shot's fold moves to its id once it is saved.
+function vlFoldMap() {
+  if (!VL.folded) { VL.folded = {}; try { var o = JSON.parse(window.localStorage.getItem('vl-folded') || '{}'); if (o && typeof o === 'object') VL.folded = o; } catch (e) {} }
+  return VL.folded;
+}
+function vlFoldSave() {
+  try { var o = {}; Object.keys(VL.folded || {}).forEach(function (k) { if (VL.folded[k] && /^id\d+$/.test(k)) o[k] = true; }); window.localStorage.setItem('vl-folded', JSON.stringify(o)); } catch (e) {}
+}
+function vlFolded(s) {
+  if (!s) return false;
+  var m = vlFoldMap();
+  if (s.id && m['ck' + s.ck] && !m['id' + s.id]) { m['id' + s.id] = true; delete m['ck' + s.ck]; vlFoldSave(); }
+  return !!m[vlFoldKey(s)];
+}
 function vlFold(si) {
   var s = VL.draft && VL.draft.shots[si]; if (!s) return;
-  VL.folded = VL.folded || {};
-  var k = vlFoldKey(s); VL.folded[k] = !VL.folded[k];
+  vlFoldMap();
+  var k = vlFoldKey(s); VL.folded[k] = !VL.folded[k]; vlFoldSave();   // v3.5.97
   var b = document.getElementById('vl-body-' + s.ck); if (b) b.style.display = VL.folded[k] ? 'none' : '';
   var shot = b && b.parentNode, t = shot && shot.querySelector('.vl-fold');
   if (t) { t.innerHTML = VL.folded[k] ? '&#9656;' : '&#9662;'; t.title = VL.folded[k] ? 'Open this shot' : 'Fold this shot away (its name and purpose stay)'; }
@@ -42627,6 +42911,159 @@ function vlPreviewAnim(key, A, B, d) {
   else B.animate([{ opacity: 0 }, { opacity: 1 }], o);   // dissolve
 }
 
+// v3.5.98 -- THE EPISODE PREVIEW (Ian, 2026-11-12: "At the bottom of the episode. Show each shot's pinned take in sequence...
+// With a Preview button... everything it can show with transitions... Hopefully it can just preview it and not finalize /
+// build it"). Played in the browser from the pinned takes, their trims and the transitions (the same animations as a
+// cut's preview); nothing is made, saved or charged. The compiled episode is still made by Compile on the server.
+function vlEpPvBoxHTML() {
+  var V = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;';
+  return '<div id="vl-eppv" style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;">' +
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+      '<div style="font-weight:600;color:var(--accent-pale);flex:1;min-width:200px;">Episode preview: the pinned takes in order</div>' +
+      '<span id="vl-eppv-read" style="' + VL_DESC + '"></span>' +
+      '<button type="button" class="btn btn-sm" id="vl-eppv-stop" style="display:none;" onclick="vlEpPvStop()">Stop</button>' +
+      '<button type="button" class="btn btn-sm btn-primary" title="Play every shot\'s pinned take in order, with their trims and the transitions, here in your browser. Nothing is made or charged." onclick="vlEpPvPlay(0)">Preview</button>' +
+    '</div>' +
+    '<div id="vl-eppv-stage" style="display:none;position:relative;width:100%;max-width:960px;margin:10px auto 0;aspect-ratio:16/9;background:#000;border-radius:6px;overflow:hidden;">' +
+      '<video id="vl-eppv-a" playsinline preload="auto" style="' + V + '"></video>' +
+      '<video id="vl-eppv-b" playsinline preload="auto" style="' + V + 'opacity:0;"></video>' +
+      '<div id="vl-eppv-card" style="position:absolute;inset:0;z-index:3;display:none;align-items:center;justify-content:center;text-align:center;padding:20px;color:#ddd;font-size:16px;background:#000;"></div>' +
+      '<div id="vl-eppv-cap" style="position:absolute;left:8px;bottom:8px;z-index:4;font-size:12px;background:rgba(0,0,0,0.55);color:#fff;padding:2px 8px;border-radius:4px;"></div>' +
+    '</div>' +
+    '<div id="vl-eppv-strip" style="margin-top:10px;"></div>' +
+    '<div style="' + VL_DESC + 'margin-top:6px;">A preview in your browser: nothing is made, saved or charged. Click a shot to start from it. The compiled episode is put together on the server and may differ slightly.</div>' +
+  '</div>';
+}
+// Each shot of the draft, in order: its pinned take (finished, with a video) or why not, its trim, and the transition out.
+function vlEpPvList(ep, d) {
+  return ((d && d.shots) || []).map(function (ds, i) {
+    var es = ds.id ? vlEpShot(ep, ds.id) : null, t = vlChosen(es), n = 0;
+    ((es && es.takes) || []).forEach(function (x, k) { if (t && x.id === t.id) n = k + 1; });
+    var ok = !!(t && t.status === 'done' && t.video_url);
+    return { i: i, name: ds.name || '', t: ok ? t : null, why: ok ? '' : (t ? 'The pinned take is not finished' : 'No pinned take'), code: ok ? vlTakeCode(t, n) : '',
+      from: ok && t.trim_start != null ? Number(t.trim_start) || 0 : 0, to: ok && t.trim_end != null ? Number(t.trim_end) : null, cut: vlCutInfo(ds.cut_style || 'instant') };
+  });
+}
+function vlEpPvStripHTML(ep, d) {
+  var L = vlEpPvList(ep, d);
+  if (!L.length) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:stretch;">' + L.map(function (x, k) {
+    var trim = x.t && (x.t.trim_start != null || x.t.trim_end != null) ? ' &middot; trimmed ' + x.from.toFixed(1) + '-' + (x.to != null ? x.to.toFixed(1) + ' s' : 'end') : '';
+    var item = '<div class="vl-eppv-item" data-i="' + k + '" onclick="vlEpPvPlay(' + k + ')" title="Preview from shot ' + (k + 1) + '" style="width:150px;cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:4px;">' +
+      (x.t ? '<video src="' + escapeHtml(x.t.video_url) + '#t=' + x.from + '" preload="metadata" muted playsinline style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:4px;pointer-events:none;"></video>'
+           : '<div style="aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(0,0,0,0.3);border-radius:4px;font-size:11px;padding:4px;color:var(--danger);">' + escapeHtml(x.why) + '</div>') +
+      '<div style="font-size:12px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Shot ' + (k + 1) + (x.name ? ': ' + escapeHtml(x.name) : '') + '</div>' +
+      '<div style="' + VL_DESC + 'font-size:11px;">' + (x.t ? escapeHtml(x.code) + trim : '&nbsp;') + '</div></div>';
+    var cut = k < L.length - 1 ? '<div style="' + VL_DESC + 'align-self:center;text-align:center;width:64px;font-size:11px;">&#8594;<br>' + escapeHtml(x.cut.label) + (x.cut.secs ? '<br>' + x.cut.secs + ' s' : '') + '</div>' : '';
+    return item + cut;
+  }).join('') + '</div>';
+}
+function vlEpPvReset(v) {
+  if (!v) return;
+  if (v.getAnimations) v.getAnimations().forEach(function (x) { x.cancel(); });
+  v.style.opacity = ''; v.style.transform = ''; v.style.clipPath = ''; v.style.zIndex = '';
+}
+function vlEpPvStop(keep) {
+  if (VL.eppv && VL.eppv.timer) clearInterval(VL.eppv.timer);
+  if (VL.eppv && VL.eppv.wait) clearTimeout(VL.eppv.wait);
+  VL.eppv = null;
+  ['vl-eppv-a', 'vl-eppv-b'].forEach(function (id) { var v = document.getElementById(id); if (v) { try { v.pause(); } catch (e) {} } });
+  if (keep) return;
+  var st = document.getElementById('vl-eppv-stage'); if (st) st.style.display = 'none';
+  var sb = document.getElementById('vl-eppv-stop'); if (sb) sb.style.display = 'none';
+  var r = document.getElementById('vl-eppv-read'); if (r) r.textContent = '';
+  vlEpPvMark(-1);
+}
+function vlEpPvMark(k) {
+  document.querySelectorAll('.vl-eppv-item').forEach(function (el) { el.style.borderColor = String(el.getAttribute('data-i')) === String(k) ? 'rgba(var(--accent-rgb),0.9)' : 'rgba(var(--accent-rgb),0.25)'; });
+}
+function vlEpPvSay(x, n) {
+  var txt = 'Shot ' + (x.i + 1) + ' of ' + n + (x.code ? ' \u00b7 ' + x.code : '');
+  var c = document.getElementById('vl-eppv-cap'); if (c) c.textContent = txt;
+  var r = document.getElementById('vl-eppv-read'); if (r) r.textContent = txt;
+  vlEpPvMark(x.i);
+}
+// Load a take into a player at its trim start; resolves false when it cannot be read.
+function vlEpPvLoad(v, x) {
+  return new Promise(function (res) {
+    var done = false, fin = function (ok) { if (!done) { done = true; res(ok); } };
+    var seek = function () {   // ready once the trim start is on screen
+      if (Math.abs((v.currentTime || 0) - x.from) < 0.05) { fin(true); return; }
+      v.addEventListener('seeked', function () { fin(true); }, { once: true });
+      try { v.currentTime = x.from; } catch (e) { fin(true); }
+      setTimeout(function () { fin(v.readyState >= 1); }, 4000);
+    };
+    v.onerror = function () { fin(false); };
+    if (v.getAttribute('data-src') === x.t.video_url && v.readyState >= 1) { seek(); return; }
+    v.setAttribute('data-src', x.t.video_url);
+    v.addEventListener('loadedmetadata', seek, { once: true });
+    v.src = x.t.video_url; v.load();
+    setTimeout(function () { fin(v.readyState >= 1); }, 15000);
+  });
+}
+function vlEpPvEnd(v, x) { var dur = v.duration || 0; return x.to != null ? Math.min(x.to, dur || x.to) : dur; }
+function vlEpPvPlay(start) {
+  vlReadForm();
+  var d = VL.draft, ep = d && vlFindEp(d.id);
+  if (!ep) return;
+  vlEpPvStop(true);
+  var L = vlEpPvList(ep, d);
+  if (!L.some(function (x) { return x.t; })) { showError('No shot has a finished pinned take to preview yet.'); return; }
+  var st = document.getElementById('vl-eppv-stage'), A = document.getElementById('vl-eppv-a'), B = document.getElementById('vl-eppv-b'), card = document.getElementById('vl-eppv-card');
+  if (!st || !A || !B) return;
+  st.style.display = ''; document.getElementById('vl-eppv-stop').style.display = '';
+  [A, B].forEach(function (v) { vlEpPvReset(v); v.removeAttribute('src'); v.removeAttribute('data-src'); });
+  A.style.opacity = '1'; B.style.opacity = '0';
+  var P = VL.eppv = { list: L, k: Math.max(0, Math.min(L.length - 1, start || 0)), cur: A, nxt: B, timer: null, wait: null };
+  function alive() { return VL.eppv === P && document.getElementById('vl-eppv-a'); }
+  function showCard(text) { card.textContent = text; card.style.display = 'flex'; }
+  function hideCard() { card.style.display = 'none'; }
+  function finish() { if (!alive()) return; P.cur.pause(); showCard('The end of the episode preview.'); var r = document.getElementById('vl-eppv-read'); if (r) r.textContent = 'Done'; vlEpPvMark(-1); if (P.timer) clearInterval(P.timer); P.timer = null; }
+  // Start shot k from nothing (the first one, after a missing shot, or after a plain cut).
+  function begin(k) {
+    if (!alive()) return;
+    if (k >= L.length) { finish(); return; }
+    var x = L[k]; P.k = k; vlEpPvSay(x, L.length);
+    if (!x.t) { P.cur.pause(); P.nxt.pause(); showCard('Shot ' + (k + 1) + ': ' + x.why.toLowerCase() + '.'); P.wait = setTimeout(function () { begin(k + 1); }, 2000); return; }
+    vlEpPvLoad(P.cur, x).then(function (ok) {
+      if (!alive()) return;
+      if (!ok) { showCard('Shot ' + (k + 1) + ': its video could not be loaded.'); P.wait = setTimeout(function () { begin(k + 1); }, 2000); return; }
+      hideCard(); vlEpPvReset(P.cur); vlEpPvReset(P.nxt); P.cur.style.opacity = '1'; P.nxt.style.opacity = '0';
+      P.cur.play().catch(function () {});
+      run(k);
+    });
+  }
+  // Shot k is playing on P.cur: get the next one ready, run the transition at the right moment, then hand over.
+  function run(k) {
+    var x = L[k], y = L[k + 1], ready = false, started = false, trans = 0;
+    if (y && y.t) vlEpPvLoad(P.nxt, y).then(function (ok) { ready = ok; });   // ready ahead, for a plain cut too
+    if (P.timer) clearInterval(P.timer);
+    P.timer = setInterval(function () {
+      if (!alive()) { clearInterval(P.timer); return; }
+      var v = P.cur, end = vlEpPvEnd(v, x);
+      if (!end) return;
+      if (!started && y && y.t && x.cut.secs && ready) {
+        var yEnd = vlEpPvEnd(P.nxt, y);
+        trans = Math.min(x.cut.secs, (end - x.from) / 2, yEnd ? (yEnd - y.from) / 2 : x.cut.secs);
+        if (v.currentTime >= end - trans - 0.02) {
+          started = true;
+          st.style.background = x.cut.key === 'fadewhite' ? '#fff' : '#000';
+          vlEpPvReset(P.nxt); P.cur.style.zIndex = '0'; P.nxt.style.zIndex = '1';
+          P.nxt.play().catch(function () {});
+          vlPreviewAnim(x.cut.key, P.cur, P.nxt, trans);
+          vlEpPvSay(y, L.length);
+        }
+      }
+      if (v.currentTime >= end - 0.02 || v.ended) {
+        v.pause(); clearInterval(P.timer); P.timer = null;
+        if (started) { var o = P.cur; P.cur = P.nxt; P.nxt = o; vlEpPvReset(P.nxt); P.nxt.style.opacity = '0'; P.cur.style.opacity = '1'; P.k = k + 1; run(k + 1); }
+        else { var o2 = P.cur; P.cur = P.nxt; P.nxt = o2; vlEpPvReset(P.nxt); P.nxt.style.opacity = '0'; begin(k + 1); }
+      }
+    }, 30);
+  }
+  begin(P.k);
+}
+
 // v3.5.54 -- TRIM A TAKE (Ian, 2026-11-09: the "end at" trim). The part of the take the episode uses; the take itself is
 // never changed. Start here / End here at the playhead.
 function vlTrimClose() { var b = document.getElementById('vl-trim-modal'); if (b) { var v = b.querySelector('video'); if (v) try { v.pause(); } catch (e) {} if (b.parentNode) b.parentNode.removeChild(b); } VL.trim = null; }
@@ -42639,10 +43076,13 @@ function vlTrimTake(takeId) {
   box.id = 'vl-trim-modal';
   box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
   box.addEventListener('click', function (e) { if (e.target === box) vlTrimClose(); });
-  box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:640px;width:100%;padding:18px;">' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Trim take ' + f.n + '</div><button class="modal-close" onclick="vlTrimClose()">&times;</button></div>' +
-    '<video id="vl-trim-v" src="' + escapeHtml(f.t.video_url) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>' +
-    '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment, then set where the episode starts and ends this take. The take itself is not changed.</div>' +
+  box.innerHTML = '<div id="vl-trim-panel" style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;width:min(1100px,94vw);max-width:98vw;min-width:360px;max-height:96vh;overflow:auto;resize:both;padding:18px;box-sizing:border-box;" title="Drag the bottom-right corner to resize">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Take ' + f.n + '</div><button class="modal-close" onclick="vlTrimClose()">&times;</button></div>' +
+    '<video id="vl-trim-v" src="' + escapeHtml(vlViewSrc(f.t.video_url)) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;max-height:calc(96vh - 230px);object-fit:contain;background:#000;border-radius:6px;"></video>' +
+    '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment. Save frame keeps that frame for another shot; Start here and End here trim the part the episode uses (the take itself is not changed).</div>' +
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-sm btn-primary vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', false)">Save frame</button><button class="btn btn-sm vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', true)">Last frame</button><span style="' + VL_DESC + '">for the next shot, another shot or the Archive</span>' +
+      '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;"><a class="btn btn-sm vl-view-dl" style="text-decoration:none;" href="/api/video-lab/takes/' + takeId + '/download?code=' + encodeURIComponent(vlTakeCode(f.t, f.n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(f.t, f.n)) + '" aria-label="Download">&#8681;</a>' +
+      '<button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + takeId + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')" ondblclick="vlTakeInfoQuick(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
       '<button class="btn btn-sm" onclick="vlTrimMark(\'st\')">Start here</button>' +
       '<button class="btn btn-sm" onclick="vlTrimMark(\'en\')">End here</button>' +
@@ -42651,12 +43091,33 @@ function vlTrimTake(takeId) {
       '<span id="vl-trim-read" style="' + VL_DESC + 'margin-left:auto;"></span>' +
     '</div>' +
     '<div id="vl-trim-msg" style="' + VL_DESC + 'margin-top:8px;"></div>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimClose()">Cancel</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save</button></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimClose()">Close</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save trim</button></div>' +
   '</div>';
+  // v3.6.22+ (Ian, 2026-11-14, take 107: the link and the card played it, View showed 0:00 with no error): Chrome lets one player
+  // at a time read a video address from its cache, so View waited behind the card's player. Pause the page's other videos
+  // and give View's copy its own address; say so if it still does not load.
+  try { document.querySelectorAll('video').forEach(function (x) { try { x.pause(); } catch (e) {} }); } catch (e) {}
   document.body.appendChild(box);
   var v = document.getElementById('vl-trim-v');
-  v.addEventListener('loadedmetadata', function () { if (VL.trim && v.duration) { VL.trim.len = v.duration; vlTrimRead(); } });
+  v.addEventListener('loadedmetadata', function () { if (VL.trim && v.duration) { VL.trim.len = v.duration; vlTrimRead(); } var m = document.getElementById('vl-trim-msg'); if (m && m.getAttribute('data-load') === '1') { m.textContent = ''; m.removeAttribute('data-load'); } });
+  var slow = function (why) {
+    var m = document.getElementById('vl-trim-msg');
+    if (!m || !document.getElementById('vl-trim-v') || v.readyState >= 1) return;
+    m.setAttribute('data-load', '1');
+    m.innerHTML = escapeHtml(why) + ' <button class="btn btn-sm" onclick="vlTrimRetry(' + takeId + ')">Retry</button>';
+  };
+  v.addEventListener('error', function () { slow('The video could not be loaded here. Copy link opens it on its own.'); });
+  setTimeout(function () { slow('The video is slow to load.'); }, 8000);
+  try { var pl = v.play(); if (pl && pl.catch) pl.catch(function () {}); } catch (e) {}   // v3.6.24 (Ian: "when you hit the view button... go ahead and play the video")
   vlTrimRead();
+}
+function vlViewSrc(url) { return String(url || '') + (String(url || '').indexOf('?') >= 0 ? '&' : '?') + 'view=' + Date.now(); }
+function vlTrimRetry(takeId) {
+  var v = document.getElementById('vl-trim-v'), f = vlRtFind(takeId), m = document.getElementById('vl-trim-msg');
+  if (!v || !f) return;
+  if (m) { m.textContent = 'Loading...'; m.setAttribute('data-load', '1'); }
+  v.src = vlViewSrc(f.t.video_url);
+  v.load();
 }
 function vlTrimEnd() { return VL.trim ? (VL.trim.en != null ? VL.trim.en : VL.trim.len) : 0; }
 function vlTrimRead() {
@@ -42740,6 +43201,7 @@ function vlEditorHTML(ep) {
     '<datalist id="vl-cast-names">' + (ep.cast || []).map(function (c) { return '<option value="' + escapeHtml(c.name) + '">'; }).join('') + '</datalist>' +   // v3.5.19: who says a line
     (locked ? '<div style="' + VL_WARN + 'margin:0 0 8px;">' + vlSpin(12) + ' The Director is writing these shots. You can edit them when it is done.</div>' : '') +   // v3.5.37
     '<div id="vl-shots"' + (locked ? ' style="pointer-events:none;opacity:0.55;"' : '') + '>' + parts.join('') + '</div>' +
+    vlEpPvBoxHTML() +   // v3.5.98: the episode preview
     '<div style="' + VL_BOX + 'margin-top:14px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
       '<span id="vl-cost" style="' + VL_DESC + 'flex:1;min-width:200px;"></span>' +
       '<span id="vl-saved" style="' + VL_DESC + '"></span>' +
@@ -42763,7 +43225,7 @@ function vlReadForm() {
   var sy = v('vl-style'); if (sy) d.style = sy;
   d.shots.forEach(function (sh, si) {
     var sn = v('vl-sn-' + si); if (sn != null) sh.name = sn;   // v3.5.15
-    var pu = v('vl-pu-' + si); if (pu != null) sh.purpose = pu;   // v3.5.59
+    // v3.5.99: the purpose and concept are set by their window (vlPurposeSave), not read from the shot
     var ml = v('vl-ml-' + si); if (ml != null) sh.model = ml;   // v3.5.86
     var mo = v('vl-mo-' + si); if (mo != null) vlSetShotMode(sh, mo);   // v3.5.34; v3.5.86 within the shot's model
     // v3.5.19 -- the shot's boxes
@@ -42891,7 +43353,7 @@ function vlSave(cb) {
   VL.saving = true; VL.savePending = false; VL.saveError = '';
   var keys = d.shots.map(function (s) { return s.ck; });
   var body = { name: d.name, overall: d.overall, model: d.model, sound: d.sound, style: d.style,
-    shots: d.shots.map(function (s) { return { id: s.id, name: s.name || '', purpose: s.purpose || '', cut_style: s.cut_style,   // v3.5.59 purpose
+    shots: d.shots.map(function (s) { return { id: s.id, name: s.name || '', purpose: s.purpose || '', concept: s.concept || '', cut_style: s.cut_style,   // v3.5.59 purpose; v3.5.99 concept
       refs: (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; }),   // v3.5.22
       mode: s.mode || '',   // v3.5.34
       model: s.model || '',   // v3.5.86
@@ -43076,6 +43538,19 @@ function vlTakeProgress(t) {
   return mv.length > 1 ? 'Making: ' + done + ' of ' + mv.length + ' parts' : 'Being made';
 }
 // v3.5.75 -- a take's date (finished, else started), short on the card and in full as its tip; its model and mode
+// v3.5.95 -- A TAKE'S CODE (Ian, 2026-11-12: "e3s2t8-##-Date... e for episode, s for shot, t for take and then (0088) is the actual
+// ID then the date"; "Just do ID for episode"): e<episode id>s<shot number>t<take number on the card>-<take id, 4 digits>-<date
+// made, here>. On the card's date row, at the top of the take's Info, and the name a download is saved under.
+function vlTakeCodeOf(epId, shotNo, n, takeId, when) {
+  var d = new Date(String(when || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(when || '')) ? '' : 'Z'));
+  var day = isNaN(d.getTime()) ? '' : d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  return 'e' + epId + 's' + shotNo + 't' + n + '-' + ('000' + takeId).slice(-Math.max(4, String(takeId).length)) + (day ? '-' + day : '');
+}
+function vlTakeCode(t, n) {
+  var d = VL.draft, si = -1;
+  if (d) d.shots.forEach(function (s, i) { if (String(s.id) === String(t.shot_id)) si = i; });
+  return vlTakeCodeOf(d ? d.id : (t.episode_id || ''), si + 1, n, t.id, t.created_at);
+}
 function vlTakeWhen(t, full) {
   var d = new Date(String(t.finished_at || t.created_at || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(t.finished_at || t.created_at || '')) ? '' : 'Z'));
   if (isNaN(d.getTime())) return '';
@@ -43086,10 +43561,244 @@ function vlTakeModelText(t) {
   var m = vlModel(t.model);
   return ((m && m.label) || t.model || 'Unknown model') + (m ? ' \u00b7 ' + (m.reference ? 'Reference' : 'Keyframes') : '') + (t.sound ? ' \u00b7 sound' : '');
 }
+// v3.5.99 -- A SHOT'S PURPOSE AND CONCEPT, IN A WINDOW (Ian, 2026-11-12: "Show it as more of a label at the top of the shot that can
+// be clicked on and opened in a Modal that has more room to type in... a purpose... and maybe a concept too... the User can write
+// what he wants to happen and then the director and pre prep can try to make it happen... a way to view what the story currently
+// says about this shot"). Your words win over the story (Ian: "Latest words win"). Neither box is sent to the video model.
+// The story part is read only; ticks to leave parts of it out come later, once Ian has seen it.
+function vlPuShot(ck) { var d = VL.draft; if (!d) return null; for (var i = 0; i < d.shots.length; i++) if (d.shots[i].ck === ck) return d.shots[i]; return null; }
+function vlPurposeLabelHTML(s) {
+  var p = String(s.purpose || '').trim(), c = String(s.concept || '').trim();
+  var tip = (p ? 'Purpose: ' + p : 'No purpose yet') + (c ? '\n\nConcept: ' + c : '') + '\n\nClick to open the Purpose and Concept, and what the story says about this shot';
+  return '<button type="button" class="vl-purpose-label" onclick="vlPurposeOpen(' + s.ck + ')" title="' + escapeHtml(tip) + '" style="flex:1;min-width:0;text-align:left;padding:5px 10px;font-size:13px;line-height:1.3;cursor:pointer;border-radius:6px;border:1px solid rgba(var(--accent-rgb),0.35);background:rgba(var(--accent-rgb),0.08);color:rgb(var(--accent-text-rgb));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+    (p ? '<b style="color:var(--accent-bright);">Purpose:</b> ' + escapeHtml(p.split('\n')[0]) : '<span style="opacity:0.7;">+ Purpose and Concept</span>') +
+    (c ? ' <span style="opacity:0.7;">&middot; Concept</span>' : '') + '</button>';
+}
+function vlPurposeClose() { var o = document.getElementById('vl-pu-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); }
+function vlPurposeOpen(ck) {
+  var s = vlPuShot(ck), d = VL.draft;
+  if (!s || !d) return;
+  vlPurposeClose();
+  var si = d.shots.indexOf(s);
+  var TA = 'width:100%;box-sizing:border-box;padding:8px 10px;font-size:14px;line-height:1.45;resize:vertical;';
+  var HINT = 'font-size:12px;color:rgba(var(--on-panel-rgb),0.75);margin:2px 0 6px;';
+  var box = document.createElement('div');
+  box.id = 'vl-pu-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:820px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Shot ' + (si + 1) + (s.name ? ': ' + escapeHtml(s.name) : '') + '</div><button class="modal-close" onclick="vlPurposeClose()">&times;</button></div>' +
+    '<label for="vl-pu-text" style="display:block;margin-top:12px;font-weight:600;">Purpose</label>' +
+    '<div style="' + HINT + '">What has to land in the story. The Director\'s Notes and the check work to make it happen.</div>' +
+    '<textarea id="vl-pu-text" class="form-input" rows="3" maxlength="600" style="' + TA + '" placeholder="For example: Drel wins over the crowd, and Gubuk sees it happen." data-no-words>' + escapeHtml(s.purpose || '') + '</textarea>' +
+    '<label for="vl-co-text" style="display:block;margin-top:12px;font-weight:600;">Concept</label>' +
+    '<div style="' + HINT + '">How it should look and feel: the camera, the mood, the pace.</div>' +
+    '<textarea id="vl-co-text" class="form-input" rows="4" maxlength="1000" style="' + TA + '" placeholder="For example: a low angle on Drel, a slow push in, the crowd roaring around him." data-no-words>' + escapeHtml(s.concept || '') + '</textarea>' +
+    '<div style="' + HINT + 'margin-top:8px;">Your words win: where they and the story disagree, the Director follows yours. Neither box is sent to the video model; the Director turns them into the shot\'s words.</div>' +
+    '<div id="vl-pu-msg" style="' + VL_WARN + '"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;"><button type="button" class="btn" onclick="vlPurposeClose()">Cancel</button><button type="button" class="btn btn-primary" onclick="vlPurposeSave(' + ck + ')">Save</button></div>' +
+    '<div style="border-top:1px solid rgba(var(--accent-rgb),0.25);margin-top:14px;padding-top:12px;">' +
+      '<div style="font-weight:600;">What the story says about this shot</div>' +
+      '<div style="' + HINT + '">Read only. The Director reads this, along with the whole story of the session.</div>' +
+      '<div id="vl-pu-story" style="font-size:13px;line-height:1.5;">' + vlSpin(14) + ' Loading...</div>' +
+    '</div></div>';
+  document.body.appendChild(box);
+  var ta = document.getElementById('vl-pu-text'); if (ta) ta.focus();
+  var put = function (h) { var b = document.getElementById('vl-pu-story'); if (b) b.innerHTML = h; };
+  if (!s.id) { put('<div style="' + HINT + '">This shot is new and not saved yet. Its story shows once it is saved.</div>'); return; }
+  fetch('/api/video-lab/episodes/' + d.id + '/shot-story').then(function (r) { return r.json(); }).then(function (j) {
+    var x = j && j.shots ? j.shots.filter(function (y) { return String(y.id) === String(s.id); })[0] : null;
+    put(j && j.shots ? vlPurposeStoryHTML(x, !!j.has_story) : '<div style="' + VL_WARN + '">' + escapeHtml((j && j.error) || 'Could not read the story.') + '</div>');
+  }).catch(function () { put('<div style="' + VL_WARN + '">Could not reach the server.</div>'); });
+}
+function vlPurposeSave(ck) {
+  var s = vlPuShot(ck), d = VL.draft;
+  if (!s || !d) { vlPurposeClose(); return; }
+  if (vlSlLocked(d.id)) { var m = document.getElementById('vl-pu-msg'); if (m) m.textContent = 'The Director is working on this episode. Save again when it has finished.'; return; }
+  var p = document.getElementById('vl-pu-text'), c = document.getElementById('vl-co-text');
+  if (p) s.purpose = p.value.trim();
+  if (c) s.concept = c.value.trim();
+  var lab = document.getElementById('vl-pl-' + ck); if (lab) lab.innerHTML = vlPurposeLabelHTML(s);
+  vlPurposeClose();
+  vlEdit();
+  vlFlushSave();
+}
+function vlPurposeStoryHTML(x, hasStory) {
+  var DIM = 'color:rgba(var(--on-panel-rgb),0.75);';
+  if (!x) return '<div style="' + DIM + '">This shot is not in the saved episode yet.</div>';
+  var BOX = 'margin-top:8px;padding:8px 10px;border-left:3px solid rgba(var(--accent-rgb),0.55);background:rgba(var(--accent-rgb),0.06);border-radius:4px;';
+  var para = function (label, t) { t = String(t || '').trim(); return t ? '<div style="margin-top:4px;"><span style="' + DIM + '">' + label + '</span> ' + escapeHtml(t).replace(/\n/g, '<br>') + '</div>' : ''; };
+  var h = [];
+  (x.pictures || []).forEach(function (p, i) {
+    var body;
+    if (p.kind === 'story') { body = para('What it shows:', p.shows) + para('The story before it:', p.before) + para('The story after it:', p.after); if (!body) body = '<div style="' + DIM + 'margin-top:4px;">The story has no words for this picture.</div>'; }
+    else body = '<div style="' + DIM + 'margin-top:4px;">' + (p.kind === 'title' ? 'The title picture: not part of the story.' : 'A picture from the Archive: not part of the story.') + '</div>';
+    h.push('<div style="' + BOX + '"><div style="font-weight:600;">Picture ' + (i + 1) + ': ' + escapeHtml(p.title || 'Untitled') + '</div>' + body + '</div>');
+  });
+  if (x.gap) {
+    var g = x.gap;
+    var a = para(g.after_title ? 'After "' + escapeHtml(g.after_title) + '":' : 'At the start of the story:', g.after);
+    var b = para(g.before_title ? 'Before "' + escapeHtml(g.before_title) + '":' : 'At the end of the story:', g.before);
+    h.push('<div style="' + BOX + '"><div style="font-weight:600;">' + ((x.pictures || []).length ? 'No story pictures in this shot.' : 'No pictures in this shot yet.') + ' The story where it sits:</div>' + ((a + b) || '<div style="' + DIM + 'margin-top:4px;">The story has nothing written here.</div>') + '</div>');
+  }
+  if (!hasStory) h.push('<div style="' + DIM + 'margin-top:8px;">This version has no written story yet, only the pictures\' own words.</div>');
+  return h.join('') || '<div style="' + DIM + '">Nothing to show.</div>';
+}
+// v3.5.92 -- A TAKE'S INFO (Ian, 2026-11-12: "a button that would open a modal that would have all the info on it... Model used,
+// Mode used, Tokens used, Prompt sent, Prompt used, References sent... Everything we know about the video"; for everyone for
+// now, failed takes too). Takes made before v3.5.92 did not keep the input sent or the shot's words: those say so.
+function vlTakeInfoClose() { var o = document.getElementById('vl-info-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); }
+function vlTakeInfo(takeId, n) {
+  vlTakeInfoClose();
+  var box = document.createElement('div');
+  box.id = 'vl-info-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  // v3.6.26 (Ian: "the double click didn't work"): the first click opens this window, so the second lands on its backdrop, not the
+  // button. A backdrop click within half a second of opening is that double-click: copy the info instead of closing.
+  var opened = Date.now();
+  box.addEventListener('click', function (e) { if (e.target === box) { if (Date.now() - opened < 500 && vlInfoAdmin()) { vlTakeInfoQuick(takeId, n); return; } vlTakeInfoClose(); } });
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:900px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +   // v3.5.93: light text on the panel
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Take ' + (n || takeId) + ' &middot; info</div>' +
+      (vlInfoAdmin() ? '<button type="button" class="narrative-regen-btn" id="vl-info-copy" title="Admin: copy all of this to the clipboard" onclick="vlTakeInfoCopy(' + (n || takeId) + ')">&#128203; Copy</button>' : '') +   // v3.5.94
+      '<span id="vl-info-copied" style="' + VL_DESC + '"></span><button class="modal-close" onclick="vlTakeInfoClose()">&times;</button></div>' +
+    '<div id="vl-info-body" style="margin-top:10px;">' + vlSpin(14) + ' Loading...</div></div>';
+  document.body.appendChild(box);
+  fetch('/api/video-lab/takes/' + takeId + '/info').then(function (r) { return r.json(); }).then(function (j) {
+    var b = document.getElementById('vl-info-body'); if (!b) return;
+    if (j && j.take) j.n = n;   // v3.5.95: the take's number on the card, for its code
+    b.innerHTML = j && j.take ? vlTakeInfoHTML(j) : '<div style="' + VL_WARN + '">' + escapeHtml((j && j.error) || 'Could not read the take.') + '</div>';
+  }).catch(function () { var b = document.getElementById('vl-info-body'); if (b) b.innerHTML = '<div style="' + VL_WARN + '">Could not reach the server.</div>'; });
+}
+// v3.5.94 (Ian, 2026-11-12: "a quick copy button at the top that puts all of the info in the clipboard... like we have on the shot.
+// Admin only."): the window's text as it reads, then every picture's address (the window shows them as pictures).
+function vlInfoAdmin() { return !!(typeof state !== 'undefined' && state.user && state.user.is_admin); }
+// v3.5.97: a take's video address to the clipboard (the right-click menu is off since v3.5.96)
+function vlCopyTakeLink(id) {
+  var url = '';
+  (VL.episodes || []).concat(VL.draft ? [VL.draft] : []).forEach(function (ep) { ((ep && ep.shots) || []).forEach(function (s) { (s.takes || []).forEach(function (t) { if (String(t.id) === String(id) && t.video_url) url = t.video_url; }); }); });
+  if (url) vlCopyText(url, 'Link copied');
+}
+function vlTakeInfoText(n) {
+  var b = document.getElementById('vl-info-body'); if (!b) return '';
+  var t = 'TAKE ' + n + ' INFO\n' + String(b.innerText || b.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+  var pics = Array.prototype.map.call(b.querySelectorAll('a[href]'), function (a) { return '  ' + (a.textContent || '').trim() + ' - ' + a.getAttribute('href'); });
+  return t + (pics.length ? '\n\nPicture addresses:\n' + pics.join('\n') : '');
+}
+function vlTakeInfoCopy(n) {
+  var t = vlTakeInfoText(n); if (!t) return;
+  var done = function () { var s = document.getElementById('vl-info-copied'); if (s) { s.textContent = 'Copied'; setTimeout(function () { if (s) s.textContent = ''; }, 3000); } };
+  var old = function () { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px;top:0;'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { showError('Could not copy.'); } document.body.removeChild(ta); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, old); else old();
+}
+// v3.6.25 (Ian, 2026-11-14: "If i double click the info button... have it just copy the text to clipboard"): the two clicks
+// have opened the Info window; wait for it to load, copy what it shows (as Copy does), close it, and say so. Admins, like Copy.
+function vlTakeInfoQuick(takeId, n) {
+  if (!vlInfoAdmin()) return;
+  var tries = 0;
+  var go = function () {
+    var b = document.getElementById('vl-info-body');
+    if (!b) { vlTakeInfo(takeId, n); b = document.getElementById('vl-info-body'); }
+    if (b && (b.textContent || '').indexOf('Loading...') < 0) {
+      var t = vlTakeInfoText(n || takeId);
+      var fin = function (ok) { vlTakeInfoClose(); billingToast(ok ? 'Take ' + (n || takeId) + ' info copied' : 'Could not copy the info', ok ? '' : 'error'); };
+      var old = function () { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px;top:0;'; document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); return ok; };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { fin(true); }, function () { fin(old()); });
+      else fin(old());
+      return;
+    }
+    if (++tries < 50) setTimeout(go, 200);
+  };
+  go();
+}
+function vlInfoWhen(v) { if (!v) return ''; var d = new Date(v); return isNaN(d.getTime()) ? String(v) : d.toLocaleString(); }
+// The pictures in a fal input, in order, each with the name the words give it.
+function vlInfoPictures(sent, cast) {
+  var inp = (sent && sent.input) || {}, out = [];
+  ['image_url', 'start_image_url', 'first_frame_url', 'end_image_url', 'last_frame_url', 'video_url'].forEach(function (k) { if (typeof inp[k] === 'string' && inp[k]) out.push({ url: inp[k], what: k.replace(/_/g, ' ') }); });
+  ['image_urls', 'reference_image_urls', 'video_urls'].forEach(function (k) {
+    if (!Array.isArray(inp[k])) return;
+    inp[k].forEach(function (u, i) { out.push({ url: u, what: 'Image ' + (i + 1) + (cast && cast[i] ? ': ' + cast[i] : (k === 'video_urls' ? ' (video)' : (cast && cast.length ? ': a shot picture' : ''))) }); });
+  });
+  return out;
+}
+function vlTakeInfoHTML(j) {
+  var t = j.take, sh = j.shot, H = [], P = 'margin:2px 0;font-size:13px;line-height:1.5;';
+  function row(k, v) { if (v === null || v === undefined || v === '') return; H.push('<div style="' + P + '"><span style="color:var(--accent-pale);">' + k + ':</span> ' + v + '</div>'); }
+  function head(k) { H.push('<div style="' + VL_BOX_LABEL + 'margin-top:14px;">' + k + '</div>'); }
+  function pre(s) { H.push('<pre style="white-space:pre-wrap;word-break:break-word;color:rgb(var(--on-panel-rgb));background:rgba(0,0,0,0.25);border:1px solid rgba(var(--accent-rgb),0.15);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;margin:4px 0;">' + escapeHtml(s) + '</pre>'); }
+  var dir = t.directions || {}, mv0 = (dir.moves && dir.moves[0]) || {}, cast = mv0.cast || null;
+  if (sh && j.episode) H.push('<div class="vl-info-code" style="font-family:monospace;font-size:14px;margin:0 0 4px;">' + escapeHtml(vlTakeCodeOf(j.episode.id, sh.position, j.n || 0, t.id, t.created_at)) + '</div>');   // v3.5.95
+  head('The take');
+  row('Episode', escapeHtml(j.episode.name || ''));
+  row('Shot', sh ? (sh.position + (sh.name ? ': ' + escapeHtml(sh.name) : '')) : 'deleted');
+  row('Status', escapeHtml(t.status));
+  if (t.video_url) row('Video', escapeHtml(t.video_url));   // v3.5.97: the address, in Copy too
+  row('Model', escapeHtml(t.model_label || t.model || '') + (t.model ? ' <span style="opacity:0.6;">(' + escapeHtml(t.model) + ')</span>' : ''));
+  row('Mode', escapeHtml(t.mode || ''));
+  row('Sound', t.sound ? 'on' : 'off');
+  row('Tokens', t.tokens_charged != null ? t.tokens_charged + ' charged' : (t.tokens != null ? t.tokens + ' (not charged' + (t.status === 'error' ? ': it failed' : ' yet') + ')' : 'not recorded'));
+  if (vlInfoAdmin()) row('fal cost', t.est_cost_usd != null ? '$' + Number(t.est_cost_usd).toFixed(3) + ' (estimate)' : '');   // v3.5.94: admins only (the server sends it to admins only too)
+  row('Made', escapeHtml(vlInfoWhen(t.created_at)) + (t.made_by ? ' by ' + escapeHtml(t.made_by) : ''));
+  row('Finished', escapeHtml(vlInfoWhen(t.finished_at)) + (t.finished_at && t.created_at ? ' (' + Math.round((new Date(t.finished_at) - new Date(t.created_at)) / 1000) + ' s)' : ''));
+  if (t.trim_start != null || t.trim_end != null) row('Trim', (t.trim_start || 0) + ' s to ' + (t.trim_end != null ? t.trim_end + ' s' : 'the end'));
+  if (t.source_take_id) { row('Retouch of', 'take id ' + t.source_take_id + ' (' + (t.retouch_kind === 'small' ? 'Small fix' : 'Bigger change') + ')'); row('Asked for', escapeHtml(t.retouch_text || '')); }
+  if (dir.copy) row('Copied from', escapeHtml(vlCpkCodeOf(dir.copy) + ' (' + (dir.copy.episode_name || 'episode ' + dir.copy.episode_id) + ', shot ' + dir.copy.shot_no + ', take ' + dir.copy.take_no + ')') + '. A copy: nothing was sent to fal for it and nothing was charged. What follows is what was sent for the original.');   // v3.6.05
+  if (t.error) { head('Why it failed'); H.push('<div style="' + VL_WARN + 'font-size:13px;">' + escapeHtml(t.error) + '</div>'); }
+  (j.moves || []).forEach(function (m, i) {
+    var many = (j.moves || []).length > 1;
+    head(many ? 'Move ' + (i + 1) : 'Sent to fal');
+    row('Endpoint', escapeHtml(m.endpoint || ''));
+    row('Length', escapeHtml(String(m.duration || '')) + ' s');
+    row('Request', escapeHtml(m.request_id || ''));
+    if (m.error) row('Error', '<span style="' + VL_WARN + '">' + escapeHtml(m.error) + '</span>');
+    var sentPrompt = m.sent && m.sent.input && typeof m.sent.input.prompt === 'string' ? m.sent.input.prompt : null;
+    head((many ? 'Move ' + (i + 1) + ': p' : 'P') + 'rompt sent' + (sentPrompt ? '' : ' (before fitting; the exact words sent were not kept for this take)'));
+    pre(sentPrompt || m.prompt || '');
+    head((many ? 'Move ' + (i + 1) + ': p' : 'P') + 'rompt the model used');
+    if (m.used_prompt) pre(m.used_prompt);
+    else H.push('<div style="' + VL_DESC + 'font-size:13px;">' + (m.sent ? 'The words as sent: fal reported no rewrite for this take.' : 'Not recorded for this take (made before v3.5.92).') + '</div>');
+    var pics = vlInfoPictures(m.sent, cast);
+    if (!pics.length && (m.start_url || m.end_url)) { if (m.start_url) pics.push({ url: m.start_url, what: 'start' }); if (m.end_url) pics.push({ url: m.end_url, what: 'end' }); }
+    if (!pics.length && mv0.images) pics = mv0.images.map(function (u, k) { return { url: u, what: 'Image ' + (k + 1) + (cast && cast[k] ? ': ' + cast[k] : '') }; });
+    head((many ? 'Move ' + (i + 1) + ': p' : 'P') + 'ictures sent (' + pics.length + ')');
+    H.push('<div style="display:flex;gap:8px;flex-wrap:wrap;">' + pics.map(function (p) {
+      var vid = /\.mp4(\?|$)/i.test(p.url);
+      return '<a href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener" style="display:block;width:132px;text-decoration:none;color:inherit;" title="' + escapeHtml(p.url) + '">' +
+        (vid ? '<div style="height:80px;display:flex;align-items:center;justify-content:center;background:#000;border-radius:6px;">video</div>' : '<img src="' + escapeHtml(p.url) + '" style="width:132px;height:80px;object-fit:cover;border-radius:6px;display:block;">') +
+        '<div style="font-size:11px;line-height:1.3;margin-top:3px;">' + escapeHtml(p.what) + '</div></a>';
+    }).join('') + '</div>');
+    if (m.sent && m.sent.input) {
+      var other = {}; Object.keys(m.sent.input).forEach(function (k) { if (k !== 'prompt' && !/url/.test(k)) other[k] = m.sent.input[k]; });
+      head('Other settings sent'); pre(JSON.stringify(other, null, 2));
+    }
+  });
+  var w = t.words_at;
+  head('The shot when this take was made');
+  if (!w) H.push('<div style="' + VL_DESC + 'font-size:13px;">Not recorded for this take (made before v3.5.92).</div>');
+  else {
+    var ww = w.words || {}, L = [];
+    if (w.name) L.push('Name: ' + w.name);
+    if (w.purpose) L.push('Purpose: ' + w.purpose);
+    if (w.concept) L.push('Concept: ' + w.concept);   // v3.5.99
+    L.push('Shot model: ' + (w.shot_model || 'same as episode') + ' / mode: ' + (w.shot_mode || 'same as episode') + ' / ' + (ww.seconds || '?') + ' s');
+    if (ww.start) L.push('Opening: ' + ww.start);
+    (ww.actions || []).forEach(function (a, k) { var b = (ww.beats || [])[k] || {};
+      L.push('Beat ' + (k + 1) + (b.secs ? ' (' + b.secs + ' s)' : '') + ': ' + a + (b.camera ? ' / Camera: ' + b.camera : '') + (b.sound ? ' / Sound: ' + b.sound : ''));
+      (ww.lines || []).filter(function (l) { return Number(l.when) === k + 1; }).forEach(function (l) { L.push('    Line: ' + (l.who || 'off-screen') + (l.off ? ' (off-screen)' : '') + ': "' + l.text + '"'); }); });
+    (ww.lines || []).filter(function (l) { return !Number(l.when); }).forEach(function (l) { L.push('Line, any time: ' + (l.who || 'off-screen') + ': "' + l.text + '"'); });
+    if (ww.camera) L.push('Camera: ' + ww.camera);
+    if (ww.sounds) L.push('Sound: ' + ww.sounds);
+    if (ww.around) L.push('Around them: ' + ww.around);
+    if (ww.end) L.push('Closing: ' + ww.end);
+    if (w.overall) L.push('Overall direction: ' + w.overall);
+    if (cast && cast.length) L.push('References sent: ' + cast.join(', '));
+    pre(L.join('\n'));
+  }
+  return H.join('');
+}
 function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
-    ? '<video src="' + escapeHtml(t.video_url) + '" controls preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'
+    ? '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" oncontextmenu="return false;" title="To save this take, use the &#8681; button under it: it names the file by the take\'s code. The link button copies its address." preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'   // v3.5.96 (Ian: "make the save as file names match"): the player's own Save named the file by its storage name, so only the code-named download is offered
     : '<div class="moment-img-placeholder" style="aspect-ratio:16/9;min-height:0;gap:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
         (making ? vlSpin(20) + '<div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.7);">' + escapeHtml(vlTakeProgress(t)) + ' &middot; ' + vlElapsed(t.created_at) + '</div>'
                 : '<div class="moment-img-inner" style="color:var(--danger);" data-no-words>' + escapeHtml(t.merge_error || t.error || ((t.moves || []).filter(function (x) { return x.error; }).map(function (x) { return x.error; })[0]) || 'Failed') + '</div>') +
@@ -43100,15 +43809,16 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
     '<div style="display:flex;gap:4px;align-items:center;margin-top:5px;flex-wrap:wrap;">' +
       '<button type="button" class="vl-pin vl-take-pin" title="' + (chosen ? 'Pinned: the take this shot uses in the episode' : 'Pin this take: use it in the episode') + '" ' + (t.status === 'done' && !chosen ? 'onclick="vlChooseTake(' + t.id + ')"' : 'disabled') +
         ' style="' + VL_PIN + 'cursor:' + (t.status === 'done' && !chosen ? 'pointer' : 'default') + ';color:' + (chosen ? 'var(--accent-bright)' : 'rgba(var(--accent-text-rgb),0.45)') + ';">' + _vpickPinSvg(chosen) + '</button>' +   // v3.5.17: the standard pin
-      '<span style="' + VL_DESC + 'flex:1 0 auto;white-space:nowrap;">Take ' + n + (t.source_take_id ? ' <span title="' + escapeHtml('Retouched: ' + (t.retouch_text || '')) + '">&middot; retouched from ' + (fromN ? 'take ' + fromN : 'a deleted take') + '</span>' : '') + (t.status === 'done' ? (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : ' <span title="Made from the shot as it is now">&middot; current</span>') : '') + (t.trim_start != null || t.trim_end != null ? ' <span title="The episode uses only this part of the take">&middot; trimmed ' + (Number(t.trim_start) || 0).toFixed(1) + '&ndash;' + (t.trim_end != null ? Number(t.trim_end).toFixed(1) : 'end') + ' s</span>' : '') + '</span>' +   // v3.5.54
-      '<span style="' + VL_DESC + 'flex:none;white-space:nowrap;" title="' + escapeHtml(vlTakeWhen(t, true)) + '">' + escapeHtml(vlTakeWhen(t)) + '</span>' +
+      '<span style="' + VL_DESC + 'flex:1 0 auto;white-space:nowrap;">Take ' + n + (t.source_take_id ? ' <span title="' + escapeHtml('Retouched: ' + (t.retouch_text || '')) + '">&middot; retouched from ' + (fromN ? 'take ' + fromN : 'a deleted take') + '</span>' : '') + (t.copy ? ' <span title="' + escapeHtml('Copied from ' + vlCpkCodeOf(t.copy) + (t.copy.episode_name ? ' (' + t.copy.episode_name + ')' : '')) + '">&middot; copied</span>' : '') + (t.status === 'done' ? (t.stale ? ' <span title="The keyframes, words, model or sound have changed since this take was made" style="color:var(--accent-bright);">&middot; out of date</span>' : ' <span title="Made from the shot as it is now">&middot; current</span>') : '') + (t.trim_start != null || t.trim_end != null ? ' <span title="The episode uses only this part of the take">&middot; trimmed ' + (Number(t.trim_start) || 0).toFixed(1) + '&ndash;' + (t.trim_end != null ? Number(t.trim_end).toFixed(1) : 'end') + ' s</span>' : '') + '</span>' +   // v3.5.54
+      '<span class="vl-take-code" style="' + VL_DESC + 'flex:none;white-space:nowrap;" title="' + escapeHtml(vlTakeWhen(t, true)) + '">' + escapeHtml(vlTakeCode(t, n)) + ' &middot; ' + escapeHtml(vlTakeWhen(t).split(', ').pop()) + '</span>' +   // v3.5.95: the take's code, then the time
     '</div>' +
     '<div style="' + VL_DESC + 'margin:2px 0 0 2px;">' + escapeHtml(vlTakeModelText(t)) + '</div>' +
     '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">' +
-      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + t.id + ')">Retouch</button>' : '') +   // v3.5.26
-      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Trim: choose the part of this take the episode uses. The take itself is not changed." onclick="vlTrimTake(' + t.id + ')">Trim</button>' : '') +   // v3.5.54
-      (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download" title="Download this take">&#8681;</a>' : '') +
+      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="View this take larger: save a frame for another shot, or trim the part the episode uses" onclick="vlTrimTake(' + t.id + ')">View</button>' : '') +   // v3.5.54 Trim; v3.6.08 View (Ian, 2026-11-13: "change it to view"), with Save frame and Last frame inside; Retouch moved there too (Ian: "take the retouch off the card")
+      (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '" aria-label="Download">&#8681;</a>' : '') +   // v3.5.97: says what it is (Ian missed the bare arrow)
+      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + t.id + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button>' : '') +   // v3.5.97 (Ian: "make it so I can get the video\'s link")
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
+      '<button type="button" class="narrative-regen-btn vl-info-btn" title="Everything we know about this take: model, mode, tokens, the words sent and used, the pictures" onclick="vlTakeInfo(' + t.id + ', ' + n + ')" ondblclick="vlTakeInfoQuick(' + t.id + ', ' + n + ')">Info</button>' +   // v3.5.92
       (!making ? '<button type="button" class="narrative-regen-btn" title="Delete this take" onclick="vlDeleteTake(' + t.id + ')">&#10005;</button>' : '') +
     '</div>' +
   '</div>';
@@ -43122,7 +43832,7 @@ function vlShotBtnHTML(ep, ds, si) {
   var takes = s ? (s.takes || []) : [];
   var making = takes.some(function (t) { return t.status === 'making'; });
   var btn = !ds.id ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Saving...</button>'
-    : !(ds.kfs || []).length ? '<button class="btn btn-sm vl-gen" disabled title="Add a picture to this shot first">Generate take</button>'   // v3.5.57: a new, empty shot
+    : !(ds.kfs || []).length && !(vlShotM(VL.draft, ds) || {}).reference ? '<button class="btn btn-sm vl-gen" disabled title="Keyframes mode needs pictures: add a picture, or make this shot in Reference mode">Generate take</button>'   // v3.5.57: a new, empty shot; v3.6.01 Reference makes it from its references
     : making ? '<button class="btn btn-sm vl-gen" disabled>' + vlSpin(10) + ' Being made</button>'
     : takes.length >= VL_MAX_TAKES ? '<span class="vl-full" style="' + VL_DESC + 'margin-right:8px;">' + VL_MAX_TAKES + ' takes max &mdash; delete one to make another.</span><button class="btn btn-sm vl-gen" disabled title="' + VL_MAX_TAKES + ' takes max: delete one to make another">Generate take</button>'   // v3.5.15
     : '<button class="btn btn-sm btn-primary vl-gen" onclick="vlMakeShot(' + si + ')" title="Generate a take of this shot from its keyframes and words as they are now. The tokens come off when the take arrives; a take that fails costs nothing.">Generate take (' + vlShotTok(VL.draft, ds) + ' tokens)</button>';   // v3.5.46
@@ -43134,7 +43844,7 @@ function vlShotBtnHTML(ep, ds, si) {
         var fi = -1; takes.forEach(function (o, j) { if (t.source_take_id && String(o.id) === String(t.source_take_id)) fi = j; });
         return vlTakeCardHTML(t, String(t.id) === String(s.chosen_take_id), i + 1, fi >= 0 ? fi + 1 : 0);
       }).join('') + '</div>' +
-    '<div style="flex:none;align-self:flex-end;">' + btn + '</div>' +
+    '<div style="flex:none;align-self:flex-end;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' + vlCpkBtnHTML(ds, takes) + btn + '</div>' +   // v3.6.05: Copy a take beside Generate take
   '</div>';
 }
 function vlLiveShotHTML(ep, ds, si, m) {
@@ -43162,10 +43872,38 @@ function vlEpVideoHTML(ep) {
 }
 // v3.5.62 (Ian, 2026-11-10: "dump the entire contents of an episode on the video tab into a text file so I can give it
 // to you... Download Outline"). Built from what is on screen; no server call.
-function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (admins, Ian: "get the outline of just the shot")
+// v3.6.00 (Ian, 2026-11-12: "add this section of the story too so you have it all"): a shot's story in the outline, as its
+// Purpose and Concept window shows it (GET /episodes/:id/shot-story).
+function vlOutlineStoryLines(x) {
+  var t = function (v) { return String(v || '').replace(/\s*\n\s*/g, ' / ').trim(); }, out = [];
+  if (!x) return ['Story: this shot is not saved yet'];
+  out.push('Story:');
+  (x.pictures || []).forEach(function (p, i) {
+    out.push('  Picture ' + (i + 1) + ': ' + (p.title || 'Untitled') + (p.kind === 'title' ? ' (the title picture, not in the story)' : p.kind === 'archive' ? ' (from the Archive, not in the story)' : ''));
+    if (p.kind !== 'story') return;
+    if (t(p.shows)) out.push('    What it shows: ' + t(p.shows));
+    if (t(p.before)) out.push('    The story before it: ' + t(p.before));
+    if (t(p.after)) out.push('    The story after it: ' + t(p.after));
+    if (!t(p.shows) && !t(p.before) && !t(p.after)) out.push('    The story has no words for this picture.');
+  });
+  if (x.gap) {
+    out.push('  ' + ((x.pictures || []).length ? 'No story pictures in this shot.' : 'No pictures in this shot yet.') + ' The story where it sits:');
+    if (t(x.gap.after)) out.push('    ' + (x.gap.after_title ? 'After "' + x.gap.after_title + '"' : 'At the start of the story') + ': ' + t(x.gap.after));
+    if (t(x.gap.before)) out.push('    ' + (x.gap.before_title ? 'Before "' + x.gap.before_title + '"' : 'At the end of the story') + ': ' + t(x.gap.before));
+    if (!t(x.gap.after) && !t(x.gap.before)) out.push('    The story has nothing written here.');
+  }
+  return out;
+}
+function vlOutline(onlySi, story) {   // v3.5.74: onlySi, one shot to the clipboard (admins, Ian: "get the outline of just the shot"); v3.6.00 story
   vlReadForm();
   var d = VL.draft, ep = d && vlFindEp(d.id);
   if (!d) return;
+  if (story === undefined && d.id) {   // v3.6.00: fetch the shots' story first, then build
+    fetch('/api/video-lab/episodes/' + d.id + '/shot-story').then(function (r) { return r.json(); })
+      .then(function (j) { vlOutline(onlySi, j && j.shots ? j : { error: 'could not be read' + (j && j.error ? ' (' + j.error + ')' : '') }); })
+      .catch(function () { vlOutline(onlySi, { error: 'could not be read (no answer from the server)' }); });
+    return;
+  }
   var m = vlModel(d.model), st = vlStyle(d.style), L = [];
   var line = function (k, v) { if (v != null && String(v).trim() !== '') L.push(k + ': ' + String(v).replace(/\s*\n\s*/g, ' / ').trim()); };
   L.push('EPISODE: ' + (d.name || 'Untitled'));
@@ -43173,6 +43911,8 @@ function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (ad
   line('Style', (st && (st.label || st.key)) || d.style);
   line('Model sound', d.sound ? 'on' : 'off');
   line('Overall direction', d.overall);
+  if (story && story.error) line('Story', story.error);   // v3.6.00
+  else if (story && !story.has_story) line('Story', 'this version has no written story yet; only the pictures\' own words');
   var miss = onlySi != null ? [] : vlMissingList(ep);
   if (miss.length) { L.push('Missing shots still open:'); miss.forEach(function (x) { L.push('  - ' + x.name + ': ' + x.what + (x.why ? ' (why: ' + x.why + ')' : '')); }); }
   var total = 0;
@@ -43182,6 +43922,8 @@ function vlOutline(onlySi) {   // v3.5.74: onlySi, one shot to the clipboard (ad
     L.push(''); L.push('================================================================');
     L.push('SHOT ' + (i + 1) + (sh.name ? ': ' + sh.name : ''));
     line('Purpose', sh.purpose);
+    line('Concept', sh.concept);   // v3.5.99
+    if (story && !story.error) vlOutlineStoryLines(sh.id ? (story.shots || []).filter(function (y) { return String(y.id) === String(sh.id); })[0] : null).forEach(function (x) { L.push(x); });   // v3.6.00
     line('Model', sh.model ? ((vlModel(sh.model) || {}).label || sh.model) + ((vlModel(sh.model) || {}).reference ? ' (Reference)' : ' (Keyframes)') : 'same as episode');   // v3.5.86
     line('Mode', sh.mode || 'same as episode');
     line('Length', (sh.seconds || '?') + ' s');
@@ -43301,6 +44043,7 @@ function vlRenderLive() {
     vlSetLive(document.getElementById('vl-todo-' + ds.ck), 'todo-' + ds.ck, vlTodoBtnHTML(si));   // v3.5.34
   });
   vlSetLive(document.getElementById('vl-epvideo'), 'ep', vlEpVideoHTML(ep));
+  vlSetLive(document.getElementById('vl-eppv-strip'), 'eppv', vlEpPvStripHTML(ep, d));   // v3.5.98
   vlSetLive(document.getElementById('vl-epnote'), 'note', vlEpNoteHTML(ep));   // v3.5.33
   vlShapeTagsRefresh();   // v3.5.35
   if (vlBusyEp(ep)) vlStartTimer();
@@ -43383,6 +44126,216 @@ function vlDeleteTake(id) {
     if (yes) vlEpAct('/api/video-lab/takes/' + id, 'DELETE', 'Could not delete the take.');
   });
 }
+
+// ---- use this frame (v3.6.07, TD-1135) ----------------------------------------------------------
+// Ian, 2026-11-13: "archive a frame in a take to use in the next shot or different shot"; "have options for all of them. next shot,
+// pick shot, archive"; "pausing the player is enough for now"; "it should be whatever they navigate to in the player". Save frame
+// takes the frame the take's player is paused on, Last frame the take's end. The server draws it and saves it in the campaign's
+// Archive; this window then puts it in as the first picture of the next shot, of a shot picked here, or only in the Archive.
+var VL_FRM = null;
+function vlFrmSay(t) { var m = document.getElementById('vl-msg'); if (m) { m.textContent = t; setTimeout(function () { if (m.textContent === t) m.textContent = ''; }, 5000); } }
+function vlFrmPlayer(takeId) { var v = document.getElementById('vl-trim-v'); if (v && VL.trim && String(VL.trim.id) === String(takeId)) return v; return document.querySelector('.vl-takes-wrap [data-take="' + takeId + '"] video'); }
+function vlFrmClose() { var o = document.getElementById('vl-frm-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); VL_FRM = null; }
+function vlFrmOpen(takeId, n, last) {
+  vlFrmClose();
+  var d = VL.draft, ep = d && vlFindEp(d.id), si = -1, t = null;
+  if (!d || !ep) return;
+  (ep.shots || []).forEach(function (s) { (s.takes || []).forEach(function (x) { if (String(x.id) === String(takeId)) t = x; }); });
+  if (!t) return;
+  d.shots.forEach(function (ds, i) { if (String(ds.id) === String(t.shot_id)) si = i; });
+  var at = 'end';
+  if (!last) {
+    var v = vlFrmPlayer(takeId);
+    if (!v || !isFinite(v.currentTime)) { vlFrmSay('Open the take with View, pause on the frame you want, then press Save frame.'); return; }
+    at = Math.round(v.currentTime * 100) / 100;
+    if (!v.paused) try { v.pause(); } catch (e) {}
+  }
+  VL_FRM = { takeId: takeId, at: at, si: si, code: vlTakeCode(t, n), busy: false };
+  var shots = d.shots.map(function (ds, i) { return '<option value="' + i + '"' + (i === si + 1 ? ' selected' : '') + '>Shot ' + (i + 1) + (ds.name ? ': ' + escapeHtml(ds.name) : '') + (i === si ? ' (this shot)' : '') + '</option>'; }).join('');
+  var hasNext = si >= 0 && si + 1 < d.shots.length;
+  var box = document.createElement('div');
+  box.id = 'vl-frm-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.addEventListener('click', function (e) { if (e.target === box) vlFrmClose(); });
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:520px;width:100%;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">' + (last ? 'Last frame' : 'Save this frame') + '</div><button class="modal-close" onclick="vlFrmClose()">&times;</button></div>' +
+    '<div style="font-size:13px;line-height:1.5;margin:6px 0 12px;">' + escapeHtml(VL_FRM.code) + (last ? ', the last frame.' : ', at ' + at + ' s.') + ' It is saved in the campaign\'s Archive either way. Free.</div>' +
+    '<div style="display:flex;flex-direction:column;gap:10px;">' +
+      '<div><button type="button" class="btn btn-sm btn-primary vl-frm-go" id="vl-frm-next"' + (hasNext ? '' : ' disabled title="This is the last shot"') + ' onclick="vlFrmGo(\'next\')">Next shot' + (hasNext ? ' (shot ' + (si + 2) + ')' : '') + '</button> <span style="font-size:12px;opacity:0.8;">It becomes the first picture of the next shot.</span></div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><select id="vl-frm-shot" style="min-width:200px;">' + shots + '</select><button type="button" class="btn btn-sm vl-frm-go" onclick="vlFrmGo(\'pick\')">Put it in this shot</button> <span style="font-size:12px;opacity:0.8;">as its first picture.</span></div>' +
+      '<div><button type="button" class="btn btn-sm vl-frm-go" onclick="vlFrmGo(\'archive\')">Archive only</button> <span style="font-size:12px;opacity:0.8;">Add it to any shot later with Add picture.</span></div>' +
+    '</div><div id="vl-frm-msg" style="font-size:13px;margin-top:10px;"></div></div>';
+  document.body.appendChild(box);
+}
+// Where: 'next', 'pick' (the shot chosen in the window) or 'archive'. The frame goes in first; the shot's other pictures follow it.
+function vlFrmGo(where) {
+  var f = VL_FRM; if (!f || f.busy) return;
+  var d = VL.draft; if (!d) return;
+  var target = where === 'next' ? f.si + 1 : where === 'pick' ? Number((document.getElementById('vl-frm-shot') || {}).value) : -1;
+  if (where !== 'archive' && !(target >= 0 && target < d.shots.length)) return;
+  f.busy = true;
+  var btns = document.querySelectorAll('#vl-frm-modal .vl-frm-go'); Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
+  var msg = document.getElementById('vl-frm-msg'); if (msg) msg.innerHTML = vlSpin(12) + ' Saving the frame...';
+  var shotId = target >= 0 ? d.shots[target].id : null;
+  fetch('/api/video-lab/takes/' + f.takeId + '/frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: f.at, label: 'Frame of ' + f.code }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.archive) {
+        if (VL_FRM) VL_FRM.busy = false;
+        Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+        var nx = document.getElementById('vl-frm-next'); if (nx && !(f.si >= 0 && f.si + 1 < d.shots.length)) nx.disabled = true;
+        if (msg) msg.innerHTML = '<span style="' + VL_WARN + '">' + escapeHtml((res.j && res.j.error) || 'Could not save the frame.') + '</span>';
+        return;
+      }
+      var a = res.j.archive;
+      vlFrmClose();
+      if (where === 'archive') { vlFrmSay('Frame saved in the Archive'); return; }
+      var dd = VL.draft, i = -1;
+      if (!dd) return;
+      dd.shots.forEach(function (ds, k) { if (shotId && String(ds.id) === String(shotId)) i = k; });
+      if (i < 0) { vlFrmSay('Frame saved in the Archive (the shot was not found)'); return; }
+      vlReadForm();
+      var m = vlModel(dd.model);
+      dd.shots[i].kfs.unshift({ url: a.image_url, source: 'archive', moment_id: null, archive_id: a.id, label: a.title, prompt: '', duration: m ? m.defDuration : '' });
+      vlStructural();
+      vlFrmSay('Frame put in shot ' + (i + 1) + ' and saved in the Archive');
+    })
+    .catch(function () {
+      if (VL_FRM) VL_FRM.busy = false;
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+      if (msg) msg.innerHTML = '<span style="' + VL_WARN + '">Could not reach the server.</span>';
+    });
+}
+
+// ---- copy a take (v3.6.05) ----------------------------------------------------------------------
+// Ian, 2026-11-13: "go find another take in the same campaign but maybe a different version, or different episode and maybe a
+// different shot and copy it into the shot i'm currently working on. It would be a copy."; "You should be able to filter by
+// version, episode, shot." A window over the page lists every finished take of the campaign (not this shot's own), each one
+// playable; Copy to this shot makes a new take of the shot with its own copy of the video. Free; not pinned.
+var VL_CPK = null;
+var VL_CPK_SHOW = 60;
+function vlCpkBtnHTML(ds, takes) {
+  var full = takes.length >= VL_MAX_TAKES;
+  var off = !ds.id || full;
+  return '<button type="button" class="btn btn-sm vl-cpk-btn"' + (off ? ' disabled' : ' onclick="vlCpkOpen(' + ds.id + ')"') +
+    ' title="' + (full ? VL_MAX_TAKES + ' takes max: delete one to copy another in' : 'Copy a finished take from anywhere in this campaign (any version, episode or shot) into this shot. Free; the copy is not pinned.') + '">Copy a take</button>';
+}
+function vlCpkClose() { var o = document.getElementById('vl-cpk-modal'); if (o && o.parentNode) o.parentNode.removeChild(o); VL_CPK = null; }
+function vlCpkOpen(shotId) {
+  vlCpkClose();
+  VL_CPK = { shotId: shotId, takes: null, v: '', e: '', s: '', p: false, busy: false };
+  var box = document.createElement('div');
+  box.id = 'vl-cpk-modal';
+  box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
+  box.addEventListener('click', function (e) { if (e.target === box) vlCpkClose(); });
+  box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:1000px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Copy a take into this shot</div><button class="modal-close" onclick="vlCpkClose()">&times;</button></div>' +
+    '<div style="font-size:13px;line-height:1.5;margin:6px 0 10px;">Any finished take from this campaign: any version, episode or shot. The copy gets its own video, costs nothing, and is not pinned.</div>' +
+    '<div id="vl-cpk-filters"></div><div id="vl-cpk-msg" style="font-size:13px;margin:6px 0;"></div>' +
+    '<div id="vl-cpk-list">' + vlSpin(14) + ' Loading...</div></div>';
+  document.body.appendChild(box);
+  fetch('/api/video-lab/shots/' + shotId + '/copyable-takes').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    if (!VL_CPK || VL_CPK.shotId !== shotId) return;
+    if (!res.ok || !res.j || !Array.isArray(res.j.takes)) { var l = document.getElementById('vl-cpk-list'); if (l) l.innerHTML = '<div style="' + VL_WARN + '">' + escapeHtml((res.j && res.j.error) || 'Could not list the takes.') + '</div>'; return; }
+    VL_CPK.takes = res.j.takes;
+    VL_CPK.full = !!res.j.full;
+    vlCpkRender();
+  }).catch(function () { var l = document.getElementById('vl-cpk-list'); if (l) l.innerHTML = '<div style="' + VL_WARN + '">Could not reach the server.</div>'; });
+}
+// The three filters: Version, then Episode (of the chosen version), then Shot (of the chosen episode).
+function vlCpkOptions(list, keyOf, labelOf) {
+  var seen = {}, out = [];
+  list.forEach(function (t) { var k = String(keyOf(t)); if (!seen[k]) { seen[k] = 1; out.push({ k: k, label: labelOf(t) }); } });
+  return out;
+}
+function vlCpkMatch(t, upTo) {
+  var c = VL_CPK;
+  if (c.p && !t.pinned) return false;   // v3.6.06: Pinned only
+  if (c.v && t.version_key !== c.v) return false;
+  if (upTo === 'v') return true;
+  if (c.e && String(t.episode_id) !== c.e) return false;
+  if (upTo === 'e') return true;
+  if (c.s && String(t.shot_id) !== c.s) return false;
+  return true;
+}
+function vlCpkSelect(id, all, opts, cur, off) {
+  return '<select id="' + id + '" onchange="vlCpkFilter()"' + (off ? ' disabled' : '') + ' style="min-width:180px;max-width:300px;">' +
+    '<option value="">' + all + '</option>' + opts.map(function (o) { return '<option value="' + escapeHtml(o.k) + '"' + (o.k === cur ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>'; }).join('') + '</select>';
+}
+function vlCpkFilter() {
+  var c = VL_CPK; if (!c) return;
+  var v = document.getElementById('vl-cpk-v'), e = document.getElementById('vl-cpk-e'), s = document.getElementById('vl-cpk-s');
+  var nv = v ? v.value : '', ne = e ? e.value : '', ns = s ? s.value : '';
+  var pp = document.getElementById('vl-cpk-p'); c.p = !!(pp && pp.checked);   // v3.6.06
+  if (nv !== c.v) { ne = ''; ns = ''; }
+  if (ne !== c.e) ns = '';
+  c.v = nv; c.e = ne; c.s = ns;
+  vlCpkRender();
+}
+function vlCpkLabel(t) { return 'Shot ' + t.shot_no + (t.shot_name ? ': ' + t.shot_name : ''); }
+function vlCpkRender() {
+  var c = VL_CPK; if (!c || !c.takes) return;
+  var f = document.getElementById('vl-cpk-filters'), l = document.getElementById('vl-cpk-list');
+  if (!f || !l) return;
+  var vs = vlCpkOptions(c.takes.filter(function (t) { return !c.p || t.pinned; }), function (t) { return t.version_key; }, function (t) { return t.version_name + (t.canonical ? ' (main)' : ''); });
+  if (c.v && !vs.some(function (o) { return o.k === c.v; })) { c.v = ''; c.e = ''; c.s = ''; }   // v3.6.06: a choice Pinned only has hidden goes back to All
+  if (c.e && !c.takes.some(function (t) { return String(t.episode_id) === c.e && vlCpkMatch(t, 'v'); })) { c.e = ''; c.s = ''; }
+  var es = vlCpkOptions(c.takes.filter(function (t) { return vlCpkMatch(t, 'v'); }), function (t) { return t.episode_id; }, function (t) { return t.episode_name || 'Episode ' + t.episode_id; });
+  if (c.s && !c.takes.some(function (t) { return String(t.shot_id) === c.s && vlCpkMatch(t, 'e'); })) c.s = '';
+  var ss = c.e ? vlCpkOptions(c.takes.filter(function (t) { return vlCpkMatch(t, 'e'); }), function (t) { return t.shot_id; }, vlCpkLabel) : [];
+  f.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+    '<label style="font-size:13px;">Version ' + vlCpkSelect('vl-cpk-v', 'All versions', vs, c.v, false) + '</label>' +
+    '<label style="font-size:13px;">Episode ' + vlCpkSelect('vl-cpk-e', 'All episodes', es, c.e, false) + '</label>' +
+    '<label style="font-size:13px;" title="' + (c.e ? '' : 'Choose an episode first') + '">Shot ' + vlCpkSelect('vl-cpk-s', c.e ? 'All shots' : 'Choose an episode first', ss, c.s, !c.e) + '</label>' +
+    '<label style="font-size:13px;display:flex;align-items:center;gap:4px;cursor:pointer;" title="Only the take each shot uses in its episode"><input type="checkbox" id="vl-cpk-p" onchange="vlCpkFilter()"' + (c.p ? ' checked' : '') + '> Pinned only</label></div>';
+  var list = c.takes.filter(function (t) { return vlCpkMatch(t, 's'); });
+  if (!c.takes.length) { l.innerHTML = '<div style="font-size:13px;">There are no finished takes elsewhere in this campaign yet.</div>'; return; }
+  if (!list.length) { l.innerHTML = '<div style="font-size:13px;">No finished takes match.</div>'; return; }
+  var shown = list.slice(0, VL_CPK_SHOW), H = [], lastEp = null;
+  if (c.full) H.push('<div style="' + VL_WARN + 'margin-bottom:8px;">This shot already has ' + VL_MAX_TAKES + ' takes. Delete one to copy another in.</div>');
+  shown.forEach(function (t) {
+    if (t.episode_id !== lastEp) {
+      if (lastEp !== null) H.push('</div>');
+      lastEp = t.episode_id;
+      H.push('<div style="' + VL_BOX_LABEL + 'margin:12px 0 6px;">' + escapeHtml(t.episode_name || 'Episode ' + t.episode_id) + ' <span style="font-weight:400;opacity:0.75;">&middot; ' + escapeHtml(t.version_name) + '</span></div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;">');
+    }
+    var code = vlTakeCodeOf(t.episode_id, t.shot_no, t.take_no, t.id, t.created_at);
+    H.push('<div class="vl-cpk-take" data-take="' + t.id + '" style="width:230px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:8px;padding:6px;">' +
+      '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>' +
+      '<div style="font-size:12px;font-weight:600;margin-top:5px;">' + (t.pinned ? '<span class="vl-cpk-pin" title="Pinned: the take this shot uses in its episode" style="color:var(--accent-bright);display:inline-block;vertical-align:-3px;margin-right:3px;">' + _vpickPinSvg(true) + '</span>' : '') + escapeHtml(vlCpkLabel(t)) + ' &middot; Take ' + t.take_no + '</div>' +
+      '<div style="font-family:monospace;font-size:11px;opacity:0.8;">' + escapeHtml(code) + '</div>' +
+      '<div style="font-size:12px;opacity:0.8;">' + escapeHtml(t.model_label + (t.mode ? ' \u00b7 ' + t.mode : '') + ' \u00b7 ' + t.secs + ' s' + (t.sound ? ' \u00b7 sound' : '')) + '</div>' +
+      '<div style="text-align:right;margin-top:6px;"><button type="button" class="btn btn-sm btn-primary vl-cpk-go"' + (c.full ? ' disabled' : '') + ' onclick="vlCpkGo(' + t.id + ')">Copy to this shot</button></div>' +
+    '</div>');
+  });
+  if (lastEp !== null) H.push('</div>');
+  if (list.length > shown.length) H.push('<div style="font-size:13px;margin-top:10px;">Showing ' + shown.length + ' of ' + list.length + '. Narrow it with the filters.</div>');
+  l.innerHTML = H.join('');
+}
+function vlCpkGo(takeId) {
+  var c = VL_CPK; if (!c || c.busy) return;
+  c.busy = true;
+  var btns = document.querySelectorAll('#vl-cpk-modal .vl-cpk-go'); Array.prototype.forEach.call(btns, function (b) { b.disabled = true; });
+  var msg = document.getElementById('vl-cpk-msg'); if (msg) msg.innerHTML = vlSpin(12) + ' Copying the take...';
+  fetch('/api/video-lab/shots/' + c.shotId + '/copy-take', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ take_id: takeId }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (res.j && res.j.episode) vlPutEp(res.j.episode);
+      vlRenderList(); vlRenderLive();
+      if (res.ok) { vlCpkClose(); return; }
+      if (VL_CPK) VL_CPK.busy = false;
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+      if (msg) msg.innerHTML = '<span style="' + VL_WARN + '">' + escapeHtml((res.j && res.j.error) || 'Could not copy the take.') + '</span>';
+    })
+    .catch(function () {
+      if (VL_CPK) VL_CPK.busy = false;
+      Array.prototype.forEach.call(btns, function (b) { b.disabled = false; });
+      if (msg) msg.innerHTML = '<span style="' + VL_WARN + '">Could not reach the server.</span>';
+    });
+}
+// The code of the take a copy was made from (as its own card showed it), for the copy's card and Info.
+function vlCpkCodeOf(c) { return c ? vlTakeCodeOf(c.episode_id, c.shot_no || 0, c.take_no || 0, c.take_id, c.created_at) : ''; }
 
 // ---- retouch a take (v3.5.26, TD-1112) ----------------------------------------------------------
 // Ian, 2026-11-08: "we are going to need a retouch for sure so build it". A window over the page: the take, what to
@@ -43734,7 +44687,7 @@ function vlWriteShotList(mode, chained) {
   notesGo();
   function notesGo() {
     if (!vlHasWords(d) && !nTakes) { go(); return; }
-    uiConfirm('The Director will rewrite the words of every shot: the overall direction, and each shot\'s Opening, beats, lines, Throughout and Closing, are replaced, and its references become the characters it names. What stays: the shots and their order, names, purposes, pictures and transitions.' +   // v3.5.64 (Ian: "Shots don\'t change but all the text inside them do")
+    uiConfirm('The Director will rewrite the words of every shot: the overall direction, and each shot\'s Opening, beats, lines, Throughout and Closing, are replaced, and its references become the characters it names. What stays: the shots and their order, names, purposes and concepts, pictures and transitions.' +   // v3.5.64 (Ian: "Shots don\'t change but all the text inside them do")
       (nTakes ? ' All your takes stay, marked out of date.' : '') + ' The book is not changed.', { okText: 'Write the notes' })
       .then(function (yes) { if (yes) go(); });
   }
@@ -43989,7 +44942,7 @@ var VL_BOX_LABEL = 'display:block;font-size:12px;font-weight:600;color:var(--acc
 var VL_BOX_STYLE = 'min-height:0;padding:6px 10px;line-height:1.45;resize:vertical;overflow:hidden;';
 var VL_WARN = 'color:#e8a85a;font-size:12px;line-height:1.45;';
 function vlNewShot(kfs, prev) {   // v3.5.86 prev: the shot before it, whose model it starts with (Ian, 2026-11-12)
-  return { ck: ++VL.ck, id: null, name: '', purpose: '', model: (prev && prev.model) || '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false, op: {}, refs: [], beats: [] };
+  return { ck: ++VL.ck, id: null, name: '', purpose: '', concept: '', model: (prev && prev.model) || '', cut_style: 'instant', kfs: kfs || [], start: '', actions: '', lines: [], camera: '', end: '', sounds: '', around: '', seconds: VL_SHOT_SECS, more: false, op: {}, refs: [], beats: [] };
 }
 function vlPanelsOpenFor(id) { var o = {}; if (id && VL.panelsOpen) VL_PANELS.forEach(function (p) { if (VL.panelsOpen[id + ':' + p[0]]) o[p[0]] = true; }); return o; }
 // A shot never given references: the characters named in its words (as the server would send them).
@@ -44001,8 +44954,17 @@ function vlRefsFromWords(ep, w) {
 }
 // Actions are typed one per line ("1. ..." numbers optional) and kept as a list.
 // v3.5.47 -- the words that have someone leave the frame (the server's EXIT_RE, the same list).
-var VL_EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|behind|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|view|sight|picture)|off[- ]?(screen|frame)|disappears?|disappearing|vanish(es|ing)?|is gone\b)/i;
-function vlHasExit(text) { return VL_EXIT_RE.test(String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '')); }
+// v3.5.96: as the server's hasExit -- only people leave ("The diamond vanishes" is not someone leaving).
+var VL_EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|picture)|off[- ]?(screen|frame))/i;
+var VL_EXIT_WEAK_RE = /(^|[^A-Za-z'\u2019])(he|she|they|He|She|They|everyone|Everyone|both|Both|[A-Z][A-Za-z-]+)((?:\s+[a-z]+){0,2})\s+(disappears?|disappearing|vanish(?:es|ing)?|(?:is|are) gone|(?:is|are) out of (?:view|sight))\b/g;
+var VL_EXIT_NOT_SUBJECT = { The: 1, A: 1, An: 1, His: 1, Her: 1, Its: 1, Their: 1, This: 1, That: 1, These: 1, Those: 1, Then: 1, And: 1, But: 1, When: 1, As: 1, Suddenly: 1, Slowly: 1, Finally: 1 };
+function vlHasExit(text) {
+  var t = String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '');
+  if (VL_EXIT_RE.test(t)) return true;
+  VL_EXIT_WEAK_RE.lastIndex = 0; var m;
+  while ((m = VL_EXIT_WEAK_RE.exec(t))) { if (!VL_EXIT_NOT_SUBJECT[m[2]]) return true; }
+  return false;
+}
 function vlActionsList(text) {
   return String(text || '').split('\n').map(function (a) { return a.replace(/^\s*\d+\s*[.)]\s*/, '').trim(); }).filter(Boolean);
 }
@@ -44277,8 +45239,9 @@ function vlBeatsHTML(s, si) {
       '<div style="display:flex;gap:6px;align-items:center;margin-bottom:3px;">' +
         '<span style="font-weight:600;color:var(--accent-pale);font-size:12px;flex:none;">Beat ' + (bi + 1) + '</span>' +
         '<span id="vl-btm-' + si + '-' + bi + '" style="' + (tm.to > Number(s.seconds) + 0.05 ? VL_BEAT_OVER : VL_DESC) + 'flex:none;">' + vlSecsText(tm.from) + '&ndash;' + vlSecsText(tm.to) + ' s</span>' +
-        '<label style="' + VL_DESC + 'display:inline-flex;gap:4px;align-items:center;margin-left:auto;" title="How long this beat takes. Empty: an equal share of what the other beats leave.">Seconds' +
+        '<label style="' + VL_DESC + 'display:inline-flex;gap:4px;align-items:center;margin-left:8px;" title="How long this beat takes. Empty: an equal share of what the other beats leave.">Seconds' +
           '<input id="vl-bs-' + si + '-' + bi + '" class="form-input" type="number" min="0.5" max="15" step="0.5" style="width:64px;padding:2px 6px;font-size:12px;height:auto;" placeholder="' + vlSecsText(tm.d) + '" value="' + (b.secs ? b.secs : '') + '" oninput="vlBeatSecs(' + si + ')"></label>' +
+        '<span style="flex:1 1 auto;"></span>' +   // v3.6.19 (Ian: "I've hit the up arrow many times thinking i was changing the seconds"): Seconds sits by the beat's label, away from the arrows
         (bi > 0 ? '<button type="button" class="narrative-regen-btn" title="Move this beat up (its camera, sound and lines go with it)" onclick="vlBeatMove(' + si + ',' + bi + ',-1)">&#9650;</button>' : '') +   // v3.5.65 (Ian: reorder beats)
         (bi < texts.length - 1 ? '<button type="button" class="narrative-regen-btn" title="Move this beat down (its camera, sound and lines go with it)" onclick="vlBeatMove(' + si + ',' + bi + ',1)">&#9660;</button>' : '') +
         '<button type="button" class="narrative-regen-btn" title="Remove this beat (its lines stay, said at any time)" onclick="vlBeatRemove(' + si + ',' + bi + ')">&#10005;</button>' +
@@ -44367,6 +45330,16 @@ function vlShotText(s) {
   return [VL.draft ? VL.draft.overall : '', s.start, s.actions, s.camera, s.end, s.sounds, s.around].concat(s.lines.filter(function (l) { return !vlLineOff(l); }).map(function (l) { return l.who; })).join(' ');
 }
 function vlLineOff(l) { return !!l.off || !String(l.who || '').trim(); }
+// v3.6.31 (Ian, 2026-11-14: "the warnings should always say Where something is"): the boxes of a shot that name someone.
+function vlWhereNamed(s, name) {
+  var boxes = [['the Overall direction', VL.draft ? VL.draft.overall : ''], ['the Opening', s.start]];
+  vlActionsList(s.actions).forEach(function (a, i) { boxes.push(['Beat ' + (i + 1), a]); });
+  boxes.push(['the Camera', s.camera], ['the Closing', s.end], ['the Sound', s.sounds], ['Around them', s.around]);
+  (s.lines || []).forEach(function (l) { if (!vlLineOff(l)) boxes.push(['a line', l.who]); });
+  var at = [];
+  boxes.forEach(function (b) { if (String(b[1] || '').trim() && vlNamed(name, b[1]) && at.indexOf(b[0]) < 0) at.push(b[0]); });
+  return at.length > 2 ? at.slice(0, 2).join(', ') + ' and ' + (at.length - 2) + ' more' : at.join(' and ');
+}
 function vlFirst(n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
 // Who is only a voice in this shot (heard off-screen, never on screen): not in the shot, so never offered as a reference.
 function vlVoiceOnly(lines, text) {
@@ -44389,6 +45362,20 @@ var VL_GONE_WORDS = /\b(vanish(es|ing|ed)?|disappear(s|ing|ed)?|gone|leav(es|ing
 // The free checks (spec section 6): plain-word warnings under the shot. They never stop Generate.
 var VL_LINE_DIRECTION = /^\s*[\(\[].*[\)\]]\s*$|under (his|her|their|its) breath|^\s*(chanting|chants|muttering|mutters|whispering|murmuring|murmurs|mumbling|humming|hums|sighing|sighs|groaning|groans|laughing|laughs|screaming|screams|sobbing|grunting|grunts)\b/i;   // v3.5.81
 var VL_SILENT_WORDS = /\bsilent(ly)?\b|without (a )?sound|no sound|\bmouths?\b|\bmouthing\b/i;   // v3.5.81
+// v3.6.30 (Ian, 2026-11-14, shot 7 takes 116-117: "the others softly present behind her" and "breath fogs from each character" drew
+// strangers into a shot of Ori alone; "force specifically naming people ... the only time ... is crowds of random people"): a vague
+// word for people warns on its box. A phrase that names a nameless crowd (soldiers, villagers) is left alone.
+var VL_VAGUE_PEOPLE = /\b(the others|others|everyone|everybody|the party|party|the group|groups?|the rest of them|companions|allies|people|each character|every character|all of them|the team)\b/i;
+var VL_CROWD_WORDS = /\b(crowds?|townsfolk|townspeople|villagers|onlookers|bystanders|spectators|soldiers|guards|refugees|mob)\b/i;
+function vlVagueWord(text) {
+  var hit = '';
+  String(text || '').split(/[.;!?]+/).some(function (ph) {
+    if (VL_CROWD_WORDS.test(ph)) return false;
+    var m = VL_VAGUE_PEOPLE.exec(ph); if (m) { hit = m[1]; return true; }
+    return false;
+  });
+  return hit;
+}
 function vlChecks(si) {
   var d = VL.draft, s = d && d.shots[si], ep = d && vlFindEp(d.id);
   if (!s) return [];
@@ -44419,6 +45406,19 @@ function vlChecks(si) {
     if (VL_LINE_DIRECTION.test(tx)) out.push({ p: 'beats', t: (n ? 'Beat ' + n + '\u2019s line' : 'The line') + ' \u201c' + tx + '\u201d reads like a direction, and the model will say it aloud. Put it in the beat\u2019s words (or its Sound) and remove the line.' });
     else if (n && VL_SILENT_WORDS.test(String(acts[n - 1] || ''))) out.push({ p: 'beats', t: 'Beat ' + n + ' says the words are silent but has a line, which will be said aloud or dropped. Say how it is said instead (quietly, under his breath).' });
   });
+  // v3.6.30: vague words for people, on the box that has them
+  var vbts = vlBeatsNorm(s.beats, acts.length), vnames = cast.map(function (c) { return String(c.name || '').trim().split(/\s+/)[0]; }).filter(Boolean).slice(0, 3).join(', ');
+  var vboxes = [['start', 'The Opening', s.start], ['camera', 'Camera', s.camera], ['end', 'The Closing', s.end], ['more', 'Sound', s.sounds], ['more', 'Around them', s.around]];
+  acts.forEach(function (a, i) {
+    var b = vbts[i] || {};
+    vboxes.push(['actions', 'Beat ' + (i + 1), a]);
+    if (b.camera) vboxes.push(['actions', 'Beat ' + (i + 1) + '\u2019s Camera', b.camera]);
+    if (b.sound) vboxes.push(['actions', 'Beat ' + (i + 1) + '\u2019s Sound', b.sound]);
+  });
+  vboxes.forEach(function (bx) {
+    var hit = vlVagueWord(bx[2]);
+    if (hit) out.push({ p: bx[0], t: bx[1] + ' says \u201c' + hit + '\u201d. Name who is there' + (vnames ? ' (' + vnames + ')' : '') + ', or the model may invent people to fill it.' });
+  });
   var secs = Number(s.seconds) || VL_SHOT_SECS;
   // v3.5.67 (Ian, 2026-11-10: "Someone leaves in beat 5" when beat 5 had 3 s): judged by the beats' own seconds
   var btm = vlBeatTimes(s, acts.length);
@@ -44430,6 +45430,8 @@ function vlChecks(si) {
     if (need > tm.d + 0.25) out.push({ p: 'beats', t: 'Beat ' + l.when + '\'s line (' + words + ' words) needs about ' + vlSecsText(need) + ' s to say and the beat has ' + vlSecsText(tm.d) + ' s. Lengthen the beat or shorten the line.' });
   });
   btm.forEach(function (tm, i) { if (acts[i] && tm.d < 1.5) out.push({ p: 'beats', t: 'Beat ' + (i + 1) + ' has only ' + vlSecsText(tm.d) + ' s. That is rarely enough for a whole movement.' }); });
+  // v3.5.97 (shot 3 carried "(0-2.5 s)" and "(5.5-7.5 s)" typed into its beats; the second disagreed with the beat's own time)
+  acts.forEach(function (a, i) { if (/\(\s*\d+(\.\d+)?\s*[-\u2013]\s*\d+(\.\d+)?\s*s\s*\)/.test(String(a || ''))) out.push({ p: 'beats', t: 'Beat ' + (i + 1) + ' has seconds typed into its words, like "(0-2.5 s)". The beat\u2019s own seconds are sent already: delete the typed ones so the model gets one timing.' }); });
   // v3.5.47 (Ian: someone told to leave stops at the edge): leaving needs about 2 seconds to get all the way out, and a
   // second of empty frame when it ends the shot.
   acts.forEach(function (a, i) {
@@ -44503,7 +45505,8 @@ function vlRefsHTML(si) {
       '<button type="button" class="review-add-btn" onclick="vlRefPicker(' + si + ',\'asset\')">+ Add asset</button>' +
     '</div>' +
     (named.length ? '<div style="' + VL_WARN + 'margin-top:4px;">' + named.map(function (c) {
-      return escapeHtml(String(c.name).split(/\s+/)[0]) + ' is named but not in References. <button type="button" class="review-add-btn" onclick="vlRefAdd(' + si + ',\'character\',' + c.id + ')">Add</button>';
+      var where = vlWhereNamed(s, c.name);   // v3.6.31: say where
+      return escapeHtml(String(c.name).split(/\s+/)[0]) + ' is named' + (where ? ' in ' + escapeHtml(where) : '') + ' but not in References. <button type="button" class="review-add-btn" onclick="vlRefAdd(' + si + ',\'character\',' + c.id + ')">Add</button>';
     }).join(' ') + '</div>' : '');
 }
 // =================================================================================================
@@ -44640,7 +45643,7 @@ function vlFillShot(si) {
           if (f && k >= 0) ['start', 'actions', 'lines', 'camera', 'end', 'sounds', 'around', 'seconds', 'beats', 'more'].forEach(function (key) { cur.shots[k][key] = f[key]; });
         }
         done();
-        msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.'));
+        msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', lines: 'the lines', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.') + (res.j.note ? '<br><span style="' + VL_WARN + '">' + escapeHtml(res.j.note) + '</span>' : ''));   // v3.6.01 lines, the note
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
       })
       .catch(function () { done(); msg('Could not reach the server.'); });
@@ -44682,7 +45685,7 @@ function vlBeatCutDo(si, bi) {
   });
   var ns = vlNewShot(bKfs, s);
   ns.name = String(s.name || '').trim() ? String(s.name).trim() + ' (2)' : '';
-  ns.purpose = s.purpose || ''; ns.mode = s.mode; ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });
+  ns.purpose = s.purpose || ''; ns.concept = s.concept || ''; ns.mode = s.mode; ns.refs = (s.refs || []).map(function (r) { return { type: r.type, id: r.id }; });   // v3.5.99 concept; v3.6.03 the references back (a comment had swallowed them)
   ns.camera = s.camera || ''; ns.sounds = s.sounds || ''; ns.around = s.around || ''; ns.more = !!(ns.sounds || ns.around);
   ns.end = s.end || ''; ns.start = '';
   ns.actions = vlActionsText(texts.slice(bi + 1)); ns.beats = beats.slice(bi + 1);
@@ -44697,7 +45700,7 @@ function vlBeatCutDo(si, bi) {
 }
 function vlShotCheckBtnHTML(si) {
   var d = VL.draft, s = d && d.shots[si];
-  if (!s || !s.id || !s.kfs.length) return '';
+  if (!s || !s.id) return '';   // v3.6.01: a shot with no pictures is checked too
   var info = VL.sl[d.id] || {}, writing = vlSlWriting(d.id);
   var mine = !!vlChecking(d.id)[s.id];   // v3.5.43: shots are checked side by side
   var tk = (info.estimate_precheck && info.estimate_precheck.shot_tokens) || 1;
@@ -44733,7 +45736,7 @@ function vlTodoPaint() {
   var pc = vlShotPc(si), quick = vlChecks(si);
   var B = 'btn btn-sm', rows = [];
   var head = '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">Shot ' + (si + 1) + (s.name ? ': ' + escapeHtml(s.name) : '') + ' &middot; to do</div><button class="modal-close" onclick="vlTodoClose()">&times;</button></div>' + vlTodoModeHTML(si);   // v3.5.35 the mode here too
-  if (!pc) rows.push('<div style="' + VL_DESC + 'margin:10px 0;">This shot has not been checked. <b>Pre-production check</b>, at the top, has the Director look at every shot for 1 token.</div>');
+  if (!pc) rows.push('<div style="' + VL_DESC + 'margin:10px 0;">This shot has not been checked. ' + (s.id ? '<button type="button" class="btn btn-sm btn-primary" onclick="vlTodoClose();vlPrecheck(' + si + ')">Check this shot</button> has the Director look at it (1 token), or ' : '') + '<b>Pre-production check</b>, at the top, looks at every shot.</div>');   // v3.6.01
   else {
     if (pc.stale) rows.push('<div style="' + VL_WARN + 'margin:10px 0;">The shot changed since the check. Run the Pre-production check again to be sure.</div>');
     var cur = s.mode || '', ep = vlFindEp(d.id), em = vlShotM(d, s), curMode = em && em.reference ? 'reference' : 'keyframes';   // v3.5.86
@@ -45373,12 +46376,17 @@ function _sbStill(w) { return !!(w && state.currentSession && String(state.curre
 // not appear too) and put back after. Hover screens only; touch screens are left as they are.
 (function () {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !window.matchMedia || !window.matchMedia('(hover: hover)').matches) return;
-  var tip = null, cur = null, watch = null;
+  var tip = null, cur = null, watch = null, pend = null, warmUntil = 0;   // v3.6.02 pend, warmUntil
+  // v3.6.02 (Ian, 2026-11-12: "delay the tool tip time by half a second so when you move your mouse around it doesn't flash all
+  // of them instantly"; everywhere): a tip waits TIP_DELAY on the same element; one shown a moment ago makes the next show at once.
+  var TIP_DELAY = 500, TIP_WARM = 400;
   function box() {
     if (!tip) { tip = document.createElement('div'); tip.id = 'cg-tip'; tip.setAttribute('role', 'tooltip'); tip.style.cssText = 'position:fixed;left:0;top:0;z-index:100000;pointer-events:none;display:none;'; document.body.appendChild(tip); }   // placed and out of the page's flow even before style.css loads
     return tip;
   }
   function hide() {
+    if (pend) { clearTimeout(pend); pend = null; }   // v3.6.02
+    if (tip && tip.style.display !== 'none') warmUntil = Date.now() + TIP_WARM;
     if (watch) { clearInterval(watch); watch = null; }
     if (cur) {
       if (cur.dataset && cur.dataset.cgTitle != null) { if (!cur.hasAttribute('title')) cur.setAttribute('title', cur.dataset.cgTitle); delete cur.dataset.cgTitle; }
@@ -45406,8 +46414,8 @@ function _sbStill(w) { return !!(w && state.currentSession && String(state.curre
     if (!text) return;
     t.dataset.cgTitle = t.getAttribute('title'); t.removeAttribute('title');
     cur = t;
-    box().textContent = text;
-    place(t);
+    var go = function () { pend = null; if (cur !== t || !t.isConnected) return; box().textContent = text; place(t); };   // v3.6.02
+    if (Date.now() < warmUntil) go(); else pend = setTimeout(go, TIP_DELAY);
     watch = setInterval(function () { if (!cur || !cur.isConnected) hide(); }, 400);
   }, true);
   document.addEventListener('mousedown', hide, true);

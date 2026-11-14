@@ -813,6 +813,24 @@ router.post('/:id/rebuild-prompt', requireAuth, verifyCampaignDmOrCharacterOwner
   }
 });
 
+// v3.6.18 (Ian, 2026-11-13: "it can be editable while locked"; "a player name can be empty"): just the Player Name, for the
+// DM or the character's owner, even while the campaign is locked (it names a real person, not story canon). Empty clears it.
+router.put('/:id/player-name', requireAuth, verifyCampaignDmOrCharacterOwner, async function (req, res) {
+  try {
+    const db = await getDb();
+    const char = await db.prepare('SELECT id FROM characters WHERE id = ? AND campaign_id = ?').get(req.params.id, req.params.campaignId);
+    if (!char) return res.status(404).json({ error: 'Character not found' });
+    const v = (req.body || {}).player_name;
+    if (typeof v !== 'string') return res.status(400).json({ error: 'A player name (or an empty one) is required.' });
+    const name = v.replace(/\s+/g, ' ').trim().slice(0, 120);
+    const now = new Date().toISOString();
+    await db.prepare('UPDATE characters SET player_name = ?, edited_at = ?, edited_by = ? WHERE id = ?').run(name, now, req.session.userId, char.id);
+    res.json({ success: true, player_name: name });
+  } catch (e) {
+    res.json({ error: friendlyError(e, 'Could not save the player name. Please try again.') });
+  }
+});
+
 // PUT update just the canonical prompt. Same access as editing the reference
 // image: the DM, or the character's owner (player blocked once a session is Ready).
 router.put('/:id/canonical-prompt', requireAuth, verifyCampaignDmOrCharacterOwner, async function(req, res) {

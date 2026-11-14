@@ -164,13 +164,13 @@ const MODELS = {
     label: 'MiniMax H3 Max', group: 'keyframes', test: true, pair: 'h3maxref', endpoint: 'minimax/h3-max/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
     durationValue: function (d) { return Number(d); }, price: 0.08, priceSound: 0.08,
-    extra: { resolution: '768P', prompt_expansion_mode: 'balanced' }, promptRequired: true, audioField: null
+    extra: { resolution: '768P', prompt_expansion_mode: 'disabled' }, promptRequired: true, audioField: null   // v3.5.91: our words as written, no MiniMax rewrite (was 'balanced')
   },
   h3maxref: {
     label: 'MiniMax H3 Max', group: 'reference', test: true, pair: 'h3max', endpoint: 'minimax/h3-max/reference-to-video', reference: true,
     durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
     durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,   // $0.08 at 768p, plus a little for pictures past the fourth
-    extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'balanced' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'disabled' }, promptRequired: true, maxRefs: 9, maxScene: 5,   // v3.5.91: no rewrite (was 'balanced')
     audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
   },
   wan27: {
@@ -475,6 +475,7 @@ function ensureTables() {
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_text TEXT');
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS retouch_kind TEXT');
     await db.exec('ALTER TABLE episodes ADD COLUMN IF NOT EXISTS missing_shots TEXT');   // v3.5.58
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS concept TEXT');   // v3.5.99: how the shot should look and feel (for the user and the Director; never sent to the video model)
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS purpose TEXT');   // v3.5.59: what the shot is for (for the user and the Director; never sent to the video model)   // v3.5.58: Create Shots' list of shots the story still needs
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS trim_start REAL');   // v3.5.54: the part of the take the episode uses
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS trim_end REAL');
@@ -490,6 +491,11 @@ function ensureTables() {
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS mode TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS precheck TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS model TEXT');   // v3.5.86 -- TD-1122: a shot's own video model (NULL = the episode's)
+    // v3.5.92 -- a take's Info (Ian, 2026-11-12: "Everything we know about the video"): the shot's words when it was made, the
+    // exact input sent to fal for each move, and the prompt the model says it used (fal's expanded_prompt).
+    await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS words_at TEXT');
+    await db.exec('ALTER TABLE moves ADD COLUMN IF NOT EXISTS sent_input TEXT');
+    await db.exec('ALTER TABLE moves ADD COLUMN IF NOT EXISTS used_prompt TEXT');
     await db.exec('CREATE INDEX IF NOT EXISTS idx_image_jobs_episode ON image_jobs(episode_id)');
   })();
   _tablesReady.catch(function () { _tablesReady = null; });
@@ -617,6 +623,8 @@ async function loadEpisodes(db, where, params) {
   const kfs = await db.prepare('SELECT * FROM keyframes WHERE episode_id = ANY(?) ORDER BY shot_id, position, id').all([ids]);
   const takes = await db.prepare('SELECT * FROM takes WHERE episode_id = ANY(?) ORDER BY shot_id, id').all([ids]);
   const moves = await db.prepare('SELECT * FROM moves WHERE episode_id = ANY(?) ORDER BY take_id, position, id').all([ids]);
+  takes.forEach(function (t) { delete t.words_at; });   // v3.5.92: only a take's Info reads these, not every refresh
+  moves.forEach(function (m) { delete m.sent_input; delete m.used_prompt; });
   const archivedBy = {};   // v3.5.20
   {
     const urls = kfs.map(function (k) { return k.image_url; }).filter(Boolean);
@@ -653,6 +661,7 @@ async function loadEpisodes(db, where, params) {
       s.takes.forEach(function (t) {
         t.moves = moves.filter(function (m) { return m.take_id === t.id; });
         t.stale = t.sig !== s.sig;
+        t.copy = (parseJson(t.directions, null) || {}).copy || null;   // v3.6.05: a copy of a take from elsewhere in the campaign (its card says so)
       });
     });
     const cs = joinSig(ep.shots.map(function (s) { const t = s.takes.filter(function (x) { return x.id === s.chosen_take_id; })[0]; return { chosen_take_id: s.chosen_take_id, cut_style: s.cut_style, trim_start: t ? t.trim_start : null, trim_end: t ? t.trim_end : null }; }));   // v3.5.54
@@ -789,7 +798,10 @@ async function writeWords(tx, sid, w) {
   await tx.prepare('UPDATE shots SET start_text = ?, actions = ?, lines = ?, camera = ?, end_text = ?, sounds = ?, around = ?, seconds = ?, beats = ? WHERE id = ?')
     .run(w.start, JSON.stringify(w.actions), JSON.stringify(w.lines), w.camera, w.end, w.sounds, w.around, w.seconds, w.beats ? JSON.stringify(w.beats) : null, sid);   // v3.5.63 beats
 }
-function cleanPurpose(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 300); }   // v3.5.59
+// v3.5.99: the Purpose and the Concept are written in a window with room, so they keep their line breaks
+function cleanLong(v, max) { return String(v == null ? '' : v).replace(/\r\n?/g, '\n').replace(/[ \t\f\v]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max); }
+function cleanPurpose(v) { return cleanLong(v, 600); }   // v3.5.59; v3.5.99 600 characters, line breaks kept
+function cleanConcept(v) { return cleanLong(v, 1000); }   // v3.5.99
 async function writeShots(tx, ep, shotsIn) {
   const have = await tx.prepare('SELECT id FROM shots WHERE episode_id = ?').all(ep.id);
   const haveIds = {}; have.forEach(function (s) { haveIds[s.id] = true; });
@@ -807,6 +819,7 @@ async function writeShots(tx, ep, shotsIn) {
       if (s.mode !== undefined) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode || null, sid);   // v3.5.34
       if (s.model !== undefined) await tx.prepare('UPDATE shots SET model = ? WHERE id = ?').run(s.model || null, sid);   // v3.5.86
       if (s.purpose !== undefined) await tx.prepare('UPDATE shots SET purpose = ? WHERE id = ?').run(s.purpose || null, sid);   // v3.5.59
+      if (s.concept !== undefined) await tx.prepare('UPDATE shots SET concept = ? WHERE id = ?').run(s.concept || null, sid);   // v3.5.99
     } else {
       const r = await tx.prepare('INSERT INTO shots (episode_id, position, cut_style, name) VALUES (?, ?, ?, ?)').run(ep.id, pos, s.cut_style, s.name || null);
       sid = r.lastInsertRowid;
@@ -815,6 +828,7 @@ async function writeShots(tx, ep, shotsIn) {
       if (s.mode) await tx.prepare('UPDATE shots SET mode = ? WHERE id = ?').run(s.mode, sid);   // v3.5.34
       if (s.model) await tx.prepare('UPDATE shots SET model = ? WHERE id = ?').run(s.model, sid);   // v3.5.86
       if (s.purpose) await tx.prepare('UPDATE shots SET purpose = ? WHERE id = ?').run(s.purpose, sid);   // v3.5.59
+      if (s.concept) await tx.prepare('UPDATE shots SET concept = ? WHERE id = ?').run(s.concept, sid);   // v3.5.99
     }
     keep[sid] = true;
     for (let i = 0; i < s.keyframes.length; i++) {
@@ -873,7 +887,7 @@ function cleanShots(list, m0, admin) {
     const room = MAX_KEYFRAMES - n;
     if (kfs.length && room <= 0) return;   // v3.5.57: a shot with no pictures yet is kept (Add new shot below)
     n += Math.max(0, Math.min(room, kfs.length));
-    out.push({ id: parseInt(s.id, 10) || null, model: own, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), purpose: s.purpose === undefined ? undefined : cleanPurpose(s.purpose), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
+    out.push({ id: parseInt(s.id, 10) || null, model: own, mode: s.mode === undefined ? undefined : (s.mode === 'reference' || s.mode === 'keyframes' ? s.mode : ''), refs: s.refs === undefined || s.refs === null ? undefined : cleanRefs(s.refs), words: s.actions === undefined ? undefined : cleanWords(s), name: s.name === undefined ? undefined : cleanShotName(s.name), purpose: s.purpose === undefined ? undefined : cleanPurpose(s.purpose), concept: s.concept === undefined ? undefined : cleanConcept(s.concept), cut_style: CUT_STYLES.indexOf(s.cut_style) >= 0 ? s.cut_style : 'instant', keyframes: kfs.slice(0, room) });
   });
   return out;
 }
@@ -997,7 +1011,7 @@ router.post('/episodes/:id/copy', requireAuth, requireVideo, async function (req
       id = r.lastInsertRowid;
       await writeShots(tx, { id: id }, cleanShots(src.shots.map(function (s) {
         const w = s.words || {};
-        return { name: s.name, purpose: s.purpose || '', mode: s.mode || '', model: s.model || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, beats: w.beats, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
+        return { name: s.name, purpose: s.purpose || '', concept: s.concept || '', mode: s.mode || '', model: s.model || '', cut_style: s.cut_style, refs: s.refs || undefined, start: w.start, actions: s.words_saved ? w.actions : undefined, lines: w.lines, camera: w.camera, end: w.end, sounds: w.sounds, around: w.around, seconds: w.seconds, beats: w.beats, keyframes: s.keyframes.map(function (k) { return { url: k.image_url, source: k.source, moment_id: k.moment_id, archive_id: k.archive_id, label: k.label, prompt: k.prompt, duration: k.duration, prev_url: k.prev_image_url }; }) };
       }), m, !!req.vlAdmin));   // v3.5.86
     });
     res.json({ episode: await loadEpisode(db, id) });
@@ -1081,11 +1095,11 @@ function planReference(ep, kfs, shotNo, cast) {
   if (pics.length === 1) lines.push('@Image1 is how the shot opens: start the video looking like it, same place, same people, same art style.');
   else lines.push('@Image1 is how the shot opens: start the video looking like it. ' + pics.slice(1).map(function (u, i) { return '@Image' + (i + 2); }).join(', ') +
     (pics.length === 2 ? ' is a later moment' : ' are later moments, in order,') + ' of the same shot: pass through ' + (pics.length === 2 ? 'it' : 'them') + ' as the action reaches ' + (pics.length === 2 ? 'it' : 'them') + '. Keep the art style of these pictures.');
-  people.forEach(function (p, i) { lines.push('@Image' + (pics.length + i + 1) + ' is ' + p.name + ': ' + p.name + '\'s face, hair, build, clothes and gear must match @Image' + (pics.length + i + 1) + ' whenever ' + p.name + ' is on screen.'); });
+  people.forEach(function (p, i) { lines.push('@Image' + (pics.length + i + 1) + ' is ' + p.name + ': ' + p.name + '\'s face, hair, build and clothes must match @Image' + (pics.length + i + 1) + ' whenever ' + p.name + ' is on screen. ' + gearLine(p.name)); });   // v3.5.96
   if (overall) lines.push('Overall: ' + overall);
-  lines.push('What happens, in order:');
+  lines.push('The beats, in order (directions only, never said aloud):');   // v3.6.30 (take 119: Oya said "What happens" before her line)
   steps.forEach(function (w, i) { lines.push((i + 1) + '. ' + w); });
-  const full = lines.join('\n').slice(0, 6000);
+  const full = capScript(lines);   // v3.6.26: whole lines left out, never cut mid-word
   const own = steps.join('\n\n');
   return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: own, full: full, duration: String(secs), images: pics.concat(people.map(function (p) { return p.url; })), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
@@ -1098,10 +1112,12 @@ function lineOff(l) { return !!l.off || !String(l.who || '').trim(); }
 // yelling in the distance". hearers: the characters on screen with no line of their own.
 function sayLine(l, hearers) {
   const who = String(l.who || '').trim();
-  if (!lineOff(l)) return who + ' says: "' + l.text + '"';
+  // v3.6.34 (Ian, 2026-11-14, takes 131-133: something was said before the first line each time; "put the actual lines in
+  // outline form ... on their own line with some carriage returns before and after"): a line is only the speaker and the words.
+  if (!lineOff(l)) return who + ': "' + l.text + '"';
   const h = (hearers || []).filter(Boolean);
-  const subj = h.length ? (h.length === 1 ? h[0] + ' hears ' : h.slice(0, -1).join(', ') + ' and ' + h[h.length - 1] + ' hear ') : 'we hear ';
-  return who ? subj + who + ' calling from off-screen, in the distance: "' + l.text + '" (' + who + ' is not in this shot)' : subj + 'a voice calling from off-screen, in the distance: "' + l.text + '" (the speaker is not in this shot)';
+  const by = h.length ? '; ' + (h.length === 1 ? h[0] + ' hears it' : h.slice(0, -1).join(', ') + ' and ' + h[h.length - 1] + ' hear it') : '';
+  return (who || 'A voice') + ' (off-screen, in the distance; ' + (who ? who + ' is' : 'the speaker is') + ' not in this shot' + by + '): "' + l.text + '"';
 }
 function firstName(n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
 // Who is only a voice in this shot: an off-screen speaker with no line said on screen.
@@ -1124,8 +1140,20 @@ function voiceRules(w, onScreen) {
 // v3.5.47 -- EXITS (Ian, 2026-11-09: "when I mention I want someone to leave the frame... It often stops before the leave
 // the frame entirely... can we do something so if we say they leave the frame that they leave all the way?"). An action
 // or End that has someone leave gets a firm line: completely out of frame before the shot ends, then the empty frame held.
-const EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|behind|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|view|sight|picture)|off[- ]?(screen|frame)|disappears?|disappearing|vanish(es|ing)?|is gone\b)/i;
-function hasExit(text) { return EXIT_RE.test(String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '')); }
+// v3.5.96 (Ian, 2026-11-12, takes 58 and 84: "The diamond vanishes" was read as someone leaving, so Gubuk walked off in 58 and
+// Drel and Gubuk dissolved in 84's last second). Only people leave: words that only things do (vanishes, disappears, is gone,
+// out of sight) count only right after a name or he/she/they ("Gubuk vanishes", "he slowly disappears"); never after
+// "the diamond" or "Emanon's glow". The page's VL_EXIT_RE / vlHasExit are the same.
+const EXIT_RE = /\b(leaves (the )?(frame|shot|scene|room|picture|view)|leaves (through|to the|off)|(walks?|runs?|strides?|heads?|steps?|hurries|hurry|rushes|rush|limps?|slips?|backs?) (out|off|away)|exits?\b|exiting|out of (the )?(frame|shot|picture)|off[- ]?(screen|frame))/i;
+const EXIT_WEAK_RE = /(^|[^A-Za-z'\u2019])(he|she|they|He|She|They|everyone|Everyone|both|Both|[A-Z][A-Za-z-]+)((?:\s+[a-z]+){0,2})\s+(disappears?|disappearing|vanish(?:es|ing)?|(?:is|are) gone|(?:is|are) out of (?:view|sight))\b/g;
+const EXIT_NOT_SUBJECT = { The: 1, A: 1, An: 1, His: 1, Her: 1, Its: 1, Their: 1, This: 1, That: 1, These: 1, Those: 1, Then: 1, And: 1, But: 1, When: 1, As: 1, Suddenly: 1, Slowly: 1, Finally: 1 };
+function hasExit(text) {
+  const t = String(text || '').replace(/\bfrom off[- ]?(screen|frame)\b/gi, '');
+  if (EXIT_RE.test(t)) return true;
+  EXIT_WEAK_RE.lastIndex = 0; let m;
+  while ((m = EXIT_WEAK_RE.exec(t))) { if (!EXIT_NOT_SUBJECT[m[2]]) return true; }
+  return false;
+}
 // v3.5.49 (Ian, 2026-11-09: the figure still did not get all the way out; "say one second"): a deadline in seconds, one
 // second before the end, when the shot is one move (reference mode), and the camera told not to follow them out.
 function exitLines(w, names, secs) {
@@ -1135,52 +1163,96 @@ function exitLines(w, names, secs) {
   if (!acts.length && !endExit) return [];
   const src = acts.map(function (n) { return w.actions[n - 1]; }).concat(endExit ? [w.end] : []).join(' ');
   const who = (names || []).filter(function (nm, i, all) { return all.indexOf(nm) === i; }).filter(function (nm) { const f = firstName(nm); return f && new RegExp('(^|[^a-z])' + f.toLowerCase().replace(/[^a-z0-9]/g, '') + '([^a-z]|$)').test(src.toLowerCase()); });
-  const whom = who.length === 1 ? who[0] : 'whoever leaves';
-  const out = ['Leaving the frame' + (acts.length ? ' (action ' + acts.join(', ') + ')' : '') + ': ' + whom + ' must keep moving until completely out of frame, with no part of them left in view, ' + (secs >= 4 ? 'by second ' + (secs - 1) + ' of this ' + secs + '-second shot' : 'well before the shot ends') + '. Do not stop at the edge of the frame. The camera does not follow them out: it holds still as they go. Hold the empty frame for the last second.'];
-  if (!endExit) out.push('The shot ends with ' + (who.length === 1 ? who[0] : 'the one who left') + ' gone from the frame.');
+  const whom = who.length === 1 ? who[0] : (acts.length > 1 || who.length > 1 ? 'everyone who leaves' : 'whoever leaves');   // v3.5.96: several
+  // v3.5.96 (Ian, take 80: "in the background" lost to "do not stop at the edge"; take 84: "hold the empty frame" emptied it of
+  // the people who stay): a way out the words name (a door, an archway) is used instead of the frame's edge, and the last second
+  // is held without the ones who left, not empty.
+  const door = /\b(through|into|out of|out through|up|down)\s+(the |a |an |his |her |their )?([a-z-]+ ){0,2}(door|doors|doorway|archway|arch|gate|gateway|stairs|stairway|stair|steps|corridor|passage|tunnel|hall|hallway|curtain|flap|portal|opening|gap)\b/i.test(src);
+  const out = ['Leaving the frame' + (acts.length ? ' (action ' + acts.join(', ') + ')' : '') + ': ' + whom + ' must keep moving until completely out of ' + (door ? 'view' : 'frame') + ', with no part of them left in view, ' + (secs >= 4 ? 'by second ' + (secs - 1) + ' of this ' + secs + '-second shot' : 'well before the shot ends') + '. ' +
+    (door ? 'They leave by the way the words name, not by the edge of the frame. ' : 'Do not stop at the edge of the frame. ') + 'The camera does not follow them out: it holds still as they go. Anyone who does not leave stays where they are; hold the last second without the ones who left.'];
+  if (!endExit) out.push('The shot ends with ' + (who.length === 1 ? who[0] : 'everyone who left') + ' gone from the frame.');
   return out;
 }
+function gearLine(name) { return 'What ' + name + ' carries or holds is up to the words; where they do not say, only what fits the scene, never anything belonging to another character; empty hands are fine.'; }   // v3.5.96
 function shotScript(ep, w, pics) {
   const out = [];
   out.push('One continuous shot, no cuts. Keep every character looking exactly the same from start to finish.');
+  // v3.6.24 (Ian, 2026-11-14, take 108: as the camera turned to the mirror, extra people appeared lying on the left; and Oya
+  // spoke in the mirror though her beat said she says nothing -- the shot's Sound line mentioned "each time Oya speaks")
+  out.push('Everyone is in the shot once only: when the camera moves or turns, those already seen keep their places, nobody appears twice, and no one is added who is not in the words or pictures.');
+  // v3.6.28 (Ian, 2026-11-14, take 111: Ori got up and a second Ori stayed on the ground; "anyone that moves or leaves their
+  // place should not leave a copy behind and leaves the space entirely")
+  out.push('Anyone who moves or leaves their place goes entirely: no copy of them is left behind, and the spot they left stays empty.');
+  if ((w.lines || []).length) out.push('Only the lines written here are spoken, each by the one named; no one else speaks or moves their mouth as if talking.');
+  if ((w.lines || []).length) out.push('Nothing else written here is said aloud: headings, labels and directions are never spoken.');   // v3.6.30
+  if ((w.lines || []).length) out.push('Each line is said word for word: nothing is added before or after it, and when a line ends the speaker is quiet.');   // v3.6.32
   // v3.5.48 (Ian, 2026-11-09: "can you make it so nothing appears out of thin air unless we tell it to?" -- take 26's pestle)
-  out.push('Nothing appears or disappears out of thin air: any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
+  out.push('Nothing appears or disappears out of thin air unless the words say so (something used up, destroyed or vanishing, as they describe it): any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
   if (pics) {
     pics.cast.forEach(function (c) {
       if (c.kind === 'asset') out.push('@Image' + c.n + ' is ' + c.name + (c.height ? ', ' + c.height : '') + ': it must look like @Image' + c.n + ' whenever it is on screen.');   // v3.5.22; v3.5.61 an NPC's height
-      else out.push('@Image' + c.n + ' is ' + c.name + ': ' + c.name + '\'s face, hair, build, clothes and gear must match @Image' + c.n + ' whenever ' + c.name + ' is on screen.');
+      // v3.5.96 (Ian, 2026-11-12: "Just because their reference image says they have an item... that does not mean they have to be
+      // carrying it"; "I'd rather him carrying nothing than carrying the pick"): the reference is their looks and height; what they
+      // hold is the words' to say, never another character's things.
+      else out.push('@Image' + c.n + ' is ' + c.name + (c.height ? ', ' + c.height : '') + ': ' + c.name + '\'s face, hair, build and clothes must match @Image' + c.n + ' whenever ' + c.name + ' is on screen. ' + gearLine(c.name));
     });
-    if (pics.cast.length) out.push('If a scene picture shows a character or thing differently, follow its own picture.');
+    if (pics.cast.length && pics.scene.length) out.push('If a scene picture shows a character or thing differently, follow its own picture.');
+    if (!pics.scene.length) out.push('There is no scene picture: the words set the place and where everyone is; the reference pictures show only how each one looks.');   // v3.6.01
     if (pics.scene.length) out.push('@Image' + pics.scene[0] + ' is how the shot opens: start the video looking like it, in its art style.');
     if (pics.scene.length > 1) out.push(pics.scene.slice(1).map(function (n) { return '@Image' + n; }).join(', ') + (pics.scene.length === 2 ? ' shows' : ' show') +
       ' the place, the light and who is there. Do not copy poses, positions or which way anyone faces from ' + (pics.scene.length === 2 ? 'it' : 'them') + '.');
+    // v3.6.25 (Ian, 2026-11-14, take 109: Ori and Gubuk twice -- once from the opening picture, once more from their own pictures;
+    // "there could be a reference keyframe that has 3 people in it ... and 1 more"): the opening picture's people ARE the cast.
+    if (pics.scene.length && pics.cast.some(function (c) { return c.kind !== 'asset'; })) out.push('Each character in the reference pictures appears once. If they are already in @Image' + pics.scene[0] + ', that is them: do not add another. If they are not in @Image' + pics.scene[0] + ', they come into view as the words say.');
   }
   const overall = String(ep.overall || '').trim();
   if (overall) out.push('Overall: ' + overall);
+  // v3.5.97 (Ian, 2026-11-12, takes 85 and 86: MiniMax painted floating islands from the Overall instead of the picture's hall;
+  // "unless specified... the background should match the background of the keyframe"; "Is that wise for cameras that move?"):
+  // the PLACE holds, not the frame -- a pan shows more of the same place.
+  if (pics && pics.scene.length) out.push('The place: unless the words say the place changes, the shot stays in the place @Image' + pics.scene[0] + ' shows: what is in view keeps its look (the buildings, sky and light), and anything the camera turns or moves to is more of that same place, never somewhere new.');
   if (w.start) out.push('Start: ' + w.start);
   const loose = w.lines.filter(function (l) { return !l.when; });
   const spk = {}; w.lines.forEach(function (l) { spk[firstName(l.who)] = true; });
   const hearers = pics ? pics.cast.filter(function (c) { return c.kind !== 'asset' && !spk[firstName(c.name)]; }).map(function (c) { return c.name; }) : [];   // v3.5.25
   if (w.actions.length || loose.length) {
-    out.push('What happens, in order' + (w.actions.length >= 2 ? ', with the seconds each part takes' : '') + ':');
+    // v3.6.30 (Ian, 2026-11-14, take 119: Oya said "What happens" before her line): the heading reads as a direction, not as words
+    out.push('The beats, in order' + (w.actions.length >= 2 ? ', with their seconds' : '') + ' (directions only, never said aloud):');
     const times = beatTimes(w), beats = w.beats || [];   // v3.5.63 -- TD-1121: each beat its seconds, camera and sound
     w.actions.forEach(function (a, i) {
-      const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return 'As this happens, ' + sayLine(l, hearers) + '.'; });
+      const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return '    ' + sayLine(l, hearers); });   // v3.6.34: outlined
+      // v3.6.32 (Ian, 2026-11-14, take 131: Oya mumbled before her line in a 6.5 s beat; "it should be a pause in speaking after the
+      // line. Space in the conversation"): the time a beat has beyond its lines is silence, said after them
+      const words = w.lines.filter(function (l) { return l.when === i + 1 && String(l.text || '').trim(); }).reduce(function (t, l) { return t + String(l.text).trim().split(/\s+/).length; }, 0);
+      const spare = words && times[i] ? (times[i].to - times[i].from) - Math.max(1, Math.round(words / 2.5 * 2) / 2) : 0;
+      if (spare >= 1) said.push('    (then silence for about ' + secsText(Math.round(spare * 2) / 2) + ' s; no one speaks)');
       const b = beats[i] || {}, at = w.actions.length >= 2 && times[i] ? '(' + secsText(times[i].from) + '-' + secsText(times[i].to) + ' s) ' : '';
       function stop(x) { x = String(x).trim(); return /[.!?"\u201d]$/.test(x) ? x : x + '.'; }
-      out.push((i + 1) + '. ' + at + ((said.length || b.camera || b.sound) ? stop(a) : a) + (said.length ? ' ' + said.join(' ') : '') + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
+      out.push((i + 1) + '. ' + at + ((said.length || b.camera || b.sound) ? stop(a) : a) + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
+      if (said.length) { out.push(''); said.forEach(function (x) { out.push(x); out.push(''); }); }   // v3.6.34: each line on its own, a blank line either side
     });
-    loose.forEach(function (l) { const t = sayLine(l, hearers); out.push(w.actions.length ? 'Then, ' + t + '.' : t.charAt(0).toUpperCase() + t.slice(1) + '.'); });
+    if (loose.length) { out.push(w.actions.length ? 'Then:' : 'Said in this shot:'); out.push(''); loose.forEach(function (l) { out.push('    ' + sayLine(l, hearers)); out.push(''); }); }   // v3.6.34: outlined
   }
   voiceRules(w, pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []).forEach(function (r) { out.push(r); });   // v3.5.25
   const ex = exitLines(w, (ep.castNames || []).concat(pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []), pics ? w.seconds : 0);   // v3.5.47; v3.5.49 the deadline
   if (ex.length) out.push(ex[0]);
   if (w.camera) out.push('Camera: ' + w.camera);
-  if (w.end) out.push('End: ' + w.end);
+  if (w.end) out.push('End (where everyone must be by the last second): ' + w.end);   // v3.5.96
   if (ex.length > 1) out.push(ex[1]);
   if (w.sounds) out.push('Sound: ' + w.sounds);
   if (w.around) out.push('Around them: ' + w.around);
-  return out.join('\n').slice(0, 6000);
+  return capScript(out);
+}
+// v3.6.26 (take 110: the words were cut mid-word at 6000 characters, "otherwise ab"): over the cap, leave out whole lines,
+// the least needed first (Around them, then Overall, then Sound), and only then cut, at the end of a sentence.
+const SCRIPT_MAX = 6000;
+function capScript(lines) {
+  let ls = lines.slice();
+  if (ls.join('\n').length <= SCRIPT_MAX) return ls.join('\n');
+  [/^Around them:/, /^Overall:/, /^Sound:/].forEach(function (re) { if (ls.join('\n').length > SCRIPT_MAX) ls = ls.filter(function (l) { return !re.test(l); }); });
+  let out = ls.join('\n');
+  if (out.length > SCRIPT_MAX) { out = out.slice(0, SCRIPT_MAX); const k = Math.max(out.lastIndexOf('. '), out.lastIndexOf('.\n')); if (k > SCRIPT_MAX * 0.6) out = out.slice(0, k + 1); }
+  return out;
 }
 function wordsHaveContent(ep, w) { return !!(String(ep.overall || '').trim() || w.start || w.actions.length || w.lines.length || w.camera || w.end); }
 // v3.5.25 -- for naming the cast: what a line SAYS names no one in the shot ("Where is Emanon?"), and only the speakers
@@ -1200,19 +1272,19 @@ function namedCast(text, cast, room) {
     if (people.length >= room || !c.url || !c.name) return;
     if (people.some(function (p) { return p.name === c.name || p.url === c.url; })) return;
     const first = String(c.name).trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9'-]/g, '');
-    if (first.length >= 2 && new RegExp('(^|[^a-z0-9])' + first.replace(/[-']/g, '\\$&') + '([^a-z0-9]|$)').test(words)) people.push({ name: String(c.name).trim(), url: c.url });
+    if (first.length >= 2 && new RegExp('(^|[^a-z0-9])' + first.replace(/[-']/g, '\\$&') + '([^a-z0-9]|$)').test(words)) people.push({ name: String(c.name).trim(), url: c.url, height: c.height || '' });   // v3.5.96 height
   });
   return people;
 }
 // A reference shot in plain words: one move; the cast named first (they win), then up to 5 scene pictures.
 function planReferenceWords(ep, kfs, w, shotNo, pool, refs) {
   const m = MODELS[ep.model];
-  if (!kfs.length) return { error: 'Shot ' + shotNo + ' has no pictures.' };
-  if (!wordsHaveContent(ep, w)) return { error: 'Shot ' + shotNo + ' needs words: say what the characters do, or how the shot starts.' };
+  if (!wordsHaveContent(ep, w)) return { error: 'Shot ' + shotNo + ' needs words: say what the characters do, or how the shot starts.' };   // v3.6.01: no pictures is fine when someone is in its references
   const scenePics = kfs.slice(0, m.maxScene || REF_MAX_KEYFRAMES).map(function (k) { return k.image_url; });   // v3.5.42: a model's own limits
   const people = refsToSend(ep, w, refs, pool, (m.maxRefs || REF_MAX_IMAGES) - scenePics.length);   // v3.5.22: the shot's references
+  if (!kfs.length && !people.length) return { error: 'Shot ' + shotNo + ' has no pictures and no one in its References. Add a character or a place to its References, or a picture.' };   // v3.6.01
   const pics = { cast: people.map(function (p, i) { return { name: p.name, n: i + 1, kind: p.kind, height: p.height || '' }; }), scene: scenePics.map(function (u, i) { return people.length + i + 1; }) };   // v3.5.61 height
-  return { moves: [{ position: 1, start: kfs[0].image_url, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics), duration: String(w.seconds),
+  return { moves: [{ position: 1, start: kfs.length ? kfs[0].image_url : null, end: null, own: w.actions.join('\n'), full: shotScript(ep, w, pics), duration: String(w.seconds),   // v3.6.01 kfs.length; v3.6.03 the length back (a comment had swallowed it)
     images: people.map(function (p) { return p.url; }).concat(scenePics), cast: people.map(function (p) { return p.name; }) }], model: m };
 }
 // A keyframe-model shot in plain words: the same script (no picture lines) for every move; the length shared out.
@@ -1238,7 +1310,7 @@ function shotRefs(shot) { const r = parseJson(shot && shot.refs, null); return A
 async function castRefs(db, ep, detail) {
   let rows = [];
   try {
-    rows = await db.prepare('SELECT ch.id, ch.name, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id);
+    rows = await db.prepare('SELECT ch.id, ch.name, ch.height_ft, COALESCE(sc.reference_url, ch.canonical_reference_url) AS url FROM characters ch LEFT JOIN session_characters sc ON sc.character_id = ch.id AND sc.fork_id = ? WHERE ch.campaign_id = ? ORDER BY ch.is_npc ASC, ch.id ASC').all(ep.fork_id, ep.campaign_id);
   } catch (e) {
     console.error('[video] cast references could not be read: ' + (e && e.message));
     rows = [];
@@ -1247,7 +1319,7 @@ async function castRefs(db, ep, detail) {
   const usable = rows.filter(function (c) { return c.url && storage.isOurPublicUrl(c.url); });
   if (!detail) return usable;
   // v3.5.18 -- for debug mode: every character, and why one is not usable
-  return { usable: usable, all: rows.map(function (c) { return { id: c.id, name: c.name, url: c.url && storage.isOurPublicUrl(c.url) ? c.url : null, picture: c.url ? vlShortUrl(c.url) : null, usable: !!(c.url && storage.isOurPublicUrl(c.url)), why_not: !c.url ? 'no reference picture' : (!storage.isOurPublicUrl(c.url) ? 'not a Campaignia picture' : undefined) }; }) };
+  return { usable: usable, all: rows.map(function (c) { return { id: c.id, name: c.name, height: Number(c.height_ft) > 0 ? vlHeightPhrase(c.height_ft) : '', url: c.url && storage.isOurPublicUrl(c.url) ? c.url : null, picture: c.url ? vlShortUrl(c.url) : null, usable: !!(c.url && storage.isOurPublicUrl(c.url)), why_not: !c.url ? 'no reference picture' : (!storage.isOurPublicUrl(c.url) ? 'not a Campaignia picture' : undefined) }; }) };
 }
 // v3.5.22 -- THE REFERENCES A SHOT CAN SEND (Ian, 2026-11-08: "add the ability to add character and asset references... and
 // see the references that are already on that shot... just like we do on the Review tab, Storyboard and Image builder").
@@ -1268,7 +1340,7 @@ async function refsPool(db, ep) {
     assets = (await db.prepare("SELECT a.id, a.name, a.category, a.height_ft, CASE WHEN r.id IS NULL THEN a.image_url ELSE NULL END AS url FROM campaign_assets a LEFT JOIN image_rights r ON r.image_url = a.image_url AND r.verdict = 'reject' WHERE a.campaign_id = ? ORDER BY LOWER(a.name)").all(ep.campaign_id))
       .map(function (a) { const ok = !!(a.url && storage.isOurPublicUrl(a.url)); return { id: a.id, name: a.name, url: ok ? a.url : null, usable: ok, why_not: ok ? null : (a.url ? 'not a Campaignia picture' : 'no usable picture'), height: (a.category === 'npc' && Number(a.height_ft) > 0) ? vlHeightPhrase(a.height_ft) : '' }; });   // v3.5.61 an NPC's height
   } catch (e) { console.error('[video] assets could not be read: ' + (e && e.message)); }
-  return { characters: cast.all.filter(function (c) { return c.name && c.id; }).map(function (c) { return { id: c.id, name: c.name, url: c.url || null, usable: !!c.usable, why_not: c.why_not || null }; }), assets: assets };
+  return { characters: cast.all.filter(function (c) { return c.name && c.id; }).map(function (c) { return { id: c.id, name: c.name, height: c.height || '', url: c.url || null, usable: !!c.usable, why_not: c.why_not || null }; }), assets: assets };
 }
 function cleanRefs(v) {
   if (!Array.isArray(v)) return [];
@@ -1293,7 +1365,7 @@ function refsToSend(ep, w, refs, pool, room) {
     });
     return out;
   }
-  return namedInShot(ep, w, pool.characters.filter(function (c) { return c.usable; }), room).map(function (p) { return { name: p.name, url: p.url, kind: 'character' }; });
+  return namedInShot(ep, w, pool.characters.filter(function (c) { return c.usable; }), room).map(function (p) { return { name: p.name, url: p.url, kind: 'character', height: p.height || '' }; });   // v3.5.96 height
 }
 // v3.5.44 -- a model with a prompt limit (Kling O3: 2500 characters) gets the script cut to fit: first the lines that
 // matter least to the picture (Sound, unless its own sound is on; Around them; Overall), then the end of the text at a
@@ -1343,6 +1415,43 @@ function buildInput(m, prompt, startUrl, endUrl, duration, sound, images) {
 
 // Make one shot: a new take (it becomes the chosen one), its moves sent to fal side by side. One take of a shot is made
 // at a time (a partial unique index is the claim). Returns { take } or { status, error }.
+// v3.6.31 -- THE PICTURES A TAKE WILL SEND MUST BE IN STORAGE. fal downloads each one from storage itself; a picture
+// deleted from the bucket can still show on the page from Cloudflare's cache, so the take failed at fal with "Failed to
+// download the file" (shot 8, takes 122-126). Our own pictures are asked about by key; one that is missing but still in
+// the cache is saved back to the same address; one that cannot be found is named. Returns the message, or null.
+async function missingPictures(req, moves, kfs, shotNo) {
+  const urls = [];
+  (moves || []).forEach(function (x) { [x.start, x.end].concat(x.images || []).forEach(function (u) { if (u && urls.indexOf(u) < 0) urls.push(u); }); });
+  const gone = [];
+  for (const u of urls) {
+    if (!storage.isOurPublicUrl(u)) continue;
+    const key = storage.keyFromUrl(u);
+    if (!key) continue;
+    let head;
+    try { head = await storage.headObject(null, key); } catch (e) { console.warn('[video] could not check ' + key + ': ' + (e && e.message)); continue; }   // cannot tell: let fal try
+    if (head) continue;
+    let back = false;
+    try {
+      const axios = require('axios');
+      const r = await axios.get(u, { responseType: 'arraybuffer', timeout: 30000, validateStatus: function () { return true; } });
+      const type = String((r.headers && r.headers['content-type']) || '');
+      if (r.status === 200 && /^image\//i.test(type) && r.data && r.data.byteLength > 0) {
+        const cut = key.indexOf('/');
+        await storage.uploadFile(Buffer.from(r.data), key.slice(cut + 1), type.split(';')[0], key.slice(0, cut));
+        back = !!(await storage.headObject(null, key));
+      }
+    } catch (e) { console.warn('[video] could not save ' + key + ' back: ' + (e && e.message)); }
+    console.log('[video] shot ' + shotNo + ': ' + key + ' was missing from storage; ' + (back ? 'saved back from the cache' : 'not in the cache either'));
+    vlDebug(req.session && req.session.userId, back ? 'info' : 'warn', 'makeShot', 'Shot ' + shotNo + ': ' + key + (back ? ' was missing from storage and was saved back from the cache' : ' is missing from storage'), { url: u });
+    if (!back) {
+      const ki = (kfs || []).findIndex(function (k) { return k.image_url === u; });
+      gone.push(ki >= 0 ? 'picture ' + (ki + 1) + (kfs[ki].label ? ' (' + String(kfs[ki].label).slice(0, 60) + ')' : '') : 'a reference picture');
+    }
+  }
+  if (!gone.length) return null;
+  return 'Shot ' + shotNo + '\u2019s ' + gone.join(' and ') + (gone.length === 1 ? ' is' : ' are') + ' missing from storage, so the video model cannot load ' + (gone.length === 1 ? 'it' : 'them') +
+    '. Put the picture in again (Add a picture, from the Archive) and remove the old one. Nothing was charged.';
+}
 async function takesFull(db, shotId, max) {   // v3.5.89: max = maxTakes(req)
   const c = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ?').get(shotId);
   return Number(c && c.n) >= max;
@@ -1367,6 +1476,10 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   });
   if (plan.error) return { status: 400, error: plan.error };
   if (await takesFull(db, shot.id, maxTakes(req))) return { status: 409, full: true, error: 'Shot ' + shotNo + ' already has ' + maxTakes(req) + ' takes. Delete one to make another.' };
+  // v3.6.31 (Ian, 2026-11-14): every picture is checked in storage before anything is charged or sent; one only in the cache is
+  // saved back; one that is gone is named ("if it is only in the cache, resave it").
+  const lost = await missingPictures(req, plan.moves, kfs, shotNo);
+  if (lost) return { status: 409, error: lost };
   const hook = webhookUrl();
   if (!hook) return { status: 500, error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' };
   const sound = !!ep.sound;
@@ -1379,7 +1492,13 @@ async function makeShot(db, req, ep0, shot, shotNo) {
     .run(ep.id, shot.id, req.session.userId, ep.model, sound, shotSig(ep0, kfs, shot), directions, cost, tokens);   // v3.5.34: signed as the episode reads it; v3.5.46 tokens
   if (!ins.lastInsertRowid) return { status: 409, error: 'Shot ' + shotNo + ' is already being made.' };
   const takeId = ins.lastInsertRowid;
-  await db.prepare('UPDATE shots SET chosen_take_id = ? WHERE id = ?').run(takeId, shot.id);
+  // v3.5.96 (Ian, 2026-11-12: "don't assume that the newest video should be the pinned take"): a new take is pinned only when the
+  // shot has no finished pinned take; otherwise the pin stays where the person put it.
+  await db.prepare("UPDATE shots SET chosen_take_id = ? WHERE id = ? AND (chosen_take_id IS NULL OR NOT EXISTS (SELECT 1 FROM takes t WHERE t.id = shots.chosen_take_id AND t.status = 'done'))").run(takeId, shot.id);
+  try {   // v3.5.92: the shot as it was when this take was made, for the take's Info
+    await db.prepare('UPDATE takes SET words_at = ? WHERE id = ?').run(JSON.stringify({ name: shot.name || '', purpose: shot.purpose || '', concept: shot.concept || '', shot_model: shotModel(shot), shot_mode: shotMode(shot),
+      words: shotWords(shot) || legacyWords(kfs, m), pictures: kfs.map(function (k) { return { url: k.image_url, label: k.label || '' }; }), overall: ep.overall || '', style: ep.style || '' }), takeId);
+  } catch (e) { console.warn('[video] take ' + takeId + ': could not keep the words: ' + (e && e.message)); }
   const rows = [];
   for (const x of plan.moves) {
     const bi = buildInput(m, x.full, x.start, x.end, x.duration, sound, x.images);
@@ -1392,6 +1511,7 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   for (const x of rows) {
     const big = await enlargeSmallPictures(x.bi.input);   // v3.5.56
     if (big.length) vlDebug(req.session.userId, 'info', 'makeShot', 'Shot ' + shotNo + ': ' + big.length + ' small picture(s) sent enlarged', { pictures: big });
+    try { await db.prepare('UPDATE moves SET sent_input = ? WHERE id = ?').run(JSON.stringify({ endpoint: x.bi.endpoint, input: x.bi.input }), x.id); } catch (e) {}   // v3.5.92: exactly what fal is sent
     try {
       const sub = await fal.queue.submit(x.bi.endpoint, { input: x.bi.input, webhookUrl: hook });
       await db.prepare("UPDATE moves SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, x.id);
@@ -1440,7 +1560,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id, maxTakes(req))) { full[i] = true; continue; }
       const kfs = await db.prepare('SELECT * FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shots[i].id);
-      const p = planShot(epForShot(ep, shots[i]), kfs, shots[i], i + 1, null);   // v3.5.16; v3.5.19; v3.5.34: the shot's mode
+      const p = planShot(epForShot(ep, shots[i]), kfs, shots[i], i + 1, kfs.length ? null : await refsPool(db, ep).catch(function () { return null; }));   // v3.5.16; v3.5.19; v3.5.34: the shot's mode; v3.6.01 a shot with no pictures plans from its references
       if (p.error) return res.status(400).json({ error: p.error });
       const pm = MODELS[epForShot(ep, shots[i]).model];   // v3.5.46: what they all cost together
       need += await takeTokens(db, p.moves.reduce(function (t, x) { return t + estCost(pm, x.duration, !!ep.sound); }, 0));
@@ -1508,6 +1628,167 @@ router.delete('/takes/:id', requireAuth, requireVideo, async function (req, res)
     res.json({ episode: await loadEpisode(db, x.ep.id) });
   } catch (e) {
     res.status(500).json({ error: 'Could not delete the take.' });
+  }
+});
+// v3.6.05 -- COPY A TAKE (Ian, 2026-11-13: "go find another take in the same campaign but maybe a different version, or different
+// episode and maybe a different shot and copy it into the shot i'm currently working on. It would be a copy."; "any version any
+// episode of the same campaign"; "filter by version, episode, shot"). Any finished take of the campaign becomes a new take of this
+// shot. Its video is copied to a file of its own, so deleting either take never touches the other. Nothing is charged, it counts
+// toward the shot's takes, and it is not pinned. Its Info comes with it (words, model, references, what was sent); its trim does not.
+async function copyTarget(req, db, shotId) {
+  const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(shotId);
+  const ep = shot ? await db.prepare('SELECT * FROM episodes WHERE id = ?').get(shot.episode_id) : null;
+  if (!ep || !(await canChange(req, ep))) return null;
+  return { shot: shot, ep: ep };
+}
+function copyVersionName(r) { return r.version_name ? String(r.version_name) : 'Version ' + (r.fork_id || '?'); }
+function copyModelLabel(model, retouchKind) {
+  if (retouchKind) return { label: retouchKind === 'small' ? 'Kling O1 Edit' : 'Seedance 2.0', mode: 'Retouch' };
+  const tm = MODELS[model];
+  return { label: tm ? tm.label : String(model || ''), mode: tm ? (tm.reference ? 'Reference' : 'Keyframes') : '' };
+}
+router.get('/shots/:id/copyable-takes', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await copyTarget(req, db, parseInt(req.params.id, 10));
+    if (!x) return res.status(404).json({ error: 'Not found.' });
+    const rows = await db.prepare(
+      'SELECT t.id, t.episode_id, t.shot_id, t.model, t.retouch_kind, t.sound, t.video_url, t.created_at, e.name AS episode_name, e.fork_id, ' +
+      's.position AS shot_no, s.name AS shot_name, s.chosen_take_id, cv.id AS version_id, cv.name AS version_name, cv.is_canonical ' +
+      'FROM takes t JOIN episodes e ON e.id = t.episode_id JOIN shots s ON s.id = t.shot_id ' +
+      'LEFT JOIN session_forks f ON f.id = e.fork_id LEFT JOIN campaign_versions cv ON cv.id = f.version_id ' +
+      "WHERE e.campaign_id = ? AND t.status = 'done' AND t.video_url IS NOT NULL AND t.shot_id <> ? ORDER BY e.id, s.position, t.id").all(x.ep.campaign_id, x.shot.id);
+    const shotIds = rows.map(function (r) { return Number(r.shot_id); }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    const all = shotIds.length ? await db.prepare('SELECT id, shot_id FROM takes WHERE shot_id = ANY(?) ORDER BY id').all([shotIds]) : [];
+    const mvs = rows.length ? await db.prepare('SELECT take_id, duration FROM moves WHERE take_id = ANY(?)').all([rows.map(function (r) { return r.id; })]) : [];
+    const takes = rows.map(function (r) {
+      const ml = copyModelLabel(r.model, r.retouch_kind);
+      return { id: r.id, episode_id: r.episode_id, episode_name: r.episode_name || '', version_key: r.version_id ? 'v' + r.version_id : 'f' + r.fork_id,
+        version_name: copyVersionName(r), canonical: !!r.is_canonical, shot_id: r.shot_id, shot_no: r.shot_no, shot_name: r.shot_name || '',
+        pinned: Number(r.chosen_take_id) === Number(r.id),   // v3.6.06: the take its shot uses
+        take_no: all.filter(function (a) { return Number(a.shot_id) === Number(r.shot_id) && Number(a.id) <= Number(r.id); }).length,
+        model_label: ml.label, mode: ml.mode, sound: !!r.sound, video_url: r.video_url, created_at: r.created_at,
+        secs: takeSecs(mvs.filter(function (m) { return Number(m.take_id) === Number(r.id); })) };
+    });
+    res.json({ takes: takes, full: await takesFull(db, x.shot.id, maxTakes(req)), max: maxTakes(req) });
+  } catch (e) {
+    console.error('[video] copyable takes error:', e && e.message);
+    res.status(500).json({ error: 'Could not list the takes.' });
+  }
+});
+router.post('/shots/:id/copy-take', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/shots/' + req.params.id + '/copy-take';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await copyTarget(req, db, parseInt(req.params.id, 10));
+    if (!x) return vlRefuse(req, res, FN, 404, 'Not found.');
+    const src = await takeAndEpisode(db, parseInt((req.body || {}).take_id, 10));
+    if (!src.ep || Number(src.ep.campaign_id) !== Number(x.ep.campaign_id) || !(await canSee(req, src.ep))) return vlRefuse(req, res, FN, 404, 'That take is not there any more.');
+    if (src.t.status !== 'done' || !src.t.video_url) return vlRefuse(req, res, FN, 409, 'Only a finished take can be copied.');
+    if (Number(src.t.shot_id) === Number(x.shot.id)) return vlRefuse(req, res, FN, 409, 'That take is already on this shot.');
+    if (await takesFull(db, x.shot.id, maxTakes(req))) return vlRefuse(req, res, FN, 409, 'This shot already has ' + maxTakes(req) + ' takes. Delete one to copy another in.');
+    const buf = await storage.fetchFile(src.t.video_url);
+    if (!buf || !buf.length) return vlRefuse(req, res, FN, 502, 'Could not read the video of that take.');
+    const stored = await storage.uploadFile(buf, 'ep-' + x.ep.id + '-copy-of-take-' + src.t.id + '-' + Date.now() + '.mp4', 'video/mp4', 'video-lab');
+    let takeId = null;
+    try {
+      const mvs = await db.prepare('SELECT * FROM moves WHERE take_id = ? ORDER BY position, id').all(src.t.id);
+      const sSh = await db.prepare('SELECT position FROM shots WHERE id = ?').get(src.t.shot_id);
+      const nRow = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ? AND id <= ?').get(src.t.shot_id, src.t.id);
+      const dEp = await loadEpisode(db, x.ep.id);
+      const dSh = dEp ? dEp.shots.filter(function (s) { return Number(s.id) === Number(x.shot.id); })[0] : null;
+      const dir = parseJson(src.t.directions, {}) || {};
+      dir.copy = { take_id: src.t.id, episode_id: src.ep.id, episode_name: src.ep.name || '', shot_no: sSh ? sSh.position : null, take_no: Number(nRow && nRow.n) || null, created_at: src.t.created_at };
+      await db.transaction(async function (tx) {
+        const ins = await tx.prepare("INSERT INTO takes (episode_id, shot_id, user_id, status, model, sound, sig, directions, video_url, merge_status, est_cost_usd, retouch_text, retouch_kind, tokens, tokens_charged, words_at, finished_at) VALUES (?, ?, ?, 'done', ?, ?, ?, ?, ?, 'single', 0, ?, ?, 0, 0, ?, NOW())")
+          .run(x.ep.id, x.shot.id, req.session.userId, src.t.model, !!src.t.sound, dSh ? dSh.sig : src.t.sig, JSON.stringify(dir), stored, src.t.retouch_text, src.t.retouch_kind, src.t.words_at);
+        takeId = ins.lastInsertRowid;
+        if (!takeId) throw new Error('the take was not saved');
+        for (const m of mvs) {
+          await tx.prepare("INSERT INTO moves (take_id, episode_id, position, start_url, end_url, prompt, model, endpoint, duration, sound, status, est_cost_usd, sent_input, used_prompt, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'done', 0, ?, ?, NOW())")
+            .run(takeId, x.ep.id, m.position, m.start_url, m.end_url, m.prompt, m.model, m.endpoint, m.duration, !!m.sound, m.sent_input, m.used_prompt);
+        }
+      });
+    } catch (e) {
+      await deleteFiles([stored], 'copy of take ' + src.t.id + ' not saved');
+      throw e;
+    }
+    vlDebug(req.session.userId, 'info', FN, 'Take ' + src.t.id + ' (episode ' + src.ep.id + ') copied to shot ' + x.shot.id + ' (episode ' + x.ep.id + ') as take ' + takeId, { file: vlShortUrl(stored) });
+    res.json({ episode: await loadEpisode(db, x.ep.id), take: takeId });
+  } catch (e) {
+    console.error('[video] copy take error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not copy the take.' });
+  }
+});
+// v3.6.07 -- USE THIS FRAME (TD-1135; Ian, 2026-11-13: "archive a frame in a take to use in the next shot or different shot"; "have
+// options for all of them. next shot, pick shot, archive"; "pausing the player is enough"; "it should be whatever they navigate to in
+// the player"). The frame of a finished take at the time the player is paused on (or its last frame) is drawn here with ffmpeg and
+// saved in the campaign's Archive, where any shot of any episode can use it. The page puts it into a shot when asked. Free.
+async function grabFrame(url, at) {
+  const fs = require('fs'), path = require('path'), os = require('os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vlframe-'));
+  try {
+    const f = path.join(dir, 'take.mp4'), out = path.join(dir, 'frame.png');
+    fs.writeFileSync(f, await fetchVideo(url));
+    const p = await probeClip(f);
+    const last = Math.max(0, p.dur - 0.08);
+    let t = at === 'end' ? last : Math.max(0, Math.min(Number(at) || 0, last));
+    for (let tries = 0; tries < 3; tries++) {
+      try { fs.unlinkSync(out); } catch (e) {}
+      await runTool('ffmpeg', ['-y', '-loglevel', 'error', '-ss', t.toFixed(3), '-i', f, '-frames:v', '1', out], 60000);
+      if (fs.existsSync(out) && fs.statSync(out).size > 0) return { png: fs.readFileSync(out), at: Math.round(t * 10) / 10, w: p.w, h: p.h };
+      t = Math.max(0, t - 0.5);
+    }
+    throw new Error('no frame at that time');
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
+  }
+}
+router.post('/takes/:id/frame', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/takes/' + req.params.id + '/frame';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
+    if (!x.ep || !(await canChange(req, x.ep))) return vlRefuse(req, res, FN, 404, 'Not found.');
+    if (x.t.status !== 'done' || !x.t.video_url) return vlRefuse(req, res, FN, 409, 'Only a finished take has frames to save.');
+    const b = req.body || {};
+    const at = b.at === 'end' ? 'end' : Number(b.at);
+    if (at !== 'end' && !(at >= 0 && at < 3600)) return vlRefuse(req, res, FN, 400, 'Pause the player on the frame you want first.');
+    try {
+      const { getEffectiveTier, getTier } = require('../middleware/tiers');
+      const effTier = getTier(await getEffectiveTier(req.session.userId, x.ep.campaign_id));
+      const cap = effTier ? effTier.max_archives_per_campaign : null;
+      if (cap !== null && cap !== undefined) {
+        const cnt = await db.prepare('SELECT COUNT(*) AS c FROM campaign_archives WHERE campaign_id = ?').get(x.ep.campaign_id);
+        if (cnt && Number(cnt.c) >= cap) return vlRefuse(req, res, FN, 409, 'This campaign has hit its archive limit of ' + cap + ' images on the ' + effTier.name + ' tier. Remove an archived image to make room, or upgrade for more.');
+      }
+    } catch (capErr) { console.error('[video] archive cap check error:', capErr.message); }
+    const fr = await grabFrame(x.t.video_url, at);
+    const url = await storage.uploadFile(fr.png, 'vlframe-take-' + x.t.id + '-' + Date.now() + '.png', 'image/png', 'video-lab');
+    const label = String(b.label || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const title = (label || 'Frame of take ' + x.t.id) + ' at ' + fr.at + ' s';
+    const vs = await db.prepare('SELECT f.art_style_override AS fork_style, s.art_style AS session_style, c.art_style AS campaign_style FROM session_forks f JOIN sessions s ON s.id = f.session_id JOIN campaigns c ON c.id = s.campaign_id WHERE f.id = ?').get(x.ep.fork_id);
+    const style = vs ? (String(vs.fork_style || vs.session_style || vs.campaign_style || '').trim() || null) : null;
+    let styleName = null;
+    const cm = style ? /^custom:(\d+)$/i.exec(style) : null;
+    if (cm) { try { const r = await db.prepare('SELECT name FROM custom_art_styles WHERE id = ?').get(parseInt(cm[1], 10)); styleName = (r && r.name) || null; } catch (e) {} }
+    const shape = fr.w > fr.h * 1.15 ? 'wide' : (fr.h > fr.w * 1.15 ? 'tall' : 'square');
+    let ins;
+    try {
+      ins = await db.prepare('INSERT INTO campaign_archives (campaign_id, session_id, fork_id, image_type, title, image_url, source_url, art_style, art_style_name, img_w, img_h, shape, archived_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(x.ep.campaign_id, x.ep.session_id, x.ep.fork_id, 'moment', title.slice(0, 200), url, url, style, styleName, fr.w, fr.h, shape, req.session.userId, new Date().toISOString());
+    } catch (e) {
+      await deleteFiles([url], 'frame of take ' + x.t.id + ' not archived');
+      throw e;
+    }
+    vlDebug(req.session.userId, 'info', FN, 'Frame of take ' + x.t.id + ' at ' + fr.at + ' s archived', { url: vlShortUrl(url), asked: b.at, w: fr.w, h: fr.h });
+    res.json({ archive: { id: ins.lastInsertRowid, image_url: url, title: title.slice(0, 200), shape: shape, at: fr.at } });
+  } catch (e) {
+    console.error('[video] frame error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not save the frame: ' + String((e && e.message) || '').slice(0, 200) });
   }
 });
 // Join the episode again after a failed join.
@@ -1803,6 +2084,7 @@ router.post('/takes/:id/retouch', requireAuth, requireVideo, async function (req
       video: vlShortUrl(x.t.video_url), refs: refs.map(function (r) { return { name: r.name, kind: r.kind, url: vlShortUrl(r.url) }; }), input: Object.assign({}, input, { prompt: undefined }), prompt: prompt });
     const bigR = await enlargeSmallPictures(input);   // v3.5.56
     if (bigR.length) vlDebug(req.session.userId, 'info', FN, bigR.length + ' small picture(s) sent enlarged', { pictures: bigR });
+    try { await db.prepare('UPDATE moves SET sent_input = ? WHERE id = ?').run(JSON.stringify({ endpoint: R.endpoint, input: input }), mv.lastInsertRowid); } catch (e) {}   // v3.5.92
     try {
       const sub = await falClient().queue.submit(R.endpoint, { input: input, webhookUrl: hook });
       await db.prepare("UPDATE moves SET request_id = ?, status = 'running', submitted_at = NOW(), updated_at = NOW() WHERE id = ?").run(sub.request_id, mv.lastInsertRowid);
@@ -1839,6 +2121,78 @@ router.get('/episodes/:id/download', requireAuth, requireVideo, async function (
     res.status(500).json({ error: 'Could not read the video.' });
   }
 });
+// v3.5.92 -- A TAKE'S INFO (Ian, 2026-11-12: model, mode, tokens, prompt sent, prompt used, references... "Everything we know
+// about the video"; for everyone for now, failed takes too). Read only; the page lays it out.
+// v3.5.99 -- WHAT THE STORY SAYS ABOUT EACH SHOT (Ian, 2026-11-12: "a way to view what the story currently says about this shot.
+// The story is getting fed into the shots but I don't think the user can see the details anywhere"). Read only, nothing charged.
+// Each picture: its title, what it shows, and its text in the story before and after it (what the Director reads with the
+// whole story). A shot with no story pictures gets the story where it sits: after the last story picture before it, before
+// the first one after it (the opening or the closing at the ends). Never sent to the video model.
+async function shotStories(db, ep) {
+  const shots = await db.prepare('SELECT id FROM shots WHERE episode_id = ? ORDER BY position, id').all(ep.id);
+  const kfs = await db.prepare('SELECT shot_id, source, moment_id, label FROM keyframes WHERE episode_id = ? ORDER BY shot_id, position, id').all(ep.id);
+  const story = await storyOfVersion(db, ep.fork_id);
+  const byId = {}; story.moments.forEach(function (mo) { byId[mo.id] = mo; });
+  const out = shots.map(function (s) {
+    const pictures = kfs.filter(function (k) { return k.shot_id === s.id; }).map(function (k) {
+      if (k.source === 'title') return { kind: 'title', title: 'The title picture' };
+      const mo = k.moment_id ? byId[k.moment_id] : null;
+      if (!mo) return { kind: 'archive', title: textOf(k.label) || 'A picture from the Archive' };
+      return { kind: 'story', title: textOf(mo.title) || 'Untitled', shows: textOf(mo.description), before: story.byMoment[mo.id] || '', after: story.afterByMoment[mo.id] || '' };
+    });
+    return { id: s.id, pictures: pictures };
+  });
+  function storyPics(s) { return s.pictures.filter(function (p) { return p.kind === 'story'; }); }
+  out.forEach(function (s, i) {
+    if (storyPics(s).length) return;
+    let prev = null, next = null;
+    for (let j = i - 1; j >= 0 && !prev; j--) { const st = storyPics(out[j]); if (st.length) prev = st[st.length - 1]; }
+    for (let j = i + 1; j < out.length && !next; j++) { const st = storyPics(out[j]); if (st.length) next = st[0]; }
+    s.gap = { after_title: prev ? prev.title : '', after: prev ? prev.after : story.intro, before_title: next ? next.title : '', before: next ? next.before : story.outro };
+  });
+  return { shots: out, has_story: !!story.text };
+}
+router.get('/episodes/:id/shot-story', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const ep = await db.prepare('SELECT * FROM episodes WHERE id = ?').get(parseInt(req.params.id, 10));
+    if (!ep || !(await canSee(req, ep))) return res.status(404).json({ error: 'Not found.' });
+    res.json(await shotStories(db, ep));
+  } catch (e) {
+    console.error('[video] shot story error:', e && e.message);
+    res.status(500).json({ error: 'Could not read the story.' });
+  }
+});
+router.get('/takes/:id/info', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
+    if (!x.ep || !(await canSee(req, x.ep))) return res.status(404).json({ error: 'That take is not there any more.' });
+    const t = x.t;
+    const sh = await db.prepare('SELECT id, position, name FROM shots WHERE id = ?').get(t.shot_id);
+    const mvs = await db.prepare('SELECT * FROM moves WHERE take_id = ? ORDER BY position, id').all(t.id);
+    const tm = MODELS[t.model];
+    const made = t.retouch_kind ? (t.retouch_kind === 'small' ? 'Kling O1 Edit (Small fix retouch)' : 'Seedance 2.0 (Bigger change retouch)') : null;
+    let maker = null; try { const u = await db.prepare('SELECT name, email FROM users WHERE id = ?').get(t.user_id); maker = u ? (u.name || u.email || null) : null; } catch (e) { maker = null; }
+    res.json({
+      take: { id: t.id, status: t.status, model: t.model, model_label: made || (tm ? tm.label : t.model), mode: made ? 'Retouch' : (tm ? (tm.reference ? 'Reference' : 'Keyframes') : ''),
+        sound: !!t.sound, tokens: t.tokens, tokens_charged: t.tokens_charged, est_cost_usd: req.vlAdmin ? t.est_cost_usd : undefined, error: t.merge_error || t.error || null,   // v3.5.94: dollars for admins only
+        created_at: t.created_at, finished_at: t.finished_at, trim_start: t.trim_start, trim_end: t.trim_end, made_by: maker,
+        source_take_id: t.source_take_id, retouch_kind: t.retouch_kind, retouch_text: t.retouch_text, video_url: t.video_url,
+        directions: parseJson(t.directions, null), words_at: parseJson(t.words_at, null) },
+      shot: sh ? { id: sh.id, position: sh.position, name: sh.name || '' } : null,
+      episode: { id: x.ep.id, name: x.ep.name || '' },
+      moves: mvs.map(function (m) { return { position: m.position, model: m.model, endpoint: m.endpoint, duration: m.duration, sound: !!m.sound, status: m.status, request_id: m.request_id,
+        error: m.error, est_cost_usd: req.vlAdmin ? m.est_cost_usd : undefined, file_size: m.file_size, submitted_at: m.submitted_at, finished_at: m.finished_at, start_url: m.start_url, end_url: m.end_url,
+        prompt: m.prompt, sent: parseJson(m.sent_input, null), used_prompt: m.used_prompt || null }; })
+    });
+  } catch (e) {
+    console.error('[video] take info error:', e && e.message);
+    res.status(500).json({ error: 'Could not read the take.' });
+  }
+});
 router.get('/takes/:id/download', requireAuth, requireVideo, async function (req, res) {
   try {
     await ensureTables();
@@ -1850,7 +2204,14 @@ router.get('/takes/:id/download', requireAuth, requireVideo, async function (req
     // "Third Go Episode (shot 3, take 57, Kling O3 Pro, Keyframes).mp4"; a retouch says which kind
     const tm = MODELS[x.t.model];
     const made = x.t.retouch_kind ? (x.t.retouch_kind === 'small' ? 'Kling O1 Edit, retouch' : 'Seedance 2.0, retouch') : (tm ? tm.label + ', ' + (tm.reference ? 'Reference' : 'Keyframes') : '');
-    await sendVideo(res, x.t.video_url, baseName(x.ep.name) + ' (shot ' + (sh ? sh.position : '') + ', take ' + x.t.id + (made ? ', ' + made : '') + ').mp4');
+    // v3.5.95 (Ian, 2026-11-12): named by the take's code, e<episode id>s<shot>t<take on the card>-<take id, 4 digits>-<date made>,
+    // then the model and mode, e.g. "e6s2t8-0077-2026-11-12 MiniMax H3 Max Reference.mp4". The page sends its code (the date in the
+    // person's own time zone); it is used only when its episode, shot, take and id are this take's.
+    const nRow = await db.prepare('SELECT COUNT(*) AS n FROM takes WHERE shot_id = ? AND id <= ?').get(x.t.shot_id, x.t.id);
+    const want = 'e' + x.ep.id + 's' + (sh ? sh.position : 0) + 't' + (Number(nRow && nRow.n) || 1) + '-' + String(x.t.id).padStart(4, '0') + '-';
+    const sent = String(req.query.code || '');
+    const code = (sent.indexOf(want) === 0 && /^\d{4}-\d{2}-\d{2}$/.test(sent.slice(want.length))) ? sent : want + new Date(x.t.created_at || Date.now()).toISOString().slice(0, 10);
+    await sendVideo(res, x.t.video_url, code + (made ? ' ' + made.replace(/,/g, '') : '') + '.mp4');
   } catch (e) {
     res.status(500).json({ error: 'Could not read the video.' });
   }
@@ -1880,6 +2241,7 @@ async function finishMove(mv, falResult, falError) {
     const buf = await fetchVideo(url);
     const stored = await storage.uploadFile(buf, 'ep-' + mv.episode_id + '-take-' + mv.take_id + '-move-' + mv.id + '-' + Date.now() + '.mp4', 'video/mp4', 'video-lab');
     await db.prepare("UPDATE moves SET status = 'done', fal_video_url = ?, video_url = ?, file_size = ?, error = NULL, finished_at = NOW(), updated_at = NOW() WHERE id = ?").run(url, stored, buf.length, mv.id);
+    if (typeof data.expanded_prompt === 'string' && data.expanded_prompt) { try { await db.prepare('UPDATE moves SET used_prompt = ? WHERE id = ?').run(data.expanded_prompt.slice(0, 20000), mv.id); } catch (e) {} }   // v3.5.92: the model's own rewrite, when it made one
     console.log('[video] move ' + mv.id + ' done: ' + buf.length + ' bytes -> ' + stored);
     await takeStatus(db, mv.take_id);
     return 'done';
@@ -2248,7 +2610,7 @@ function textOf(v) { return String(v == null ? '' : v).replace(/\r\n/g, '\n').tr
 async function storyOfVersion(db, forkId) {
   const fork = await db.prepare('SELECT id, narrative_intro, narrative_sections, narrative_outro, art_style_override FROM session_forks WHERE id = ?').get(forkId);
   const moments = await db.prepare('SELECT id, kind, title, description FROM moments WHERE fork_id = ? ORDER BY panel_order ASC, id ASC').all(forkId);
-  const byMoment = {};
+  const byMoment = {}, afterByMoment = {};   // v3.5.99 afterByMoment
   const parts = [];
   if (fork && textOf(fork.narrative_intro)) parts.push(textOf(fork.narrative_intro));
   let blocks = null;
@@ -2263,14 +2625,14 @@ async function storyOfVersion(db, forkId) {
     if (own) byMoment[mo.id] = own;
     parts.push('[Picture: ' + textOf(mo.title || 'untitled') + ']' + (own ? '\n' + own : ''));
     const after = textOf(b.after);
-    if (after) parts.push(after);
+    if (after) { parts.push(after); afterByMoment[mo.id] = after; }   // v3.5.99
   });
   if (fork && textOf(fork.narrative_outro)) parts.push(textOf(fork.narrative_outro));
   let text = parts.join('\n\n');
   const hasStory = !!(blocks || (fork && (textOf(fork.narrative_intro) || textOf(fork.narrative_outro))));
   let trimmed = false;
   if (text.length > SL_STORY_CHARS) { text = text.slice(0, SL_STORY_CHARS); trimmed = true; }
-  return { fork: fork, moments: moments, text: hasStory ? text : '', byMoment: byMoment, trimmed: trimmed };
+  return { fork: fork, moments: moments, text: hasStory ? text : '', byMoment: byMoment, trimmed: trimmed, afterByMoment: afterByMoment, intro: fork ? textOf(fork.narrative_intro) : '', outro: fork ? textOf(fork.narrative_outro) : '' };   // v3.5.99
 }
 // The structure the writer was given: shots and their keyframes' pictures. If it differs when the answer comes back,
 // nothing is filled and nothing is charged.
@@ -2353,7 +2715,11 @@ async function pictureForModel(url) {
 // them, no words. ctx.mode 'notes' (Director's Notes): the Director writes every box of the shots as they stand.
 function directorHead(ctx) {
   return 'You are the Director of a short video made from the illustrations of a story, for the video model ' + ctx.m.label + (ctx.m.reference ? ' (reference mode)' : '') + '.\n\n' +
-    'SHOTS AND CUTS\nThe video is a series of SHOTS joined by CUTS. A shot is one continuous camera run in one place: the camera never cuts away inside it.\n\n';
+    'SHOTS AND CUTS\nThe video is a series of SHOTS joined by CUTS. A shot is one continuous camera run in one place: the camera never cuts away inside it.\n\n' +
+    // v3.6.30 (Ian, 2026-11-14: "The director writing should always name people not use vague words"; take 117's strangers came from "the others")
+    // v3.6.33 (Ian, 2026-11-14: "when writing it should specifically name the people in the opening ... for the first keyframe image")
+    'THE OPENING NAMES WHO IS IN THE FIRST PICTURE\nThe start (Opening) names every person who can be seen in the shot\'s first picture, by name, where each one is and which way they face ("Ori stands on the right, side-on, holding the mirror up to her face"). Someone seen only as a face in a mirror, a vision or a sending is said to be only that. Name no one who is not in the first picture there: anyone else comes in during a beat.\n\n' +
+    'NAME EVERYONE\nIn everything you write, name each person on screen by name (Ori, Drel and Gubuk). Never use vague words for people, such as the others, the party, the group, people, everyone, the rest of them, companions, allies or each character: the video model invents people to fill them. The only exception is a nameless crowd (a crowd, townsfolk, soldiers).\n\n';
 }
 function shotListRequest(ctx, images) {
   const m = ctx.m, style = ctx.style, N = ctx.pictures.length, ref = !!m.reference;
@@ -2371,23 +2737,24 @@ function shotListRequest(ctx, images) {
   } else {
     system = directorHead(ctx) +
       'YOUR JOB NOW: the episode is already divided into ' + ctx.shots.length + ' shots, shown below. Keep them exactly as they are and write the Director\'s Notes for each one.\n\n' +
-      (ref ? 'HOW THE MODEL USES THE PICTURES\nEach shot is ONE clip. Its first picture is how the shot opens; its later pictures only show the place, the light and who is there: the model does NOT copy their poses or positions, so say in the words what happens and how the shot ends. ' +
-        'The cast\'s own reference pictures are sent too, so describe what characters DO, not how they look.\n\n'
+      (ref ? 'HOW THE MODEL USES THE PICTURES\nEach shot is ONE clip. Its first picture is how the shot opens and decides who is there and where: write the start as that picture shows it. Anyone not in it must enter in a beat, through a place the picture shows and with a path ("through the far archway, toward us"), or be revealed by a camera move that names them; a reference picture alone never brings anyone in. Its later pictures only show the place, the light and who is there: the model does NOT copy their poses or positions, so say in the words what happens and how the shot ends. ' +
+        'The cast\'s own reference pictures are sent too, so describe what characters DO, not how they look. Those pictures give their looks, not what they must carry: when it matters, say what each one holds ("carries only the stone bowl").\n\n'
         : 'HOW THE MODEL USES THE PICTURES\nA shot of several pictures moves from each picture exactly to the next, so the action must flow through every picture of the shot.\n\n') +
       'THE STYLE OF THIS VIDEO\n' + style.instructions + '\n\n' +
       'FOR EACH SHOT write these, in plain words:\n' +
       '- name: 2 to 5 words naming the shot.\n' +
       '- start: who is where when the shot opens, and which way they face, and anything lying around that must stay in the shot (bodies, fallen weapons, props) as the shot\'s pictures show it: later pictures do not carry them (one to three sentences).\n' +
       '- actions: the shot\'s BEATS. Each item is one beat, either a string (what happens) or {"do": what happens, "camera": what the camera does during this beat, only when it does something then, "sound": a sound heard at this moment, only when there is one, "seconds": the beat\'s length, only when it must be set (a quick look 1.5, a long walk 4); leave it out and the beats share the shot\'s length}. A camera move or a sound tied to one moment goes on its beat; what lasts the whole shot goes in camera, sounds and around.\n' +
-      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning. Read the shot\'s pictures in order and write what they show being done (crumbling something, pouring, lighting) and every step that gets from one picture to the next: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there, something now lit or open), write the action that brings it in, in its place (for example "He picks up the stone pestle from beside the bowl."), so nothing appears out of thin air. When someone leaves the frame, say they walk completely out of frame and are gone, give that about 2 seconds, and make the end say the frame is empty of them.\n' +   // v3.5.47
+      '- actions: what the characters do, in order, one action per item, at most one action for every 2.5 seconds of the shot. Put every movement here: entering, leaving, picking up, turning. Read the shot\'s pictures in order and write what they show being done (crumbling something, pouring, lighting) and every step that gets from one picture to the next: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there, something now lit or open), write the action that brings it in, in its place (for example "He picks up the stone pestle from beside the bowl."), so nothing appears out of thin air. When something is used up or destroyed, say what happens to it ("bursts into glittering dust", "crumbles"), never only that it vanishes or disappears. When someone leaves the frame, say they walk completely out of frame and are gone, give that about 2 seconds, and make the end say the frame is empty of them.\n' +   // v3.5.47
       (style.speech ? '- lines: what they say: {"who": exact cast name, "line": short, "during": the number of the action it is said during (1 = the first), or 0 for any time, "offscreen": true when the speaker is not in view; always name the speaker}. At most two short lines in a shot; an empty list when nobody should talk.\n'
         : '- lines: always an empty list in this style.\n') +
       '- camera: what the camera does across the whole shot (a move tied to one beat goes on that beat). If someone leaves the frame and is needed again, or the camera has to find someone, say how the camera moves to show it.\n' +
-      '- end: who is where when the shot ends, and which way they face.\n' +
+      '- end: who is where when the shot ends, and which way they face. Every change in where people are (someone sits back, stands, turns away) happens in a beat; the end only confirms it.\n' +
       '- sounds: sounds only, never actions.\n' +
       '- around: what the surroundings do (smoke, fire, weather, light), never the characters.\n' +
       '- seconds: the shot\'s length, a whole number from 4 to 15.\n\n' +
       'THE OVERALL DIRECTION is sent with every shot: one short paragraph (at most 600 characters) naming the setting, the mood and the light' + (ref ? '' : ', and each main character\'s look in words (build, hair, clothes, colours)') + '. Keep the art style as it is in the pictures.\n\n' +
+      'PURPOSE AND CONCEPT (v3.5.99): a shot\'s Purpose (what has to land in the story) and Concept (how it should look and feel) are the user\'s own words. Write the shot to deliver both. Where they and the story disagree, follow the user\'s words.\n\n' +
       'A SHOT WITH NO PICTURES YET was added for a moment the story needs; its first line below says what it is for. Write its notes from that and the story, as for any shot (it gets its pictures later).\n\n' +   // v3.5.58
       'RULES\n- Keep the names exactly as the story and the cast list write them.\n- Each action is at most 300 characters; every other field short.\n- Never describe a cut inside a shot; never move a picture to another shot.\n' +
       '- Write original words; never reproduce text from any published source.\n- Never put words, captions or titles on screen.\n\n' +
@@ -2427,10 +2794,10 @@ function shotListRequest(ctx, images) {
       const n = sh.keyframes.length, first = i + 1, last = i + n;
       if (!n) {
         const why = [textOf(sh.start_text), (function () { try { return (JSON.parse(sh.actions || '[]') || []).join(' '); } catch (e) { return ''; } })()].filter(Boolean).join(' ').slice(0, 800);
-        content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': NO PICTURES YET. It is for: ' + ([textOf(sh.purpose), why].filter(Boolean).join(' ') || 'a moment the story needs here') });
+        content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': NO PICTURES YET. It is for: ' + ([textOf(sh.purpose), why].filter(Boolean).join(' ') || 'a moment the story needs here') + (textOf(sh.concept) ? ' Its concept (how it should look and feel): ' + textOf(sh.concept) : '') });   // v3.5.99 concept
         return;
       }
-      content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(sh.purpose) ? ' Its purpose: ' + textOf(sh.purpose) : '') });   // v3.5.59
+      content.push({ type: 'text', text: (si ? '--- CUT ---\n' : '') + 'SHOT ' + (si + 1) + (sh.name ? ' ("' + sh.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(sh.purpose) ? ' Its purpose: ' + textOf(sh.purpose) : '') + (textOf(sh.concept) ? ' Its concept (how it should look and feel): ' + textOf(sh.concept) : '') });   // v3.5.59; v3.5.99 concept
       for (let k = 0; k < n; k++) pushPicture(i + k);
       i += n;
     });
@@ -2927,6 +3294,7 @@ async function pcShape(url) {
 }
 async function precheckContext(db, ep) {
   const ctx = await shotListContext(db, ep);
+  ctx.shots = ctx.allShots;   // v3.6.01: shots with no pictures are checked too
   const pool = await refsPool(db, ep).catch(function () { return { characters: [], assets: [] }; });
   ctx.mode = 'precheck';
   ctx.sig = cutSig(ctx.shots);
@@ -2935,7 +3303,8 @@ async function precheckContext(db, ep) {
   ctx.info = ctx.shots.map(function (s) {
     const w = shotWords(s) || legacyWords(s.keyframes, MODELS[ep.model]);
     const key = shotModelKey(ep.model, shotMode(s), shotModel(s)), mm = MODELS[key];   // v3.5.86: the shot's own model
-    return { id: s.id, name: s.name || '', words: w, refs: refsToSend(ep, w, shotRefs(s), pool, 12).map(function (p) { return p.name; }),
+    const rs = refsToSend(ep, w, shotRefs(s), pool, 12);   // v3.6.33: their pictures too, for a one-shot check
+    return { id: s.id, name: s.name || '', words: w, refs: rs.map(function (p) { return p.name; }), refPics: rs.filter(function (p) { return p.kind !== 'asset'; }).slice(0, 6).map(function (p) { return { name: p.name, url: p.url }; }),
       mode: mm.reference ? 'reference' : 'keyframes', modeSet: shotMode(s), model: mm.label + (mm.reference ? ' (Reference)' : ' (Keyframes)'),
       maxSecs: Math.min(SHOT_MAX_SECS, Math.max.apply(null, (mm.durations || ['15']).map(Number))),   // v3.5.79
       dealt: pcDealt(s) };
@@ -2947,7 +3316,7 @@ function precheckRequest(ctx, images) {
   const system = directorHead(ctx) +
     'YOUR JOB NOW: THE PRE-PRODUCTION CHECK. The shots, their words and their pictures are ready. Every take costs real money, so before any video is made, look at each shot and say plainly what will go wrong and how to fix it. Only real problems: if a shot is fine, say nothing about it.\n\n' +
     'THE TWO VIDEO MODES\n' +
-    '- REFERENCE: the model is given the shot\'s pictures and the cast\'s reference pictures as references and directs the shot itself from the words. The first picture is how it opens; later pictures only show the place, the light and who is there. Best when the pictures disagree on place, poses, facing or who is where.\n' +
+    '- REFERENCE: the model is given the shot\'s pictures and the cast\'s reference pictures as references and directs the shot from the words. Its first picture decides who is there and how they are laid out, but it is not a strict first frame: the model may redraw the setting or open with a move of its own and reach the picture later (v3.5.97, takes 85 and 86). A reference picture alone never brings anyone into the shot. When a shot must open exactly on its picture, Keyframes is the safe mode. Later pictures only show the place, the light and who is there. Best when the pictures disagree on place, poses, facing or who is where.\n' +
     '- KEYFRAMES: the video moves from each picture EXACTLY to the next one, morphing the first into the second. Best only when neighbouring pictures match closely: the same place, the same people in nearly the same poses and positions, a small change. When neighbouring pictures differ in place, in someone\'s pose or facing (a man carried with his head to the left in one picture and lying with his head to the right in the next), in who is holding what, or in who is where, a Keyframes take morphs nonsense.\n\n' +
     'WHAT TO LOOK FOR, SHOT BY SHOT\n' +
     '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
@@ -2955,12 +3324,24 @@ function precheckRequest(ctx, images) {
     // v3.5.83 (Ian: "should it recommend Keyframes when everyone is in the picture?... What I was hoping for was... to recommend
     // adding a reference image when someone isn't in the inital or any Keyframe"): the Keyframes preference is gone again.
     'NOT PICTURED (recommended): when someone or something that matters (a named character, an asset) appears in the shot but is in none of its pictures, the model can only guess what they look like. Say who, and in which beat they appear, and that they are not in the pictures. If the shot is in Keyframes mode, the fix is to switch to Reference (fix type "mode"); if it is already in Reference and they are not among the references sent, the fix is add_reference.\n' +
+    // v3.5.96 (Ian's MiniMax takes, 2026-11-12: the opening picture rules the shot in both modes; Ori's reference was sent and he
+    // never appeared; Emanon, Ori and Gubuk, in no picture, walked in on cue when a beat brought them in).
+    'NOT IN THE OPENING PICTURE (recommended): a reference picture alone never brings anyone into the shot. When someone named in the start, the beats or the end is not in the shot\'s FIRST picture, a beat must bring them in (they walk in, enter through a place the picture shows, arrive) or a camera move must reveal them BY NAME ("pans right to reveal Ori by the door"). When neither does, say who and that they will not appear, and give a beat fix that adds their entrance to the first beat they matter in (keeping that beat\'s own words), or suggest putting them in the opening picture.\n' +
+    'THE START AND THE OPENING PICTURE (recommended): the opening picture wins over the start words. When the start says something the first picture does not show (someone there who is not, sitting up when the picture has them lying down, another place or position), say what differs and give a words fix for the start box that describes the picture as it is, or suggest changing the picture. Leave the start alone when a beat explains the difference (the start has the diamond still in his coat and beat 1 draws it out: v3.5.97, take 84 got that right and the check broke it), and when you are not sure what the picture shows.\n' +
+    'DIRECTIONS AND DEPTH (recommended): where someone comes from or goes ("from the left", "from the back of the room", "in the background", "through the archway") loses when the picture or the path words disagree. "In the background" or "from the back" needs a place in the picture to come from, named (a doorway, an archway, a gap), and a path in depth ("toward us", "away from us", "behind the fallen shelves"); "enters from the left edge ... exits right" is a crossing at the front, and walking past someone in the foreground brings them forward. Give a beat fix that names the place in the picture and a path that matches.\n' +
     '2. gap: the story says something happens that the video must show and no picture covers (between two pictures of a shot, or between two shots). Read the story: if it explains a change (someone healed in turn, a later moment), that is not a mistake, but the video still has to get from one picture to the next. Suggest the missing picture: say after which picture number it goes and describe it in one or two sentences.\n' +
     '3. continuity: a person or prop that appears from nowhere: when a later picture shows something an earlier one does not (a tool now in a hand, a person now there) and no action brings it in, give a fix of type "words" for the actions box with the missing step written in its place (for example "He picks up the stone pestle from beside the bowl."); someone who leaves and is needed again in the same shot (a cut is the reliable fix); a change of place inside one shot.\n' +   // v3.5.48
     '4. words: words that fight the pictures or each other, an action placed in the Sound or Around boxes, more actions than the shot\'s length allows (about one action per 2.5 seconds), a shot of two or more pictures with no end (when there are more actions than the length allows, give a fix of type "seconds" with the length that fits, at most 15), someone who must leave the frame with too little time left to get all the way out at least 1 second before the shot ends (they stop at the edge; give a fix of type "seconds" or cut an action) or an end that still shows them after they leave. Offer replacement words for the one box to change.\n' +
+    // v3.5.96 (shot 2: the camera line still named the diamond a beat had used up, so it stayed whole)
+    'USED UP (recommended): when a beat uses something up, destroys it or makes it vanish (a diamond pressed in and gone, a scroll burned), later camera, sound, around or end words that still name it keep it on screen. Give a fix that drops it from those words. Prefer words that say what happens to it ("bursts into glittering dust") over "vanishes" or "disappears".\n' +
+    'TWO CAMERAS (recommended): a beat\'s camera and the whole-shot camera must agree. When one eases back and the other holds close, or one moves where the other is still, say which beat and give a fix for the one to change (v3.5.97).\n' +
+    'OUR ADDED LINES (recommended): a shot may list lines the video script adds by itself (leaving the frame). When one fights the words (it has someone leave who should not, or the words name a doorway), say so and give a beat fix that rewords the beat.\n' +
+    'GEAR: what a character carries is set by the words; their reference picture shows their looks, not what they must hold, and the video is told so. Never ask for reference gear to be explained or written in. Report only a real contradiction: the words have someone use an item that is in none of the pictures or references and no beat brings in.\n' +
     'BEATS: each action is a beat with its seconds (shown as "(0-3 s)"); judge crowding from those seconds, not by counting actions: a beat under about 2 seconds rarely shows a whole movement. A line shown inside a beat ([line said during this beat: ...]) is already tied to that beat and is sent with it: never say a line has no beat, never suggest moving a line, and never put a line in a sound box. People move and speak at the same time: never treat an action and a line as competing for the same seconds. Judge a line only by how long it takes to say, about 2.5 words a second (an 8-word line needs about 3 seconds).\n' +   // v3.5.76
     'KEEP THE USER\'S WORDS (v3.5.64, Ian: a suggestion threw away "run", a shouted line and a bloody flail): replacement words keep everything the user wrote, their verbs, details, lines and who does what, and change ONLY the part that causes the problem. Never rewrite a box to fix something in another box.\n' +
     'NO EMPTY FINDINGS: report only what needs changing. Never a finding that ends with "it is fine", "retain" or "no change needed", and never two findings with the same fix.\n' +
+    'A SHOT WITH NO PICTURES (v3.6.01): it can be made only in Reference mode, from its words and its references; if its mode is Keyframes, that is a "mode" finding (Reference). Skip every rule about an opening picture or keyframes for it. Its people come only from its references: anyone it names who is not among them will not appear. Its place comes only from the words, so its Opening must name the place and who is where.\n' +
+    'CONCEPT (v3.5.99): a shot\'s Concept is the user\'s intent for how it looks and feels. When the words fight it (it asks for a slow push in and the camera whips around), that is a finding of kind "words" with a fix that changes only that part. Where a Purpose or Concept and the story disagree, the user\'s words win: never report that difference.\n' +
     'PURPOSE: each shot\'s Purpose is the user\'s intent. When the words leave out part of it (the purpose says Drel takes the mirror from Ori and Ori is not in the shot) or do something it does not ask for, that is a finding of kind "words" with a fix that adds only what is missing. When a purpose describes what happens in another shot, say which shot and suggest no words.\n' +
     'TITLE CARDS: a title, logo or text-on-black picture as a shot\'s first picture is meant: the shot opens on it and moves into the scene (clouds, a fade). Never report it as a different kind of art, never tell them to drop it, and never take "opens on the title" out of the words.\n' +
     // v3.5.79 (Ian, 2026-11-11: the check should get people to an all clear; "Recommended vs Optional"; "It's too long you should cut between x and y beats")
@@ -2968,10 +3349,13 @@ function precheckRequest(ctx, images) {
     // v3.5.81 (Ian, 2026-11-11): the fix takes the line away too; every beat with a line is looked at
     'SPOKEN BY MISTAKE (recommended): a line\'s words are spoken aloud exactly as written. A line that is really a direction ("Chanting under his breath.", "whispers a prayer", "(muttering)") will be read out: say so, and give a beat fix with "remove_line": true that puts the direction in the beat\'s action (or the chanting in its sound); using the fix takes the line away.\n' +
     'SILENT AND SPEAKING (recommended): look at EVERY beat that has a line. If that beat\'s words say the speaker speaks silently, "silently speaks", mouths the words, speaks "without sound" or "words without sound", the line will still be said aloud or dropped: say which beat, and give a beat fix whose words say how the line is said (quietly, under his breath, hoarsely) instead. The reverse too: a beat that says someone speaks or calls out a line but has no line on it.\n' +
-    'THE CLOSING (recommended): the end must match where the last beat leaves people: who is where, standing or kneeling, what is in their hands. When it does not, give a words fix for the end box.\n' +
+    'THE CLOSING (recommended): the end must match where the last beat leaves people: who is where, standing or kneeling, what is in their hands. The video acts on the beats and treats the end only as where people must be: when the end asks for a change no beat makes (someone sits back, stands, turns away), give a beat fix that adds that move to the last beat (keeping its own words) rather than changing the end (v3.5.96: take 84, Drel sat back once his last beat said so). When the beats contradict the end, give a words fix for the end box. Compare the details too: where hands end up (in his lap or at his sides), standing or sitting, facing which way; when the last beat and the end disagree on one, give a fix that makes them agree. On EVERY shot whose camera ends close (a push-in, a close-up, "closing on" someone), check whether the end names people who will be outside that frame; when it does, say so: end the camera wider, or trim the end (v3.5.97: shot 3\'s camera closed on Drel while the end placed Gubuk and Ori).\n' +
     'TOO LONG (recommended): when the beats add up to more than the most this model makes (given with each shot), the shot must be cut in two. Give a finding of kind "cut" with a fix {"type": "cut", "after_beat": N}: the shot is cut between beat N and beat N+1. Pick the natural break (a change of subject, one action finished before the next starts), with each half no longer than the model makes.\n' +
     'ALREADY DEALT WITH: findings listed under a shot as already dealt with by the user were fixed or dismissed. Do not raise them again, in any wording.\n' +
     '5. reference: someone clearly on screen AND named in the shot\'s words who is not among the references sent. Never someone already sent, a background figure or a guess.\n' +
+    // v3.6.33 (Ian, 2026-11-14, shot 8: the Opening did not say who the first picture shows; Ori in the opening picture AND sent as a reference made two Oris in takes 127-128)
+    'WHO IS IN THE FIRST PICTURE (recommended): the start must name every person who can be seen in the shot\'s first picture, by name, where each is and which way they face, and no one else. When reference pictures are shown, use them to tell who is who. When the start leaves someone out, names someone who is not there, or puts someone in the wrong place, give a words fix for the start box that keeps the user\'s words and adds or corrects only that.\n' +
+    'IN THE PICTURE AND IN THE REFERENCES (optional): when someone is plainly in the shot\'s first picture and their reference picture is sent as well, the model may now and then add a second copy of them. Say so in one sentence, as optional, with no fix: if a take shows two of them, untick their reference.\n' +
     '6. style: only a picture that is plainly a different kind of art from the shot\'s other pictures (a photo among paintings, a flat cartoon among painted pictures, black and white among colour). The art style\'s name' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' is a loose label, not a test: never report that a picture is not that style, and never report differences of colour, light or detail.\n' +
     'LIKENESS: never judge whether a character in a picture looks like their reference (build, height, proportions, face, hair, clothing details): the reference picture is sent and the video follows it. Report only a picture where it plainly cannot be them (another skin colour, another kind of creature, a man where a woman should be).\n\n' +   // v3.5.50 (Ian, 2026-11-09: "it\'s saying this isn\'t Emanon because he\'s too bulky... a little over the top")
     'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
@@ -3002,8 +3386,10 @@ function precheckRequest(ctx, images) {
   let n = 0;
   ctx.shots.forEach(function (s, si) {
     const inf = ctx.info[si], w = inf.words, first = n + 1, last = n + s.keyframes.length;
-    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
+    const lines = ['--- SHOT ' + (si + 1) + (inf.name ? ' ("' + inf.name + '")' : '') + (s.keyframes.length ? ': picture' + (first === last ? ' ' + first : 's ' + first + ' to ' + last) + '.' : ': NO PICTURES (made from its words and its references only).') + (textOf(s.purpose) ? ' Purpose (the user\'s intent for this shot): ' + textOf(s.purpose) + '.' : '') + (textOf(s.concept) ? ' Concept (how the user wants it to look and feel): ' + textOf(s.concept) + '.' : '') + ' Made in ' + inf.mode.toUpperCase() + ' mode (' + inf.model + '), ' + w.seconds + ' seconds.'];
     lines.push('References sent: ' + (inf.refs.length ? inf.refs.join(', ') : 'none') + '.');
+    { const ours = exitLines(w, (ctx.cast || []).map(function (c) { return c.name; }).concat(inf.refs || []), w.seconds || 0);   // v3.5.96: our own added lines, so the check can see them fight the words
+      if (ours.length) lines.push('Lines our script adds for this shot: ' + ours.join(' ')); }
     { const bt0 = beatTimes(w), tot = bt0.length ? bt0[bt0.length - 1].to : 0;   // v3.5.79: too long for the model
       lines.push('The beats add up to ' + secsText(tot) + ' seconds; this model makes at most ' + inf.maxSecs + ' seconds' + (tot > inf.maxSecs + 0.25 ? ': TOO LONG, it must be cut.' : '.')); }
     if (inf.dealt.length) lines.push('Already dealt with by the user (do not raise again): ' + inf.dealt.map(function (t) { return '"' + t + '"'; }).join(' '));
@@ -3023,6 +3409,10 @@ function precheckRequest(ctx, images) {
       content.push({ type: 'text', text: 'Picture ' + (n + 1) + '. ' + p.words });
       if (images[n]) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: images[n] } });
       n++;
+    });
+    if (ctx.only === si && (ctx.refImages || []).length) ctx.refImages.forEach(function (r) {   // v3.6.33
+      content.push({ type: 'text', text: 'Reference picture of ' + r.name + ' (sent with this shot; shows how they look):' });
+      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: r.b64 } });
     });
   });
   content.push({ type: 'text', text: ctx.only != null ? 'Now the pre-production check for shot ' + (ctx.only + 1) + ' only, as JSON.' : 'Now the pre-production check for these ' + ctx.shots.length + ' shots, as JSON.' });
@@ -3136,6 +3526,11 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     if (ctx.only != null) { let a = 0; for (let k = 0; k < ctx.only; k++) a += ctx.shots[k].keyframes.length; lo = Math.max(0, a - 1); hi = Math.min(ctx.pictures.length - 1, a + ctx.shots[ctx.only].keyframes.length); }
     for (let i = 0; i < ctx.pictures.length; i++) shapes.push(i >= lo && i <= hi ? await pcShape(ctx.pictures[i].url) : null);
     const images = shapes.map(function (s, i) { return s && (ctx.only != null || i < SL_MAX_IMAGES) ? s.b64 : null; });
+    // v3.6.33: checking one shot, its characters' reference pictures are shown too, so the check can say who is in the first picture
+    if (ctx.only != null && ctx.info[ctx.only]) {
+      ctx.refImages = [];
+      for (const p of (ctx.info[ctx.only].refPics || [])) { const b = await pictureForModel(p.url); if (b) ctx.refImages.push({ name: p.name, b64: b }); }
+    }
     const req = precheckRequest(ctx, images);
     for (let attempt = 1; attempt <= 2 && !result; attempt++) {
       const r = await callShotListModel(key, req);
@@ -3179,7 +3574,7 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
     const shots = ep ? await tx.prepare('SELECT * FROM shots WHERE episode_id = ? ORDER BY position, id').all(episodeId) : [];
     const kfs = ep ? await tx.prepare('SELECT * FROM keyframes WHERE episode_id = ? ORDER BY shot_id, position, id').all(episodeId) : [];
     shots.forEach(function (s) { s.keyframes = kfs.filter(function (k) { return k.shot_id === s.id; }); });
-    const live = shots.filter(function (s) { return s.keyframes.length; });
+    const live = shots;   // v3.6.01: a shot with no pictures gets its findings too
     // v3.5.37: the episode stays open during the check, so a shot may have changed meanwhile. Each shot still there gets its
     // findings, signed to the shot as it was checked (a changed one reads "Changed since the check"); a shot removed since
     // gets none. Only when none of the checked shots is left does the check fail, with nothing charged.
@@ -3221,7 +3616,8 @@ async function runPrecheck(jobId, episodeId, userId, ctx, prices, key, tokens) {
 // are written; everything the user wrote stays. The shots before and after are read so the words follow on. 1 token
 // (app_settings video_fill_tokens), charged only when something was written. Answered at once, no job.
 // =================================================================================================
-const FILL_BOXES = { start: 'Opening (the first frame: who is where, facing which way, and the place)', end: 'Closing (the last frame: where everyone is and how they stand)', camera: 'Camera across the whole shot', sounds: 'Sounds heard all the way through', around: 'What is happening around them (weather, fire, crowds)' };
+const FILL_BOXES = { start: 'Opening (the first frame only: who is where, facing which way, and the place; no one enters, moves or speaks in it, the entrances happen in the beats)',   // v3.6.01
+  end: 'Closing (the last frame: where everyone is and how they stand)', camera: 'Camera across the whole shot', sounds: 'Sounds heard all the way through', around: 'What is happening around them (weather, fire, crowds)' };
 async function fillTokens(db) {
   let v = null;
   try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_fill_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
@@ -3232,6 +3628,45 @@ function fillWordsText(w, label) {
   const t = beatTimes(w);
   return label + ':\n' + ['Opening: ' + (w.start || '(empty)'), 'Beats: ' + (w.actions.length ? w.actions.map(function (a, i) { return (i + 1) + '. (' + secsText(t[i].from) + '-' + secsText(t[i].to) + ' s) ' + a + w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return ' [' + (l.who || 'a voice') + (l.off ? ', off screen' : '') + ': "' + l.text + '"]'; }).join(''); }).join(' ') : '(none)'),
     'Camera: ' + (w.camera || '(empty)'), 'Sounds: ' + (w.sounds || '(empty)'), 'Around them: ' + (w.around || '(empty)'), 'Closing: ' + (w.end || '(empty)'), 'Length: ' + w.seconds + ' s'].join('\n');
+}
+// v3.6.01 -- A SHOT'S OWN NOTES WRITE REAL LINES (Ian, 2026-11-12: "I would have liked it to write the dialog in the beats from either
+// the story or from my concepts"). Shot 4's Notes had put the talk into the beats' words as [Drel: "..."], where no timing check,
+// voice rule or line ever saw it, and squeezed 22 seconds of talk into 15. Now the lines come back as lines, each beat lasts as long
+// as its lines take to say, and a shot that needs more than its model makes keeps all of it: the page says where to cut.
+const LINE_WPS = 2.5;   // words a second
+function lineSecs(text) { const n = String(text || '').trim().split(/\s+/).filter(Boolean).length; return n ? n / LINE_WPS + 1 : 0; }   // plus a breath: lines land about a second late (takes 69 to 77)
+// A line the Director still wrote into a beat ([Drel: "..."]) becomes a line of that beat.
+function liftLines(items, lines) {
+  items.forEach(function (it, i) {
+    it.a = it.a.replace(/\s*\[([^\]:"]{1,60}):\s*["\u201c]([^"\u201d]+)["\u201d]\s*\]\s*/g, function (all, who, text) {
+      if (!lines.some(function (l) { return l.text === text.trim(); })) lines.push({ who: who.trim(), text: text.trim(), when: i + 1, off: false });
+      return ' ';
+    }).replace(/\s{2,}/g, ' ').trim();
+  });
+  return lines;
+}
+// Each beat at least as long as its lines (2.5 s when it has none and gave none); never squeezed to the model's length.
+function fillSized(items, lines, maxSecs) {
+  const beats = items.map(function (it, i) {
+    const say = lines.filter(function (l) { return l.when === i + 1; }).reduce(function (t, l) { return t + lineSecs(l.text); }, 0);
+    const secs = Math.max(it.secs > 0 ? it.secs : 2.5, say);
+    return { camera: it.camera || '', sound: it.sound || '', secs: Math.min(SHOT_MAX_SECS, Math.ceil(secs * 2) / 2) };
+  });
+  let total = 0, cutAfter = 0;
+  beats.forEach(function (b, i) { total += b.secs; if (total <= maxSecs + 0.01) cutAfter = i + 1; });
+  return { beats: beats, total: total, over: total > maxSecs + 0.01, cutAfter: cutAfter >= 1 && cutAfter < beats.length ? cutAfter : 0 };
+}
+// The story behind one shot, as its Purpose and Concept window shows it, for the Director.
+function shotStoryText(x) {
+  if (!x) return '';
+  const out = [];
+  (x.pictures || []).forEach(function (p, i) {
+    if (p.kind !== 'story') return;
+    out.push('Picture ' + (i + 1) + ' "' + p.title + '"' + (p.shows ? ', showing: ' + p.shows : '') + (p.before ? '\nThe story before it: ' + p.before : '') + (p.after ? '\nThe story after it: ' + p.after : ''));
+  });
+  if (x.gap) out.push('This shot has no story pictures; the story where it sits' + (x.gap.after ? ':\n' + (x.gap.after_title ? 'After "' + x.gap.after_title + '": ' : '') + x.gap.after : '') +
+    (x.gap.before ? '\n' + (x.gap.before_title ? 'Before "' + x.gap.before_title + '" (that picture belongs to the next shot; only the part before it belongs here): ' : '') + x.gap.before : ''));
+  return out.join('\n\n');
 }
 router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, res) {
   const FN = 'POST /api/video-lab/shots/' + req.params.id + '/fill';
@@ -3256,21 +3691,54 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     const at = all.findIndex(function (x) { return x.id === shot.id; });
     const prev = at > 0 ? shotWords(all[at - 1]) : null, next = at >= 0 && at < all.length - 1 ? shotWords(all[at + 1]) : null;
     const pool = await refsPool(db, ep).catch(function () { return { characters: [], assets: [] }; });
-    const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of strings, about one for every 2.5 seconds of its ' + w.seconds + ' seconds'] : []);
-    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Reply with JSON only, with just the boxes asked for.';
+    const speech = !!styleFor(ep.style).speech, askLines = noBeats && speech && !w.lines.length;   // v3.6.01
+    const sKey = shotModelKey(ep.model, shotMode(shot), shotModel(shot)), sm = MODELS[sKey] || MODELS[ep.model] || {};
+    const maxSecs = Math.min(SHOT_MAX_SECS, Math.max.apply(null, (sm.durations || ['15']).map(Number)));
+    let story = '';
+    try { const ss = await shotStories(db, ep); story = shotStoryText(ss.shots.filter(function (x) { return x.id === shot.id; })[0]); } catch (e) { story = ''; }
+    const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of {"do": what happens, in plain words with no spoken words in it, "seconds": how long it takes}'] : [])
+      .concat(askLines ? ['"lines": what is said, in order, a list of {"who": a name from the Characters, "line": the exact words, "during": the number of the beat it is said in, "offscreen": false}'] : []);
+    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Name each person on screen by name; never vague words for people (the others, the party, the group, people, everyone, each character), as the video model invents people to fill them; a nameless crowd is the only exception. The Opening names every person who can be seen in the shot\'s first picture (shown below), by name, where each one is and which way they face; tell who is who from the reference pictures shown; someone seen only as a face in a mirror or a vision is said to be only that; name no one who is not in the first picture. Reply with JSON only, with just the boxes asked for.' +
+      (noBeats ? ' THE BEATS (v3.6.01): what the user wants is in the Purpose and Concept; follow them, and the story where they say nothing. The Opening is the first frame only: entrances, moves and speech happen in the beats. Give every beat its seconds. A beat with a line lasts at least as long as the line takes to say (about 2.5 words a second, plus a second). Never squeeze: if it all needs more than ' + maxSecs + ' seconds, still write all of it with honest seconds; the user is told where to cut.' : '') +
+      (askLines ? ' THE LINES: when the Concept gives words to say, use them word for word, in its order, and fix only spelling; when it gives none, take them from the story; otherwise write none. Every line goes in "lines", never inside a beat\'s "do".' : '');
     const text = ['Overall direction: ' + (ep.overall || '(none)'), 'Characters: ' + (pool.characters.map(function (c) { return c.name; }).join(', ') || '(none)'),
-      'Shot ' + (at + 1) + (shot.name ? ' "' + shot.name + '"' : '') + (shot.purpose ? '. Purpose: ' + shot.purpose : ''),
+      'Shot ' + (at + 1) + (shot.name ? ' "' + shot.name + '"' : '') + (shot.purpose ? '. Purpose: ' + shot.purpose : '') + (shot.concept ? '. Concept: ' + shot.concept : ''),   // v3.5.99 concept
       fillWordsText(w, 'THIS SHOT, as written so far'), prev ? fillWordsText(prev, 'THE SHOT BEFORE') : 'This is the first shot.', next ? fillWordsText(next, 'THE SHOT AFTER') : 'This is the last shot.',
+      story ? 'THE STORY BEHIND THIS SHOT:\n' + story : 'The story has nothing written for this shot.',   // v3.6.01
       'Write these boxes: {' + ask.join(', ') + '}'].join('\n\n');
     const prices = await shotListPrices(db);
-    const r = await callShotListModel(key, { max_tokens: 1500, system: system, content: [{ type: 'text', text: text }] });
+    // v3.6.33 (Ian, 2026-11-14): the Director sees the shot's first and last pictures and its characters' reference pictures, so the
+    // Opening it writes names who is in the first picture. A picture that cannot be read is left out.
+    const fillPics = [];
+    try {
+      const kf = await db.prepare('SELECT image_url FROM keyframes WHERE shot_id = ? ORDER BY position, id').all(shot.id);
+      const picks = kf.length ? [{ url: kf[0].image_url, label: 'The shot\'s FIRST picture (how it opens):' }].concat(kf.length > 1 ? [{ url: kf[kf.length - 1].image_url, label: 'The shot\'s LAST picture:' }] : []) : [];
+      refsToSend(ep, w, shotRefs(shot), pool, 6).filter(function (p) { return p.kind !== 'asset'; }).forEach(function (p) { picks.push({ url: p.url, label: 'Reference picture of ' + p.name + ' (how they look, to tell who is who; it adds no one):' }); });
+      for (const p of picks) { const b = await pictureForModel(p.url); if (b) fillPics.push({ type: 'text', text: p.label }, { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b } }); }
+    } catch (e) { console.warn('[video] shot notes: pictures not read (' + (e && e.message) + ')'); }
+    const r = await callShotListModel(key, { max_tokens: 1500, system: system, content: [{ type: 'text', text: text }].concat(fillPics) });
     if (r.error) return vlRefuse(req, res, FN, 502, 'The Director could not be reached (' + r.error + '). Nothing was charged.');
     const j = readJson(r.text) || {};
     const got = {};
     empty.forEach(function (k) { if (typeof j[k] === 'string' && j[k].trim()) got[k] = j[k].trim(); });
-    if (noBeats && Array.isArray(j.actions)) { const a = j.actions.map(textOf).filter(Boolean).slice(0, 12); if (a.length) got.actions = a; }
+    let sized = null;
+    if (noBeats && Array.isArray(j.actions)) {   // v3.6.01: beats with their seconds, and the lines as lines
+      const items = j.actions.map(function (a) {
+        if (a && typeof a === 'object') return { a: textOf(a.do != null ? a.do : (a.action != null ? a.action : a.text)), camera: textOf(a.camera), sound: textOf(a.sound), secs: parseFloat(a.seconds) || null };
+        return { a: textOf(a), camera: '', sound: '', secs: null };
+      }).filter(function (it) { return it.a; }).slice(0, 12);
+      let lines = askLines && Array.isArray(j.lines) ? j.lines.map(function (l) { l = l || {}; return { who: textOf(l.who), text: textOf(l.line != null ? l.line : l.text), when: parseInt(l.during != null ? l.during : l.when, 10) || 0, off: !!l.offscreen }; }).filter(function (l) { return l.text; }) : [];
+      if (askLines) lines = liftLines(items, lines);
+      if (items.length) {
+        sized = fillSized(items, lines, maxSecs);
+        got.actions = items.map(function (it) { return it.a; }).filter(Boolean);
+        got.beats = sized.beats;
+        got.seconds = Math.min(maxSecs, Math.max(SHOT_MIN_SECS, Math.ceil(sized.total)));
+        if (lines.length) got.lines = lines;
+      }
+    }
     if (!Object.keys(got).length) return vlRefuse(req, res, FN, 502, 'The Director\u2019s answer had nothing usable. Nothing was charged; try again.');
-    const merged = cleanWords(Object.assign({}, w, got, { beats: got.actions ? null : w.beats }));
+    const merged = cleanWords(Object.assign({}, w, got, { beats: got.actions ? got.beats : w.beats }));   // v3.6.01 the sized beats
     await db.transaction(async function (tx) {
       await writeWords(tx, shot.id, merged);
       await tx.prepare('UPDATE shots SET precheck = NULL WHERE id = ?').run(shot.id);
@@ -3279,7 +3747,9 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     await tk.spendTokens(req.session.userId, tokens, { source: 'video_shot_fill', event_type: 'generation_spend', related_campaign_id: ep.campaign_id });
     const usd = Math.round(usdFor(prices, Number((r.usage && r.usage.input_tokens) || 0), Number((r.usage && r.usage.output_tokens) || 0)) * 10000) / 10000;
     vlDebug(req.session.userId, 'info', FN, 'Filled ' + Object.keys(got).join(', ') + ' for ' + tokens + ' token(s), $' + usd + ' to Campaignia', { usage: r.usage });
-    res.json({ ok: true, filled: Object.keys(got), tokens: tokens, episode: await loadEpisode(db, ep.id) });
+    const note = sized && sized.over ? 'The beats need about ' + secsText(sized.total) + ' s and ' + (sm.label || 'this model') + ' makes at most ' + maxSecs + ' s, so nothing was squeezed: ' +   // v3.6.01
+      (sized.cutAfter ? 'press \u2702 Cut here under beat ' + sized.cutAfter + ' to make the rest a new shot, or shorten it.' : 'shorten it, or cut it into two shots.') : '';
+    res.json({ ok: true, filled: Object.keys(got).filter(function (k) { return k !== 'beats' && k !== 'seconds'; }), tokens: tokens, note: note, episode: await loadEpisode(db, ep.id) });
   } catch (e) {
     console.error('[video] shot fill error:', e && e.message);
     vlDebug(req.session && req.session.userId, 'error', FN, 'Could not fill: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });
@@ -3296,12 +3766,12 @@ router.post('/episodes/:id/precheck', requireAuth, requireVideo, async function 
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) return vlRefuse(req, res, FN, 500, 'The Director is not set up on this server (ANTHROPIC_API_KEY).');
     const ctx = await precheckContext(db, ep);
-    if (!ctx.pictures.length) return vlRefuse(req, res, FN, 400, 'This episode has no keyframes.');
+    if (!ctx.shots.length) return vlRefuse(req, res, FN, 400, 'This episode has no shots.');   // v3.6.01: shots with no pictures count
     // v3.5.38 (Ian, 2026-11-09): shot_id checks that one shot (1 token); none checks them all (2 tokens).
     const shotId = parseInt((req.body || {}).shot_id, 10) || null;
     if (shotId) {
       ctx.only = ctx.shots.findIndex(function (s) { return Number(s.id) === shotId; });
-      if (ctx.only < 0) return vlRefuse(req, res, FN, 400, 'That shot has no keyframes, or is not in this episode.');
+      if (ctx.only < 0) return vlRefuse(req, res, FN, 400, 'That shot is not in this episode.');   // v3.6.01
     }
     const tokens = shotId ? await precheckShotTokens(db) : await precheckTokens(db);
     const bal = await require('./tokens').getBalance(req.session.userId);

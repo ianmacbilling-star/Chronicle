@@ -500,10 +500,16 @@ async function releaseImage(db, fileUrl) {
       ['SELECT 1 FROM moments WHERE layout_meta LIKE ? LIMIT 1', ['%' + String(fileUrl).replace(/[%_]/g, '') + '%']],
       ['SELECT 1 FROM campaign_archives WHERE image_url = ? LIMIT 1', [fileUrl]],
       ['SELECT 1 FROM public_story_images WHERE image_url = ? LIMIT 1', [fileUrl]],
-      ['SELECT 1 FROM builder_images WHERE image_url = ? OR prev_image_url = ? OR clean_image_url = ? OR prev_clean_image_url = ? LIMIT 1', [fileUrl, fileUrl, fileUrl, fileUrl]]   // v3.3.71 -- TD-1080; v3.3.85 -- the clean copies
+      ['SELECT 1 FROM builder_images WHERE image_url = ? OR prev_image_url = ? OR clean_image_url = ? OR prev_clean_image_url = ? LIMIT 1', [fileUrl, fileUrl, fileUrl, fileUrl]],   // v3.3.71 -- TD-1080; v3.3.85 -- the clean copies
+      // v3.6.31 (Ian, 2026-11-14, shot 8: a Save frame picture is the shot's picture AND its Archive entry; taking it out of the
+      // Archive deleted the file the shot still used, and three takes failed at fal). A video shot's picture, or its Revert, keeps
+      // the file. Optional: an environment that never made the video tables has nothing to keep.
+      ['SELECT 1 FROM keyframes WHERE image_url = ? OR prev_image_url = ? LIMIT 1', [fileUrl, fileUrl], true]
     ];
     for (let i = 0; i < checks.length; i++) {
-      const row = await db.prepare(checks[i][0]).get(...checks[i][1]);
+      let row;
+      try { row = await db.prepare(checks[i][0]).get(...checks[i][1]); }
+      catch (ce) { if (checks[i][2] && /does not exist/i.test(String(ce && ce.message))) continue; throw ce; }   // v3.6.31: an optional table
       if (row) return; // still referenced somewhere — keep the file
     }
     await deleteFile(fileUrl);

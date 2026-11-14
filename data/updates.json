@@ -1,5 +1,791 @@
 [
   {
+    "version": "3.6.34",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3634-vid-lines-outlined",
+        "kind": "change",
+        "public": false,
+        "summary": "Video lines go to the model on their own lines.",
+        "detail": "Takes 131 to 133 had something said before the first line. Each line is now sent as just the speaker and the words, on its own line with a blank line either side, under its beat, followed by any silence.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.33",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3633-vid-opening-names",
+        "kind": "change",
+        "public": false,
+        "summary": "The Director's Opening names everyone in the shot's first picture.",
+        "detail": "Episode and shot Notes write who can be seen in the first picture, where each is and which way they face, and no one else. A shot's Notes now see its first and last pictures and its characters' reference pictures.",
+        "td": []
+      },
+      {
+        "id": "3633-vid-check-who",
+        "kind": "change",
+        "public": false,
+        "summary": "Checking one shot looks at who is in its first picture.",
+        "detail": "The check sees the shot's reference pictures, fixes an Opening that leaves someone out or names someone who is not there, and notes (optional) when someone is in the picture and sent as a reference too.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.32",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3632-vid-word-for-word",
+        "kind": "change",
+        "public": false,
+        "summary": "Video lines are said word for word, and a beat longer than its lines ends in silence.",
+        "detail": "Take 131's Oya mumbled before her line in a beat longer than the line. Each line is now sent as exactly these words, nothing before or after, and the time a beat has beyond its lines is asked for as silence.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.31",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3631-vid-keep-pictures",
+        "kind": "fix",
+        "public": false,
+        "summary": "Taking a picture out of the Archive no longer deletes it from a video shot that uses it.",
+        "detail": "A Save frame picture is both the shot's picture and its Archive entry; turning its Archived pill off deleted the file, and the shot's takes then failed at fal. The file is now kept while any shot (or its Revert) uses it.",
+        "td": []
+      },
+      {
+        "id": "3631-vid-check-pictures",
+        "kind": "fix",
+        "public": false,
+        "summary": "A take checks its pictures before anything is charged.",
+        "detail": "A picture missing from storage but still in the cache is saved back to its address; one that is gone is named, and nothing is charged.",
+        "td": []
+      },
+      {
+        "id": "3631-vid-where-named",
+        "kind": "change",
+        "public": false,
+        "summary": "The References hint says where a character is named.",
+        "detail": "For example: Emanon is named in the Closing but not in References.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.30",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3630-vid-vague-people",
+        "kind": "change",
+        "public": false,
+        "summary": "Video shots warn about vague words for people.",
+        "detail": "Words like the others, the party, the group, people or each character get a warning on their box asking for names, since the model invents people to fill them. Nameless crowds (soldiers, villagers) are fine. The Director now always names people in what it writes.",
+        "td": []
+      },
+      {
+        "id": "3630-vid-heading-spoken",
+        "kind": "fix",
+        "public": false,
+        "summary": "A character no longer says the prompt's heading aloud.",
+        "detail": "Take 119's Oya said What happens before her line. The heading now reads as a direction, and every prompt with lines says nothing else written is said aloud.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.29",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3629-audio-apply",
+        "kind": "fix",
+        "public": false,
+        "summary": "Put it in the Story box now says what went wrong instead of closing silently.",
+        "detail": "The transcribe window stays open under the Append / Replace question, so any failure is shown in it with the reason, and the transcript is kept for another try.",
+        "td": []
+      },
+      {
+        "id": "3629-audio-trial-note",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Free Trial's first-20-minutes note shows only when the recording was longer.",
+        "detail": "A short trial recording that came back whole no longer says only the first 20 minutes were transcribed.",
+        "td": []
+      },
+      {
+        "id": "3629-audio-samples",
+        "kind": "fix",
+        "public": false,
+        "summary": "Speaker sample lines show the words as spoken, on both brands.",
+        "detail": "On the Story brand the naming window's sample lines had Session changed to Chapter; they are quotes from the recording, so they are no longer changed.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.28",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3628-vid-no-copy",
+        "kind": "change",
+        "public": false,
+        "summary": "Video takes are told that anyone who moves leaves no copy behind.",
+        "detail": "A character who got up could also stay where they had been. Every prompt now says anyone who moves or leaves their place goes entirely, and the spot they left stays empty.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.27",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3627-take-icons",
+        "kind": "change",
+        "public": false,
+        "summary": "A take's Download and Copy link buttons are now icons.",
+        "detail": "Video: the download arrow and a chain link, with their tooltips, so a take's buttons fit on one line.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.26",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3626-vid-prompt-cap",
+        "kind": "fix",
+        "public": false,
+        "summary": "Long video prompts are no longer cut off mid-word.",
+        "detail": "Words over 6,000 characters were cut wherever they reached the limit. Now the least needed lines are left out first (Around them, then Overall, then Sound), and any cut ends at a full stop.",
+        "td": []
+      },
+      {
+        "id": "3626-info-dblclick-fix",
+        "kind": "fix",
+        "public": false,
+        "summary": "Double-clicking a take's Info button now copies its info.",
+        "detail": "The first click opened the window, so the second missed the button; it is caught on the window's backdrop instead.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.25",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3625-vid-cast-once",
+        "kind": "change",
+        "public": false,
+        "summary": "Video takes are told that the people in the opening picture are the cast.",
+        "detail": "A take could show a character twice: once as they stand in the opening picture and again from their own reference picture. When a shot has both, the prompt now says each character appears once, and anyone not in the opening picture comes into view as the words say.",
+        "td": []
+      },
+      {
+        "id": "3625-info-dblclick",
+        "kind": "change",
+        "public": false,
+        "summary": "Double-click a take's Info button to copy its info.",
+        "detail": "Video (admins): the info is copied to the clipboard without leaving the window open.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.24",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3624-vid-once",
+        "kind": "change",
+        "public": false,
+        "summary": "Video takes are told that everyone is in the shot once only, and that only the written lines are spoken.",
+        "detail": "As the camera turned, a take could add extra copies of people, and a character with no line could still talk. Every prompt now says those already seen keep their places and nobody appears twice, and when a shot has lines, that no one else speaks.",
+        "td": []
+      },
+      {
+        "id": "3624-view-play",
+        "kind": "change",
+        "public": false,
+        "summary": "A take's View window starts playing as soon as it opens.",
+        "detail": "Video: press View and the take plays.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.23",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3623-view-load",
+        "kind": "fix",
+        "public": false,
+        "summary": "A take's View window now plays a video that the card has already started.",
+        "detail": "Video: the browser lets one player at a time read a video from its cache, so View could sit at 0:00 behind the card's player with no error. View now pauses the page's other videos and loads its own copy, and if a video still does not load it says so and offers Retry.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.22",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3622-audio-trial",
+        "kind": "change",
+        "public": false,
+        "summary": "On the Free Trial, Audio Transcription does the first 20 minutes of a recording.",
+        "detail": "A quick proof it works, for 4 tokens at most: it is an expensive feature and trial tokens cannot be topped up. The window says so before you start and again when the words come back; Gold and Platinum transcribe the whole recording. The tier grid shows it, and the window's plan message no longer mentions members: transcribing is the Story Master's, since the Story box is theirs.",
+        "td": [
+          "TD-1046"
+        ]
+      },
+      {
+        "id": "3622-audio-junk",
+        "kind": "fix",
+        "public": false,
+        "summary": "A file that is not audio now gets a plain message.",
+        "detail": "Instead of the converter's own output, the window says it could not read the file as audio and suggests mp3, m4a or wav. A tiny file that cannot be read is refused before it uploads.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.21",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3621-audio-length",
+        "kind": "fix",
+        "public": false,
+        "summary": "Transcribe a recording shows the length to the second.",
+        "detail": "A 5 h 45 m 36 s file showed as 5 h 45 m, so the price (2 tokens for each started 15 minutes) looked 2 tokens too high. The length is now shown in full, rounded up the same way as the price.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.20",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3620-asset-done",
+        "kind": "fix",
+        "public": false,
+        "summary": "Done saves a new asset even without a picture.",
+        "detail": "Assets: a new asset with a name is created when you press Done, picture or not. Before, everything typed was thrown away unless you uploaded or generated a picture. An asset with no name says so instead of closing.",
+        "td": []
+      },
+      {
+        "id": "3620-dialog-race",
+        "kind": "fix",
+        "public": false,
+        "summary": "Adding an asset or a character can no longer overwrite the one before it.",
+        "detail": "If a picture upload, a generation or a character save finished after the dialog had been closed and opened again, its answer was written into the new dialog, and the next save renamed the previous asset or character. Late answers now leave a reopened dialog alone, and a change still waiting to save is sent when the asset dialog closes.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.19",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3619-beat-secs",
+        "kind": "change",
+        "public": false,
+        "summary": "A beat's Seconds box now sits by the beat's label, away from the up and down arrows.",
+        "detail": "Video, a shot's beats: the arrows that move a beat were too easy to hit when meaning to change its seconds.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.18",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3618-story-box-sm",
+        "kind": "fix",
+        "public": false,
+        "summary": "Import from file and Transcribe a recording are for the Story Master only.",
+        "detail": "The Story box is the Story Master's. A member could see both buttons, put text into a box that cannot save, and with Transcribe pay for it. The buttons are now the Story Master's, a read-only box takes nothing, and the server refuses a transcription from anyone else.",
+        "td": [
+          "TD-1046"
+        ]
+      },
+      {
+        "id": "3618-audio-price",
+        "kind": "change",
+        "public": false,
+        "summary": "Audio Transcription costs 2 tokens for each started 15 minutes.",
+        "detail": "Still 8 tokens an hour, but a short clip now costs 2 tokens instead of 4. The top bar shows the charge straight away, and if fewer speakers come back than you said, the window says so.",
+        "td": [
+          "TD-1046"
+        ]
+      },
+      {
+        "id": "3618-player-name-locked",
+        "kind": "change",
+        "public": false,
+        "summary": "You can change the Player Name on your character even when the campaign is locked.",
+        "detail": "Characters tab: a Player name button on your own character's card while a session is Ready. It names a real person, so it is not part of the locked story.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.17",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3617-gen-tips",
+        "kind": "change",
+        "public": false,
+        "summary": "Generate Narrative and Generate Images now say what they do when you hover over them.",
+        "detail": "Review: Generate Narrative & Images. Storyboard: Generate Narrative (your pictures stay as they are) and Generate Images (locked pictures are kept, the rest are regenerated).",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.16",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3616-gen-story-tip",
+        "kind": "change",
+        "public": false,
+        "summary": "Generate Story now says what it does when you hover over it.",
+        "detail": "Story tab: the Generate Story button's tooltip explains that this is where it begins: the key moments, the characters and the outline to review, before the narrative and the illustrations.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.15",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3615-audio-keyterms",
+        "kind": "change",
+        "public": false,
+        "summary": "Audio Transcription listens for your Asset names and the names in your lore.",
+        "detail": "Besides the character, campaign and session names, the transcription service is now told the Asset Library's names and the proper names in the campaign lore and character descriptions, so made-up places and people come out spelled right.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.14",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3614-audio-players",
+        "kind": "change",
+        "public": false,
+        "summary": "Audio Transcription's name boxes offer your campaign's Player Names.",
+        "detail": "When the words are back, each speaker's box lists the Player Names from the campaign's characters to pick from, or you can type any name. For a game session, use the Player Name.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.13",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3613-audio-gold",
+        "kind": "feature",
+        "public": false,
+        "summary": "Audio Transcription is open to Gold, Platinum and the Free Trial.",
+        "detail": "Turn a recording of a session, an interview or a narrated story (up to 6 hours) into text in the Story box. Members get it from their Story Master's plan and pay with their own tokens. It is on the tier grid and the speaker-name boxes look like the rest of the app.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.12",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3612-audio-long",
+        "kind": "fix",
+        "public": false,
+        "summary": "Transcribe a recording now takes long recordings (up to 6 hours).",
+        "detail": "The transcription service takes 20 minutes at a time, so our server now makes a small speech copy, cuts it into overlapping parts, sends them all at once and joins the words back, keeping each speaker the same person across the parts. The original is deleted as soon as the copy is made.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.11",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3611-audio-btn",
+        "kind": "change",
+        "public": false,
+        "summary": "Transcribe a recording sits beside Import from file, on the right above the Story box, with the same arrow.",
+        "detail": "Story tab: the two buttons are together on the right; the window says only that the recording goes to our transcription service and is deleted as soon as the words come back.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.10",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3610-audio-reasons",
+        "kind": "fix",
+        "public": false,
+        "summary": "Transcribe a recording: when fal refuses, the window shows fal's reasons, and every step goes to the log and to Debug Mode.",
+        "detail": "A first test stopped at 'fal: Unexpected status code: 422' with no reason. Now each step (start and its refusals, the upload, what was sent to fal, fal's whole answer on a failure, the result's word and speaker counts, the deletion of the recording) is written to the server log and, with Debug Mode on, to the person's debug log. The signed address and the words of a transcript are never logged.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.09",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3609-transcribe",
+        "kind": "feature",
+        "public": false,
+        "summary": "Transcribe a recording: turn a recording of a session into text in the Story box (first draft, admins only).",
+        "detail": "Story tab: Transcribe a recording, beside Import from file, takes an audio file, shows its length and price (8 tokens an hour, charged only when the words come back), uploads it straight to private storage and has fal's ElevenLabs Scribe v2 write it out with speakers told apart. You name each speaker (or leave them out) and the text goes into the Story box. The recording is deleted as soon as the words are back.",
+        "td": [
+          "TD-1046"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.08",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3608-take-view",
+        "kind": "change",
+        "public": false,
+        "summary": "A take's Trim button is now View: a bigger window you can resize from its corner, with Save frame and Last frame.",
+        "detail": "Video tab: View opens the take large (drag the bottom-right corner to resize). Save frame and Last frame moved there from the take card; trimming works as before (Save is now Save trim).",
+        "td": [
+          "TD-1135"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.07",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3607-use-frame",
+        "kind": "feature",
+        "public": false,
+        "summary": "Use this frame: save a frame of a take for the next shot, another shot or the Archive.",
+        "detail": "Video tab: Save frame on a take saves the frame its player is paused on; Last frame saves its end. Either one asks where it goes: the next shot's first picture, a shot you pick (as its first picture), or the Archive only. It is always saved in the campaign's Archive, labelled with the take's code and the time, so any episode can use it. Free.",
+        "td": [
+          "TD-1135"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.06",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3606-cpk-pinned",
+        "kind": "feature",
+        "public": false,
+        "summary": "Copy a take: a Pinned only box shows just the take each shot uses.",
+        "detail": "Video tab, Copy a take window: tick Pinned only to see only the pinned take of each shot (the one its episode uses); it works with the Version, Episode and Shot filters. Pinned takes carry the pin on their card.",
+        "td": [
+          "TD-1136"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.05",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3605-copy-take",
+        "kind": "feature",
+        "public": false,
+        "summary": "Copy a take: bring a finished take from anywhere in the campaign into the shot you are working on.",
+        "detail": "Video tab: Copy a take, beside Generate take, opens a window listing every finished take of the campaign (any version, episode or shot), filtered by version, episode and shot, each one playable. Copy to this shot makes a new take of the shot with its own copy of the video, so deleting either never touches the other. Free, not pinned, counts toward the shot's takes; its Info comes with it, its trim does not.",
+        "td": [
+          "TD-1136"
+        ]
+      },
+      {
+        "id": "3605-repo-tidy",
+        "kind": "ops",
+        "public": false,
+        "summary": "promote_production.sh is tracked in git; test files and SQL probes moved out of the project folder.",
+        "detail": "No change to the app. The promote script is committed. vertex_test.js, anime_guard_test.js, two SQL probes and fix_claude_ontop are moved to Dev Files beside the repo.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.04",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3604-repo-tidy",
+        "kind": "ops",
+        "public": false,
+        "summary": "The project folder holds only the application: old delivery and undo scripts cleared, Claude outputs moved out.",
+        "detail": "No change to the app. .gitignore now covers apply/, apply_v*.sh and undo_v*.sh. Undo scripts are kept only for the work in hand and cleared when Ian says so.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.03",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3603-length-refs",
+        "kind": "fix",
+        "public": false,
+        "summary": "Reference takes go out at the shot's length again; a shot cut between beats keeps its references.",
+        "detail": "Video tab: since v3.6.01 every Reference take was sent at the model's default length (take 91: 12 s of beats made in 5 s); since v3.5.99 the new shot made by Cut here had no References. Both were code lost behind a comment.",
+        "td": [
+          "TD-1133"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.02",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3602-tip-delay",
+        "kind": "feature",
+        "public": true,
+        "summary": "Tooltips wait half a second before they appear.",
+        "detail": "Everywhere: a tooltip shows once the mouse has rested on something for half a second, so moving across the page no longer flashes them all. Once one is showing, the next one you move onto shows at once.",
+        "td": [
+          "TD-1134"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.01",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3601-notes-lines",
+        "kind": "feature",
+        "public": false,
+        "summary": "A shot's own Director's Notes write real lines; the check and takes work for a shot with no pictures.",
+        "detail": "Video tab: a shot's Notes now write its dialogue as lines (word for word from the Concept, else from the story), give each beat time to say them, and when the shot needs more than the model makes they keep all of it and say where to cut. The Opening is only the first frame. The check covers shots with no pictures (Check this shot is there from the start, also in the shot's to do), and in Reference mode such a shot makes a take from its references.",
+        "td": [
+          "TD-1133"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.00",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3600-outline-story",
+        "kind": "feature",
+        "public": false,
+        "summary": "The episode outline now carries each shot's story.",
+        "detail": "Video tab: Download outline and a shot's copied outline list, under each shot's Purpose and Concept, the story behind it as the Purpose and Concept window shows it (each picture's title, what it shows and the story before and after it, or the story where a shot with no pictures sits).",
+        "td": [
+          "TD-1133"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.99",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3599-purpose-window",
+        "kind": "feature",
+        "public": false,
+        "summary": "A shot's Purpose and Concept in their own window, with what the story says about the shot.",
+        "detail": "Video tab: the Purpose box at the top of each shot is now a label; click it to open a window with room for the Purpose (what has to land) and a new Concept (how it should look and feel), and, read only, the story text behind the shot's pictures (or, for a shot with no pictures, the story where it sits). The Director's Notes and the check follow both, and your words win over the story. Neither is sent to the video model.",
+        "td": [
+          "TD-1133"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.98",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3598-episode-preview",
+        "kind": "feature",
+        "public": false,
+        "summary": "Preview the whole episode before compiling it.",
+        "detail": "Video tab: at the bottom of an episode, each shot's pinned take in order with the transition between them, and a Preview button that plays them all in your browser, with their trims and transitions. Click a shot to start from it. Nothing is made, saved or charged; Compile still makes the episode video.",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.97",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3597-place-folds-link",
+        "kind": "feature",
+        "public": false,
+        "summary": "A shot keeps its place; folded shots stay folded; Copy link on a take.",
+        "detail": "Video tab: a take stays in the place its opening picture shows (a camera move shows more of the same place). Folded shots stay folded after a reload. Each take has Download and Copy link, and its Info shows the video address. The quick check spots seconds typed into a beat; the Pre-production check leaves a start alone when a beat explains it, compares the end with the last beat closely, checks a beat camera against the whole-shot camera, and says when Keyframes is the safe mode for an exact opening.",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.96",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3596-minimax-lessons",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video takes follow the words more closely.",
+        "detail": "Video tab: lessons from the MiniMax takes. \"The diamond vanishes\" no longer makes someone walk out or the frame empty; people who leave through a named door leave that way; a character's reference gives their looks and height, and the words decide what they carry; the end is where everyone must be by the last second. The Pre-production check and the Director's Notes now know the opening picture decides who is there, ask for entrances, check directions and depth, and spot things used up. A new take no longer takes the pin from a finished one, and a take is saved only by its download button, named by its code.",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.95",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3595-take-code",
+        "kind": "feature",
+        "public": false,
+        "summary": "Every take has a code.",
+        "detail": "Video tab: each take has a code, e<episode id>s<shot>t<take>-<take id>-<date> (e.g. e6s2t8-0077-2026-11-12), on its card, at the top of its Info and as its download name (with the model and mode).",
+        "td": [
+          "TD-1124"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.94",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3594-take-info-copy",
+        "kind": "feature",
+        "public": false,
+        "summary": "Take Info: Copy for admins; the fal cost for admins only.",
+        "detail": "Video tab: admins get a Copy button at the top of a take Info window (all the text and every picture address); the fal cost line, and the dollars behind it, are for admins only.",
+        "td": [
+          "TD-1124"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.93",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3593-take-info-readable",
+        "kind": "feature",
+        "public": false,
+        "summary": "Take Info readable.",
+        "detail": "Video tab: the take Info window had dark text on its dark panel; its text is now light (measured contrast 13:1 with the theme).",
+        "td": [
+          "TD-1124"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.92",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3592-take-info",
+        "kind": "feature",
+        "public": false,
+        "summary": "Info on every take.",
+        "detail": "Video tab: an Info button on every take, failed ones too, shows the model, mode, tokens, the words sent, the words the model used, the pictures sent with their names, the other settings and the shot as it was when the take was made. Takes made before this keep less, and say so.",
+        "td": [
+          "TD-1124"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.5.91",
+    "staged_on": "2026-11-12",
+    "entries": [
+      {
+        "id": "3591-minimax-no-rewrite",
+        "kind": "feature",
+        "public": false,
+        "summary": "MiniMax uses our words as written.",
+        "detail": "Video tab: MiniMax H3 Max (both modes) is sent with its prompt rewrite switched off, so it gets the shot exactly as written (a test for following instructions).",
+        "td": [
+          "TD-1131"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.5.90",
     "staged_on": "2026-11-12",
     "entries": [

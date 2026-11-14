@@ -1182,7 +1182,7 @@
             <div id="story-style-row" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;">
               <button class="btn btn-sm dm-only" id="story-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="story-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
-              <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()">&#9998; Generate Story</button>
+              <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()" title="It begins here. We read your story and your instructions, pick the key moments, find the right characters and drop you into the outline to review. From there you work up the narrative and make the illustrations.">&#9998; Generate Story</button>
             </div>
             <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;">&#10005; Cancel</button>
           </div>
@@ -1213,7 +1213,7 @@
                  always visible, and it can never sit on top of the text. -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
               <label class="form-label">Story / Session Transcript</label>
-              <button class="btn btn-xs" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:5px;padding:0 8px;height:16px;line-height:14px;font-size:11px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button>
+              <span style="display:flex;align-items:center;gap:6px;"><button class="btn btn-xs dm-only" type="button" id="story-import-btn" onclick="storyImportFromFile()" style="margin-bottom:5px;padding:0 8px;height:16px;line-height:14px;font-size:11px;" title="Read a PDF, Word or text file and put its text in this box. The file is read on your device and never uploaded.">&#11014; Import from file</button><button class="btn btn-xs dm-only" type="button" id="story-audio-btn" onclick="audTOpen()" style="display:none;margin-bottom:5px;padding:0 8px;height:16px;line-height:14px;font-size:11px;" title="Turn a recording of your session, interview or narrated story (up to 6 hours) into text in this box. The recording is deleted as soon as the words come back.">&#11014; Transcribe a recording</button></span>
             </div>
             <!-- position:relative hosts the busy overlay, which is absolutely positioned. Inline
                  rather than a new class, so this batch touches no stylesheet. -->
@@ -1280,7 +1280,7 @@
             <div id="review-action-row" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:flex-end;">
               <button class="btn btn-sm dm-only" id="review-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="review-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
-              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" data-idle="Generate Narrative &amp; Images" onclick="generateNarrativeAndImages()">Generate Narrative &amp; Images</button>
+              <button class="btn btn-primary btn-sm dm-only" id="review-generate-btn" data-idle="Generate Narrative &amp; Images" onclick="generateNarrativeAndImages()" title="Happy with the outline? We work up the narrative and illustrations based on your selections, building your storyboard in one go.">Generate Narrative &amp; Images</button>
               <button class="btn btn-xs" id="narr-cancel-btn" onclick="cancelNarr()" style="display:none;">Cancel</button>
             </div>
           </div>
@@ -1307,9 +1307,9 @@
               <button class="btn btn-sm dm-only" id="sb-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="sb-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
               <span style="flex:1 1 auto;"></span>
-              <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" data-idle="Generate Narrative" onclick="generateNarrativeOnly()">Generate Narrative</button>
+              <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" data-idle="Generate Narrative" onclick="generateNarrativeOnly()" title="We work up the narrative for the whole story from your outline and style selection. Your pictures stay as they are.">Generate Narrative</button>
               <button class="btn btn-xs" id="sb-narr-cancel-btn" onclick="cancelNarrOnly()" style="display:none;">Cancel</button>
-              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()">Generate Images</button>
+              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()" title="We work up the illustrations for every panel. Pictures you've locked are kept; the rest are regenerated.">Generate Images</button>
               <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">Cancel</button>
             </div>
             <div id="gen-bars-row" style="display:flex;gap:14px;margin-top:10px;align-items:flex-start;">
@@ -3075,7 +3075,7 @@
       <div class="form-hint" style="margin-top:4px;">Generate an image from the description, or upload your own. Generating costs 1 token.</div>
     </div>
     <div class="modal-footer">
-      <button class="btn" onclick="closeAssetModal()">Done</button>
+      <button class="btn" id="asset-done-btn" onclick="assetDone()">Done</button>
     </div>
     <div class="form-hint" style="margin-top:8px;text-align:center;color:var(--text-muted);">Only upload images you own or have the rights to use. Do not upload copyrighted characters, logos, or artwork without permission.</div>
   </div>
