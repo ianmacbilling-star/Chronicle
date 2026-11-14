@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.34",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3634-vid-lines-outlined",
+        "kind": "change",
+        "public": false,
+        "summary": "Video lines go to the model on their own lines.",
+        "detail": "Takes 131 to 133 had something said before the first line. Each line is now sent as just the speaker and the words, on its own line with a blank line either side, under its beat, followed by any silence.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.33",
     "staged_on": "2026-11-14",
     "entries": [

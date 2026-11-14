@@ -1112,10 +1112,12 @@ function lineOff(l) { return !!l.off || !String(l.who || '').trim(); }
 // yelling in the distance". hearers: the characters on screen with no line of their own.
 function sayLine(l, hearers) {
   const who = String(l.who || '').trim();
-  if (!lineOff(l)) return who + ' says exactly these words, nothing before or after them: "' + l.text + '"';   // v3.6.32 word for word
+  // v3.6.34 (Ian, 2026-11-14, takes 131-133: something was said before the first line each time; "put the actual lines in
+  // outline form ... on their own line with some carriage returns before and after"): a line is only the speaker and the words.
+  if (!lineOff(l)) return who + ': "' + l.text + '"';
   const h = (hearers || []).filter(Boolean);
-  const subj = h.length ? (h.length === 1 ? h[0] + ' hears ' : h.slice(0, -1).join(', ') + ' and ' + h[h.length - 1] + ' hear ') : 'we hear ';
-  return who ? subj + who + ' calling from off-screen, in the distance, word for word: "' + l.text + '" (' + who + ' is not in this shot)' : subj + 'a voice calling from off-screen, in the distance, word for word: "' + l.text + '" (the speaker is not in this shot)';
+  const by = h.length ? '; ' + (h.length === 1 ? h[0] + ' hears it' : h.slice(0, -1).join(', ') + ' and ' + h[h.length - 1] + ' hear it') : '';
+  return (who || 'A voice') + ' (off-screen, in the distance; ' + (who ? who + ' is' : 'the speaker is') + ' not in this shot' + by + '): "' + l.text + '"';
 }
 function firstName(n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
 // Who is only a voice in this shot: an off-screen speaker with no line said on screen.
@@ -1218,17 +1220,18 @@ function shotScript(ep, w, pics) {
     out.push('The beats, in order' + (w.actions.length >= 2 ? ', with their seconds' : '') + ' (directions only, never said aloud):');
     const times = beatTimes(w), beats = w.beats || [];   // v3.5.63 -- TD-1121: each beat its seconds, camera and sound
     w.actions.forEach(function (a, i) {
-      const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return 'As this happens, ' + sayLine(l, hearers) + '.'; });
+      const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return '    ' + sayLine(l, hearers); });   // v3.6.34: outlined
       // v3.6.32 (Ian, 2026-11-14, take 131: Oya mumbled before her line in a 6.5 s beat; "it should be a pause in speaking after the
       // line. Space in the conversation"): the time a beat has beyond its lines is silence, said after them
       const words = w.lines.filter(function (l) { return l.when === i + 1 && String(l.text || '').trim(); }).reduce(function (t, l) { return t + String(l.text).trim().split(/\s+/).length; }, 0);
       const spare = words && times[i] ? (times[i].to - times[i].from) - Math.max(1, Math.round(words / 2.5 * 2) / 2) : 0;
-      if (spare >= 1) said.push('Then silence for the rest of this part (about ' + secsText(Math.round(spare * 2) / 2) + ' s): no one speaks.');
+      if (spare >= 1) said.push('    (then silence for about ' + secsText(Math.round(spare * 2) / 2) + ' s; no one speaks)');
       const b = beats[i] || {}, at = w.actions.length >= 2 && times[i] ? '(' + secsText(times[i].from) + '-' + secsText(times[i].to) + ' s) ' : '';
       function stop(x) { x = String(x).trim(); return /[.!?"\u201d]$/.test(x) ? x : x + '.'; }
-      out.push((i + 1) + '. ' + at + ((said.length || b.camera || b.sound) ? stop(a) : a) + (said.length ? ' ' + said.join(' ') : '') + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
+      out.push((i + 1) + '. ' + at + ((said.length || b.camera || b.sound) ? stop(a) : a) + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
+      if (said.length) { out.push(''); said.forEach(function (x) { out.push(x); out.push(''); }); }   // v3.6.34: each line on its own, a blank line either side
     });
-    loose.forEach(function (l) { const t = sayLine(l, hearers); out.push(w.actions.length ? 'Then, ' + t + '.' : t.charAt(0).toUpperCase() + t.slice(1) + '.'); });
+    if (loose.length) { out.push(w.actions.length ? 'Then:' : 'Said in this shot:'); out.push(''); loose.forEach(function (l) { out.push('    ' + sayLine(l, hearers)); out.push(''); }); }   // v3.6.34: outlined
   }
   voiceRules(w, pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []).forEach(function (r) { out.push(r); });   // v3.5.25
   const ex = exitLines(w, (ep.castNames || []).concat(pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []), pics ? w.seconds : 0);   // v3.5.47; v3.5.49 the deadline
