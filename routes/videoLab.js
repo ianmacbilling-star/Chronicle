@@ -1228,10 +1228,13 @@ function shotScript(ep, w, pics) {
       if (spare >= 1) said.push('    (then silence for about ' + secsText(Math.round(spare * 2) / 2) + ' s; no one speaks)');
       const b = beats[i] || {}, at = w.actions.length >= 2 && times[i] ? '(' + secsText(times[i].from) + '-' + secsText(times[i].to) + ' s) ' : '';
       function stop(x) { x = String(x).trim(); return /[.!?"\u201d]$/.test(x) ? x : x + '.'; }
-      out.push((i + 1) + '. ' + at + ((said.length || b.camera || b.sound) ? stop(a) : a) + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
+      // v3.6.35 (Ian, 2026-11-14, takes 131-135: MiniMax voiced a scrap of made-up speech before a line due at second 0; "For the
+      // first second no one speaks" cured it in takes 135-136; Ian: try half a second, a whole one could be too much)
+      const hush = i === 0 && w.lines.some(function (l) { return l.when === 1 && String(l.text || '').trim(); }) ? 'For the first half second no one speaks. ' : '';
+      out.push((i + 1) + '. ' + at + hush + ((said.length || b.camera || b.sound) ? stop(a) : a) + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
       if (said.length) { out.push(''); said.forEach(function (x) { out.push(x); out.push(''); }); }   // v3.6.34: each line on its own, a blank line either side
     });
-    if (loose.length) { out.push(w.actions.length ? 'Then:' : 'Said in this shot:'); out.push(''); loose.forEach(function (l) { out.push('    ' + sayLine(l, hearers)); out.push(''); }); }   // v3.6.34: outlined
+    if (loose.length) { out.push(w.actions.length ? 'Then:' : 'Said in this shot (for the first half second no one speaks):'); out.push(''); loose.forEach(function (l) { out.push('    ' + sayLine(l, hearers)); out.push(''); }); }   // v3.6.34: outlined; v3.6.35 the half second
   }
   voiceRules(w, pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []).forEach(function (r) { out.push(r); });   // v3.5.25
   const ex = exitLines(w, (ep.castNames || []).concat(pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []), pics ? w.seconds : 0);   // v3.5.47; v3.5.49 the deadline

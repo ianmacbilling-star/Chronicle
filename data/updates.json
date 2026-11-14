@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.35",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3635-vid-first-hush",
+        "kind": "fix",
+        "public": false,
+        "summary": "A shot that opens on a line starts with half a second of silence.",
+        "detail": "MiniMax voiced a scrap of made-up speech before a line due at second 0 (takes 131 to 134). Saying no one speaks at first cured it in takes 135 and 136; the first beat with a line now opens with half a second of silence.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.34",
     "staged_on": "2026-11-14",
     "entries": [
