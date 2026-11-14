@@ -1,5 +1,35 @@
 [
   {
+    "version": "3.6.29",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3629-audio-apply",
+        "kind": "fix",
+        "public": false,
+        "summary": "Put it in the Story box now says what went wrong instead of closing silently.",
+        "detail": "The transcribe window stays open under the Append / Replace question, so any failure is shown in it with the reason, and the transcript is kept for another try.",
+        "td": []
+      },
+      {
+        "id": "3629-audio-trial-note",
+        "kind": "fix",
+        "public": false,
+        "summary": "The Free Trial's first-20-minutes note shows only when the recording was longer.",
+        "detail": "A short trial recording that came back whole no longer says only the first 20 minutes were transcribed.",
+        "td": []
+      },
+      {
+        "id": "3629-audio-samples",
+        "kind": "fix",
+        "public": false,
+        "summary": "Speaker sample lines show the words as spoken, on both brands.",
+        "detail": "On the Story brand the naming window's sample lines had Session changed to Chapter; they are quotes from the recording, so they are no longer changed.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.28",
     "staged_on": "2026-11-13",
     "entries": [

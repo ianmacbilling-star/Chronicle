@@ -26540,7 +26540,7 @@ function audTShowJob(job) {
   var sp = job.speakers || [];
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.6.18: the top bar shows the charge at once
   audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
-    (job.cap_secs ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Gold and Platinum transcribe the whole recording.</div>' : '') +   // v3.6.22
+    (job.cap_secs && Number(job.secs_est) > Number(job.cap_secs) ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Gold and Platinum transcribe the whole recording.</div>' : '') +   // v3.6.22
     (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
     '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14
     (job.speakers_hint && sp.length < job.speakers_hint ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">You said ' + job.speakers_hint + ' people were speaking; we could tell ' + sp.length + ' apart. Voices that sound alike can come back as one.</div>' : '') +   // v3.6.18
@@ -26550,7 +26550,7 @@ function audTShowJob(job) {
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b style="min-width:80px;">' + escapeHtml(s.label) + '</b>' +
         '<input class="form-input aud-t-name" data-spk="' + escapeHtml(s.id) + '" type="text" maxlength="80" list="aud-t-players" autocomplete="off" placeholder="' + ((job.players || []).length ? 'Pick a player or type a name' : 'Name') + '" style="flex:1;min-width:180px;width:auto;padding:6px 10px;">' +
         '<label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;"><input type="checkbox" class="aud-t-leave" data-spk="' + escapeHtml(s.id) + '" style="margin:0;width:14px;height:14px;accent-color:var(--accent-bright);cursor:pointer;"> Leave out</label></div>' +
-        '<div style="font-size:12px;opacity:0.85;margin-top:6px;line-height:1.45;">' + (s.samples || []).map(function (t) { return '&ldquo;' + escapeHtml(t) + '&rdquo;'; }).join('<br>') + '</div></div>';
+        '<div data-no-words style="font-size:12px;opacity:0.85;margin-top:6px;line-height:1.45;">' + (s.samples || []).map(function (t) { return '&ldquo;' + escapeHtml(t) + '&rdquo;'; }).join('<br>') + '</div></div>';
     }).join('') +
     '<div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-sm btn-primary" id="aud-t-put" onclick="audTApply()">Put it in the Story box</button></div>');
 }
@@ -26560,20 +26560,34 @@ function audTApply() {
   Array.prototype.forEach.call(document.querySelectorAll('#aud-t-modal .aud-t-name'), function (i) { names[i.getAttribute('data-spk')] = i.value || ''; });
   Array.prototype.forEach.call(document.querySelectorAll('#aud-t-modal .aud-t-leave'), function (c) { if (c.checked) names[c.getAttribute('data-spk')] = '-'; });
   var put = document.getElementById('aud-t-put'); if (put) put.disabled = true;
+  function fail(msg) { if (put) put.disabled = false; audTSay(msg, true); }
+  // v3.6.29 (a tester, 2026-11-14: the window closed, the Story box did not change, and nothing was said). The window no longer
+  // hides itself before the Append / Replace question (that question sits above it), so whatever goes wrong is said in a window
+  // the reader can see, with the reason. Finishing the job is waited for and checked as well.
   fetch('/api/audio/jobs/' + A.job.id + '/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ names: names }) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(async function (res) {
       if (!AUD_T) return;
-      if (!res.ok || typeof res.j.text !== 'string') { if (put) put.disabled = false; audTSay(escapeHtml((res.j && res.j.error) || 'Could not build the text.'), true); return; }
+      if (!res.ok || typeof res.j.text !== 'string') { fail(escapeHtml((res.j && res.j.error) || 'Could not build the text.')); return; }
       var jobId = A.job.id;
-      var m = document.getElementById('aud-t-modal'); if (m) m.style.display = 'none';
-      var ok = await fiApplyToField(fiEl('transcript-input'), res.j.text, { existsMessage: 'There is already text in the Story box.', after: function () { updateWordCounts(); } });
-      if (ok === false) { if (m) m.style.display = 'flex'; if (put) put.disabled = false; return; }
-      fetch('/api/audio/jobs/' + jobId + '/done', { method: 'POST' }).catch(function () {});
+      if (!fiEl('transcript-input')) { fail('The Story box is not on this page. Open the session\'s Story tab and try again; the transcript is kept.'); return; }
+      var ok;
+      try {
+        ok = await fiApplyToField(fiEl('transcript-input'), res.j.text, { existsMessage: 'There is already text in the Story box.', after: function () { updateWordCounts(); } });
+      } catch (e) {
+        console.error('transcript into the Story box failed:', e);
+        fail('It could not be put in the Story box (' + escapeHtml((e && e.message) || 'unknown error') + '). The transcript is kept; try again.');
+        return;
+      }
+      if (ok === false) { if (put) put.disabled = false; return; }
+      var done = null;
+      try { done = await fetch('/api/audio/jobs/' + jobId + '/done', { method: 'POST' }); } catch (e) { done = null; }
+      if (!done || !done.ok) { fail('The words are in the Story box, but the transcript could not be marked as used' + (done ? ' (' + done.status + ')' : '') + '. Close this window; it may offer the same transcript again.'); return; }
       audTClose();
     })
-    .catch(function () { if (put) put.disabled = false; audTSay('Could not reach the server.', true); });
+    .catch(function (e) { fail('Could not reach the server' + (e && e.message ? ' (' + escapeHtml(e.message) + ')' : '') + '.'); });
 }
+
 setTimeout(audTInit, 1200);
 
 // ---- CALLER 2: Campaign Details -> Lore / Background ---------------------------------------
