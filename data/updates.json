@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.6.25",
+    "staged_on": "2026-11-13",
+    "entries": [
+      {
+        "id": "3625-vid-cast-once",
+        "kind": "change",
+        "public": false,
+        "summary": "Video takes are told that the people in the opening picture are the cast.",
+        "detail": "A take could show a character twice: once as they stand in the opening picture and again from their own reference picture. When a shot has both, the prompt now says each character appears once, and anyone not in the opening picture comes into view as the words say.",
+        "td": []
+      },
+      {
+        "id": "3625-info-dblclick",
+        "kind": "change",
+        "public": false,
+        "summary": "Double-click a take's Info button to copy its info.",
+        "detail": "Video (admins): the info is copied to the clipboard without leaving the window open.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.24",
     "staged_on": "2026-11-13",
     "entries": [

@@ -1194,6 +1194,9 @@ function shotScript(ep, w, pics) {
     if (pics.scene.length) out.push('@Image' + pics.scene[0] + ' is how the shot opens: start the video looking like it, in its art style.');
     if (pics.scene.length > 1) out.push(pics.scene.slice(1).map(function (n) { return '@Image' + n; }).join(', ') + (pics.scene.length === 2 ? ' shows' : ' show') +
       ' the place, the light and who is there. Do not copy poses, positions or which way anyone faces from ' + (pics.scene.length === 2 ? 'it' : 'them') + '.');
+    // v3.6.25 (Ian, 2026-11-14, take 109: Ori and Gubuk twice -- once from the opening picture, once more from their own pictures;
+    // "there could be a reference keyframe that has 3 people in it ... and 1 more"): the opening picture's people ARE the cast.
+    if (pics.scene.length && pics.cast.some(function (c) { return c.kind !== 'asset'; })) out.push('Each character in the reference pictures appears once. If they are already in @Image' + pics.scene[0] + ', that is them: do not add another. If they are not in @Image' + pics.scene[0] + ', they come into view as the words say.');
   }
   const overall = String(ep.overall || '').trim();
   if (overall) out.push('Overall: ' + overall);

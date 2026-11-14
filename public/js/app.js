@@ -43068,7 +43068,7 @@ function vlTrimTake(takeId) {
     '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment. Save frame keeps that frame for another shot; Start here and End here trim the part the episode uses (the take itself is not changed).</div>' +
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-sm btn-primary vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', false)">Save frame</button><button class="btn btn-sm vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', true)">Last frame</button><span style="' + VL_DESC + '">for the next shot, another shot or the Archive</span>' +
       '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;"><a class="btn btn-sm vl-view-dl" style="text-decoration:none;" href="/api/video-lab/takes/' + takeId + '/download?code=' + encodeURIComponent(vlTakeCode(f.t, f.n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(f.t, f.n)) + '">&#8681; Download</a>' +
-      '<button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" onclick="vlCopyTakeLink(' + takeId + ')">Copy link</button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
+      '<button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" onclick="vlCopyTakeLink(' + takeId + ')">Copy link</button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')" ondblclick="vlTakeInfoQuick(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
       '<button class="btn btn-sm" onclick="vlTrimMark(\'st\')">Start here</button>' +
       '<button class="btn btn-sm" onclick="vlTrimMark(\'en\')">End here</button>' +
@@ -43672,6 +43672,26 @@ function vlTakeInfoCopy(n) {
   var old = function () { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px;top:0;'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { showError('Could not copy.'); } document.body.removeChild(ta); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, old); else old();
 }
+// v3.6.25 (Ian, 2026-11-14: "If i double click the info button... have it just copy the text to clipboard"): the two clicks
+// have opened the Info window; wait for it to load, copy what it shows (as Copy does), close it, and say so. Admins, like Copy.
+function vlTakeInfoQuick(takeId, n) {
+  if (!vlInfoAdmin()) return;
+  var tries = 0;
+  var go = function () {
+    var b = document.getElementById('vl-info-body');
+    if (!b) { vlTakeInfo(takeId, n); b = document.getElementById('vl-info-body'); }
+    if (b && (b.textContent || '').indexOf('Loading...') < 0) {
+      var t = vlTakeInfoText(n || takeId);
+      var fin = function (ok) { vlTakeInfoClose(); billingToast(ok ? 'Take ' + (n || takeId) + ' info copied' : 'Could not copy the info', ok ? '' : 'error'); };
+      var old = function () { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px;top:0;'; document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); return ok; };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { fin(true); }, function () { fin(old()); });
+      else fin(old());
+      return;
+    }
+    if (++tries < 50) setTimeout(go, 200);
+  };
+  go();
+}
 function vlInfoWhen(v) { if (!v) return ''; var d = new Date(v); return isNaN(d.getTime()) ? String(v) : d.toLocaleString(); }
 // The pictures in a fal input, in order, each with the name the words give it.
 function vlInfoPictures(sent, cast) {
@@ -43781,7 +43801,7 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '">&#8681; Download</a>' : '') +   // v3.5.97: says what it is (Ian missed the bare arrow)
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Copy this take\'s video address" onclick="vlCopyTakeLink(' + t.id + ')">Copy link</button>' : '') +   // v3.5.97 (Ian: "make it so I can get the video\'s link")
       (t.merge_status === 'error' ? '<button type="button" class="narrative-regen-btn" onclick="vlTakeAct(' + t.id + ', \'join\')">Join again</button>' : '') +
-      '<button type="button" class="narrative-regen-btn vl-info-btn" title="Everything we know about this take: model, mode, tokens, the words sent and used, the pictures" onclick="vlTakeInfo(' + t.id + ', ' + n + ')">Info</button>' +   // v3.5.92
+      '<button type="button" class="narrative-regen-btn vl-info-btn" title="Everything we know about this take: model, mode, tokens, the words sent and used, the pictures" onclick="vlTakeInfo(' + t.id + ', ' + n + ')" ondblclick="vlTakeInfoQuick(' + t.id + ', ' + n + ')">Info</button>' +   // v3.5.92
       (!making ? '<button type="button" class="narrative-regen-btn" title="Delete this take" onclick="vlDeleteTake(' + t.id + ')">&#10005;</button>' : '') +
     '</div>' +
   '</div>';
