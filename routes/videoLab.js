@@ -1112,10 +1112,10 @@ function lineOff(l) { return !!l.off || !String(l.who || '').trim(); }
 // yelling in the distance". hearers: the characters on screen with no line of their own.
 function sayLine(l, hearers) {
   const who = String(l.who || '').trim();
-  if (!lineOff(l)) return who + ' says: "' + l.text + '"';
+  if (!lineOff(l)) return who + ' says exactly these words, nothing before or after them: "' + l.text + '"';   // v3.6.32 word for word
   const h = (hearers || []).filter(Boolean);
   const subj = h.length ? (h.length === 1 ? h[0] + ' hears ' : h.slice(0, -1).join(', ') + ' and ' + h[h.length - 1] + ' hear ') : 'we hear ';
-  return who ? subj + who + ' calling from off-screen, in the distance: "' + l.text + '" (' + who + ' is not in this shot)' : subj + 'a voice calling from off-screen, in the distance: "' + l.text + '" (the speaker is not in this shot)';
+  return who ? subj + who + ' calling from off-screen, in the distance, word for word: "' + l.text + '" (' + who + ' is not in this shot)' : subj + 'a voice calling from off-screen, in the distance, word for word: "' + l.text + '" (the speaker is not in this shot)';
 }
 function firstName(n) { return String(n || '').trim().split(/\s+/)[0].toLowerCase(); }
 // Who is only a voice in this shot: an off-screen speaker with no line said on screen.
@@ -1183,6 +1183,7 @@ function shotScript(ep, w, pics) {
   out.push('Anyone who moves or leaves their place goes entirely: no copy of them is left behind, and the spot they left stays empty.');
   if ((w.lines || []).length) out.push('Only the lines written here are spoken, each by the one named; no one else speaks or moves their mouth as if talking.');
   if ((w.lines || []).length) out.push('Nothing else written here is said aloud: headings, labels and directions are never spoken.');   // v3.6.30
+  if ((w.lines || []).length) out.push('Each line is said word for word: nothing is added before or after it, and when a line ends the speaker is quiet.');   // v3.6.32
   // v3.5.48 (Ian, 2026-11-09: "can you make it so nothing appears out of thin air unless we tell it to?" -- take 26's pestle)
   out.push('Nothing appears or disappears out of thin air unless the words say so (something used up, destroyed or vanishing, as they describe it): any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
   if (pics) {
@@ -1218,6 +1219,11 @@ function shotScript(ep, w, pics) {
     const times = beatTimes(w), beats = w.beats || [];   // v3.5.63 -- TD-1121: each beat its seconds, camera and sound
     w.actions.forEach(function (a, i) {
       const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return 'As this happens, ' + sayLine(l, hearers) + '.'; });
+      // v3.6.32 (Ian, 2026-11-14, take 131: Oya mumbled before her line in a 6.5 s beat; "it should be a pause in speaking after the
+      // line. Space in the conversation"): the time a beat has beyond its lines is silence, said after them
+      const words = w.lines.filter(function (l) { return l.when === i + 1 && String(l.text || '').trim(); }).reduce(function (t, l) { return t + String(l.text).trim().split(/\s+/).length; }, 0);
+      const spare = words && times[i] ? (times[i].to - times[i].from) - Math.max(1, Math.round(words / 2.5 * 2) / 2) : 0;
+      if (spare >= 1) said.push('Then silence for the rest of this part (about ' + secsText(Math.round(spare * 2) / 2) + ' s): no one speaks.');
       const b = beats[i] || {}, at = w.actions.length >= 2 && times[i] ? '(' + secsText(times[i].from) + '-' + secsText(times[i].to) + ' s) ' : '';
       function stop(x) { x = String(x).trim(); return /[.!?"\u201d]$/.test(x) ? x : x + '.'; }
       out.push((i + 1) + '. ' + at + ((said.length || b.camera || b.sound) ? stop(a) : a) + (said.length ? ' ' + said.join(' ') : '') + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));

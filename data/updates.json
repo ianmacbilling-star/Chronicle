@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.32",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3632-vid-word-for-word",
+        "kind": "change",
+        "public": false,
+        "summary": "Video lines are said word for word, and a beat longer than its lines ends in silence.",
+        "detail": "Take 131's Oya mumbled before her line in a beat longer than the line. Each line is now sent as exactly these words, nothing before or after, and the time a beat has beyond its lines is asked for as silence.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.31",
     "staged_on": "2026-11-14",
     "entries": [
