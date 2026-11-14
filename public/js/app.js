@@ -44636,9 +44636,10 @@ function vlSlRefresh(id) {
     })
     .catch(function () {});
 }
-function vlWriteShotList(mode, chained) {
+function vlWriteShotList(mode, chained, asked) {   // v3.6.36: asked = the Notes window already chose Start over
   mode = mode === 'shots' ? 'shots' : 'notes';
   var d = VL.draft;
+  if (mode === 'notes' && !chained && !asked && d && !VL.busy && !vlSlWriting(d.id) && !vlAnyChecking(d.id) && vlHasWords(d) && d.shots.some(function (s) { return s.id; })) { vlNotesAsk(null); return; }   // v3.6.36: fill, add or start over
   if (d && vlAnyChecking(d.id)) { var m9 = document.getElementById('vl-sl-msg'); if (m9) m9.textContent = 'Shots are being checked. The Director can start when they are done.'; return; }   // v3.5.43
   if (!d || VL.busy || vlSlWriting(d.id)) return;
   vlReadForm();
@@ -45614,39 +45615,113 @@ function vlShotEmpty(s) {
 function vlShotFillBtnHTML(si) {
   var d = VL.draft, s = d && d.shots[si];
   if (!s || !s.id) return '';
-  var empty = vlShotEmpty(s), busy = VL.filling && VL.filling[s.id];
-  // v3.5.78 (Ian, 2026-11-11: "leave it there all the time but greyed out if there isn't anything empty")
-  var off = busy || vlSlWriting(d.id) || !empty.length;
-  return '<button type="button" class="btn btn-sm" id="vl-fill-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;' + (!empty.length && !busy ? 'opacity:0.45;' : '') + '"' + (off ? ' disabled' : '') +
-    ' title="' + (empty.length ? 'The Director writes this shot\'s empty parts (' + escapeHtml(empty.join(', ')) + ') to follow on from the shots either side. What you wrote stays as it is.' : 'Nothing empty in this shot. Clear a box you want the Director to write.') + '" onclick="vlFillShot(' + si + ')">' +
-    (busy ? vlSpin(12) + ' Writing...' : 'Notes (1 token)') + '</button>';
+  var busy = VL.filling && VL.filling[s.id];
+  // v3.6.36 (Ian, 2026-11-14): Notes asks what to do (fill the empty boxes, add to what is there, or start over), so it is never greyed out
+  var off = busy || vlSlWriting(d.id);
+  var eps = vlFindEp(d.id), es = eps && (eps.shots || []).filter(function (x) { return String(x.id) === String(s.id); })[0];
+  return '<button type="button" class="btn btn-sm" id="vl-fill-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;"' + (off ? ' disabled' : '') +
+    ' title="The Director writes this shot: fill in the empty boxes, add to what is there, or start over." onclick="vlNotesAsk(' + si + ')">' +
+    (busy ? vlSpin(12) + ' Writing...' : 'Notes (1 token)') + '</button>' +
+    (es && es.can_revert && !busy ? '<button type="button" class="btn btn-sm" style="font-size:12px;padding:3px 10px;white-space:nowrap;"' + (vlSlWriting(d.id) ? ' disabled' : '') +
+      ' title="Put back this shot\'s words as they were before the last Notes (free)" onclick="vlRevertNotes(' + si + ')">Revert</button>' : '');
 }
-function vlFillShot(si) {
+// v3.6.36: the three ways the Director can write a shot (or, from the episode's button, every shot)
+function vlNotesAsk(si) {
+  vlReadForm();
+  var d = VL.draft; if (!d) return;
+  var all = si == null, s = all ? null : d.shots[si];
+  var anyEmpty = all ? d.shots.some(function (x) { return x.id && vlShotEmpty(x).length; }) : vlShotEmpty(s).length > 0;
+  var n = all ? d.shots.filter(function (x) { return x.id; }).length : 1;
+  var old = document.getElementById('vl-notes-ask'); if (old) old.parentNode.removeChild(old);
+  var w = document.createElement('div'); w.id = 'vl-notes-ask';
+  w.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;');
+  function opt(how, title, desc, dis) {
+    return '<button type="button" class="btn btn-sm" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:8px;white-space:normal;' + (dis ? 'opacity:0.45;' : '') + '"' + (dis ? ' disabled' : '') + ' onclick="vlNotesPick(' + (all ? 'null' : si) + ',\'' + how + '\')">' +
+      '<div style="font-weight:600;">' + title + '</div><div style="' + VL_DESC + 'margin-top:2px;">' + desc + '</div></button>';
+  }
+  w.innerHTML = '<div style="' + VL_BOX + 'max-width:520px;width:92%;padding:16px 18px;color:rgb(var(--on-panel-rgb));">' +
+    '<div style="font-weight:600;margin-bottom:10px;">' + (all ? 'Director\'s Notes for every shot' : 'Director\'s Notes for shot ' + (si + 1)) + '</div>' +
+    opt('fill', 'Fill in the empty boxes', anyEmpty ? 'What you wrote stays as it is.' : 'Nothing is empty' + (all ? ' in any shot.' : ' in this shot.'), !anyEmpty) +
+    opt('add', 'Add to what\'s there', 'Your words stay as they are; the Director adds only what is missing, never anything that contradicts them.') +
+    opt('fresh', 'Clear it and start over', 'Everything but the Purpose and Concept is cleared and written again' + (all ? ', in every shot, with the overall direction' : '') + '. Pictures, references, mode and model stay.') +
+    '<div style="' + VL_DESC + 'margin:4px 0 10px;">' + (all ? 'About 1 token a shot (' + n + ' shot' + (n === 1 ? '' : 's') + ') to fill or add; starting over is priced on the button. ' : '1 token. ') + 'Each shot keeps a Revert that puts its words back.</div>' +
+    '<div style="text-align:right;"><button type="button" class="btn btn-sm" onclick="vlNotesAskClose()">Cancel</button></div></div>';
+  w.addEventListener('click', function (e) { if (e.target === w) vlNotesAskClose(); });
+  document.body.appendChild(w);
+}
+function vlNotesAskClose() { var w = document.getElementById('vl-notes-ask'); if (w) w.parentNode.removeChild(w); }
+function vlNotesPick(si, how) {
+  vlNotesAskClose();
+  var all = si == null;
+  if (how === 'fresh') {
+    if (all) { vlWriteShotList('notes', false, true); return; }   // the episode's own start over, with its own question
+    uiConfirm('You sure? Shot ' + (si + 1) + '\'s Opening, beats, lines, Camera, Sound, Around them and Closing are cleared, with the check\'s findings, and the Director writes them again from the Purpose and Concept. Revert puts them back.', { okText: 'Start over', danger: true })
+      .then(function (yes) { if (yes) vlFillShot(si, 'fresh'); });
+    return;
+  }
+  if (all) vlNotesEvery(how); else vlFillShot(si, how);
+}
+// Fill or add for every shot, one after another (each its own 1-token Notes); a shot with nothing to do is passed over.
+function vlNotesEvery(how) {
+  var d = VL.draft; if (!d) return;
+  var list = d.shots.map(function (s, i) { return i; }).filter(function (i) { return d.shots[i].id && (how === 'add' || vlShotEmpty(d.shots[i]).length); });
+  var k = 0, wrote = 0, msg = function (t) { var m = document.getElementById('vl-sl-msg'); if (m) m.innerHTML = t; };
+  function next() {
+    if (!VL.draft || VL.draft.id !== d.id) return;
+    if (k >= list.length) { msg(escapeHtml('The Director ' + (how === 'add' ? 'added to ' : 'filled in ') + wrote + ' shot' + (wrote === 1 ? '' : 's') + '.')); return; }
+    var si = list[k++];
+    msg(vlSpin(12) + ' ' + escapeHtml('Shot ' + (si + 1) + ' (' + k + ' of ' + list.length + ')...'));
+    vlFillShot(si, how, function (ok, stop) { if (ok) wrote++; if (stop) return; next(); });
+  }
+  next();
+}
+function vlRevertNotes(si) {
+  var d = VL.draft, s = d && d.shots[si]; if (!d || !s || !s.id) return;
+  var id = d.id, sid = s.id, msg = function (t) { var m = document.getElementById('vl-sl-msg'); if (m) m.innerHTML = t; };
+  fetch('/api/video-lab/shots/' + sid + '/revert-notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.episode) { msg(escapeHtml((res.j && (res.j.message || res.j.error)) || 'Could not put the words back.')); return; }
+      vlPutEp(res.j.episode);
+      vlTakeShotWords(id, sid, res.j.episode);
+      vlRenderOpen(true);
+      msg(escapeHtml('Shot ' + (si + 1) + ': the words are back as they were before the last Notes.'));
+    })
+    .catch(function () { msg('Could not reach the server.'); });
+}
+// The shot's words (and references) from the server's copy into the page's draft
+function vlTakeShotWords(id, sid, ep) {
+  var fresh = vlDraftFrom(ep), cur = VL.draft;
+  if (!cur || cur.id !== id) return;
+  var f = fresh.shots.filter(function (x) { return x.id === sid; })[0], k = cur.shots.findIndex(function (x) { return x.id === sid; });
+  if (f && k >= 0) ['start', 'actions', 'lines', 'camera', 'end', 'sounds', 'around', 'seconds', 'beats', 'more', 'refs'].forEach(function (key) { cur.shots[k][key] = f[key]; });
+}
+
+function vlFillShot(si, how, after) {   // v3.6.36: how = fill, add or fresh; after(ok, stop) when run for every shot
   var d = VL.draft, s = d && d.shots[si];
   if (!d || !s || !s.id) return;
   vlReadForm();
   var id = d.id, sid = s.id;
   VL.filling = VL.filling || {}; VL.filling[sid] = true; vlRenderOpen(true);
   var msg = function (t) { var m = document.getElementById('vl-sl-msg'); if (m) m.innerHTML = t; };
+  how = how === 'add' || how === 'fresh' ? how : 'fill';
   var done = function () { delete VL.filling[sid]; vlRenderOpen(true); };
   if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
   vlSave(function (saved) {
-    if (!saved) { done(); msg(escapeHtml('Could not save the episode first, so the Director did not start.')); return; }
-    fetch('/api/video-lab/shots/' + sid + '/fill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    if (!saved) { done(); msg(escapeHtml('Could not save the episode first, so the Director did not start.')); if (after) after(false, true); return; }
+    fetch('/api/video-lab/shots/' + sid + '/fill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: how }) })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        if (!res.ok || !res.j || !res.j.episode) { done(); msg(res.j && res.j.error === 'INSUFFICIENT_TOKENS' ? insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')) : escapeHtml((res.j && (res.j.message || res.j.error)) || 'The Director could not write it.')); return; }
+        if (!res.ok || !res.j || !res.j.episode) { done(); msg(res.j && res.j.error === 'INSUFFICIENT_TOKENS' ? insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')) : escapeHtml((res.j && (res.j.message || res.j.error)) || 'The Director could not write it.')); if (after) after(false, res.j && res.j.error === 'INSUFFICIENT_TOKENS'); return; }
         vlPutEp(res.j.episode);
-        var fresh = vlDraftFrom(res.j.episode), cur = VL.draft;
-        if (cur && cur.id === id) {
-          var f = fresh.shots.filter(function (x) { return x.id === sid; })[0], k = cur.shots.findIndex(function (x) { return x.id === sid; });
-          if (f && k >= 0) ['start', 'actions', 'lines', 'camera', 'end', 'sounds', 'around', 'seconds', 'beats', 'more'].forEach(function (key) { cur.shots[k][key] = f[key]; });
-        }
+        vlTakeShotWords(id, sid, res.j.episode);   // v3.6.36
         done();
-        msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', lines: 'the lines', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.') + (res.j.note ? '<br><span style="' + VL_WARN + '">' + escapeHtml(res.j.note) + '</span>' : ''));   // v3.6.01 lines, the note
+        if (res.j.how === 'add') msg(escapeHtml('Shot ' + (si + 1) + ': the Director added to ' + ((res.j.added || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') || 'nothing') + '. Revert puts it back.'));
+        else msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', lines: 'the lines', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.') + (res.j.note ? '<br><span style="' + VL_WARN + '">' + escapeHtml(res.j.note) + '</span>' : ''));   // v3.6.01 lines, the note
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        if (after) after(true, false);
       })
-      .catch(function () { done(); msg('Could not reach the server.'); });
+      .catch(function () { done(); msg('Could not reach the server.'); if (after) after(false, true); });
   });
 }
 // v3.5.77 -- TD-1127, CUT BETWEEN BEATS (Ian, 2026-11-11). The beats after the cut become a new shot right after this one,

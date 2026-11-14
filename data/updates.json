@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.6.36",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3636-vid-notes-ask",
+        "kind": "change",
+        "public": false,
+        "summary": "Director's Notes ask what to do: fill the empty boxes, add to what's there, or start over.",
+        "detail": "On a shot's Notes button and the episode's. Add keeps every word written and adds only what is missing at the end, never against it. Start over asks first, then clears all but the Purpose and Concept (pictures, references, mode and model stay) and the check's findings.",
+        "td": []
+      },
+      {
+        "id": "3636-vid-notes-revert",
+        "kind": "change",
+        "public": false,
+        "summary": "Each shot has a Revert after Notes.",
+        "detail": "Before any Notes write a shot, its words, references and check findings are kept; the shot's Revert button puts them back, free.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.35",
     "staged_on": "2026-11-14",
     "entries": [

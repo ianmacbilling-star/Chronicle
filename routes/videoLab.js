@@ -491,6 +491,7 @@ function ensureTables() {
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS mode TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS precheck TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS model TEXT');   // v3.5.86 -- TD-1122: a shot's own video model (NULL = the episode's)
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS notes_prev TEXT');   // v3.6.36: the shot's words before the last Notes (Revert)
     // v3.5.92 -- a take's Info (Ian, 2026-11-12: "Everything we know about the video"): the shot's words when it was made, the
     // exact input sent to fal for each move, and the prompt the model says it used (fal's expanded_prompt).
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS words_at TEXT');
@@ -655,6 +656,7 @@ async function loadEpisodes(db, where, params) {
       s.mode = shotMode(s);   // v3.5.34
       s.model = shotModel(s);   // v3.5.86 -- TD-1122
       s.model_used = shotModelKey(ep.model, s.mode, s.model);
+      s.can_revert = !!s.notes_prev; delete s.notes_prev;   // v3.6.36: Revert puts back the words from before the last Notes
       s.precheck = parseJson(s.precheck, null);
       if (s.precheck && typeof s.precheck === 'object') s.precheck.stale = s.precheck.sig !== s.sig; else s.precheck = null;
       s.takes = takes.filter(function (t) { return t.shot_id === s.id; });
@@ -2997,6 +2999,7 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
       // is rewritten, the references become the characters named, and a shot without a name gets the Director's.
       for (let i = 0; i < live.length; i++) {
         const sh = result.shots[i];
+        await keepNotesPrev(tx, live[i]);   // v3.6.36: each shot's Revert
         await writeWords(tx, live[i].id, sh.words);
         // v3.5.65 (Ian, 2026-11-10: shot 14 lost the Goliath Rider): the assets already on the shot stay
         const keepAssets = (shotRefs(live[i]) || []).filter(function (r) { return r.type === 'asset'; });
@@ -3626,6 +3629,29 @@ async function fillTokens(db) {
   try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_fill_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
   return (Number.isFinite(v) && v >= 1) ? v : 1;
 }
+// v3.6.36 (Ian, 2026-11-14: Notes asks "clear fields and start over, or append to what's there, or fill in the missing fields";
+// "put the revert on each shot"). Before any Notes write a shot's words, they are kept so its Revert can put them back exactly.
+async function keepNotesPrev(tx, shot) {
+  await tx.prepare('UPDATE shots SET notes_prev = ? WHERE id = ?').run(JSON.stringify({ words: shotWords(shot), refs: shot.refs == null ? null : String(shot.refs), precheck: shot.precheck == null ? null : String(shot.precheck) }), shot.id);
+}
+// Add to what's there: the Director's additions go at the end of the user's own words, which are never changed.
+function addToWords(w, j) {
+  const out = JSON.parse(JSON.stringify(w)), added = [];
+  Object.keys(FILL_BOXES).forEach(function (k) {
+    const add = typeof j['add_' + k] === 'string' ? j['add_' + k].trim() : '';
+    if (!add || !String(w[k] || '').trim()) return;
+    if (String(w[k]).indexOf(add) >= 0) return;
+    out[k] = String(w[k]).trim().replace(/[^.!?"\u201d]$/, '$&.') + ' ' + add;
+    added.push(k);
+  });
+  (Array.isArray(j.add_beats) ? j.add_beats : []).forEach(function (b) {
+    const i = parseInt(b && b.beat, 10) - 1, add = textOf(b && b.add);
+    if (!add || !(i >= 0 && i < out.actions.length) || String(out.actions[i]).indexOf(add) >= 0) return;
+    out.actions[i] = String(out.actions[i]).trim().replace(/[^.!?"\u201d]$/, '$&.') + ' ' + add;
+    if (added.indexOf('actions') < 0) added.push('actions');
+  });
+  return { words: out, added: added };
+}
 function fillWordsText(w, label) {
   if (!w) return label + ': (none)';
   const t = beatTimes(w);
@@ -3683,10 +3709,14 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     if (!key) return vlRefuse(req, res, FN, 500, 'The writer is not set up on this server (ANTHROPIC_API_KEY).');
     const busy = await db.prepare("SELECT id FROM episode_writer_jobs WHERE episode_id = ? AND shot_id IS NULL AND status = 'running' LIMIT 1").get(ep.id);
     if (busy) return vlRefuse(req, res, FN, 409, 'The Director is rewriting the episode. Try when that is done.');
-    const w = shotWords(shot) || cleanWords({ seconds: shot.seconds });
+    // v3.6.36: fill (the empty boxes, as before), add (to what is there, never against it) or fresh (start over: everything but the
+    // name, Purpose, Concept, pictures, references, mode and model is cleared, the check's findings too)
+    const how = req.body && (req.body.mode === 'add' || req.body.mode === 'fresh') ? req.body.mode : 'fill';
+    const w = how === 'fresh' ? cleanWords({ seconds: shot.seconds }) : (shotWords(shot) || cleanWords({ seconds: shot.seconds }));
     const empty = Object.keys(FILL_BOXES).filter(function (k) { return !String(w[k] || '').trim(); });
     const noBeats = !w.actions.length;
-    if (!empty.length && !noBeats) return res.status(400).json({ error: 'NOTHING', message: 'Every box of this shot is filled in already. Clear a box you want the Director to write.' });
+    const full = Object.keys(FILL_BOXES).filter(function (k) { return String(w[k] || '').trim(); });
+    if (how === 'fill' && !empty.length && !noBeats) return res.status(400).json({ error: 'NOTHING', message: 'Every box of this shot is filled in already. Clear a box you want the Director to write.' });
     const tokens = await fillTokens(db);
     const bal = await require('./tokens').getBalance(req.session.userId);
     if (bal.total < tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'The Director\u2019s Notes for one shot cost ' + tokens + ' token' + (tokens === 1 ? '' : 's') + '.' });
@@ -3700,8 +3730,10 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     let story = '';
     try { const ss = await shotStories(db, ep); story = shotStoryText(ss.shots.filter(function (x) { return x.id === shot.id; })[0]); } catch (e) { story = ''; }
     const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of {"do": what happens, in plain words with no spoken words in it, "seconds": how long it takes}'] : [])
-      .concat(askLines ? ['"lines": what is said, in order, a list of {"who": a name from the Characters, "line": the exact words, "during": the number of the beat it is said in, "offscreen": false}'] : []);
-    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Name each person on screen by name; never vague words for people (the others, the party, the group, people, everyone, each character), as the video model invents people to fill them; a nameless crowd is the only exception. The Opening names every person who can be seen in the shot\'s first picture (shown below), by name, where each one is and which way they face; tell who is who from the reference pictures shown; someone seen only as a face in a mirror or a vision is said to be only that; name no one who is not in the first picture. Reply with JSON only, with just the boxes asked for.' +
+      .concat(askLines ? ['"lines": what is said, in order, a list of {"who": a name from the Characters, "line": the exact words, "during": the number of the beat it is said in, "offscreen": false}'] : [])
+      .concat(how === 'add' ? full.map(function (k) { return '"add_' + k + '": words to ADD at the end of the user\'s ' + FILL_BOXES[k].split(' (')[0] + ', only what is missing and nothing that contradicts or repeats it; "" when nothing is missing'; }) : [])   // v3.6.36
+      .concat(how === 'add' && !noBeats ? ['"add_beats": a list of {"beat": its number, "add": words to ADD at the end of that beat, only what is missing and nothing that contradicts or repeats it}; [] when nothing is missing'] : []);
+    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for.' + (how === 'add' ? ' ADDING (v3.6.36): for a box the user has written, never change, repeat or contradict their words; return only what to add at its end, and only what is missing (who is where, which way they face, who speaks, how long); "" when nothing is missing.' : '') + ' Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Name each person on screen by name; never vague words for people (the others, the party, the group, people, everyone, each character), as the video model invents people to fill them; a nameless crowd is the only exception. The Opening names every person who can be seen in the shot\'s first picture (shown below), by name, where each one is and which way they face; tell who is who from the reference pictures shown; someone seen only as a face in a mirror or a vision is said to be only that; name no one who is not in the first picture. Reply with JSON only, with just the boxes asked for.' +
       (noBeats ? ' THE BEATS (v3.6.01): what the user wants is in the Purpose and Concept; follow them, and the story where they say nothing. The Opening is the first frame only: entrances, moves and speech happen in the beats. Give every beat its seconds. A beat with a line lasts at least as long as the line takes to say (about 2.5 words a second, plus a second). Never squeeze: if it all needs more than ' + maxSecs + ' seconds, still write all of it with honest seconds; the user is told where to cut.' : '') +
       (askLines ? ' THE LINES: when the Concept gives words to say, use them word for word, in its order, and fix only spelling; when it gives none, take them from the story; otherwise write none. Every line goes in "lines", never inside a beat\'s "do".' : '');
     const text = ['Overall direction: ' + (ep.overall || '(none)'), 'Characters: ' + (pool.characters.map(function (c) { return c.name; }).join(', ') || '(none)'),
@@ -3740,9 +3772,17 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
         if (lines.length) got.lines = lines;
       }
     }
-    if (!Object.keys(got).length) return vlRefuse(req, res, FN, 502, 'The Director\u2019s answer had nothing usable. Nothing was charged; try again.');
+    let addedTo = [];
+    if (how === 'add') {   // v3.6.36: the additions go at the end of the user's words
+      const ad = addToWords(Object.assign({}, w, got), j);
+      full.concat(noBeats ? [] : ['actions']).forEach(function (k) { if (ad.added.indexOf(k) >= 0) got[k] = ad.words[k]; });
+      addedTo = ad.added;
+      if (addedTo.indexOf('actions') >= 0 && !got.beats) got.beats = w.beats;   // an addition keeps the beats' seconds
+    }
+    if (!Object.keys(got).length) return vlRefuse(req, res, FN, how === 'add' ? 400 : 502, how === 'add' ? 'The Director found nothing to add to this shot. Nothing was charged.' : 'The Director\u2019s answer had nothing usable. Nothing was charged; try again.');
     const merged = cleanWords(Object.assign({}, w, got, { beats: got.actions ? got.beats : w.beats }));   // v3.6.01 the sized beats
     await db.transaction(async function (tx) {
+      await keepNotesPrev(tx, shot);   // v3.6.36: for Revert
       await writeWords(tx, shot.id, merged);
       await tx.prepare('UPDATE shots SET precheck = NULL WHERE id = ?').run(shot.id);
     });
@@ -3752,11 +3792,37 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     vlDebug(req.session.userId, 'info', FN, 'Filled ' + Object.keys(got).join(', ') + ' for ' + tokens + ' token(s), $' + usd + ' to Campaignia', { usage: r.usage });
     const note = sized && sized.over ? 'The beats need about ' + secsText(sized.total) + ' s and ' + (sm.label || 'this model') + ' makes at most ' + maxSecs + ' s, so nothing was squeezed: ' +   // v3.6.01
       (sized.cutAfter ? 'press \u2702 Cut here under beat ' + sized.cutAfter + ' to make the rest a new shot, or shorten it.' : 'shorten it, or cut it into two shots.') : '';
-    res.json({ ok: true, filled: Object.keys(got).filter(function (k) { return k !== 'beats' && k !== 'seconds'; }), tokens: tokens, note: note, episode: await loadEpisode(db, ep.id) });
+    res.json({ ok: true, how: how, added: addedTo, filled: Object.keys(got).filter(function (k) { return k !== 'beats' && k !== 'seconds'; }), tokens: tokens, note: note, episode: await loadEpisode(db, ep.id) });
   } catch (e) {
     console.error('[video] shot fill error:', e && e.message);
     vlDebug(req.session && req.session.userId, 'error', FN, 'Could not fill: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });
     if (!res.headersSent) res.status(500).json({ error: 'Could not write the notes. Nothing was charged.' });
+  }
+});
+// v3.6.36 -- REVERT (Ian, 2026-11-14: "put the revert on each shot"): the shot's words, references and check findings as they
+// were before the last Notes (the shot's own or the episode's). Free; one step back only.
+router.post('/shots/:id/revert-notes', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/shots/' + req.params.id + '/revert-notes';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(parseInt(req.params.id, 10));
+    const ep = shot ? await db.prepare('SELECT * FROM episodes WHERE id = ?').get(shot.episode_id) : null;
+    if (!shot || !(await canChange(req, ep))) return vlRefuse(req, res, FN, 404, 'Not found.', { found: !!shot });
+    const busy = await db.prepare("SELECT id FROM episode_writer_jobs WHERE episode_id = ? AND status = 'running' LIMIT 1").get(ep.id);
+    if (busy) return vlRefuse(req, res, FN, 409, 'The Director is working on this episode. Try when that is done.');
+    const prev = parseJson(shot.notes_prev, null);
+    if (!prev || typeof prev !== 'object') return vlRefuse(req, res, FN, 400, 'There is nothing to put back for this shot.');
+    await db.transaction(async function (tx) {
+      if (prev.words) await writeWords(tx, shot.id, cleanWords(prev.words));
+      else await tx.prepare('UPDATE shots SET start_text = NULL, actions = NULL, lines = NULL, camera = NULL, end_text = NULL, sounds = NULL, around = NULL, beats = NULL WHERE id = ?').run(shot.id);
+      await tx.prepare('UPDATE shots SET refs = ?, precheck = ?, notes_prev = NULL WHERE id = ?').run(prev.refs == null ? null : prev.refs, prev.precheck == null ? null : prev.precheck, shot.id);
+    });
+    vlDebug(req.session.userId, 'info', FN, 'Put back shot ' + shot.id + '\u2019s words from before the last Notes');
+    res.json({ ok: true, episode: await loadEpisode(db, ep.id) });
+  } catch (e) {
+    console.error('[video] revert notes error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not put the words back.' });
   }
 });
 router.post('/episodes/:id/precheck', requireAuth, requireVideo, async function (req, res) {
