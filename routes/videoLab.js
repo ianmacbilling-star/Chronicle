@@ -1097,7 +1097,7 @@ function planReference(ep, kfs, shotNo, cast) {
     (pics.length === 2 ? ' is a later moment' : ' are later moments, in order,') + ' of the same shot: pass through ' + (pics.length === 2 ? 'it' : 'them') + ' as the action reaches ' + (pics.length === 2 ? 'it' : 'them') + '. Keep the art style of these pictures.');
   people.forEach(function (p, i) { lines.push('@Image' + (pics.length + i + 1) + ' is ' + p.name + ': ' + p.name + '\'s face, hair, build and clothes must match @Image' + (pics.length + i + 1) + ' whenever ' + p.name + ' is on screen. ' + gearLine(p.name)); });   // v3.5.96
   if (overall) lines.push('Overall: ' + overall);
-  lines.push('What happens, in order:');
+  lines.push('The beats, in order (directions only, never said aloud):');   // v3.6.30 (take 119: Oya said "What happens" before her line)
   steps.forEach(function (w, i) { lines.push((i + 1) + '. ' + w); });
   const full = capScript(lines);   // v3.6.26: whole lines left out, never cut mid-word
   const own = steps.join('\n\n');
@@ -1182,6 +1182,7 @@ function shotScript(ep, w, pics) {
   // place should not leave a copy behind and leaves the space entirely")
   out.push('Anyone who moves or leaves their place goes entirely: no copy of them is left behind, and the spot they left stays empty.');
   if ((w.lines || []).length) out.push('Only the lines written here are spoken, each by the one named; no one else speaks or moves their mouth as if talking.');
+  if ((w.lines || []).length) out.push('Nothing else written here is said aloud: headings, labels and directions are never spoken.');   // v3.6.30
   // v3.5.48 (Ian, 2026-11-09: "can you make it so nothing appears out of thin air unless we tell it to?" -- take 26's pestle)
   out.push('Nothing appears or disappears out of thin air unless the words say so (something used up, destroyed or vanishing, as they describe it): any object a character uses must first be seen in the scene and picked up, drawn or brought into view on screen, and anyone who appears must walk or come into view.');
   if (pics) {
@@ -1212,7 +1213,8 @@ function shotScript(ep, w, pics) {
   const spk = {}; w.lines.forEach(function (l) { spk[firstName(l.who)] = true; });
   const hearers = pics ? pics.cast.filter(function (c) { return c.kind !== 'asset' && !spk[firstName(c.name)]; }).map(function (c) { return c.name; }) : [];   // v3.5.25
   if (w.actions.length || loose.length) {
-    out.push('What happens, in order' + (w.actions.length >= 2 ? ', with the seconds each part takes' : '') + ':');
+    // v3.6.30 (Ian, 2026-11-14, take 119: Oya said "What happens" before her line): the heading reads as a direction, not as words
+    out.push('The beats, in order' + (w.actions.length >= 2 ? ', with their seconds' : '') + ' (directions only, never said aloud):');
     const times = beatTimes(w), beats = w.beats || [];   // v3.5.63 -- TD-1121: each beat its seconds, camera and sound
     w.actions.forEach(function (a, i) {
       const said = w.lines.filter(function (l) { return l.when === i + 1; }).map(function (l) { return 'As this happens, ' + sayLine(l, hearers) + '.'; });
@@ -2663,7 +2665,9 @@ async function pictureForModel(url) {
 // them, no words. ctx.mode 'notes' (Director's Notes): the Director writes every box of the shots as they stand.
 function directorHead(ctx) {
   return 'You are the Director of a short video made from the illustrations of a story, for the video model ' + ctx.m.label + (ctx.m.reference ? ' (reference mode)' : '') + '.\n\n' +
-    'SHOTS AND CUTS\nThe video is a series of SHOTS joined by CUTS. A shot is one continuous camera run in one place: the camera never cuts away inside it.\n\n';
+    'SHOTS AND CUTS\nThe video is a series of SHOTS joined by CUTS. A shot is one continuous camera run in one place: the camera never cuts away inside it.\n\n' +
+    // v3.6.30 (Ian, 2026-11-14: "The director writing should always name people not use vague words"; take 117's strangers came from "the others")
+    'NAME EVERYONE\nIn everything you write, name each person on screen by name (Ori, Drel and Gubuk). Never use vague words for people, such as the others, the party, the group, people, everyone, the rest of them, companions, allies or each character: the video model invents people to fill them. The only exception is a nameless crowd (a crowd, townsfolk, soldiers).\n\n';
 }
 function shotListRequest(ctx, images) {
   const m = ctx.m, style = ctx.style, N = ctx.pictures.length, ref = !!m.reference;
@@ -3629,7 +3633,7 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     try { const ss = await shotStories(db, ep); story = shotStoryText(ss.shots.filter(function (x) { return x.id === shot.id; })[0]); } catch (e) { story = ''; }
     const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of {"do": what happens, in plain words with no spoken words in it, "seconds": how long it takes}'] : [])
       .concat(askLines ? ['"lines": what is said, in order, a list of {"who": a name from the Characters, "line": the exact words, "during": the number of the beat it is said in, "offscreen": false}'] : []);
-    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Reply with JSON only, with just the boxes asked for.' +
+    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Name each person on screen by name; never vague words for people (the others, the party, the group, people, everyone, each character), as the video model invents people to fill them; a nameless crowd is the only exception. Reply with JSON only, with just the boxes asked for.' +
       (noBeats ? ' THE BEATS (v3.6.01): what the user wants is in the Purpose and Concept; follow them, and the story where they say nothing. The Opening is the first frame only: entrances, moves and speech happen in the beats. Give every beat its seconds. A beat with a line lasts at least as long as the line takes to say (about 2.5 words a second, plus a second). Never squeeze: if it all needs more than ' + maxSecs + ' seconds, still write all of it with honest seconds; the user is told where to cut.' : '') +
       (askLines ? ' THE LINES: when the Concept gives words to say, use them word for word, in its order, and fix only spelling; when it gives none, take them from the story; otherwise write none. Every line goes in "lines", never inside a beat\'s "do".' : '');
     const text = ['Overall direction: ' + (ep.overall || '(none)'), 'Characters: ' + (pool.characters.map(function (c) { return c.name; }).join(', ') || '(none)'),

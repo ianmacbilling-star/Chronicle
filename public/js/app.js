@@ -45352,6 +45352,20 @@ var VL_GONE_WORDS = /\b(vanish(es|ing|ed)?|disappear(s|ing|ed)?|gone|leav(es|ing
 // The free checks (spec section 6): plain-word warnings under the shot. They never stop Generate.
 var VL_LINE_DIRECTION = /^\s*[\(\[].*[\)\]]\s*$|under (his|her|their|its) breath|^\s*(chanting|chants|muttering|mutters|whispering|murmuring|murmurs|mumbling|humming|hums|sighing|sighs|groaning|groans|laughing|laughs|screaming|screams|sobbing|grunting|grunts)\b/i;   // v3.5.81
 var VL_SILENT_WORDS = /\bsilent(ly)?\b|without (a )?sound|no sound|\bmouths?\b|\bmouthing\b/i;   // v3.5.81
+// v3.6.30 (Ian, 2026-11-14, shot 7 takes 116-117: "the others softly present behind her" and "breath fogs from each character" drew
+// strangers into a shot of Ori alone; "force specifically naming people ... the only time ... is crowds of random people"): a vague
+// word for people warns on its box. A phrase that names a nameless crowd (soldiers, villagers) is left alone.
+var VL_VAGUE_PEOPLE = /\b(the others|others|everyone|everybody|the party|party|the group|groups?|the rest of them|companions|allies|people|each character|every character|all of them|the team)\b/i;
+var VL_CROWD_WORDS = /\b(crowds?|townsfolk|townspeople|villagers|onlookers|bystanders|spectators|soldiers|guards|refugees|mob)\b/i;
+function vlVagueWord(text) {
+  var hit = '';
+  String(text || '').split(/[.;!?]+/).some(function (ph) {
+    if (VL_CROWD_WORDS.test(ph)) return false;
+    var m = VL_VAGUE_PEOPLE.exec(ph); if (m) { hit = m[1]; return true; }
+    return false;
+  });
+  return hit;
+}
 function vlChecks(si) {
   var d = VL.draft, s = d && d.shots[si], ep = d && vlFindEp(d.id);
   if (!s) return [];
@@ -45381,6 +45395,19 @@ function vlChecks(si) {
     if (!tx) return;
     if (VL_LINE_DIRECTION.test(tx)) out.push({ p: 'beats', t: (n ? 'Beat ' + n + '\u2019s line' : 'The line') + ' \u201c' + tx + '\u201d reads like a direction, and the model will say it aloud. Put it in the beat\u2019s words (or its Sound) and remove the line.' });
     else if (n && VL_SILENT_WORDS.test(String(acts[n - 1] || ''))) out.push({ p: 'beats', t: 'Beat ' + n + ' says the words are silent but has a line, which will be said aloud or dropped. Say how it is said instead (quietly, under his breath).' });
+  });
+  // v3.6.30: vague words for people, on the box that has them
+  var vbts = vlBeatsNorm(s.beats, acts.length), vnames = cast.map(function (c) { return String(c.name || '').trim().split(/\s+/)[0]; }).filter(Boolean).slice(0, 3).join(', ');
+  var vboxes = [['start', 'The Opening', s.start], ['camera', 'Camera', s.camera], ['end', 'The Closing', s.end], ['more', 'Sound', s.sounds], ['more', 'Around them', s.around]];
+  acts.forEach(function (a, i) {
+    var b = vbts[i] || {};
+    vboxes.push(['actions', 'Beat ' + (i + 1), a]);
+    if (b.camera) vboxes.push(['actions', 'Beat ' + (i + 1) + '\u2019s Camera', b.camera]);
+    if (b.sound) vboxes.push(['actions', 'Beat ' + (i + 1) + '\u2019s Sound', b.sound]);
+  });
+  vboxes.forEach(function (bx) {
+    var hit = vlVagueWord(bx[2]);
+    if (hit) out.push({ p: bx[0], t: bx[1] + ' says \u201c' + hit + '\u201d. Name who is there' + (vnames ? ' (' + vnames + ')' : '') + ', or the model may invent people to fill it.' });
   });
   var secs = Number(s.seconds) || VL_SHOT_SECS;
   // v3.5.67 (Ian, 2026-11-10: "Someone leaves in beat 5" when beat 5 had 3 s): judged by the beats' own seconds

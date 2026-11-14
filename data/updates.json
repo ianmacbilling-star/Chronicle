@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.6.30",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3630-vid-vague-people",
+        "kind": "change",
+        "public": false,
+        "summary": "Video shots warn about vague words for people.",
+        "detail": "Words like the others, the party, the group, people or each character get a warning on their box asking for names, since the model invents people to fill them. Nameless crowds (soldiers, villagers) are fine. The Director now always names people in what it writes.",
+        "td": []
+      },
+      {
+        "id": "3630-vid-heading-spoken",
+        "kind": "fix",
+        "public": false,
+        "summary": "A character no longer says the prompt's heading aloud.",
+        "detail": "Take 119's Oya said What happens before her line. The heading now reads as a direction, and every prompt with lines says nothing else written is said aloud.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.29",
     "staged_on": "2026-11-14",
     "entries": [
