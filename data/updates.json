@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.45",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3645-vid-take-review-server",
+        "kind": "change",
+        "public": false,
+        "summary": "Take review, the server half: a reviewer watches a take's frames, hears its sound and compares them with what was asked.",
+        "detail": "New: take_reviews table; routes to start a review, follow it, ask about it and mark a finding done. Frames come from the take's own file (2 a second, at most 40, the trimmed part), the sound through our transcription, and the answer is findings like the check's, one fix each. 1 token, including 5 questions, then 1 token per 5 more; nothing charged on a failure. The page half comes next.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.44",
     "staged_on": "2026-11-14",
     "entries": [
