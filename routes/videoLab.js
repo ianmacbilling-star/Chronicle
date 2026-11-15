@@ -308,7 +308,7 @@ function estCost(m, duration, sound) {
 // tokens come off when the video lands; a take that fails costs nothing.
 async function takeTokens(db, usd) {
   const pr = await shotListPrices(db);
-  return Math.max(1, Math.ceil((Number(usd) || 0) * 100 / pr.shotlist_cents_per_token - 1e-9));
+  return Math.max(1, Math.round((Number(usd) || 0) * 100 / pr.shotlist_cents_per_token + 1e-9));   // v3.6.42 (Ian, 2026-11-15: "do the Nearest"): 17.4 -> 17, 17.5 -> 18 (was rounded up)
 }
 async function tokensFree(db, userId) {
   const bal = await require('./tokens').getBalance(userId);
@@ -2682,7 +2682,7 @@ function usdFor(prices, inTok, outTok) {
   return (Number(inTok || 0) * prices.shotlist_price_in_per_mtok + Number(outTok || 0) * prices.shotlist_price_out_per_mtok) / 1000000;
 }
 function tokensFor(prices, usd) {
-  const n = Math.ceil((Number(usd || 0) * 100) / prices.shotlist_cents_per_token - 1e-9);
+  const n = Math.round((Number(usd || 0) * 100) / prices.shotlist_cents_per_token + 1e-9);   // v3.6.42: to the nearest token (was rounded up)
   return Math.max(1, Number.isFinite(n) ? n : 1);
 }
 function textOf(v) { return String(v == null ? '' : v).replace(/\r\n/g, '\n').trim(); }

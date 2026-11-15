@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.42",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3642-vid-tokens-nearest",
+        "kind": "change",
+        "public": false,
+        "summary": "Video charges round to the nearest token.",
+        "detail": "A take, the Director's Notes and the check: 17.4 tokens is now 17 and 17.5 is 18 (they were always rounded up). Never less than 1.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.41",
     "staged_on": "2026-11-14",
     "entries": [

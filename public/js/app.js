@@ -43288,7 +43288,7 @@ function vlMovesOf(s) {
 }
 // v3.5.46 -- TAKES IN TOKENS (Ian, 2026-11-09). A take's price: fal's cost at VL.cpt cents a token, rounded up, for the
 // model the shot is made with (its own mode can switch it, as the server's shotModelKey does). The server is the judge.
-function vlTakeTok(usd) { return Math.max(1, Math.ceil((Number(usd) || 0) * 100 / (VL.cpt || 8) - 1e-9)); }
+function vlTakeTok(usd) { return Math.max(1, Math.round((Number(usd) || 0) * 100 / (VL.cpt || 8) + 1e-9)); }   // v3.6.42: to the nearest token, as the server charges
 // v3.5.86 -- TD-1122: the shot's own model wins; its Mode then only switches to the same model in the other mode
 // (as the server's shotModelKey). The pair rule of v3.5.82 was missing here, so it is added for the episode's model too.
 function vlShotModelKey(d, ds) {
