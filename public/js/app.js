@@ -45829,6 +45829,12 @@ function vlTodoPaint() {
   rows.push('<div style="' + VL_DESC + 'margin:14px 0 4px;">Optional Checks</div>' + (quick.length ? quick.map(function (c) { return '<div style="' + VL_WARN + 'margin-bottom:4px;">&#9888; ' + escapeHtml(c.t) + '</div>'; }).join('') : '<div style="' + VL_DESC + '">None.</div>'));
   box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:680px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' + head + rows.join('') + '<div id="vl-todo-msg" style="' + VL_DESC + 'margin-top:8px;"></div></div>';
 }
+// v3.6.37: a check finding written as an outline -- the headline in bold, each "- " line on its own line
+function vlPcTextHTML(t) {
+  var rows = String(t == null ? '' : t).split('\n').map(function (r) { return r.trim(); }).filter(Boolean);
+  if (rows.length < 2) return escapeHtml(rows[0] || '');
+  return '<b>' + escapeHtml(rows[0]) + '</b>' + rows.slice(1).map(function (r) { return '<div style="padding-left:12px;text-indent:-10px;">\u2013 ' + escapeHtml(r.replace(/^-\s*/, '')) + '</div>'; }).join('');
+}
 function vlPcRowHTML(si, f, done) {
   var B = 'btn btn-sm', x = f.fix, fixBtn = '', extra = '';
   if (!done && x) {
@@ -45842,7 +45848,7 @@ function vlPcRowHTML(si, f, done) {
   }
   return '<div style="padding:8px 0;border-top:1px solid rgba(var(--accent-rgb),0.12);' + (done ? 'opacity:0.5;' : '') + '">' +
     '<div style="font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:' + (done ? 'inherit' : '#e8a85a') + ';">' + escapeHtml((x && x.type === 'words' && x.label) ? x.label : (VL_PC_KIND[f.kind] || 'Note')) + '</div>' +   // v3.5.64: named after the box it changes
-    '<div style="font-size:13px;line-height:1.45;color:var(--accent-pale);" data-no-words>' + escapeHtml(f.text) + '</div>' + extra +
+    '<div style="font-size:13px;line-height:1.45;color:var(--accent-pale);" data-no-words>' + vlPcTextHTML(f.text) + '</div>' + extra +
     '<div style="display:flex;gap:8px;margin-top:6px;">' + fixBtn +
       '<button class="' + B + '" onclick="vlPcDone(' + Number(vlShotIdAt(si)) + ',' + f.id + ',false,' + (done ? 'true' : 'false') + ')">' + (done ? 'Undo' : 'Dismiss') + '</button></div></div>';
 }

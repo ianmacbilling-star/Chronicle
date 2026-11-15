@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.37",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3637-vid-check-outline",
+        "kind": "change",
+        "public": false,
+        "summary": "The check writes each finding as a short outline.",
+        "detail": "A headline, then up to three short lines (where, what will happen, the fix). Never cut mid-word: a long one drops whole lines. The mode reason is one short line.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.36",
     "staged_on": "2026-11-14",
     "entries": [

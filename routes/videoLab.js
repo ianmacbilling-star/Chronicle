@@ -3325,7 +3325,7 @@ function precheckRequest(ctx, images) {
     '- REFERENCE: the model is given the shot\'s pictures and the cast\'s reference pictures as references and directs the shot from the words. Its first picture decides who is there and how they are laid out, but it is not a strict first frame: the model may redraw the setting or open with a move of its own and reach the picture later (v3.5.97, takes 85 and 86). A reference picture alone never brings anyone into the shot. When a shot must open exactly on its picture, Keyframes is the safe mode. Later pictures only show the place, the light and who is there. Best when the pictures disagree on place, poses, facing or who is where.\n' +
     '- KEYFRAMES: the video moves from each picture EXACTLY to the next one, morphing the first into the second. Best only when neighbouring pictures match closely: the same place, the same people in nearly the same poses and positions, a small change. When neighbouring pictures differ in place, in someone\'s pose or facing (a man carried with his head to the left in one picture and lying with his head to the right in the next), in who is holding what, or in who is where, a Keyframes take morphs nonsense.\n\n' +
     'WHAT TO LOOK FOR, SHOT BY SHOT\n' +
-    '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
+    '1. mode: which mode suits the shot, and why, in one short line of at most 15 words. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
     // v3.5.82 (Ian, 2026-11-11: "Can it mention it in the findings that you need a reference for X because they are not pictured?").
     // v3.5.83 (Ian: "should it recommend Keyframes when everyone is in the picture?... What I was hoping for was... to recommend
     // adding a reference image when someone isn't in the inital or any Keyframe"): the Keyframes preference is gone again.
@@ -3364,7 +3364,7 @@ function precheckRequest(ctx, images) {
     'IN THE PICTURE AND IN THE REFERENCES (optional): when someone is plainly in the shot\'s first picture and their reference picture is sent as well, the model may now and then add a second copy of them. Say so in one sentence, as optional, with no fix: if a take shows two of them, untick their reference.\n' +
     '6. style: only a picture that is plainly a different kind of art from the shot\'s other pictures (a photo among paintings, a flat cartoon among painted pictures, black and white among colour). The art style\'s name' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' is a loose label, not a test: never report that a picture is not that style, and never report differences of colour, light or detail.\n' +
     'LIKENESS: never judge whether a character in a picture looks like their reference (build, height, proportions, face, hair, clothing details): the reference picture is sent and the video follows it. Report only a picture where it plainly cannot be them (another skin colour, another kind of creature, a man where a woman should be).\n\n' +   // v3.5.50 (Ian, 2026-11-09: "it\'s saying this isn\'t Emanon because he\'s too bulky... a little over the top")
-    'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
+    'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is a quick outline, never a paragraph: a headline of at most 12 words saying what is wrong, then at most 3 lines that each start with "- " and have at most 15 words (where it is, what will happen, the fix), separated by line breaks (\\n in the JSON). Name the picture numbers and the characters; do not repeat the shot\'s words back or explain how the model works.\n\n' +
     (ctx.only != null ? 'THIS TIME, CHECK ONLY SHOT ' + (ctx.only + 1) + '. The other shots are listed so you know what comes before and after it (the last picture of the shot before and the first of the shot after are shown): look at the cut into it and out of it, but report only on shot ' + (ctx.only + 1) + '.\n\n' : '') +   // v3.5.38
     'ANSWER WITH ONLY THIS JSON, no other text:\n' +
     '{"shots": [{"shot": 1, "mode": "reference", "mode_why": "...", "findings": [{"kind": "gap", "level": "optional", "text": "...", "fix": {"type": "add_picture", "after_picture": 3, "describe": "..."}}]}]}\n' +
@@ -3457,6 +3457,29 @@ function pcDealt(s) {
   return pc.findings.filter(function (f) { return f && f.done && f.kind !== 'aspect'; }).map(function (f) { return pcText(f.text, 240); }).filter(Boolean).slice(0, 12);
 }
 function pcText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }
+// v3.6.37 (Ian, 2026-11-14: "This check cuts off at the f... write these check in more quick outline form. They are very
+// verbose"). Never cut mid-word: back to the last whole word, with an ellipsis.
+function pcCut(v, max) {
+  const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const c = t.slice(0, max - 1), sp = c.lastIndexOf(' ');
+  return (sp > max * 0.5 ? c.slice(0, sp) : c).replace(/[\s,;:.\-\u2013\u2014]+$/, '') + '\u2026';
+}
+// A finding as a headline and up to four "- " lines; when too long, whole lines are dropped from the end, never cut.
+function pcOutline(v, max) {
+  let rows = String(v == null ? '' : v).replace(/\r\n?/g, '\n').split('\n').map(function (r) { return r.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+  if (!rows.length) return '';
+  if (rows.length === 1 && rows[0].length > 120) rows = rows[0].split(/(?<=[.!?])\s+(?=[A-Z"(])/).map(function (r) { return r.trim(); }).filter(Boolean);   // a paragraph after all: a line a sentence
+  const head = pcCut(rows[0].replace(/^\*\*(.*)\*\*$/, '$1').replace(/^[-*\u2022\u2013\u2014]\s*/, ''), Math.min(max, 160));
+  const dash = rows.slice(1).map(function (r) { return r.replace(/^[-*\u2022\u2013\u2014]\s*/, '').trim(); }).filter(Boolean).slice(0, 4);
+  let out = head;
+  for (let i = 0; i < dash.length; i++) {
+    const d = '\n- ' + pcCut(dash[i], 200);
+    if ((out + d).length > max) { out += '\n- \u2026'; break; }
+    out += d;
+  }
+  return out;
+}
 function parsePrecheck(raw, ctx) {
   const j = readJson(raw);
   if (!j || !Array.isArray(j.shots)) return { error: 'no shots in the answer' };
@@ -3471,7 +3494,7 @@ function parsePrecheck(raw, ctx) {
     const findings = [];
     (Array.isArray(x.findings) ? x.findings : []).forEach(function (f) {
       if (!f || findings.length >= PC_MAX_FINDINGS) return;
-      const text = pcText(f.text, 500);
+      const text = pcOutline(f.text, 700);   // v3.6.37: an outline, never cut mid-word
       if (!text) return;
       const kind = PC_KINDS.indexOf(f.kind) >= 0 && f.kind !== 'aspect' ? f.kind : 'other';
       let fix = null;
@@ -3510,7 +3533,7 @@ function parsePrecheck(raw, ctx) {
       if (fix && fix.type === 'words') fix.label = pcBoxLabel(fix);
       findings.push({ kind: kind, level: f.level === 'optional' && kind !== 'cut' ? 'optional' : 'recommended', text: text, fix: fix });   // v3.5.79
     });
-    out[si] = { mode: mode, mode_why: pcText(x.mode_why, 400), findings: findings };
+    out[si] = { mode: mode, mode_why: pcCut(x.mode_why, 200), findings: findings };
   });
   if (ctx.only != null) {   // v3.5.38: one shot -- its entry is all that counts (the shot number given, or the only entry)
     if (!out[ctx.only] && j.shots.length === 1 && out.filter(Boolean).length === 1) { const k = out.findIndex(Boolean); out[ctx.only] = out[k]; out[k] = null; }
