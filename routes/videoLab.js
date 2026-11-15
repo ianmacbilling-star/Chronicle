@@ -173,6 +173,21 @@ const MODELS = {
     extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'disabled' }, promptRequired: true, maxRefs: 9, maxScene: 5,   // v3.5.91: no rewrite (was 'balanced')
     audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
   },
+  // v3.6.41 (Ian, 2026-11-15: "Does MiniMax have a 1080 option?... Do it as a small build"): H3 Max at 1080P, which fal
+  // makes as a 768P video refined up to 1080P, $0.16 a second (768P is $0.08). Otherwise the same as h3max / h3maxref.
+  h3max1080: {
+    label: 'MiniMax H3 Max 1080P', group: 'keyframes', test: true, pair: 'h3max1080ref', endpoint: 'minimax/h3-max/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.16, priceSound: 0.16,
+    extra: { resolution: '1080P', prompt_expansion_mode: 'disabled' }, promptRequired: true, audioField: null
+  },
+  h3max1080ref: {
+    label: 'MiniMax H3 Max 1080P', group: 'reference', test: true, pair: 'h3max1080', endpoint: 'minimax/h3-max/reference-to-video', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.18, priceSound: 0.18,   // $0.16 at 1080P, plus a little for pictures past the fourth
+    extra: { resolution: '1080P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'disabled' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
+  },
   wan27: {
     label: 'Wan 2.7', group: 'keyframes', test: true, pair: 'wan27ref', endpoint: 'fal-ai/wan/v2.7/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
