@@ -43075,26 +43075,27 @@ function vlTrimTake(takeId) {
   if (!f || f.t.status !== 'done' || !f.t.video_url) return;
   vlTrimClose();
   VL.trim = { id: takeId, st: f.t.trim_start != null ? Number(f.t.trim_start) : 0, en: f.t.trim_end != null ? Number(f.t.trim_end) : null, len: vlTakeSecs(f.t) };
+  VL.trim.st0 = VL.trim.st; VL.trim.en0 = VL.trim.en;   // v3.6.43: what is saved, to tell unsaved marks on closing
   var box = document.createElement('div');
   box.id = 'vl-trim-modal';
   box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
-  box.addEventListener('click', function (e) { if (e.target === box) vlTrimClose(); });
+  box.addEventListener('click', function (e) { if (e.target === box) vlTrimAsk(); });
   box.innerHTML = '<div id="vl-trim-panel" style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;width:min(1100px,94vw);max-width:98vw;min-width:360px;max-height:96vh;overflow:auto;resize:both;padding:18px;box-sizing:border-box;" title="Drag the bottom-right corner to resize">' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Take ' + f.n + '</div><button class="modal-close" onclick="vlTrimClose()">&times;</button></div>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Take ' + f.n + '</div><button class="modal-close" onclick="vlTrimAsk()">&times;</button></div>' +
     '<video id="vl-trim-v" src="' + escapeHtml(vlViewSrc(f.t.video_url)) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;max-height:calc(96vh - 230px);object-fit:contain;background:#000;border-radius:6px;"></video>' +
     '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment. Save frame keeps that frame for another shot; Start here and End here trim the part the episode uses (the take itself is not changed).</div>' +
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-sm btn-primary vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', false)">Save frame</button><button class="btn btn-sm vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', true)">Last frame</button><span style="' + VL_DESC + '">for the next shot, another shot or the Archive</span>' +
       '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;"><a class="btn btn-sm vl-view-dl" style="text-decoration:none;" href="/api/video-lab/takes/' + takeId + '/download?code=' + encodeURIComponent(vlTakeCode(f.t, f.n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(f.t, f.n)) + '" aria-label="Download">&#8681;</a>' +
       '<button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + takeId + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')" ondblclick="vlTakeInfoQuick(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
-      '<button class="btn btn-sm" onclick="vlTrimMark(\'st\')">Start here</button>' +
-      '<button class="btn btn-sm" onclick="vlTrimMark(\'en\')">End here</button>' +
+      '<button class="btn btn-sm" id="vl-trim-stb" onclick="vlTrimMark(\'st\')">Start here</button>' +
+      '<button class="btn btn-sm" id="vl-trim-enb" onclick="vlTrimMark(\'en\')">End here</button>' +
       '<button class="btn btn-sm" onclick="vlTrimPlay()">Play the trimmed part</button>' +
       '<button class="btn btn-sm" onclick="vlTrimMark(\'reset\')">Use the whole take</button>' +
       '<span id="vl-trim-read" style="' + VL_DESC + 'margin-left:auto;"></span>' +
     '</div>' +
     '<div id="vl-trim-msg" style="' + VL_DESC + 'margin-top:8px;"></div>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimClose()">Close</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save trim</button></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimAsk()">Close</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save trim</button></div>' +
   '</div>';
   // v3.6.22+ (Ian, 2026-11-14, take 107: the link and the card played it, View showed 0:00 with no error): Chrome lets one player
   // at a time read a video address from its cache, so View waited behind the card's player. Pause the page's other videos
@@ -43122,9 +43123,21 @@ function vlTrimRetry(takeId) {
   v.src = vlViewSrc(f.t.video_url);
   v.load();
 }
+// v3.6.43 (Ian, 2026-11-15: the preview ignored his End here; the marks are kept only by Save trim, and closing threw them
+// away without a word). Closing with unsaved marks asks: Save trim, Discard, or keep editing.
+function vlTrimDirty() { return !!(VL.trim && (VL.trim.st !== VL.trim.st0 || VL.trim.en !== VL.trim.en0)); }
+function vlTrimAsk() {
+  if (!vlTrimDirty()) { vlTrimClose(); return; }
+  uiConfirm('You marked a new start or end (' + VL.trim.st.toFixed(1) + ' s to ' + vlTrimEnd().toFixed(1) + ' s). It is only used once it is saved.', { title: 'Save the trim?', okText: 'Save trim', middleText: 'Discard', cancelText: 'Keep editing' })
+    .then(function (v) { if (v === true) vlTrimSave(); else if (v === 'middle') vlTrimClose(); });
+}
 function vlTrimEnd() { return VL.trim ? (VL.trim.en != null ? VL.trim.en : VL.trim.len) : 0; }
 function vlTrimRead() {
   var el = document.getElementById('vl-trim-read'); if (!el || !VL.trim) return;
+  // v3.6.43 (Ian, 2026-11-15: "On the End Here button on the viewer can you put the time that was selected. Same with the start here")
+  var sb = document.getElementById('vl-trim-stb'), eb = document.getElementById('vl-trim-enb');
+  if (sb) sb.textContent = 'Start here \u00b7 ' + VL.trim.st.toFixed(1) + ' s';
+  if (eb) eb.textContent = 'End here \u00b7 ' + vlTrimEnd().toFixed(1) + ' s';
   el.textContent = 'Uses ' + VL.trim.st.toFixed(1) + ' s to ' + vlTrimEnd().toFixed(1) + ' s (' + Math.max(0, vlTrimEnd() - VL.trim.st).toFixed(1) + ' s)';
 }
 function vlTrimMark(which) {
@@ -43859,7 +43872,7 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
         (making ? vlSpin(20) + '<div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.7);">' + escapeHtml(vlTakeProgress(t)) + ' &middot; ' + vlElapsed(t.created_at) + '</div>'
                 : '<div class="moment-img-inner" style="color:var(--danger);" data-no-words>' + escapeHtml(t.merge_error || t.error || ((t.moves || []).filter(function (x) { return x.error; }).map(function (x) { return x.error; })[0]) || 'Failed') + '</div>') +
       '</div>';
-  return '<div data-take="' + t.id + '" style="width:220px;flex:0 0 auto;border:1px solid ' + (chosen ? 'rgba(var(--accent-rgb),0.8)' : 'rgba(var(--accent-rgb),0.2)') + ';border-radius:8px;padding:6px;">' +
+  return '<div data-take="' + t.id + '" style="width:220px;flex:0 0 auto;' + (chosen ? 'border:3px solid rgb(var(--accent-rgb));padding:4px;box-shadow:0 0 10px rgba(var(--accent-rgb),0.55);' : 'border:1px solid rgba(var(--accent-rgb),0.2);padding:6px;') + 'border-radius:8px;">' +   // v3.6.43 (Ian: "bolden the gold border around the pinned take")
     body +
     // v3.5.75 (Ian, 2026-11-11): pin, take, current or out of date, date / the model and mode / the buttons at the foot
     '<div style="display:flex;gap:4px;align-items:center;margin-top:5px;flex-wrap:wrap;">' +
@@ -44207,6 +44220,9 @@ function vlFrmOpen(takeId, n, last) {
   if (!t) return;
   d.shots.forEach(function (ds, i) { if (String(ds.id) === String(t.shot_id)) si = i; });
   var at = 'end';
+  // v3.6.43 (Ian, 2026-11-15: "Last Frame will that take the last frame of the trim or the whole thing?"): the trim's end
+  // when the take has one saved, a moment before it so it is a frame that is shown
+  if (last && t.trim_end != null && isFinite(Number(t.trim_end)) && Number(t.trim_end) > 0.1) at = Math.round((Number(t.trim_end) - 0.05) * 100) / 100;
   if (!last) {
     var v = vlFrmPlayer(takeId);
     if (!v || !isFinite(v.currentTime)) { vlFrmSay('Open the take with View, pause on the frame you want, then press Save frame.'); return; }
@@ -44222,7 +44238,7 @@ function vlFrmOpen(takeId, n, last) {
   box.addEventListener('click', function (e) { if (e.target === box) vlFrmClose(); });
   box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:520px;width:100%;padding:18px;">' +
     '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">' + (last ? 'Last frame' : 'Save this frame') + '</div><button class="modal-close" onclick="vlFrmClose()">&times;</button></div>' +
-    '<div style="font-size:13px;line-height:1.5;margin:6px 0 12px;">' + escapeHtml(VL_FRM.code) + (last ? ', the last frame.' : ', at ' + at + ' s.') + ' It is saved in the campaign\'s Archive either way. Free.</div>' +
+    '<div style="font-size:13px;line-height:1.5;margin:6px 0 12px;">' + escapeHtml(VL_FRM.code) + (last ? (at === 'end' ? ', the last frame.' : ', the last frame of the trimmed part (' + at + ' s).') : ', at ' + at + ' s.') + ' It is saved in the campaign\'s Archive either way. Free.</div>' +
     '<div style="display:flex;flex-direction:column;gap:10px;">' +
       '<div><button type="button" class="btn btn-sm btn-primary vl-frm-go" id="vl-frm-next"' + (hasNext ? '' : ' disabled title="This is the last shot"') + ' onclick="vlFrmGo(\'next\')">Next shot' + (hasNext ? ' (shot ' + (si + 2) + ')' : '') + '</button> <span style="font-size:12px;opacity:0.8;">It becomes the first picture of the next shot.</span></div>' +
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><select id="vl-frm-shot" style="min-width:200px;">' + shots + '</select><button type="button" class="btn btn-sm vl-frm-go" onclick="vlFrmGo(\'pick\')">Put it in this shot</button> <span style="font-size:12px;opacity:0.8;">as its first picture.</span></div>' +

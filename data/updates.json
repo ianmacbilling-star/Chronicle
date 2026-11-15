@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.43",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3643-vid-trim-asks",
+        "kind": "change",
+        "public": false,
+        "summary": "The take viewer's trim buttons show their times, and closing with an unsaved trim asks first.",
+        "detail": "Start here and End here show the marked seconds. Closing with marks not yet saved asks Save trim, Discard or Keep editing. Last frame takes the end of a saved trim. The pinned take has a thicker gold border.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.42",
     "staged_on": "2026-11-14",
     "entries": [
