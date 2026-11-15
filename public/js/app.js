@@ -43927,19 +43927,24 @@ var VL_RV = null;   // { takeId, code, rv, price, freeAsks, msg, timer, busy }
 function vlRvOn() { return !!(VL_RV && VL_RV.takeId); }
 function vlReviewTake(takeId) {
   var f = vlRtFind(takeId); if (!f) return;
-  if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer);
-  VL_RV = { takeId: takeId, code: vlTakeCode(f.t, f.n), rv: null, price: 1, freeAsks: 5, msg: 'Opening\u2026', timer: null, busy: false };
-  openHelp();
-  try { vlRvViewer(takeId); } catch (e) {}   // v3.6.47: the viewer stays, beside the panel
-  var m = document.getElementById('help-panel'); if (m) m.style.zIndex = '120';
+  // v3.6.48 (Ian: "when the new ?Review button it pressed give a modal that says 'Do you want us to review the video and make
+  // suggestions? (1 token)'"): asked only when a review would be made and charged; a saved review just opens.
   fetch('/api/video-lab/takes/' + takeId + '/review').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
-    if (!VL_RV || VL_RV.takeId !== takeId) return;
-    if (!res.ok) { VL_RV.msg = (res.j && res.j.error) || 'Could not open the review.'; renderHelpThread(); return; }
-    VL_RV.price = res.j.price != null ? res.j.price : 1; VL_RV.freeAsks = res.j.free_asks || 5;
-    var rv = res.j.review;
-    if (rv && (rv.status === 'done' || rv.status === 'running')) { VL_RV.rv = rv; VL_RV.msg = ''; renderHelpThread(); vlRvFollow(); }
-    else vlRvStart();
-  }).catch(function () { if (VL_RV) { VL_RV.msg = 'Could not reach the server.'; renderHelpThread(); } });
+    var rv = res.ok && res.j ? res.j.review : null, price = res.ok && res.j && res.j.price != null ? res.j.price : 1;
+    var open = function (start) {
+      if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer);
+      VL_RV = { takeId: takeId, code: vlTakeCode(f.t, f.n), rv: null, price: price, freeAsks: (res.ok && res.j && res.j.free_asks) || 5, msg: '', timer: null, busy: false };
+      openHelp();
+      try { vlRvViewer(takeId); } catch (e) {}   // v3.6.47: the viewer stays, beside the panel
+      var m = document.getElementById('help-panel'); if (m) m.style.zIndex = '120';
+      if (!res.ok) { VL_RV.msg = (res.j && res.j.error) || 'Could not open the review.'; renderHelpThread(); return; }
+      if (start) { vlRvStart(); return; }
+      VL_RV.rv = rv; renderHelpThread(); vlRvFollow();
+    };
+    if (!res.ok || (rv && (rv.status === 'done' || rv.status === 'running'))) { open(false); return; }
+    uiConfirm('Do you want us to review the video and make suggestions? (' + price + ' token' + (price === 1 ? '' : 's') + ')', { title: 'Review this take', okText: 'Review it', cancelText: 'Not now' })
+      .then(function (ok) { if (ok) open(true); });
+  }).catch(function () { showError('Could not reach the server.'); });
 }
 function vlRvStart() {
   if (!VL_RV || VL_RV.busy) return;

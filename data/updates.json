@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.48",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3648-vid-review-fix-ask",
+        "kind": "fix",
+        "public": false,
+        "summary": "Take review: the frames are taken again (they failed on the server), and Review asks before it charges.",
+        "detail": "The server's ffmpeg refused to write the review's frames (error -22); they are now made full-range first, and one frame that fails is skipped instead of failing the review. ? Review asks \"Do you want us to review the video and make suggestions? (1 token)\" before making a new review; a saved review opens without asking.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.47",
     "staged_on": "2026-11-14",
     "entries": [

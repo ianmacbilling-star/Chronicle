@@ -4050,11 +4050,18 @@ async function rvFrames(url, from, to) {
     const p = await probeClip(f);
     const end = to == null ? p.dur : Math.min(to, p.dur), start = Math.max(0, Math.min(from || 0, end));
     const times = rvTimes(start, end), frames = [];
+    let lastErr = null;
     for (let i = 0; i < times.length; i++) {
       const out = path.join(dir, 'f' + i + '.jpg');
-      await runTool('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(times[i]), '-i', f, '-frames:v', '1', '-vf', 'scale=' + RV_FRAME_W + ':-2', '-q:v', '5', out], 60000);
-      if (fs.existsSync(out)) frames.push({ t: times[i], b64: fs.readFileSync(out).toString('base64') });
+      // v3.6.48 (Ian's first real review: "ffmpeg failed: [vost#0:0/mjpeg] ... error code: -22 (Invalid argument)"): the server's
+      // ffmpeg 7 will not write a JPEG from limited-range YUV, so the frame is made full-range first. One frame that still fails
+      // is skipped, not the whole review; only no frames at all is a failure.
+      try {
+        await runTool('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(times[i]), '-i', f, '-frames:v', '1', '-vf', 'scale=' + RV_FRAME_W + ':-2,format=yuvj420p', '-q:v', '5', out], 60000);
+        if (fs.existsSync(out)) frames.push({ t: times[i], b64: fs.readFileSync(out).toString('base64') });
+      } catch (e) { lastErr = e; }
     }
+    if (!frames.length) throw (lastErr || new Error('no frames could be taken from the take'));
     return { frames: frames, dur: p.dur, from: start, to: end, audio: p.audio };
   } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
 }
