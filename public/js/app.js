@@ -42892,8 +42892,8 @@ function vlPreviewPlay(si) {
         B.play().catch(function () {});
         vlPreviewAnim(info.key, A, B, d);
       }
-      if (A.currentTime >= aE - 0.02 && !A.paused) A.pause();
-      if (started && B.currentTime >= Math.min(bE, bS + d + 2.5)) { B.pause(); clearInterval(VL.pvTimer); VL.pvTimer = null; }
+      if (A.currentTime >= aE - 0.04 && !A.paused) A.pause();   // v3.6.44: one frame early, so the last frame shown is the marked one
+      if (started && B.currentTime >= Math.min(bE - 0.04, bS + d + 2.5)) { B.pause(); clearInterval(VL.pvTimer); VL.pvTimer = null; }
     }, 30);
   });
 }
@@ -42947,6 +42947,16 @@ function vlEpPvList(ep, d) {
       from: ok && t.trim_start != null ? Number(t.trim_start) || 0 : 0, to: ok && t.trim_end != null ? Number(t.trim_end) : null, cut: vlCutInfo(ds.cut_style || 'instant') };
   });
 }
+// v3.6.44 (Ian, 2026-11-15: "on each shot... the shots name. and Shot Number. a small goto button that will take you back up to
+// that shot opened up"): scroll to the shot, open it if folded, and flash its border so the eye lands on it.
+function vlGoShot(si) {
+  var s = VL.draft && VL.draft.shots[si]; if (!s) return;
+  if (vlFolded(s)) vlFold(si);
+  var b = document.getElementById('vl-body-' + s.ck), el = b && b.parentNode;
+  if (!el) return;
+  try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { el.scrollIntoView(); }
+  if (el.animate) el.animate([{ boxShadow: '0 0 0 3px rgba(var(--accent-rgb),0.95)' }, { boxShadow: '0 0 0 3px rgba(var(--accent-rgb),0.95)', offset: 0.6 }, { boxShadow: '0 0 0 0 rgba(var(--accent-rgb),0)' }], { duration: 1800 });
+}
 function vlEpPvStripHTML(ep, d) {
   var L = vlEpPvList(ep, d);
   if (!L.length) return '';
@@ -42955,7 +42965,9 @@ function vlEpPvStripHTML(ep, d) {
     var item = '<div class="vl-eppv-item" data-i="' + k + '" onclick="vlEpPvPlay(' + k + ')" title="Preview from shot ' + (k + 1) + '" style="width:150px;cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:4px;">' +
       (x.t ? '<video src="' + escapeHtml(x.t.video_url) + '#t=' + x.from + '" preload="metadata" muted playsinline style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:4px;pointer-events:none;"></video>'
            : '<div style="aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(0,0,0,0.3);border-radius:4px;font-size:11px;padding:4px;color:var(--danger);">' + escapeHtml(x.why) + '</div>') +
-      '<div style="font-size:12px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Shot ' + (k + 1) + (x.name ? ': ' + escapeHtml(x.name) : '') + '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:600;color:var(--accent-pale);">Shot ' + (k + 1) +   // v3.6.44 (Ian: the name could not be seen; "a small goto button")
+        '<button type="button" class="btn btn-sm" style="margin-left:auto;padding:0 6px;font-size:10px;line-height:16px;" title="Go up to shot ' + (k + 1) + ' and open it" onclick="event.stopPropagation();vlGoShot(' + k + ')">Go to</button></div>' +
+      (x.name ? '<div style="font-size:12px;line-height:1.3;color:rgb(var(--on-panel-rgb));overflow-wrap:anywhere;">' + escapeHtml(x.name) + '</div>' : '') +
       '<div style="' + VL_DESC + 'font-size:11px;">' + (x.t ? escapeHtml(x.code) + trim : '&nbsp;') + '</div></div>';
     var cut = k < L.length - 1 ? '<div style="' + VL_DESC + 'align-self:center;text-align:center;width:64px;font-size:11px;">&#8594;<br>' + escapeHtml(x.cut.label) + (x.cut.secs ? '<br>' + x.cut.secs + ' s' : '') + '</div>' : '';
     return item + cut;
@@ -43057,7 +43069,7 @@ function vlEpPvPlay(start) {
           vlEpPvSay(y, L.length);
         }
       }
-      if (v.currentTime >= end - 0.02 || v.ended) {
+      if (v.currentTime >= end - 0.04 || v.ended) {   // v3.6.44: one frame early
         v.pause(); clearInterval(P.timer); P.timer = null;
         if (started) { var o = P.cur; P.cur = P.nxt; P.nxt = o; vlEpPvReset(P.nxt); P.nxt.style.opacity = '0'; P.cur.style.opacity = '1'; P.k = k + 1; run(k + 1); }
         else { var o2 = P.cur; P.cur = P.nxt; P.nxt = o2; vlEpPvReset(P.nxt); P.nxt.style.opacity = '0'; begin(k + 1); }
@@ -43083,6 +43095,10 @@ function vlTrimTake(takeId) {
   box.innerHTML = '<div id="vl-trim-panel" style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;width:min(1100px,94vw);max-width:98vw;min-width:360px;max-height:96vh;overflow:auto;resize:both;padding:18px;box-sizing:border-box;" title="Drag the bottom-right corner to resize">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Take ' + f.n + '</div><button class="modal-close" onclick="vlTrimAsk()">&times;</button></div>' +
     '<video id="vl-trim-v" src="' + escapeHtml(vlViewSrc(f.t.video_url)) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;max-height:calc(96vh - 230px);object-fit:contain;background:#000;border-radius:6px;"></video>' +
+    '<div id="vl-trim-bar" onclick="vlTrimBarClick(event)" title="The whole take; the gold part is what the episode uses. Click to jump there." style="position:relative;height:12px;margin-top:6px;border-radius:6px;background:rgba(var(--accent-rgb),0.15);cursor:pointer;">' +   // v3.6.44
+      '<div id="vl-trim-sel" style="position:absolute;top:0;bottom:0;left:0;width:100%;background:rgba(var(--accent-rgb),0.5);border-left:3px solid rgb(var(--accent-rgb));border-right:3px solid rgb(var(--accent-rgb));box-sizing:border-box;"></div>' +
+      '<div id="vl-trim-head" style="position:absolute;top:-3px;bottom:-3px;left:0;width:2px;background:#fff;box-shadow:0 0 3px #000;"></div></div>' +
+    '<div id="vl-trim-clock" style="' + VL_DESC + 'margin-top:4px;font-variant-numeric:tabular-nums;"></div>' +
     '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment. Save frame keeps that frame for another shot; Start here and End here trim the part the episode uses (the take itself is not changed).</div>' +
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-sm btn-primary vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', false)">Save frame</button><button class="btn btn-sm vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', true)">Last frame</button><span style="' + VL_DESC + '">for the next shot, another shot or the Archive</span>' +
       '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;"><a class="btn btn-sm vl-view-dl" style="text-decoration:none;" href="/api/video-lab/takes/' + takeId + '/download?code=' + encodeURIComponent(vlTakeCode(f.t, f.n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(f.t, f.n)) + '" aria-label="Download">&#8681;</a>' +
@@ -43103,6 +43119,13 @@ function vlTrimTake(takeId) {
   try { document.querySelectorAll('video').forEach(function (x) { try { x.pause(); } catch (e) {} }); } catch (e) {}
   document.body.appendChild(box);
   var v = document.getElementById('vl-trim-v');
+  // v3.6.44 (Ian: "stop playing the video when they let go" of the slider): a seek that is not ours (the player's slider) leaves it
+  // paused on that frame; the browser plays again on release, so a play straight after it is undone
+  v.addEventListener('seeking', function () { if (VL.trim && VL.trim.selfSeek) { VL.trim.selfSeek = false; return; } VL.trimScrub = Date.now(); if (!v.paused) try { v.pause(); } catch (e) {} });
+  v.addEventListener('play', function () { if (VL.trimScrub && Date.now() - VL.trimScrub < 500) { VL.trimScrub = 0; try { v.pause(); } catch (e) {} } });
+  v.addEventListener('seeked', function () { if (VL.trimScrub && Date.now() - VL.trimScrub < 500 && !v.paused) try { v.pause(); } catch (e) {} });
+  if (VL.trimTick) clearInterval(VL.trimTick);
+  VL.trimTick = setInterval(function () { if (!document.getElementById('vl-trim-v')) { clearInterval(VL.trimTick); VL.trimTick = null; return; } vlTrimDraw(); }, 50);   // the clock and playhead
   v.addEventListener('loadedmetadata', function () { if (VL.trim && v.duration) { VL.trim.len = v.duration; vlTrimRead(); } var m = document.getElementById('vl-trim-msg'); if (m && m.getAttribute('data-load') === '1') { m.textContent = ''; m.removeAttribute('data-load'); } });
   var slow = function (why) {
     var m = document.getElementById('vl-trim-msg');
@@ -43128,22 +43151,43 @@ function vlTrimRetry(takeId) {
 function vlTrimDirty() { return !!(VL.trim && (VL.trim.st !== VL.trim.st0 || VL.trim.en !== VL.trim.en0)); }
 function vlTrimAsk() {
   if (!vlTrimDirty()) { vlTrimClose(); return; }
-  uiConfirm('You marked a new start or end (' + VL.trim.st.toFixed(1) + ' s to ' + vlTrimEnd().toFixed(1) + ' s). It is only used once it is saved.', { title: 'Save the trim?', okText: 'Save trim', middleText: 'Discard', cancelText: 'Keep editing' })
+  uiConfirm('You marked a new start or end (' + VL.trim.st.toFixed(2) + ' s to ' + vlTrimEnd().toFixed(2) + ' s). It is only used once it is saved.', { title: 'Save the trim?', okText: 'Save trim', middleText: 'Discard', cancelText: 'Keep editing' })
     .then(function (v) { if (v === true) vlTrimSave(); else if (v === 'middle') vlTrimClose(); });
+}
+// v3.6.44 (Ian, 2026-11-15: "put 10th of a second on the running clock"; "put markers on the Slider where the start and end are"):
+// the browser draws its own slider and clock, so ours sit under the video: the take as a bar, the used part in gold with its
+// ends marked, a playhead, and the time in tenths.
+function vlTrimDraw() {
+  var v = document.getElementById('vl-trim-v'); if (!v || !VL.trim) return;
+  var len = VL.trim.len || v.duration || 0; if (!(len > 0) || !isFinite(len)) return;
+  var sel = document.getElementById('vl-trim-sel'), head = document.getElementById('vl-trim-head'), clk = document.getElementById('vl-trim-clock');
+  var a = Math.max(0, Math.min(1, VL.trim.st / len)), b = Math.max(a, Math.min(1, vlTrimEnd() / len)), c = Math.max(0, Math.min(1, (v.currentTime || 0) / len));
+  if (sel) { sel.style.left = (a * 100) + '%'; sel.style.width = ((b - a) * 100) + '%'; }
+  if (head) head.style.left = 'calc(' + (c * 100) + '% - 1px)';
+  if (clk) clk.textContent = (Math.floor((v.currentTime || 0) * 10) / 10).toFixed(1) + ' s of ' + len.toFixed(1) + ' s' + (v.paused ? '' : ' \u00b7 playing');
+}
+function vlTrimBarClick(e) {
+  var v = document.getElementById('vl-trim-v'), bar = document.getElementById('vl-trim-bar'); if (!v || !bar || !VL.trim) return;
+  var r = bar.getBoundingClientRect(), len = VL.trim.len || v.duration || 0; if (!(len > 0) || !r.width) return;
+  VL.trim.selfSeek = true;
+  try { v.pause(); } catch (x) {}
+  v.currentTime = Math.max(0, Math.min(len, ((e.clientX - r.left) / r.width) * len));
+  vlTrimDraw();
 }
 function vlTrimEnd() { return VL.trim ? (VL.trim.en != null ? VL.trim.en : VL.trim.len) : 0; }
 function vlTrimRead() {
   var el = document.getElementById('vl-trim-read'); if (!el || !VL.trim) return;
   // v3.6.43 (Ian, 2026-11-15: "On the End Here button on the viewer can you put the time that was selected. Same with the start here")
   var sb = document.getElementById('vl-trim-stb'), eb = document.getElementById('vl-trim-enb');
-  if (sb) sb.textContent = 'Start here \u00b7 ' + VL.trim.st.toFixed(1) + ' s';
-  if (eb) eb.textContent = 'End here \u00b7 ' + vlTrimEnd().toFixed(1) + ' s';
-  el.textContent = 'Uses ' + VL.trim.st.toFixed(1) + ' s to ' + vlTrimEnd().toFixed(1) + ' s (' + Math.max(0, vlTrimEnd() - VL.trim.st).toFixed(1) + ' s)';
+  if (sb) sb.textContent = 'Start here \u00b7 ' + VL.trim.st.toFixed(2) + ' s';
+  if (eb) eb.textContent = 'End here \u00b7 ' + vlTrimEnd().toFixed(2) + ' s';
+  el.textContent = 'Uses ' + VL.trim.st.toFixed(2) + ' s to ' + vlTrimEnd().toFixed(2) + ' s (' + Math.max(0, vlTrimEnd() - VL.trim.st).toFixed(2) + ' s)';
+  vlTrimDraw();   // v3.6.44: the bar under the video
 }
 function vlTrimMark(which) {
   var v = document.getElementById('vl-trim-v'), m = document.getElementById('vl-trim-msg'); if (!v || !VL.trim) return;
   if (m) m.textContent = '';
-  var t = Math.round((v.currentTime || 0) * 10) / 10;
+  var t = Math.round((v.currentTime || 0) * 100) / 100;   // v3.6.44: hundredths, the frame paused on (was tenths)
   if (which === 'reset') { VL.trim.st = 0; VL.trim.en = null; }
   else if (which === 'st') { if (t > vlTrimEnd() - 1) { if (m) m.textContent = 'The start must be at least 1 second before the end.'; return; } VL.trim.st = t; }
   else { if (t < VL.trim.st + 1) { if (m) m.textContent = 'The end must be at least 1 second after the start.'; return; } VL.trim.en = (VL.trim.len && t >= VL.trim.len - 0.05) ? null : t; }
@@ -43152,9 +43196,14 @@ function vlTrimMark(which) {
 function vlTrimPlay() {
   var v = document.getElementById('vl-trim-v'); if (!v || !VL.trim) return;
   var en = vlTrimEnd();
-  v.currentTime = VL.trim.st; v.play().catch(function () {});
-  var stop = function () { if (v.currentTime >= en - 0.03) { v.pause(); v.removeEventListener('timeupdate', stop); } };
-  v.addEventListener('timeupdate', stop);
+  VL.trim.selfSeek = true; v.currentTime = VL.trim.st; v.play().catch(function () {});
+  // v3.6.44 (Ian: "I tell it to trim at x but it always goes a little longer"): timeupdate comes about 4 times a second, so it ran up
+  // to 0.25 s past the end; looked at every 20 ms now, and stopped one frame early so the last frame shown is the marked one
+  if (VL.trimStop) clearInterval(VL.trimStop);
+  VL.trimStop = setInterval(function () {
+    if (!document.getElementById('vl-trim-v') || v.paused) { clearInterval(VL.trimStop); VL.trimStop = null; return; }
+    if (v.currentTime >= en - 0.04) { v.pause(); clearInterval(VL.trimStop); VL.trimStop = null; }
+  }, 20);
 }
 function vlTrimSave() {
   if (!VL.trim) return;

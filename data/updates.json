@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.44",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3644-vid-trim-bar",
+        "kind": "change",
+        "public": false,
+        "summary": "The take viewer gets a trim bar and a clock in tenths; trims stop on the marked frame; the episode strip shows each shot's name with Go to.",
+        "detail": "Under the video: the whole take as a bar with the used part in gold, a playhead, and the time in tenths. Letting go of the slider leaves the video paused. Marks keep hundredths and every player stops one frame early, so the last frame shown is the marked one. The strip at the bottom shows Shot N and its name in readable text, with a Go to button that opens and flashes the shot.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.43",
     "staged_on": "2026-11-14",
     "entries": [
