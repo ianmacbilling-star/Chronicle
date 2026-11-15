@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.47",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3647-vid-review-side",
+        "kind": "change",
+        "public": false,
+        "summary": "While reviewing a take, its viewer sits beside the assistant; a second named in the review jumps there.",
+        "detail": "? Review keeps the take viewer open, smaller and on the left, with no cover over the page; closing the assistant puts it back. Seconds in the review (\"from 2.5 s\") are links that show that moment, paused.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.46",
     "staged_on": "2026-11-14",
     "entries": [

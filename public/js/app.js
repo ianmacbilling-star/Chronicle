@@ -43929,8 +43929,8 @@ function vlReviewTake(takeId) {
   var f = vlRtFind(takeId); if (!f) return;
   if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer);
   VL_RV = { takeId: takeId, code: vlTakeCode(f.t, f.n), rv: null, price: 1, freeAsks: 5, msg: 'Opening\u2026', timer: null, busy: false };
-  try { vlTrimClose(); } catch (e) {}
   openHelp();
+  try { vlRvViewer(takeId); } catch (e) {}   // v3.6.47: the viewer stays, beside the panel
   var m = document.getElementById('help-panel'); if (m) m.style.zIndex = '120';
   fetch('/api/video-lab/takes/' + takeId + '/review').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
     if (!VL_RV || VL_RV.takeId !== takeId) return;
@@ -43968,7 +43968,43 @@ function vlRvFollow() {
     }).catch(function () { if (VL_RV && VL_RV.takeId === tid) vlRvFollow(); });
   }, 3000);
 }
-function vlRvLeave() { if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer); VL_RV = null; }
+function vlRvLeave() { if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer); VL_RV = null; try { vlTrimSide(false); } catch (e) {} }   // v3.6.47: the viewer back to its size
+// v3.6.47 (Ian, 2026-11-15: "can you make the viewer smaller and to the left so you can see the video when looking at the
+// assistant"; "Sure" to a second in a finding jumping there). While a take is reviewed, its viewer sits left of the ? panel
+// with no cover over the page; closing the assistant puts it back. A second named in the review ("at 1.5 s") is a link that
+// jumps the viewer there, paused.
+function vlTrimSide(on) {
+  var box = document.getElementById('vl-trim-modal'), panel = document.getElementById('vl-trim-panel');
+  if (!box || !panel) return;
+  if (on) {
+    if (box.getAttribute('data-full') == null) { box.setAttribute('data-full', box.style.cssText); panel.setAttribute('data-full', panel.style.cssText); }
+    var hp = document.getElementById('help-panel'), w = hp && !hp.classList.contains('hidden') ? hp.getBoundingClientRect().width : 0;
+    box.style.cssText = 'position:fixed;left:12px;top:12px;bottom:12px;right:' + Math.round(w + 24) + 'px;z-index:110;display:flex;align-items:flex-start;justify-content:flex-start;pointer-events:none;';
+    panel.style.width = '100%'; panel.style.minWidth = '0'; panel.style.maxWidth = '760px'; panel.style.maxHeight = '100%'; panel.style.pointerEvents = 'auto';
+    box.setAttribute('data-side', '1');
+  } else if (box.getAttribute('data-full') != null) {
+    box.style.cssText = box.getAttribute('data-full'); panel.style.cssText = panel.getAttribute('data-full') || '';
+    box.removeAttribute('data-full'); panel.removeAttribute('data-full'); box.removeAttribute('data-side');
+  }
+}
+function vlRvViewer(takeId) {
+  var b = document.getElementById('vl-trim-modal');
+  if (!b || !VL.trim || String(VL.trim.id) !== String(takeId)) vlTrimTake(takeId);
+  vlTrimSide(true);
+}
+function vlRvSeek(t) {
+  if (!VL_RV) return;
+  vlRvViewer(VL_RV.takeId);
+  var v = document.getElementById('vl-trim-v'); if (!v) return;
+  var go = function () { if (VL.trim) VL.trim.selfSeek = true; try { v.pause(); } catch (e) {} v.currentTime = Math.max(0, Number(t) || 0); };
+  if (v.readyState >= 1) go(); else v.addEventListener('loadedmetadata', go, { once: true });
+}
+// "1.5 s", "2-3 s", "t = 4.0 s" in the review's words become links to that second (the first number of a range).
+function vlRvSecLinks(html) {
+  return String(html).replace(/(^|[^\w.#&;-])(\d{1,2}(?:\.\d{1,2})?)((?:\s?[-\u2013]\s?\d{1,2}(?:\.\d{1,2})?)?\s?s)\b/g, function (m, pre, a, rest) {
+    return pre + '<a href="#" onclick="vlRvSeek(' + Number(a) + ');return false;" title="Show this moment in the viewer" style="color:var(--accent-pale);text-decoration:underline;">' + a + rest + '</a>';
+  });
+}
 function vlRvFindingHTML(f) {
   var x = f.fix, B = 'btn btn-sm', fix = '';
   if (!f.done && x && !f.ours) {
@@ -43979,7 +44015,7 @@ function vlRvFindingHTML(f) {
   var detail = x && x.type === 'words' && !f.done ? '<div style="font-size:12px;margin-top:4px;padding:4px 6px;border-left:2px solid rgba(var(--accent-rgb),0.5);white-space:pre-wrap;" data-no-words>' + escapeHtml(x.text || '') + '</div>' : '';
   return '<div class="vl-rv-f" data-fid="' + Number(f.id) + '" style="padding:8px 0;border-top:1px solid rgba(var(--accent-rgb),0.15);' + (f.done ? 'opacity:0.5;' : '') + '">' +
     (f.ours ? '<div style="font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:#e8a85a;">Our prompt, not your words</div>' : '') +
-    '<div style="font-size:13px;line-height:1.45;" data-no-words>' + vlPcTextHTML(f.text) + '</div>' + detail +
+    '<div style="font-size:13px;line-height:1.45;" data-no-words>' + vlRvSecLinks(vlPcTextHTML(f.text)) + '</div>' + detail +   // v3.6.47: seconds jump the viewer
     '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' + fix +
       '<button type="button" class="' + B + '" onclick="vlRvDone(' + Number(f.id) + ',' + (f.done ? 'false' : 'true') + ')">' + (f.done ? 'Undo' : 'Done') + '</button></div></div>';
 }
@@ -43994,13 +44030,13 @@ function vlRvRender(box) {
     var byTurn = {};
     (rv.turns || []).forEach(function (tu) { (tu.findings || []).forEach(function (id) { byTurn[id] = true; }); });
     var first = (rv.findings || []).filter(function (f) { return !byTurn[f.id]; });
-    H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.summary ? '<div style="margin-bottom:4px;">' + escapeHtml(rv.summary) + '</div>' : '') +
+    H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.summary ? '<div style="margin-bottom:4px;">' + vlRvSecLinks(escapeHtml(rv.summary)) + '</div>' : '') +
       (first.length ? first.map(vlRvFindingHTML).join('') : '<div style="font-size:13px;">Nothing to fix.</div>') + '</div>');
     (rv.turns || []).forEach(function (tu) {
       if (tu.role === 'user') H.push('<div class="help-msg help-msg-user">' + escapeHtml(tu.text) + '</div>');
       else if (tu.role === 'answer') {
         var nf = (rv.findings || []).filter(function (f) { return (tu.findings || []).indexOf(f.id) >= 0; });
-        H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + _helpFormat(tu.text || '') + nf.map(vlRvFindingHTML).join('') + '</div>');
+        H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + vlRvSecLinks(_helpFormat(tu.text || '')) + nf.map(vlRvFindingHTML).join('') + '</div>');   // v3.6.47
       } else if (tu.role === 'error') H.push('<div class="help-msg help-msg-error">' + escapeHtml(tu.text) + '</div>');
     });
     if (rv.pending) H.push('<div class="help-msg help-msg-user">' + escapeHtml(rv.pending) + '</div><div class="help-msg help-msg-bot help-msg-pending">Thinking\u2026</div>');
