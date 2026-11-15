@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.38",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3638-vid-load-in-turn",
+        "kind": "change",
+        "public": false,
+        "summary": "The Video page no longer freezes loading every take.",
+        "detail": "Take players load two at a time, open shots first top to bottom, then folded shots in the background; a shot just opened goes to the front. A redraw keeps players already loaded instead of loading them again.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.37",
     "staged_on": "2026-11-14",
     "entries": [

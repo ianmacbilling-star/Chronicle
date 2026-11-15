@@ -42671,7 +42671,9 @@ function vlRenderOpen(force) {
   if (!force && VL.draft && String(VL.draft.id) === String(ep.id) && host.querySelector('#vl-ed-' + ep.id)) { vlRenderLive(); return; }
   if (!VL.draft || String(VL.draft.id) !== String(ep.id)) VL.draft = vlDraftFrom(ep);
   VL.liveSig = {};
+  var keep = vlVidHarvest(host);   // v3.6.38: videos already loaded are moved across, not loaded again
   host.innerHTML = vlEditorHTML(ep);
+  vlVidRestore(host, keep);
   vlShowMode();
   vlShowCost();
   vlRenderLive();
@@ -42800,6 +42802,7 @@ function vlFold(si) {
   var b = document.getElementById('vl-body-' + s.ck); if (b) b.style.display = VL.folded[k] ? 'none' : '';
   var shot = b && b.parentNode, t = shot && shot.querySelector('.vl-fold');
   if (t) { t.innerHTML = VL.folded[k] ? '&#9656;' : '&#9662;'; t.title = VL.folded[k] ? 'Open this shot' : 'Fold this shot away (its name and purpose stay)'; }
+  vlVidQueue();   // v3.6.38: a shot just opened goes to the front
 }
 function vlAddShotBelow(si) {
   vlReadForm();
@@ -43795,10 +43798,63 @@ function vlTakeInfoHTML(j) {
   }
   return H.join('');
 }
+// v3.6.38 (Ian, 2026-11-14: "it kinda freezes until all the videos are loaded. Maybe only load up the ones for the shots that
+// are open... Load the other in the background"). A take's player is drawn empty (data-vl-src); two at a time are loaded,
+// shots on view first, top to bottom, then folded ones. A redraw moves players already loaded across instead of reloading.
+function vlVidHarvest(root) {
+  var keep = {};
+  if (!root || !root.querySelectorAll) return keep;
+  root.querySelectorAll('video[data-vl-src][src]').forEach(function (v) { keep[v.getAttribute('data-vl-src')] = v; });
+  return keep;
+}
+function vlVidRestore(root, keep) {
+  if (root && root.querySelectorAll) root.querySelectorAll('video[data-vl-src]:not([src])').forEach(function (v) {
+    var old = keep[v.getAttribute('data-vl-src')];
+    if (!old || old === v) return;
+    delete keep[v.getAttribute('data-vl-src')];
+    var card = v.closest('[data-take]');
+    if (card && !card._vlHtml) card._vlHtml = card.outerHTML;
+    var w = v.parentNode && v.parentNode.querySelector('.vl-vid-wait');
+    v.parentNode.replaceChild(old, v);
+    if (w && old._vlDone) w.parentNode.removeChild(w);
+  });
+  vlVidQueue();
+}
+function vlVidQueue() {
+  if (VL.vidTimer) return;
+  VL.vidTimer = setTimeout(function () { VL.vidTimer = null; vlVidNext(); }, 0);
+}
+function vlVidNext() {
+  VL.vidBusy = (VL.vidBusy || []).filter(function (v) { return !v._vlDone && document.contains(v); });
+  while (VL.vidBusy.length < 2) {
+    var all = document.querySelectorAll('#vl-open video[data-vl-src]:not([src])');
+    if (!all.length) return;
+    var pick = null;
+    for (var i = 0; i < all.length && !pick; i++) if (all[i].offsetParent !== null) pick = all[i];
+    vlVidStart(pick || all[0]);
+  }
+}
+function vlVidStart(v) {
+  var card = v.closest('[data-take]');
+  if (card && !card._vlHtml) card._vlHtml = card.outerHTML;
+  var fin = function () {
+    if (v._vlDone) return;
+    v._vlDone = true;
+    var w = v.parentNode && v.parentNode.querySelector('.vl-vid-wait');
+    if (w) w.parentNode.removeChild(w);
+    vlVidQueue();
+  };
+  v.addEventListener('loadedmetadata', fin, { once: true });
+  v.addEventListener('error', fin, { once: true });
+  setTimeout(fin, 15000);
+  VL.vidBusy.push(v);
+  v.preload = 'metadata';
+  v.src = v.getAttribute('data-vl-src');
+}
 function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
-    ? '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" oncontextmenu="return false;" title="To save this take, use the &#8681; button under it: it names the file by the take\'s code. The link button copies its address." preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'   // v3.5.96 (Ian: "make the save as file names match"): the player's own Save named the file by its storage name, so only the code-named download is offered
+    ? '<div style="position:relative;"><video data-vl-src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" oncontextmenu="return false;" title="To save this take, use the &#8681; button under it: it names the file by the take\'s code. The link button copies its address." preload="none" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video><div class="vl-vid-wait" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-size:11px;color:rgba(var(--accent-text-rgb),0.6);">Loading...</div></div>'   // v3.6.38: loaded in turn by vlVidNext; v3.5.96 (Ian: "make the save as file names match"): the player's own Save named the file by its storage name, so only the code-named download is offered
     : '<div class="moment-img-placeholder" style="aspect-ratio:16/9;min-height:0;gap:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
         (making ? vlSpin(20) + '<div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.7);">' + escapeHtml(vlTakeProgress(t)) + ' &middot; ' + vlElapsed(t.created_at) + '</div>'
                 : '<div class="moment-img-inner" style="color:var(--danger);" data-no-words>' + escapeHtml(t.merge_error || t.error || ((t.moves || []).filter(function (x) { return x.error; }).map(function (x) { return x.error; })[0]) || 'Failed') + '</div>') +
@@ -44016,7 +44072,11 @@ function vlPatchTakes(el, key, html) {
   for (var i = 0; i < newCards.length; i++) if (newCards[i].getAttribute('data-take') !== oldCards[i].getAttribute('data-take')) return false;
   var newRow = tmp.firstElementChild, oldRow = el.firstElementChild;
   if (!newRow || !oldRow || newRow.children.length !== oldRow.children.length) return false;
-  for (var k = 0; k < newCards.length; k++) if (newCards[k].outerHTML !== oldCards[k].outerHTML) oldCards[k].parentNode.replaceChild(newCards[k].cloneNode(true), oldCards[k]);
+  for (var k = 0; k < newCards.length; k++) if (newCards[k].outerHTML !== (oldCards[k]._vlHtml || oldCards[k].outerHTML)) {   // v3.6.38: _vlHtml = the card as drawn, before its video was loaded
+    var keep = vlVidHarvest(oldCards[k]), nc = newCards[k].cloneNode(true);
+    oldCards[k].parentNode.replaceChild(nc, oldCards[k]);
+    vlVidRestore(nc, keep);
+  }
   var nb = newRow.lastElementChild, ob = oldRow.lastElementChild;   // the Generate take button
   if (nb && ob && nb.outerHTML !== ob.outerHTML) ob.parentNode.replaceChild(nb.cloneNode(true), ob);
   VL.liveSig[key] = html;
@@ -44026,7 +44086,9 @@ function vlSetLive(el, key, html) {
   if (!el) return;
   if (VL.liveSig[key] === html) return;
   VL.liveSig[key] = html;
+  var keep = vlVidHarvest(el);   // v3.6.38
   el.innerHTML = html;
+  vlVidRestore(el, keep);
 }
 function vlRenderLive() {
   var d = VL.draft, ep = d ? vlFindEp(d.id) : null;
@@ -44047,6 +44109,7 @@ function vlRenderLive() {
   vlSetLive(document.getElementById('vl-epnote'), 'note', vlEpNoteHTML(ep));   // v3.5.33
   vlShapeTagsRefresh();   // v3.5.35
   if (vlBusyEp(ep)) vlStartTimer();
+  vlVidQueue();   // v3.6.38
 }
 
 // ---- making --------------------------------------------------------------------------------
