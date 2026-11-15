@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.51",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3651-vid-review-choice",
+        "kind": "change",
+        "public": false,
+        "summary": "Take review: it watches first, then asks whether you want its thoughts or have something specific; the token is taken when you choose.",
+        "detail": "? Review watches and listens to the take first (free), then asks \"Want my thoughts, or is there something specific?\" Your thoughts gives the whole review; a typed question is answered first, with a Full thoughts too? button after it (one of the 5 questions). The sound is now sent to the transcriber as an mp3 (it refused the .mp4), and the reviewer checks that the room stays the same room.",
+        "td": [
+          "TD-1147"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.50",
     "staged_on": "2026-11-14",
     "entries": [

@@ -43973,29 +43973,25 @@ var VL_RV = null;   // { takeId, code, rv, price, freeAsks, msg, timer, busy }
 function vlRvOn() { return !!(VL_RV && VL_RV.takeId); }
 function vlReviewTake(takeId) {
   var f = vlRtFind(takeId); if (!f) return;
-  // v3.6.48 (Ian: "when the new ?Review button it pressed give a modal that says 'Do you want us to review the video and make
-  // suggestions? (1 token)'"): asked only when a review would be made and charged; a saved review just opens.
+  // v3.6.51 (Ian, 2026-11-15: "let it look at the video and info.. then ask... Do you want my thoughts or do you have something
+  // specific"; "Fine you can charge at the selection."): no question up front any more; watching is free, the token is taken
+  // when a choice is made. A review already under way, waiting or done just opens.
   fetch('/api/video-lab/takes/' + takeId + '/review').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
     var rv = res.ok && res.j ? res.j.review : null, price = res.ok && res.j && res.j.price != null ? res.j.price : 1;
-    var open = function (start) {
-      if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer);
-      VL_RV = { takeId: takeId, code: vlTakeCode(f.t, f.n), rv: null, price: price, freeAsks: (res.ok && res.j && res.j.free_asks) || 5, msg: '', timer: null, busy: false };
-      openHelp();
-      try { vlRvViewer(takeId); } catch (e) {}   // v3.6.47: the viewer stays, beside the panel
-      var m = document.getElementById('help-panel'); if (m) m.style.zIndex = '120';
-      if (!res.ok) { VL_RV.msg = (res.j && res.j.error) || 'Could not open the review.'; renderHelpThread(); return; }
-      if (start) { vlRvStart(); return; }
-      VL_RV.rv = rv; renderHelpThread(); vlRvFollow();
-    };
-    if (!res.ok || (rv && (rv.status === 'done' || rv.status === 'running'))) { open(false); return; }
-    uiConfirm('Do you want us to review the video and make suggestions? (' + price + ' token' + (price === 1 ? '' : 's') + ')', { title: 'Review this take', okText: 'Review it', cancelText: 'Not now' })
-      .then(function (ok) { if (ok) open(true); });
+    if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer);
+    VL_RV = { takeId: takeId, code: vlTakeCode(f.t, f.n), rv: null, price: price, freeAsks: (res.ok && res.j && res.j.free_asks) || 5, msg: '', timer: null, busy: false };
+    openHelp();
+    try { vlRvViewer(takeId); } catch (e) {}   // v3.6.47: the viewer stays, beside the panel
+    var m = document.getElementById('help-panel'); if (m) m.style.zIndex = '120';
+    if (!res.ok) { VL_RV.msg = (res.j && res.j.error) || 'Could not open the review.'; renderHelpThread(); return; }
+    if (rv && rv.status !== 'error') { VL_RV.rv = rv; renderHelpThread(); vlRvFollow(); return; }
+    vlRvStart();
   }).catch(function () { showError('Could not reach the server.'); });
 }
 function vlRvStart() {
   if (!VL_RV || VL_RV.busy) return;
   var id = VL_RV.takeId;
-  VL_RV.busy = true; VL_RV.msg = ''; VL_RV.rv = { status: 'running', findings: [], turns: [] }; renderHelpThread();
+  VL_RV.busy = true; VL_RV.msg = ''; VL_RV.rv = { status: 'preparing', findings: [], turns: [] }; renderHelpThread();   // v3.6.51 watching first
   fetch('/api/video-lab/takes/' + id + '/review', { method: 'POST' }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
     if (!VL_RV || VL_RV.takeId !== id) return;
     VL_RV.busy = false;
@@ -44008,7 +44004,7 @@ function vlRvFollow() {
   if (!VL_RV || !VL_RV.rv || !VL_RV.rv.id) return;
   if (VL_RV.timer) { clearTimeout(VL_RV.timer); VL_RV.timer = null; }
   var rv = VL_RV.rv, id = rv.id, tid = VL_RV.takeId;
-  if (rv.status !== 'running' && !rv.pending) return;
+  if (rv.status !== 'running' && rv.status !== 'preparing' && !rv.pending) return;   // v3.6.51 preparing
   VL_RV.timer = setTimeout(function () {
     if (!VL_RV || VL_RV.takeId !== tid) return;
     fetch('/api/video-lab/reviews/' + id).then(function (r) { return r.json(); }).then(function (j) {
@@ -44073,17 +44069,31 @@ function vlRvFindingHTML(f) {
 function vlRvRender(box) {
   var R = VL_RV, rv = R.rv, H = [];
   H.push('<div class="help-msg help-msg-bot" style="max-width:100%;"><div style="font-weight:600;margin-bottom:4px;">Reviewing take ' + escapeHtml(R.code) + '</div>' +
-    '<div style="font-size:12px;opacity:0.8;">I watch frames of the take, listen to what is said, and compare them with what was asked. ' + R.price + ' token' + (R.price === 1 ? '' : 's') + ', which includes ' + R.freeAsks + ' questions.</div></div>');
+    '<div style="font-size:12px;opacity:0.8;">I watch frames of the take, listen to what is said, and compare them with what was asked. Watching is free; ' + R.price + ' token' + (R.price === 1 ? '' : 's') + ' when you choose, including ' + R.freeAsks + ' questions.</div></div>');
   if (R.msg) H.push('<div class="help-msg help-msg-error">' + escapeHtml(R.msg) + '</div>');
-  if (rv && rv.status === 'running') H.push('<div class="help-msg help-msg-bot help-msg-pending">Watching the take\u2026 (about half a minute)</div>');
+  if (rv && rv.status === 'preparing') H.push('<div class="help-msg help-msg-bot help-msg-pending">Watching the take and listening to it\u2026</div>');   // v3.6.51
+  if (rv && rv.status === 'ready') {   // v3.6.51: the choice
+    var sp = rv.span || {}, len = sp.to != null && sp.from != null ? (Number(sp.to) - Number(sp.from)).toFixed(1) + ' s' : '';
+    H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.error ? '<div style="color:var(--danger);font-size:12px;margin-bottom:6px;">' + escapeHtml(rv.error) + '</div>' : '') +
+      'I\u2019ve watched take ' + escapeHtml(R.code) + (len ? ' (' + len + ')' : '') + '. Want my thoughts, or is there something specific you\u2019d like help with?' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="btn btn-sm btn-primary" id="vl-rv-thoughts" onclick="vlRvBegin(\'\')">Your thoughts &middot; ' + R.price + ' token' + (R.price === 1 ? '' : 's') + '</button></div>' +
+      '<div style="font-size:12px;opacity:0.75;margin-top:6px;">Or type your question below (' + R.price + ' token' + (R.price === 1 ? '' : 's') + ', including ' + R.freeAsks + ' more questions).</div></div>');
+  }
+  if (rv && rv.status === 'running') H.push((rv.pending ? '<div class="help-msg help-msg-user">' + escapeHtml(rv.pending) + '</div>' : '') + '<div class="help-msg help-msg-bot help-msg-pending">' + (rv.pending ? 'Looking into it\u2026' : 'Putting my thoughts together\u2026') + '</div>');
   if (rv && rv.status === 'error') H.push('<div class="help-msg help-msg-error">' + escapeHtml(rv.error || 'The review failed. Nothing was charged.') + '</div><div style="margin:6px 0;"><button type="button" class="btn btn-sm" onclick="vlRvStart()">Try again</button></div>');
   if (rv && rv.status === 'done') {
     var byTurn = {};
     (rv.turns || []).forEach(function (tu) { (tu.findings || []).forEach(function (id) { byTurn[id] = true; }); });
     var first = (rv.findings || []).filter(function (f) { return !byTurn[f.id]; });
-    H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.summary ? '<div style="margin-bottom:4px;">' + vlRvSecLinks(escapeHtml(rv.summary)) + '</div>' : '') +
-      (first.length ? first.map(vlRvFindingHTML).join('') : '<div style="font-size:13px;">Nothing to fix.</div>') + '</div>');
+    var t0 = (rv.turns || [])[0], qFirst = !!(t0 && t0.first), rvTurn = (rv.turns || []).filter(function (tu) { return tu.role === 'review'; })[0] || {};   // v3.6.51
+    var fullAsked = (rv.turns || []).some(function (tu) { return tu.full; }) || (rv.pending === VL_RV_FULL_Q);
+    if (qFirst) H.push('<div class="help-msg help-msg-user">' + escapeHtml(t0.text) + '</div>');
+    H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.summary ? '<div style="margin-bottom:4px;' + (qFirst ? 'font-weight:600;' : '') + '">' + vlRvSecLinks(escapeHtml(rv.summary)) + '</div>' : '') +
+      (qFirst && rvTurn.answer ? '<div style="margin-bottom:4px;">' + vlRvSecLinks(_helpFormat(rvTurn.answer)) + '</div>' : '') +
+      (first.length ? first.map(vlRvFindingHTML).join('') : (qFirst ? '' : '<div style="font-size:13px;">Nothing to fix.</div>')) +
+      (qFirst && !fullAsked ? '<div style="margin-top:8px;"><button type="button" class="btn btn-sm" onclick="vlRvFull()" title="The whole review of the take; counts as one of your questions">Full thoughts too?</button></div>' : '') + '</div>');
     (rv.turns || []).forEach(function (tu) {
+      if (tu.first) return;
       if (tu.role === 'user') H.push('<div class="help-msg help-msg-user">' + escapeHtml(tu.text) + '</div>');
       else if (tu.role === 'answer') {
         var nf = (rv.findings || []).filter(function (f) { return (tu.findings || []).indexOf(f.id) >= 0; });
@@ -44098,10 +44108,29 @@ function vlRvRender(box) {
   box.innerHTML = H.join('');
   box.scrollTop = box.scrollHeight;
 }
-function vlRvAgain() { uiConfirm('Review this take again from the start? It costs ' + VL_RV.price + ' token' + (VL_RV.price === 1 ? '' : 's') + '. The review you have stays in the take\u2019s Info.', { okText: 'Review again' }).then(function (ok) { if (ok) vlRvStart(); }); }
+function vlRvAgain() { uiConfirm('Review this take again from the start? Watching it is free; ' + VL_RV.price + ' token' + (VL_RV.price === 1 ? '' : 's') + ' when you choose. The review you have stays in the take\u2019s Info.', { okText: 'Review again' }).then(function (ok) { if (ok) vlRvStart(); }); }
+// v3.6.51 -- the choice: '' the whole review, or the user's own question first.
+var VL_RV_FULL_Q = 'Your full thoughts on the whole take, please.';   // the server's RV_FULL_Q
+function vlRvBegin(q) {
+  if (!VL_RV || !VL_RV.rv || !VL_RV.rv.id || VL_RV.rv.status !== 'ready' || VL_RV.busy) return;
+  var id = VL_RV.rv.id, qEl = document.getElementById('help-question');
+  VL_RV.busy = true; VL_RV.msg = ''; VL_RV.rv.status = 'running'; VL_RV.rv.pending = q || null; VL_RV.rv.error = null;
+  if (q && qEl) qEl.value = '';
+  renderHelpThread();
+  fetch('/api/video-lab/reviews/' + id + '/begin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: q || '' }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!VL_RV || !VL_RV.rv || VL_RV.rv.id !== id) return;
+      VL_RV.busy = false;
+      if (!res.ok || !res.j.review) { VL_RV.rv.status = 'ready'; VL_RV.rv.pending = null; if (q && qEl) qEl.value = q; VL_RV.msg = (res.j && (res.j.message || res.j.error)) || 'Could not start the review.'; renderHelpThread(); return; }
+      VL_RV.rv = res.j.review; renderHelpThread(); vlRvFollow();
+    }).catch(function () { if (VL_RV && VL_RV.rv) { VL_RV.busy = false; VL_RV.rv.status = 'ready'; VL_RV.rv.pending = null; if (q && qEl) qEl.value = q; VL_RV.msg = 'Could not reach the server.'; renderHelpThread(); } });
+}
+function vlRvFull() { var qEl = document.getElementById('help-question'); if (qEl) qEl.value = VL_RV_FULL_Q; vlRvAsk(); }
 function vlRvAsk() {
   var qEl = document.getElementById('help-question'), q = qEl ? qEl.value.trim() : '';
   if (!q || !VL_RV || !VL_RV.rv || !VL_RV.rv.id) return;
+  if (VL_RV.rv.status === 'ready') { vlRvBegin(q); return; }   // v3.6.51: a question typed at the choice goes first
   if (VL_RV.rv.status !== 'done') { VL_RV.msg = 'Wait for the review to finish first.'; renderHelpThread(); return; }
   if (VL_RV.rv.pending) return;
   var id = VL_RV.rv.id; VL_RV.msg = '';

@@ -4062,15 +4062,29 @@ async function rvFrames(url, from, to) {
       } catch (e) { lastErr = e; }
     }
     if (!frames.length) throw (lastErr || new Error('no frames could be taken from the take'));
-    return { frames: frames, dur: p.dur, from: start, to: end, audio: p.audio };
+    // v3.6.51 (take 159's review: "audio format unsupported"): the transcriber takes sound files, not the take's .mp4, so the
+    // sound is taken out as a small mp3 here, while the take is on disk. Only for the transcript; it is never kept.
+    let mp3 = null;
+    if (p.audio) {
+      try {
+        const a = path.join(dir, 'sound.mp3');
+        await runTool('ffmpeg', ['-y', '-loglevel', 'error', '-i', f, '-vn', '-ac', '1', '-ar', '22050', '-b:a', '64k', a], 120000);
+        if (fs.existsSync(a)) mp3 = fs.readFileSync(a);
+      } catch (e) { mp3 = null; }
+    }
+    return { frames: frames, dur: p.dur, from: start, to: end, audio: p.audio, mp3: mp3 };
   } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
 }
 // What was heard, with times: the take's own file through our transcription (fal's ElevenLabs Scribe). Words are grouped
 // into phrases (a pause over 0.6 s, or another speaker, starts a new one). Only what falls in the used part is kept.
-async function rvTranscript(url, from, to) {
+async function rvTranscript(fr, from, to, takeId) {
   const key = process.env.FAL_API_KEY;
   if (!key) return { error: 'transcription is not set up on this server' };
+  if (!fr || !fr.audio) return { error: 'the take has no sound track' };
+  if (!fr.mp3) return { error: 'the sound could not be taken out of the take' };
+  let url = null;
   try {
+    url = await storage.uploadFile(fr.mp3, 'vlreview-sound-take-' + takeId + '-' + Date.now() + '.mp3', 'audio/mpeg', 'video-lab');   // v3.6.51: an mp3, not the .mp4
     const axios = require('axios');
     const r = await axios.post('https://fal.run/' + RV_SCRIBE, { audio_url: url, tag_audio_events: true, diarize: true },
       { headers: { Authorization: 'Key ' + key, 'Content-Type': 'application/json' }, timeout: 120000 });
@@ -4078,6 +4092,9 @@ async function rvTranscript(url, from, to) {
   } catch (e) {
     const d = e && e.response && e.response.data;
     return { error: 'the sound could not be transcribed (' + String((d && (d.detail && JSON.stringify(d.detail) || d.error)) || (e && e.message) || 'no reason').slice(0, 200) + ')' };
+  } finally {
+    if (url) deleteFiles([url], 'take review sound').catch(function () {});
+    fr.mp3 = null;
   }
 }
 function rvPhrases(data, from, to) {
@@ -4149,9 +4166,9 @@ const RV_SYSTEM = 'You are the take reviewer in Campaignia, an app that turns ta
   '- THE BEATS: each beat happens, in order, by the right person.\n' +
   '- THE LINES: each line said word for word, by the right person, with nothing added before or after it; no one else speaking. Words heard that are not in any line (mumbles, a label or heading read aloud) are faults; say the second.\n' +
   '- THE END: where everyone is in the last frame against the Closing; and whether the last frame will cut well to the next shot\'s opening picture when one is given.\n' +
-  '- THE PLACE: the place and light hold; a camera turn shows more of the same place, not a new one.\n' +
+  '- THE PLACE: compare the background of every frame with the opening picture and the first frame. Walls, doors, arches, windows, furniture and what lies on it stay as they were; a camera move or turn shows more of the same place, never a new room, a new door or arch, or a table that vanishes. Say from which second it changes.\n' +   // v3.6.51 (take 159: the room changed and the review missed it)
   'WHAT VIDEO MODELS OFTEN DO WRONG (look for these): vague group words (others, everyone, the party, the group) invent people; words that say what NOT to show often make it appear; a speaker whose mouth is not visible (a voice from a mirror, off screen) gets a body; a face in a mirror becomes a second person in the room; a character in the opening picture who is also sent as a reference picture can appear twice; a line at the very start can get a mumble before it; the background drifts when the camera turns; headings or directions get spoken aloud.\n' +
-  'WHAT FRAMES CANNOT SHOW: smoothness of motion, natural hands, exact lip-sync timing. Do not judge these; say once, briefly, that they are for the user\'s eye.\n' +
+  'WHAT FRAMES CANNOT SHOW: smoothness of motion, walls or objects stretching or warping as the camera moves, natural hands, exact lip-sync timing. Do not judge these; say once, briefly, that they are for the user\'s eye.\n' +
   'HOW TO ANSWER\n' +
   '- Only real faults. Never invent one to have something to say. If the take is good, say so in the summary and give no findings.\n' +
   '- Say how sure you are: clearly / probably / I can\'t tell from the frames.\n' +
@@ -4166,6 +4183,15 @@ const RV_SYSTEM = 'You are the take reviewer in Campaignia, an app that turns ta
   'For a box fix, keep what is already there and change only what the fault needs; the text replaces the box.\n';
 const RV_FIRST = 'Review this take. Answer with JSON only: {"summary":"one short line: how the take did overall","findings":[{"kind":"continuity|words|reference|mode|gap|other","level":"recommended|optional","text":"...","ours":false,"fix":{...} or null}]}';
 const RV_FOLLOW = 'Answer the user\'s question about this take, briefly, from the frames, the sound and the words. Answer with JSON only: {"text":"your answer, a few short lines","findings":[...new findings in the same shape, only if the answer gives a new fix; usually none]}';
+// v3.6.51 (Ian, 2026-11-15: "let it look at the video and info.. then ask... Do you want my thoughts or do you have something
+// specific you want help with?"): the user's own question can come first, instead of the whole review; the whole review can
+// still be asked for after it (it counts as one of the questions).
+function rvQuestionFirst(q) {
+  return 'The user has a specific question about this take: "' + String(q).slice(0, 1500) + '"\nAnswer that question, from the frames, the sound and the words. Do not review everything else; name another fault only if it is serious, in one line at most. ' +
+    'Answer with JSON only: {"summary":"one short line answering the question","text":"your answer, a few short lines","findings":[findings about the question only, in the shape {"kind":"continuity|words|reference|mode|gap|other","level":"recommended|optional","text":"...","ours":false,"fix":{...} or null}; usually 0 to 2]}';
+}
+const RV_FULL_Q = 'Your full thoughts on the whole take, please.';
+const RV_FULL = 'Now review the whole take: every real fault, as in a full review, leaving out any finding already given above. Answer with JSON only: {"text":"one short line: how the take did overall","findings":[at most 6, in the same shape as a review\'s findings]}';
 function rvFirstContent(rv, asked, fr, tr, ep, t) {
   const c = [];
   c.push({ type: 'text', text: 'THE TAKE: shot ' + asked.shotNo + (asked.shot && asked.shot.name ? ' ("' + asked.shot.name + '")' : '') + ' of episode "' + (ep.name || '') + '", made with ' + asked.model +
@@ -4255,23 +4281,47 @@ async function rvGetFrames(db, rv, t) {
   ids.slice(4).forEach(function (k) { delete RV_FRAMES[k]; });   // keep the four reviews used last
   return fr;
 }
+// v3.6.51 -- a review is made in two steps. rvPrepare watches and listens (frames and transcript; cheap, never charged)
+// and leaves the review 'ready'; the user then chooses (the whole review, or a question of their own), and runReview asks
+// the model and charges. statuses: preparing -> ready -> running -> done; a failed choice goes back to ready.
+async function rvPrepare(rvId) {
+  const db = await getDb();
+  const FN = 'Take review ' + rvId + ' (watching)';
+  const rv = await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(rvId);
+  if (!rv) return;
+  const fail = async function (why) { await db.prepare("UPDATE take_reviews SET status = 'error', error = ?, updated_at = NOW() WHERE id = ? AND status = 'preparing'").run(String(why).slice(0, 400) + ' Nothing was charged.', rvId); vlDebug(rv.user_id, 'warn', FN, why); };
+  try {
+    const x = await takeAndEpisode(db, rv.take_id);
+    if (!x.t || !x.ep || x.t.status !== 'done' || !x.t.video_url) return fail('The take is not there any more.');
+    const t = x.t;
+    const from = t.trim_start != null ? Number(t.trim_start) || 0 : 0, to = t.trim_end != null ? Number(t.trim_end) : null;
+    const fr = await rvGetFrames(db, Object.assign({}, rv, { span: JSON.stringify({ from: from, to: to }) }), t);
+    const tr = t.sound ? await rvTranscript(fr, fr.from, fr.to, t.id) : { error: 'the take was made without sound' };
+    fr.mp3 = null;
+    await db.prepare("UPDATE take_reviews SET status = 'ready', error = NULL, span = ?, transcript = ?, updated_at = NOW() WHERE id = ? AND status = 'preparing'")
+      .run(JSON.stringify({ from: fr.from, to: fr.to, dur: fr.dur, frames: fr.frames.map(function (f) { return f.t; }) }), JSON.stringify(tr), rvId);
+    vlDebug(rv.user_id, 'info', FN, fr.frames.length + ' frames' + (tr && tr.error ? '; sound: ' + tr.error : '; ' + ((tr && tr.phrases) || []).length + ' phrase(s) heard'), { take: t.id });
+  } catch (e) {
+    console.error('[video] ' + FN + ' failed:', e && e.message);
+    await fail('The take could not be watched (' + String((e && e.message) || 'no reason').slice(0, 200) + ').');
+  }
+}
 async function runReview(rvId, key) {
   const db = await getDb();
   const FN = 'Take review ' + rvId;
   let rv = await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(rvId);
   if (!rv) return;
-  const fail = async function (why) { await db.prepare("UPDATE take_reviews SET status = 'error', error = ?, updated_at = NOW() WHERE id = ? AND status = 'running'").run(String(why).slice(0, 400) + ' Nothing was charged.', rvId); vlDebug(rv.user_id, 'warn', FN, why); };
+  const q = rv.pending ? String(rv.pending) : '';   // v3.6.51: the user's own question, or '' for the whole review
+  const fail = async function (why) { await db.prepare("UPDATE take_reviews SET status = 'ready', pending = NULL, error = ?, updated_at = NOW() WHERE id = ? AND status = 'running'").run(String(why).slice(0, 400) + ' Nothing was charged.', rvId); vlDebug(rv.user_id, 'warn', FN, why); };
   try {
     const x = await takeAndEpisode(db, rv.take_id);
     if (!x.t || !x.ep || x.t.status !== 'done' || !x.t.video_url) return fail('The take is not there any more.');
     const t = x.t, ep = x.ep;
-    const from = t.trim_start != null ? Number(t.trim_start) || 0 : 0, to = t.trim_end != null ? Number(t.trim_end) : null;
-    const fr = await rvGetFrames(db, Object.assign({}, rv, { span: JSON.stringify({ from: from, to: to }) }), t);
-    const tr = t.sound ? await rvTranscript(t.video_url, fr.from, fr.to) : { error: 'the take was made without sound' };
-    await db.prepare('UPDATE take_reviews SET span = ?, transcript = ?, updated_at = NOW() WHERE id = ?').run(JSON.stringify({ from: fr.from, to: fr.to, dur: fr.dur, frames: fr.frames.map(function (f) { return f.t; }) }), JSON.stringify(tr), rvId);
+    const fr = await rvGetFrames(db, rv, t);
+    const tr = parseJson(rv.transcript, null);
     const asked = await rvAsked(db, ep, t);
     const content = rvFirstContent(rv, asked, fr, tr, ep, t);
-    content.push({ type: 'text', text: RV_FIRST });
+    content.push({ type: 'text', text: q ? rvQuestionFirst(q) : RV_FIRST });
     const ans = await rvCall(key, [{ role: 'user', content: content }]);
     const usd = rvUsd(ans.usage || {});
     if (ans.error) return fail('The reviewer could not answer: ' + ans.error + '.');
@@ -4279,13 +4329,15 @@ async function runReview(rvId, key) {
     if (!j) return fail('The reviewer\'s answer could not be read.');
     const findings = await rvFindings(db, ep, asked.shot, j.findings, 1);
     const summary = String(j.summary || '').replace(/\s+/g, ' ').trim().slice(0, 300);
-    const turns = [{ role: 'review', at: new Date().toISOString(), text: summary, raw: String(ans.text).slice(0, 12000) }];
-    const ok = await db.prepare("UPDATE take_reviews SET status = 'done', summary = ?, findings = ?, turns = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, updated_at = NOW() WHERE id = ? AND status = 'running'")
+    const now = new Date().toISOString();
+    const turns = q ? [{ role: 'user', first: true, at: now, text: q }, { role: 'review', at: now, text: summary, answer: String(j.text || '').trim().slice(0, 3000), raw: String(ans.text).slice(0, 12000) }]
+                    : [{ role: 'review', at: now, text: summary, raw: String(ans.text).slice(0, 12000) }];
+    const ok = await db.prepare("UPDATE take_reviews SET status = 'done', pending = NULL, error = NULL, summary = ?, findings = ?, turns = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, updated_at = NOW() WHERE id = ? AND status = 'running'")
       .run(summary, JSON.stringify(findings), JSON.stringify(turns), Number(ans.usage.input_tokens || 0) + Number(ans.usage.cache_creation_input_tokens || 0) + Number(ans.usage.cache_read_input_tokens || 0), Number(ans.usage.output_tokens || 0), Math.round(usd * 10000) / 10000, rvId);
     if (!ok.changes) return;
     const charged = await rvCharge(db, rv.user_id, await rvSetting(db, 'video_review_tokens', 1), ep.campaign_id, 'review');
     await db.prepare('UPDATE take_reviews SET tokens_charged = ? WHERE id = ?').run(charged, rvId);
-    vlDebug(rv.user_id, 'info', FN, findings.length + ' finding(s), ' + fr.frames.length + ' frames, ' + charged + ' token(s)', { take: t.id, cost_usd: usd, findings: findings.map(function (f) { return f.kind + (f.fix ? '+' + f.fix.type : '') + (f.ours ? ' ours' : ''); }) });
+    vlDebug(rv.user_id, 'info', FN, (q ? 'question first; ' : '') + findings.length + ' finding(s), ' + fr.frames.length + ' frames, ' + charged + ' token(s)', { take: t.id, cost_usd: usd, findings: findings.map(function (f) { return f.kind + (f.fix ? '+' + f.fix.type : '') + (f.ours ? ' ours' : ''); }) });
   } catch (e) {
     console.error('[video] ' + FN + ' failed:', e && e.message);
     await fail('The review failed (' + String((e && e.message) || 'no reason').slice(0, 200) + ').');
@@ -4308,21 +4360,24 @@ async function runAsk(rvId, key) {
     const fr = await rvGetFrames(db, rv, x.t);
     const asked = await rvAsked(db, x.ep, x.t);
     const first = rvFirstContent(rv, asked, fr, parseJson(rv.transcript, null), x.ep, x.t);
-    first.push({ type: 'text', text: RV_FIRST });
+    const qFirst = turns[0] && turns[0].first ? turns[0].text : '';   // v3.6.51: the review began with the user's question
+    first.push({ type: 'text', text: qFirst ? rvQuestionFirst(qFirst) : RV_FIRST });
     const msgs = [{ role: 'user', content: first }];
     turns.forEach(function (tu) {
+      if (tu.first) return;
       if (tu.role === 'review') msgs.push({ role: 'assistant', content: tu.raw || JSON.stringify({ summary: tu.text }) });
       else if (tu.role === 'user') msgs.push({ role: 'user', content: tu.text });
       else if (tu.role === 'answer') msgs.push({ role: 'assistant', content: tu.raw || tu.text });
     });
-    msgs.push({ role: 'user', content: String(rv.pending) + '\n\n(' + RV_FOLLOW + ')' });
+    const full = String(rv.pending) === RV_FULL_Q;   // v3.6.51: "Full thoughts too?"
+    msgs.push({ role: 'user', content: String(rv.pending) + '\n\n(' + (full ? RV_FULL : RV_FOLLOW) + ')' });
     const ans = await rvCall(key, msgs);
     if (ans.error) return fail('The reviewer could not answer: ' + ans.error + '.');
     const j = readJson(ans.text) || { text: ans.text };
     const had = parseJson(rv.findings, []) || [];
     const nf = await rvFindings(db, x.ep, asked.shot, j.findings, had.reduce(function (m, f) { return Math.max(m, Number(f.id) || 0); }, 0) + 1);
     turns.push({ role: 'user', at: new Date().toISOString(), text: String(rv.pending) });
-    turns.push({ role: 'answer', at: new Date().toISOString(), text: String(j.text || '').trim().slice(0, 3000), raw: String(ans.text).slice(0, 8000), findings: nf.map(function (f) { return f.id; }) });
+    turns.push({ role: 'answer', at: new Date().toISOString(), text: String(j.text || '').trim().slice(0, 3000), raw: String(ans.text).slice(0, 8000), findings: nf.map(function (f) { return f.id; }), full: full || undefined });
     const used = (Number(rv.asks_used) || 0) + 1, free = await rvSetting(db, 'video_review_free_asks', RV_FREE_ASKS);
     const usd = rvUsd(ans.usage || {});
     const ok = await db.prepare('UPDATE take_reviews SET pending = NULL, busy_since = NULL, turns = ?, findings = ?, asks_used = ?, input_tokens = input_tokens + ?, output_tokens = output_tokens + ?, cost_usd = cost_usd + ?, updated_at = NOW() WHERE id = ? AND pending IS NOT NULL')
@@ -4341,7 +4396,8 @@ async function runAsk(rvId, key) {
 // The review's token covers the first `free` questions; then 1 token at question free+1, 2*free+1, ...
 function rvAskCharges(used, free) { return free > 0 ? (used > free && (used - free - 1) % free === 0) : true; }
 async function rvRetire(db, takeId) {
-  await db.prepare("UPDATE take_reviews SET status = 'error', error = 'Interrupted (the server restarted while it was being made). Nothing was charged; try again.', updated_at = NOW() WHERE take_id = ? AND status = 'running' AND updated_at < NOW() - INTERVAL '6 minutes'").run(takeId);
+  await db.prepare("UPDATE take_reviews SET status = 'error', error = 'Interrupted (the server restarted while it was being made). Nothing was charged; try again.', updated_at = NOW() WHERE take_id = ? AND status IN ('running', 'preparing') AND updated_at < NOW() - INTERVAL '6 minutes' AND span IS NULL").run(takeId);
+  await db.prepare("UPDATE take_reviews SET status = 'ready', pending = NULL, error = 'Interrupted (the server restarted). Nothing was charged; choose again.', updated_at = NOW() WHERE take_id = ? AND status = 'running' AND updated_at < NOW() - INTERVAL '6 minutes' AND span IS NOT NULL").run(takeId);   // v3.6.51: it had watched; only the answer was lost
   await db.prepare("UPDATE take_reviews SET pending = NULL, busy_since = NULL WHERE take_id = ? AND pending IS NOT NULL AND busy_since < NOW() - INTERVAL '6 minutes'").run(takeId);
 }
 router.get('/takes/:id/review', requireAuth, requireVideo, async function (req, res) {
@@ -4371,15 +4427,15 @@ router.post('/takes/:id/review', requireAuth, requireVideo, async function (req,
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) return vlRefuse(req, res, FN, 500, 'The reviewer is not set up on this server (ANTHROPIC_API_KEY).');
     await rvRetire(db, x.t.id);
-    const busy = await db.prepare("SELECT id FROM take_reviews WHERE take_id = ? AND status = 'running' LIMIT 1").get(x.t.id);
+    const busy = await db.prepare("SELECT id FROM take_reviews WHERE take_id = ? AND status IN ('running', 'preparing', 'ready') ORDER BY id DESC LIMIT 1").get(x.t.id);   // v3.6.51 preparing, ready
     if (busy) return res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(busy.id)) });   // one at a time: the page follows the one already running
     const price = await rvSetting(db, 'video_review_tokens', 1);
     const bal = await require('./tokens').getBalance(req.session.userId);
     if (price > 0 && !(bal.total >= price)) return vlRefuse(req, res, FN, 402, 'A review costs ' + price + ' token' + (price === 1 ? '' : 's') + ', and there are none left.');
-    const ins = await db.prepare("INSERT INTO take_reviews (take_id, episode_id, user_id, status, turns, findings) VALUES (?, ?, ?, 'running', '[]', '[]')").run(x.t.id, x.ep.id, req.session.userId);
+    const ins = await db.prepare("INSERT INTO take_reviews (take_id, episode_id, user_id, status, turns, findings) VALUES (?, ?, ?, 'preparing', '[]', '[]')").run(x.t.id, x.ep.id, req.session.userId);
     const rid = ins.lastInsertRowid;
-    vlDebug(req.session.userId, 'info', FN, 'Review ' + rid + ' started');
-    runReview(rid, key).catch(function (e) { console.error('[video] review run error:', e && e.message); });
+    vlDebug(req.session.userId, 'info', FN, 'Review ' + rid + ' started (watching first; charged only when the user chooses)');
+    rvPrepare(rid).catch(function (e) { console.error('[video] review watch error:', e && e.message); });   // v3.6.51
     res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(rid)) });
   } catch (e) {
     console.error('[video] review start error:', e && e.message);
@@ -4434,6 +4490,33 @@ router.post('/reviews/:id/ask', requireAuth, requireVideo, async function (req, 
     if (!res.headersSent) res.status(500).json({ error: 'Could not send the question.' });
   }
 });
+// v3.6.51 -- the user's choice after the take is watched: { text: '' } the whole review, { text: '...' } their own question.
+// Charged (as a review) only when the answer comes.
+router.post('/reviews/:id/begin', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/reviews/' + req.params.id + '/begin';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    await rvTables(db);
+    const m = await rvMine(req, db, parseInt(req.params.id, 10));
+    if (!m) return vlRefuse(req, res, FN, 404, 'That review is not there any more.');
+    if (m.rv.status !== 'ready') return vlRefuse(req, res, FN, 409, m.rv.status === 'preparing' ? 'The take is still being watched.' : m.rv.status === 'running' ? 'The answer is on its way.' : 'Start a new review.');
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return vlRefuse(req, res, FN, 500, 'The reviewer is not set up on this server (ANTHROPIC_API_KEY).');
+    const q = String((req.body && req.body.text) || '').trim().slice(0, 1500);
+    const price = await rvSetting(db, 'video_review_tokens', 1);
+    const bal = await require('./tokens').getBalance(req.session.userId);
+    if (price > 0 && !(bal.total >= price)) return vlRefuse(req, res, FN, 402, 'A review costs ' + price + ' token' + (price === 1 ? '' : 's') + ', and there are none left.');
+    const claim = await db.prepare("UPDATE take_reviews SET status = 'running', pending = ?, error = NULL, updated_at = NOW() WHERE id = ? AND status = 'ready'").run(q || null, m.rv.id);
+    if (!claim.changes) return vlRefuse(req, res, FN, 409, 'The answer is on its way.');
+    vlDebug(req.session.userId, 'info', FN, q ? 'their own question first' : 'the whole review');
+    runReview(m.rv.id, key).catch(function (e) { console.error('[video] review run error:', e && e.message); });
+    res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(m.rv.id)) });
+  } catch (e) {
+    console.error('[video] review begin error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not start the review.' });
+  }
+});
 // One finding marked done (its fix was applied on the page) or open again. Only that finding changes.
 router.post('/reviews/:id/done', requireAuth, requireVideo, async function (req, res) {
   const FN = 'POST /api/video-lab/reviews/' + req.params.id + '/done';
@@ -4458,7 +4541,7 @@ router.post('/reviews/:id/done', requireAuth, requireVideo, async function (req,
 });
 module.exports = router;
 module.exports.MODELS = MODELS;
-module.exports._review = { rvTimes: rvTimes, rvPhrases: rvPhrases, rvAskCharges: rvAskCharges, rvWordsText: rvWordsText, rvHeard: rvHeard, rvTables: rvTables, runReview: runReview, runAsk: runAsk, rvFindings: rvFindings };   // v3.6.45: for tests
+module.exports._review = { rvTimes: rvTimes, rvPhrases: rvPhrases, rvAskCharges: rvAskCharges, rvWordsText: rvWordsText, rvHeard: rvHeard, rvTables: rvTables, runReview: runReview, runAsk: runAsk, rvFindings: rvFindings, rvPrepare: rvPrepare, rvTranscript: rvTranscript, rvQuestionFirst: rvQuestionFirst, RV_FULL_Q: RV_FULL_Q };   // v3.6.45: for tests; v3.6.51 rvPrepare
 module.exports.VIDEO_ASPECT = VIDEO_ASPECT;
 module.exports.VIDEO_STYLES = VIDEO_STYLES;
 module.exports.estCost = estCost;
