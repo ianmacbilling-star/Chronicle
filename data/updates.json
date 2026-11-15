@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.52",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3652-vid-tile-name",
+        "kind": "change",
+        "public": false,
+        "summary": "Video: a picture's name is smaller and runs across the whole tile, with the number and arrows under it.",
+        "detail": "The name under each picture (such as Frame of e6s15t2-0162 at 14.9 s) is in small type across the full width; the picture number and the move arrows sit at the bottom of the tile.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.51",
     "staged_on": "2026-11-14",
     "entries": [

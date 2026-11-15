@@ -42696,7 +42696,7 @@ function vlKfCardHTML(d, si, ki, n) {
   var label = k.source === 'title' ? 'Title picture' : (k.label || (k.source === 'archive' ? 'From the Archive' : ''));
   var first = si === 0 && ki === 0, last = si === d.shots.length - 1 && ki === d.shots[si].kfs.length - 1;
   var busy = !!VL.kfBusy[k.url];   // v3.5.09: being retouched
-  return '<div class="storyboard-panel">' +
+  return '<div class="storyboard-panel" style="display:flex;flex-direction:column;flex:1;">' +
     '<div class="storyboard-panel-img" style="position:relative;">' +
       '<img class="moment-img-generated" src="' + escapeHtml(k.url) + '" alt="' + escapeHtml(label) + '" loading="lazy" title="Click to enlarge" onclick="openLightbox(this.src,this.alt)" onload="vlKfMeasure(this)" data-kfu="' + escapeHtml(k.url) + '" style="cursor:zoom-in;' + (busy ? 'opacity:0.45;' : '') + '">' +   // v3.5.12: click to see it bigger, as on the Storyboard
       (busy ? '<div style="position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;pointer-events:none;">' + vlSpin(34) +
@@ -42710,12 +42710,16 @@ function vlKfCardHTML(d, si, ki, n) {
         vlArchivePillHTML(k.url) +   // v3.5.20
       '</div>' +
     '</div>' +
-    '<div class="storyboard-panel-meta">' +
-      '<span class="moment-num">' + n + '</span>' +
-      '<span class="moment-title" style="flex:1;min-width:0;" data-no-words>' + escapeHtml(label) + '</span>' +
-      '<span style="display:inline-flex;gap:3px;margin-left:auto;">' +
-        vlBtn(!first, '&#9664;', 'One place earlier (into the shot before, at the start of a shot)', 'vlMove(' + si + ',' + ki + ',-1)') +
-        vlBtn(!last, '&#9654;', 'One place later (into the next shot, at the end of a shot)', 'vlMove(' + si + ',' + ki + ',1)') +
+    // v3.6.52 (Ian, 2026-11-15: "make this circled text smaller and go all the way across the tile. You can move the buttons
+    // down to the bottom of the tile"): the name in small type across the whole tile; the number and the arrows under it.
+    '<div class="storyboard-panel-meta" style="display:flex;flex-direction:column;align-items:stretch;gap:4px;flex:1;padding:6px 8px;">' +
+      '<span class="moment-title" style="display:block;width:100%;font-size:11px;line-height:1.3;overflow-wrap:anywhere;" data-no-words>' + escapeHtml(label) + '</span>' +
+      '<span style="display:flex;align-items:center;gap:3px;margin-top:auto;">' +
+        '<span class="moment-num">' + n + '</span>' +
+        '<span style="display:inline-flex;gap:3px;margin-left:auto;">' +
+          vlBtn(!first, '&#9664;', 'One place earlier (into the shot before, at the start of a shot)', 'vlMove(' + si + ',' + ki + ',-1)') +
+          vlBtn(!last, '&#9654;', 'One place later (into the next shot, at the end of a shot)', 'vlMove(' + si + ',' + ki + ',1)') +
+        '</span>' +
       '</span>' +
     '</div>' +
   '</div>';
@@ -42727,7 +42731,7 @@ function vlShotHTML(d, si, m, n0) {
   // each, then the takes and Generate take at the bottom.
   var cells = [];
   for (var ki = 0; ki < s.kfs.length; ki++) {
-    cells.push('<div class="vl-pic" style="flex:0 0 160px;width:160px;">' + vlKfCardHTML(d, si, ki, n0 + ki) + '</div>');
+    cells.push('<div class="vl-pic" style="flex:0 0 160px;width:160px;display:flex;flex-direction:column;">' + vlKfCardHTML(d, si, ki, n0 + ki) + '</div>');
     if (ki < s.kfs.length - 1) cells.push('<button type="button" class="vl-cut" style="' + VL_CUT_BTN + '" title="Cut here: the camera cuts away after picture ' + (n0 + ki) + ' and a new shot starts on picture ' + (n0 + ki + 1) + '" onclick="vlCutHere(' + si + ',' + ki + ')">&#9986;</button>');
   }
   cells.push('<div class="storyboard-panel" style="flex:0 0 120px;width:120px;cursor:pointer;" onclick="vlChoose(\'add:' + si + '\')" title="Add a picture from the Archive at the end of this shot">' +
