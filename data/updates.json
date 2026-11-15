@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.50",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3650-vid-card-viewer-only",
+        "kind": "change",
+        "public": false,
+        "summary": "Video: the take card has no ? Review and no full screen; the viewer is the way in.",
+        "detail": "? Review is only in the viewer now. The take card's video has no full-screen or picture-in-picture button; double-clicking it opens our viewer.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.49",
     "staged_on": "2026-11-14",
     "entries": [
