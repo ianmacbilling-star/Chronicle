@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.49",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3649-vid-move-shot",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: move a shot up or down, or delete it.",
+        "detail": "Small arrows beside each shot's number move the whole shot (pictures, words, takes, and the transition after it) up or down one place; an x at the end of the top line deletes the shot after asking (its takes are deleted; not while a take is being made, and not the last shot). Shot numbers and take codes follow; the episode video shows as out of date until compiled again.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.48",
     "staged_on": "2026-11-14",
     "entries": [

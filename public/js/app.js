@@ -42742,6 +42742,7 @@ function vlShotHTML(d, si, m, n0) {
       // v3.5.59 (Ian, 2026-11-10: "collapse the shot panels like the Accordion leaving their name and purpose readable")
       '<button type="button" class="vl-fold" onclick="vlFold(' + si + ')" title="' + (vlFolded(s) ? 'Open this shot' : 'Fold this shot away (its name and purpose stay)') + '" style="background:none;border:none;color:var(--accent-bright);cursor:pointer;font-size:13px;padding:0 2px;flex:none;">' + (vlFolded(s) ? '&#9656;' : '&#9662;') + '</button>' +
       '<div style="' + VL_TITLE + 'font-size:14px;flex:none;">Shot ' + (si + 1) + '</div>' +
+      vlMoveBtnsHTML(si, d.shots.length) +   // v3.6.49
       '<input id="vl-sn-' + si + '" class="form-input vl-shot-name" type="text" maxlength="120" value="' + escapeHtml(s.name || '') + '" placeholder="Name this shot" title="The shot\'s name" style="' + VL_SHOT_NAME + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
       // v3.5.59 (Ian, 2026-11-10: "every shot needs a Purpose field. It's more for the user and what the shot creating process can
       // fill in"): on the top line, so it stays readable when the shot is folded and the pictures stay right under it.
@@ -42749,6 +42750,7 @@ function vlShotHTML(d, si, m, n0) {
       '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +   // v3.5.86: the length and the Mode moved to the row below
       '<span id="vl-todo-' + s.ck + '" style="flex:none;margin-left:auto;">' + vlTodoBtnHTML(si) + '</span>' +   // v3.5.34
       ((typeof state !== 'undefined' && state.user && state.user.is_admin) ? '<button type="button" class="narrative-regen-btn" style="flex:none;" title="Admin: copy this shot\'s outline to the clipboard" onclick="vlOutline(' + si + ')">&#128203;</button>' : '') +   // v3.5.74
+      vlDelBtnHTML(si, d.shots.length) +   // v3.6.49
     '</div>' +
     '<div id="vl-body-' + s.ck + '" style="' + (vlFolded(s) ? 'display:none;' : '') + '">' +
     '<div class="vl-halves">' +
@@ -43555,6 +43557,50 @@ function vlCutHere(si, ki) {
   vlStructural();
 }
 // Remove the cut after shot si: the next shot's keyframes join it (vlStructural asks first if that shot has takes).
+// v3.6.49 (Ian, 2026-11-15: "a way to Move a Shot up or down"): the whole shot trades places with its neighbour -- its
+// pictures, words, takes and the transition after it go with it. Saved like any other change; the episode video then
+// shows as out of date (its signature follows the order), and take codes follow the new shot numbers.
+function vlMoveBtnsHTML(si, n) {
+  if (n < 2) return '';
+  var b = function (dir, on, ch, tip) {
+    return '<button type="button" class="vl-move" ' + (on ? 'onclick="vlMoveShot(' + si + ',' + dir + ')"' : 'disabled') + ' title="' + tip + '" style="background:none;border:none;color:var(--accent-bright);cursor:' + (on ? 'pointer' : 'default') + ';opacity:' + (on ? '1' : '0.25') + ';font-size:12px;padding:0 2px;line-height:1;">' + ch + '</button>';
+  };
+  return '<span style="flex:none;display:inline-flex;flex-direction:column;gap:1px;">' + b(-1, si > 0, '&#9650;', 'Move this shot up') + b(1, si < n - 1, '&#9660;', 'Move this shot down') + '</span>';
+}
+function vlMoveShot(si, dir) {
+  vlReadForm();
+  var d = VL.draft, to = si + dir;
+  if (!d || !d.shots[si] || !d.shots[to]) return;
+  var s = d.shots.splice(si, 1)[0];
+  d.shots.splice(to, 0, s);
+  vlStructural();
+  setTimeout(function () { var el = document.getElementById('vl-sn-' + to); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50);
+}
+// v3.6.49 (Ian, 2026-11-15: "add the x to delete one too"): a shot can be deleted outright, after a question that says
+// what goes with it. Its takes are deleted by the save (as when shots are joined); the last shot cannot be deleted.
+function vlDelBtnHTML(si, n) {
+  if (n < 2) return '';
+  return '<button type="button" class="vl-del-shot" title="Delete this shot" onclick="vlDeleteShot(' + si + ')" style="flex:none;background:none;border:none;color:var(--danger,#c0392b);cursor:pointer;font-size:16px;padding:0 4px;line-height:1;">&times;</button>';
+}
+function vlDeleteShot(si) {
+  vlReadForm();
+  var d = VL.draft; if (!d || !d.shots[si] || d.shots.length < 2) return;
+  var s = d.shots[si], ep = vlFindEp(d.id), n = 0;
+  var busy = false;
+  if (s.id && ep) (ep.shots || []).forEach(function (x) { if (String(x.id) === String(s.id)) { n = (x.takes || []).length; busy = (x.takes || []).some(function (t) { return t.status === 'making'; }); } });
+  if (busy) { showError('A take of this shot is being made. Wait until it is made, then delete the shot.'); return; }
+  var nm = String(s.name || '').trim();
+  uiConfirm('Delete shot ' + (si + 1) + (nm ? ' (' + nm + ')' : '') + '? Its pictures and words leave the episode' + (n ? ', and its ' + n + ' take' + (n === 1 ? ' is' : 's are') + ' deleted' : '') + '. This cannot be undone.',
+    { title: 'Delete this shot', okText: 'Delete shot', cancelText: 'Keep it', danger: true })
+    .then(function (yes) {
+      if (!yes || VL.draft !== d) return;
+      var at = d.shots.indexOf(s); if (at < 0) return;
+      d.shots.splice(at, 1);
+      vlRenderOpen(true);
+      if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
+      vlSave();
+    });
+}
 function vlJoinShots(si) {
   vlReadForm();
   var d = VL.draft;
