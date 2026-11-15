@@ -4182,13 +4182,18 @@ const RV_SYSTEM = 'You are the take reviewer in Campaignia, an app that turns ta
   '  {"type":"mode","mode":"reference|keyframes"}   {"type":"seconds","seconds":4-15}\n' +
   'For a box fix, keep what is already there and change only what the fault needs; the text replaces the box.\n';
 const RV_FIRST = 'Review this take. Answer with JSON only: {"summary":"one short line: how the take did overall","findings":[{"kind":"continuity|words|reference|mode|gap|other","level":"recommended|optional","text":"...","ours":false,"fix":{...} or null}]}';
-const RV_FOLLOW = 'Answer the user\'s question about this take, briefly, from the frames, the sound and the words. Answer with JSON only: {"text":"your answer, a few short lines","findings":[...new findings in the same shape, only if the answer gives a new fix; usually none]}';
+// v3.6.53 (Ian, 2026-11-15, on an answer about a doubled Ori: "this is too much... The first sentence is good... Short bullets
+// after that... with a clear sentence stating the cause. Then a clear sentence with solution."): every answer has that shape.
+const RV_ANSWER_SHAPE = 'Lay the answer out exactly like this, with line breaks (\\n in the JSON): first ONE short sentence that answers the question directly; ' +
+  'then at most 3 lines that each start with "- " and have at most 12 words (what you saw, with the second); then one line starting "**Cause:** " (one plain sentence); ' +
+  'then one line starting "**Fix:** " (one plain sentence: what to change). Nothing else: no paragraphs, no repeating the first sentence.';
+const RV_FOLLOW = 'Answer the user\'s question about this take, briefly, from the frames, the sound and the words. ' + RV_ANSWER_SHAPE + ' Answer with JSON only: {"text":"your answer, laid out as above","findings":[...new findings in the same shape, only if the answer gives a new fix; usually none]}';
 // v3.6.51 (Ian, 2026-11-15: "let it look at the video and info.. then ask... Do you want my thoughts or do you have something
 // specific you want help with?"): the user's own question can come first, instead of the whole review; the whole review can
 // still be asked for after it (it counts as one of the questions).
 function rvQuestionFirst(q) {
   return 'The user has a specific question about this take: "' + String(q).slice(0, 1500) + '"\nAnswer that question, from the frames, the sound and the words. Do not review everything else; name another fault only if it is serious, in one line at most. ' +
-    'Answer with JSON only: {"summary":"one short line answering the question","text":"your answer, a few short lines","findings":[findings about the question only, in the shape {"kind":"continuity|words|reference|mode|gap|other","level":"recommended|optional","text":"...","ours":false,"fix":{...} or null}; usually 0 to 2]}';
+    RV_ANSWER_SHAPE + ' Answer with JSON only: {"summary":"the first sentence of your answer","text":"the rest of your answer: the - lines, the Cause line and the Fix line, as above","findings":[findings about the question only, in the shape {"kind":"continuity|words|reference|mode|gap|other","level":"recommended|optional","text":"...","ours":false,"fix":{...} or null}; usually 0 to 2]}';
 }
 const RV_FULL_Q = 'Your full thoughts on the whole take, please.';
 const RV_FULL = 'Now review the whole take: every real fault, as in a full review, leaving out any finding already given above. Answer with JSON only: {"text":"one short line: how the take did overall","findings":[at most 6, in the same shape as a review\'s findings]}';

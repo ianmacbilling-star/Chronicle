@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.53",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3653-vid-review-answer-shape",
+        "kind": "change",
+        "public": false,
+        "summary": "Take review: answers are one sentence, a few short bullets, then the cause and the fix.",
+        "detail": "An answer to a question now opens with one sentence that answers it, then up to 3 short bullets of what was seen (with the second), then a Cause line and a Fix line.",
+        "td": [
+          "TD-1147"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.52",
     "staged_on": "2026-11-14",
     "entries": [
