@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.40",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3640-vid-wan30-720",
+        "kind": "change",
+        "public": false,
+        "summary": "Wan 3.0 at 720p as its own test choice.",
+        "detail": "Half the price of the 1080p one, to see whether the cheaper setting holds the look. Admins only, Keyframes and Reference.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.39",
     "staged_on": "2026-11-14",
     "entries": [

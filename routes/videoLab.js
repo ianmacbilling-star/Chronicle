@@ -205,6 +205,21 @@ const MODELS = {
     extra: { aspect_ratio: VIDEO_ASPECT, resolution: '1080p' }, promptRequired: true, maxRefs: 9, maxScene: 5,
     audioField: 'audio', refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
   },
+  // v3.6.40 (Ian, 2026-11-15: "yes... add Wan 3.0" at 720p): Wan 3.0 made shot 10 first try (take 144, 1080p); the same
+  // model at 720p, $0.10 a second (half), to see whether the cheaper setting holds the look.
+  wan30s: {
+    label: 'Wan 3.0 720p', group: 'keyframes', test: true, pair: 'wan30sref', endpoint: 'alibaba/wan-3.0/image-to-video',
+    start: 'start_image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,
+    extra: { resolution: '720p' }, promptRequired: true, audioField: 'audio'
+  },
+  wan30sref: {
+    label: 'Wan 3.0 720p', group: 'reference', test: true, pair: 'wan30s', endpoint: 'alibaba/wan-3.0/reference-to-video', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,
+    extra: { aspect_ratio: VIDEO_ASPECT, resolution: '720p' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    audioField: 'audio', refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
+  },
   seedance25: {
     label: 'Seedance 2.5', group: 'keyframes', test: true, pair: 'seedance25ref', endpoint: 'bytedance/seedance-2.5/us/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
