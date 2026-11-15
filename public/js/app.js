@@ -5819,6 +5819,7 @@ function _helpGreeting() {
 }
 function renderHelpThread() {
   var box = document.getElementById('help-thread'); if (!box) return;
+  if (vlRvOn()) { vlRvRender(box); return; }   // v3.6.46: reviewing a take
   var html = '';
   if (!_helpThread.length) {
     html += '<div class="help-msg help-msg-bot">' + escapeHtml(_helpGreeting()) + '</div>';
@@ -6081,10 +6082,12 @@ function openHelp() {
   if (q) setTimeout(function(){ q.focus(); }, 0);
 }
 function closeHelp() {
+  vlRvLeave();   // v3.6.46: closing leaves review mode; the review is kept on the take
   var m = document.getElementById('help-panel'); if (m) { m.classList.add('hidden'); m.style.zIndex = ''; }
   var fab = document.getElementById('help-fab'); if (fab) fab.style.display = '';
 }
 function submitHelp() {
+  if (vlRvOn()) { vlRvAsk(); return; }   // v3.6.46: a question about the take being reviewed
   if (_helpPending) return;
   var qEl = document.getElementById('help-question');
   var btn = document.getElementById('help-ask-btn');
@@ -43102,7 +43105,7 @@ function vlTrimTake(takeId) {
     '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment. Save frame keeps that frame for another shot; Start here and End here trim the part the episode uses (the take itself is not changed).</div>' +
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-sm btn-primary vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', false)">Save frame</button><button class="btn btn-sm vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', true)">Last frame</button><span style="' + VL_DESC + '">for the next shot, another shot or the Archive</span>' +
       '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;"><a class="btn btn-sm vl-view-dl" style="text-decoration:none;" href="/api/video-lab/takes/' + takeId + '/download?code=' + encodeURIComponent(vlTakeCode(f.t, f.n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(f.t, f.n)) + '" aria-label="Download">&#8681;</a>' +
-      '<button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + takeId + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')" ondblclick="vlTakeInfoQuick(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
+      '<button class="btn btn-sm vl-rv-btn" title="Have the assistant watch this take and say what went wrong, with fixes. 1 token, including 5 questions." onclick="vlReviewTake(' + takeId + ')">? Review</button><button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + takeId + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')" ondblclick="vlTakeInfoQuick(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
       '<button class="btn btn-sm" id="vl-trim-stb" onclick="vlTrimMark(\'st\')">Start here</button>' +
       '<button class="btn btn-sm" id="vl-trim-enb" onclick="vlTrimMark(\'en\')">End here</button>' +
@@ -43913,6 +43916,144 @@ function vlVidStart(v) {
   v.preload = 'metadata';
   v.src = v.getAttribute('data-vl-src');
 }
+// =================================================================================================
+// v3.6.46 -- TD-1147 TAKE REVIEW, THE PAGE (Ian, 2026-11-15: "A conversation about the take in the assistant"; "you can select
+// one at a time. You shouldn't have to do all of it at once"; spec claude/VIDEO_TAKE_REVIEW_SPEC.md). Review on a finished
+// take opens the ? panel in review mode: the reviewer's summary and findings, each with its own Fix (the check's fixes, applied
+// through the same code, one at a time) and Done/Undo, then the conversation. Typing in the panel asks about the take.
+// Closing the panel leaves review mode; Review again shows the saved review.
+// =================================================================================================
+var VL_RV = null;   // { takeId, code, rv, price, freeAsks, msg, timer, busy }
+function vlRvOn() { return !!(VL_RV && VL_RV.takeId); }
+function vlReviewTake(takeId) {
+  var f = vlRtFind(takeId); if (!f) return;
+  if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer);
+  VL_RV = { takeId: takeId, code: vlTakeCode(f.t, f.n), rv: null, price: 1, freeAsks: 5, msg: 'Opening\u2026', timer: null, busy: false };
+  try { vlTrimClose(); } catch (e) {}
+  openHelp();
+  var m = document.getElementById('help-panel'); if (m) m.style.zIndex = '120';
+  fetch('/api/video-lab/takes/' + takeId + '/review').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    if (!VL_RV || VL_RV.takeId !== takeId) return;
+    if (!res.ok) { VL_RV.msg = (res.j && res.j.error) || 'Could not open the review.'; renderHelpThread(); return; }
+    VL_RV.price = res.j.price != null ? res.j.price : 1; VL_RV.freeAsks = res.j.free_asks || 5;
+    var rv = res.j.review;
+    if (rv && (rv.status === 'done' || rv.status === 'running')) { VL_RV.rv = rv; VL_RV.msg = ''; renderHelpThread(); vlRvFollow(); }
+    else vlRvStart();
+  }).catch(function () { if (VL_RV) { VL_RV.msg = 'Could not reach the server.'; renderHelpThread(); } });
+}
+function vlRvStart() {
+  if (!VL_RV || VL_RV.busy) return;
+  var id = VL_RV.takeId;
+  VL_RV.busy = true; VL_RV.msg = ''; VL_RV.rv = { status: 'running', findings: [], turns: [] }; renderHelpThread();
+  fetch('/api/video-lab/takes/' + id + '/review', { method: 'POST' }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    if (!VL_RV || VL_RV.takeId !== id) return;
+    VL_RV.busy = false;
+    if (!res.ok || !res.j.review) { VL_RV.rv = null; VL_RV.msg = (res.j && (res.j.message || res.j.error)) || 'Could not start the review.'; renderHelpThread(); return; }
+    VL_RV.rv = res.j.review; renderHelpThread(); vlRvFollow();
+  }).catch(function () { if (VL_RV) { VL_RV.busy = false; VL_RV.rv = null; VL_RV.msg = 'Could not reach the server.'; renderHelpThread(); } });
+}
+// While the review is being made or a question is being answered, look again every 3 seconds.
+function vlRvFollow() {
+  if (!VL_RV || !VL_RV.rv || !VL_RV.rv.id) return;
+  if (VL_RV.timer) { clearTimeout(VL_RV.timer); VL_RV.timer = null; }
+  var rv = VL_RV.rv, id = rv.id, tid = VL_RV.takeId;
+  if (rv.status !== 'running' && !rv.pending) return;
+  VL_RV.timer = setTimeout(function () {
+    if (!VL_RV || VL_RV.takeId !== tid) return;
+    fetch('/api/video-lab/reviews/' + id).then(function (r) { return r.json(); }).then(function (j) {
+      if (!VL_RV || VL_RV.takeId !== tid || !j || !j.review) return;
+      var was = VL_RV.rv; VL_RV.rv = j.review;
+      if (was && was.status === 'running' && j.review.status === 'done' && typeof refreshTokenBalance === 'function') refreshTokenBalance();
+      renderHelpThread(); vlRvFollow();
+    }).catch(function () { if (VL_RV && VL_RV.takeId === tid) vlRvFollow(); });
+  }, 3000);
+}
+function vlRvLeave() { if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer); VL_RV = null; }
+function vlRvFindingHTML(f) {
+  var x = f.fix, B = 'btn btn-sm', fix = '';
+  if (!f.done && x && !f.ours) {
+    var label = x.type === 'words' ? (x.label ? 'Use: ' + x.label : 'Use this') : x.type === 'add_reference' ? 'Add ' + x.name : x.type === 'untick_reference' ? 'Stop sending ' + x.name + '\u2019s picture' :
+      x.type === 'mode' ? 'Switch to ' + (x.mode === 'reference' ? 'Reference' : 'Keyframes') : x.type === 'seconds' ? 'Make it ' + Number(x.seconds) + ' s' : '';
+    if (label) fix = '<button type="button" class="' + B + '" onclick="vlRvFix(' + Number(f.id) + ')">' + escapeHtml(label) + '</button>';
+  }
+  var detail = x && x.type === 'words' && !f.done ? '<div style="font-size:12px;margin-top:4px;padding:4px 6px;border-left:2px solid rgba(var(--accent-rgb),0.5);white-space:pre-wrap;" data-no-words>' + escapeHtml(x.text || '') + '</div>' : '';
+  return '<div class="vl-rv-f" data-fid="' + Number(f.id) + '" style="padding:8px 0;border-top:1px solid rgba(var(--accent-rgb),0.15);' + (f.done ? 'opacity:0.5;' : '') + '">' +
+    (f.ours ? '<div style="font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:#e8a85a;">Our prompt, not your words</div>' : '') +
+    '<div style="font-size:13px;line-height:1.45;" data-no-words>' + vlPcTextHTML(f.text) + '</div>' + detail +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' + fix +
+      '<button type="button" class="' + B + '" onclick="vlRvDone(' + Number(f.id) + ',' + (f.done ? 'false' : 'true') + ')">' + (f.done ? 'Undo' : 'Done') + '</button></div></div>';
+}
+function vlRvRender(box) {
+  var R = VL_RV, rv = R.rv, H = [];
+  H.push('<div class="help-msg help-msg-bot" style="max-width:100%;"><div style="font-weight:600;margin-bottom:4px;">Reviewing take ' + escapeHtml(R.code) + '</div>' +
+    '<div style="font-size:12px;opacity:0.8;">I watch frames of the take, listen to what is said, and compare them with what was asked. ' + R.price + ' token' + (R.price === 1 ? '' : 's') + ', which includes ' + R.freeAsks + ' questions.</div></div>');
+  if (R.msg) H.push('<div class="help-msg help-msg-error">' + escapeHtml(R.msg) + '</div>');
+  if (rv && rv.status === 'running') H.push('<div class="help-msg help-msg-bot help-msg-pending">Watching the take\u2026 (about half a minute)</div>');
+  if (rv && rv.status === 'error') H.push('<div class="help-msg help-msg-error">' + escapeHtml(rv.error || 'The review failed. Nothing was charged.') + '</div><div style="margin:6px 0;"><button type="button" class="btn btn-sm" onclick="vlRvStart()">Try again</button></div>');
+  if (rv && rv.status === 'done') {
+    var byTurn = {};
+    (rv.turns || []).forEach(function (tu) { (tu.findings || []).forEach(function (id) { byTurn[id] = true; }); });
+    var first = (rv.findings || []).filter(function (f) { return !byTurn[f.id]; });
+    H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.summary ? '<div style="margin-bottom:4px;">' + escapeHtml(rv.summary) + '</div>' : '') +
+      (first.length ? first.map(vlRvFindingHTML).join('') : '<div style="font-size:13px;">Nothing to fix.</div>') + '</div>');
+    (rv.turns || []).forEach(function (tu) {
+      if (tu.role === 'user') H.push('<div class="help-msg help-msg-user">' + escapeHtml(tu.text) + '</div>');
+      else if (tu.role === 'answer') {
+        var nf = (rv.findings || []).filter(function (f) { return (tu.findings || []).indexOf(f.id) >= 0; });
+        H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + _helpFormat(tu.text || '') + nf.map(vlRvFindingHTML).join('') + '</div>');
+      } else if (tu.role === 'error') H.push('<div class="help-msg help-msg-error">' + escapeHtml(tu.text) + '</div>');
+    });
+    if (rv.pending) H.push('<div class="help-msg help-msg-user">' + escapeHtml(rv.pending) + '</div><div class="help-msg help-msg-bot help-msg-pending">Thinking\u2026</div>');
+    var used = Number(rv.asks_used) || 0, free = Number(rv.free_asks) || R.freeAsks, left = used < free ? free - used : (free - ((used - free) % free)) % free;
+    H.push('<div style="font-size:11px;opacity:0.75;margin:6px 2px;">' + (used < free ? left + ' question' + (left === 1 ? '' : 's') + ' left in this review.' : (left ? left + ' question' + (left === 1 ? '' : 's') + ' left before the next token.' : 'The next question costs 1 token and covers ' + free + '.')) +
+      ' <a href="#" onclick="vlRvAgain();return false;" style="color:var(--accent-pale);">Review it again</a></div>');
+  }
+  box.innerHTML = H.join('');
+  box.scrollTop = box.scrollHeight;
+}
+function vlRvAgain() { uiConfirm('Review this take again from the start? It costs ' + VL_RV.price + ' token' + (VL_RV.price === 1 ? '' : 's') + '. The review you have stays in the take\u2019s Info.', { okText: 'Review again' }).then(function (ok) { if (ok) vlRvStart(); }); }
+function vlRvAsk() {
+  var qEl = document.getElementById('help-question'), q = qEl ? qEl.value.trim() : '';
+  if (!q || !VL_RV || !VL_RV.rv || !VL_RV.rv.id) return;
+  if (VL_RV.rv.status !== 'done') { VL_RV.msg = 'Wait for the review to finish first.'; renderHelpThread(); return; }
+  if (VL_RV.rv.pending) return;
+  var id = VL_RV.rv.id; VL_RV.msg = '';
+  VL_RV.rv.pending = q; if (qEl) qEl.value = ''; renderHelpThread();
+  fetch('/api/video-lab/reviews/' + id + '/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: q }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!VL_RV || !VL_RV.rv || VL_RV.rv.id !== id) return;
+      if (!res.ok) { VL_RV.rv.pending = null; if (qEl) qEl.value = q; VL_RV.msg = (res.j && (res.j.message || res.j.error)) || 'Could not send the question.'; renderHelpThread(); return; }
+      VL_RV.rv = res.j.review; renderHelpThread(); vlRvFollow();
+    }).catch(function () { if (VL_RV && VL_RV.rv) { VL_RV.rv.pending = null; if (qEl) qEl.value = q; VL_RV.msg = 'Could not reach the server.'; renderHelpThread(); } });
+}
+function vlRvSay(t) { if (VL_RV) { VL_RV.msg = t || ''; renderHelpThread(); } }
+function vlRvDone(fid, done, quiet) {
+  if (!VL_RV || !VL_RV.rv || !VL_RV.rv.id) return;
+  var id = VL_RV.rv.id;
+  fetch('/api/video-lab/reviews/' + id + '/done', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ finding: fid, done: done }) })
+    .then(function (r) { return r.json(); }).then(function (j) { if (VL_RV && VL_RV.rv && VL_RV.rv.id === id && j && j.review) { VL_RV.rv = j.review; if (!quiet) VL_RV.msg = ''; renderHelpThread(); } }).catch(function () {});
+}
+// One finding's fix, through the check's own fix code (vlPcWords / vlPcRef / vlPcSeconds / vlPcSetMode / vlPcApply), with
+// the finding handed over (VL.pcOver) so nothing touches the check's own findings; when it is saved, only this finding is
+// marked done.
+function vlRvFix(fid) {
+  var rv = VL_RV && VL_RV.rv, f = rv && (rv.findings || []).filter(function (z) { return Number(z.id) === Number(fid); })[0];
+  if (!f || !f.fix || f.done) return;
+  var w = vlRtFind(VL_RV.takeId);
+  if (!w || !(w.si >= 0)) { vlRvSay('Open this take\u2019s episode to use its fixes.'); return; }
+  VL.pcOver = { f: f, done: function () { VL.pcOver = null; vlRvDone(f.id, true, true); vlRvSay('Done: the shot\u2019s words are changed. Make a new take when you are ready.'); } };
+  var x = f.fix, si = w.si;
+  try {
+    if (x.type === 'words') vlPcWords(si, f.id);
+    else if (x.type === 'add_reference') vlPcRef(si, f.id);
+    else if (x.type === 'seconds') vlPcSeconds(si, f.id);
+    else if (x.type === 'mode') vlPcSetMode(si, x.mode, f.id);
+    else if (x.type === 'untick_reference') vlPcApply(si, f.id, function (s) { s.refs = (s.refs || []).filter(function (r) { return !(r.type === x.ref_type && Number(r.id) === Number(x.ref_id)); }); });
+    else VL.pcOver = null;
+  } catch (e) { VL.pcOver = null; vlRvSay('That fix could not be used (' + (e && e.message) + ').'); }
+  if (VL.pcOver && !VL.pcOver.started) VL.pcOver = null;   // it did not get as far as changing the shot (it said why)
+}
 function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
@@ -43932,6 +44073,7 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
     '</div>' +
     '<div style="' + VL_DESC + 'margin:2px 0 0 2px;">' + escapeHtml(vlTakeModelText(t)) + '</div>' +
     '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">' +
+      (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn vl-rv-btn" title="Have the assistant watch this take and say what went wrong, with fixes. 1 token, including 5 questions." onclick="vlReviewTake(' + t.id + ')">? Review</button>' : '') +   // v3.6.46
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="View this take larger: save a frame for another shot, or trim the part the episode uses" onclick="vlTrimTake(' + t.id + ')">View</button>' : '') +   // v3.5.54 Trim; v3.6.08 View (Ian, 2026-11-13: "change it to view"), with Save frame and Last frame inside; Retouch moved there too (Ian: "take the retouch off the card")
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '" aria-label="Download">&#8681;</a>' : '') +   // v3.5.97: says what it is (Ian missed the bare arrow)
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + t.id + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button>' : '') +   // v3.5.97 (Ian: "make it so I can get the video\'s link")
@@ -46000,12 +46142,15 @@ function vlPcCut(si, fid) {
   vlBeatCut(si, bi);
 }
 function vlShotIdAt(si) { var s = VL.draft && VL.draft.shots[si]; return s && s.id ? s.id : 0; }
-function vlPcFinding(si, fid) { var pc = vlShotPc(si); return pc ? (pc.findings || []).filter(function (f) { return Number(f.id) === Number(fid); })[0] : null; }
-function vlPcMsg(t) { var m = document.getElementById('vl-todo-msg'); if (m) m.textContent = t || ''; }
+function vlPcFinding(si, fid) { if (VL.pcOver && Number(VL.pcOver.f.id) === Number(fid)) return VL.pcOver.f;   // v3.6.46: a review's finding handed over
+  var pc = vlShotPc(si); return pc ? (pc.findings || []).filter(function (f) { return Number(f.id) === Number(fid); })[0] : null; }
+function vlPcMsg(t) { if (VL.pcOver) { vlRvSay(t); return; }   // v3.6.46: a review's fix speaks in the panel
+  var m = document.getElementById('vl-todo-msg'); if (m) m.textContent = t || ''; }
 // A fix changes the shot, saves it, then marks the finding done and signs the check to the shot as it is now.
 function vlPcApply(si, fid, change) {
   var d = VL.draft, s = d && d.shots[si];
   if (!s || vlSlLocked(d.id)) return;
+  var ov = VL.pcOver; if (ov) ov.started = true;   // v3.6.46: a review's fix -- done is told to the review, not the check
   vlReadForm();
   change(s);
   var sid = s.id;
@@ -46013,6 +46158,7 @@ function vlPcApply(si, fid, change) {
   if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
   vlPcMsg('Saving...');
   vlSave(function (ok) {
+    if (ov) { if (VL.pcOver === ov) VL.pcOver = null; if (!ok) vlRvSay('Could not save the shot (' + (VL.saveError || 'no reason given') + ').'); else ov.done(); return; }
     if (!ok) { vlPcMsg('Could not save the shot (' + (VL.saveError || 'no reason given') + ').'); return; }
     if (fid != null && sid) vlPcDone(sid, fid, true); else vlTodoPaint();
   });

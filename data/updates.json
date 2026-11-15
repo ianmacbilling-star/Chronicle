@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.46",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3646-vid-take-review-page",
+        "kind": "change",
+        "public": false,
+        "summary": "Review a take: the assistant watches it and says what went wrong, with fixes.",
+        "detail": "? Review on a finished take (and in the take viewer) opens the assistant panel on that take: a short summary, findings each with its own fix (used one at a time, through the check's own fix code) and Done/Undo, then questions about the take. 1 token, which includes 5 questions.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.45",
     "staged_on": "2026-11-14",
     "entries": [
