@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.39",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3639-vid-three-models",
+        "kind": "change",
+        "public": false,
+        "summary": "Three more test video models: Wan 3.0, Seedance 2.5 and Gemini Omni Flash 1.2.",
+        "detail": "The top of the public video boards in November 2026, for comparing against MiniMax H3 Max. Admins only, each in Keyframes and Reference mode. Wan 3.0 and Omni at 1080p, Seedance 2.5 at 720p.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.38",
     "staged_on": "2026-11-14",
     "entries": [

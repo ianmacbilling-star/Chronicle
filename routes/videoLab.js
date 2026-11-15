@@ -185,6 +185,50 @@ const MODELS = {
     durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,
     extra: { aspect_ratio: VIDEO_ASPECT, resolution: '720p' }, promptRequired: true, maxRefs: 5, maxScene: 2, maxPrompt: 5000,
     audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'image ' + n; }
+  },
+  // v3.6.39 (Ian, 2026-11-15: "Add Wan 3.0 and Gemini Omni Flash and Seedance 2.5 to our list of options"): the top of the
+  // public video boards in November 2026, for a bake-off against MiniMax H3 Max. Test models (admins only), both modes.
+  // Read from fal's pages on 2026-11-15. Wan 3.0 at 1080p ($0.20 a second; 720p is $0.10) because the look is being judged;
+  // its words name pictures 'Image 1'. Seedance 2.5 (US) at 720p, about $0.47 a second (billed by tokens; 1080p is about
+  // $1.16); always its own shape on image-to-video, so no aspect_ratio there. Gemini Omni Flash 1.2 at 1080p ($0.1229 a
+  // second): the words name pictures <IMAGE_REF_0>, counted from 0; no sound switch is documented, so none is sent.
+  wan30: {
+    label: 'Wan 3.0', group: 'keyframes', test: true, pair: 'wan30ref', endpoint: 'alibaba/wan-3.0/image-to-video',
+    start: 'start_image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.20, priceSound: 0.20,
+    extra: { resolution: '1080p' }, promptRequired: true, audioField: 'audio'
+  },
+  wan30ref: {
+    label: 'Wan 3.0', group: 'reference', test: true, pair: 'wan30', endpoint: 'alibaba/wan-3.0/reference-to-video', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.20, priceSound: 0.20,
+    extra: { aspect_ratio: VIDEO_ASPECT, resolution: '1080p' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    audioField: 'audio', refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
+  },
+  seedance25: {
+    label: 'Seedance 2.5', group: 'keyframes', test: true, pair: 'seedance25ref', endpoint: 'bytedance/seedance-2.5/us/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.473, priceSound: 0.473,
+    extra: { resolution: '720p' }, promptRequired: true
+  },
+  seedance25ref: {
+    label: 'Seedance 2.5', group: 'reference', test: true, pair: 'seedance25', endpoint: 'bytedance/seedance-2.5/us/reference-to-video', reference: true,
+    durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.473, priceSound: 0.473,
+    extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
+  },
+  omni12: {
+    label: 'Gemini Omni Flash 1.2', group: 'keyframes', test: true, pair: 'omni12ref', endpoint: 'google/gemini-omni-flash/v1.2/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['3', '4', '5', '6', '7', '8', '9', '10'], defDuration: '8',
+    durationValue: function (d) { return Number(d); }, price: 0.1229, priceSound: 0.1229,
+    extra: { resolution: '1080p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true, audioField: null
+  },
+  omni12ref: {
+    label: 'Gemini Omni Flash 1.2', group: 'reference', test: true, pair: 'omni12', endpoint: 'google/gemini-omni-flash/v1.2/reference-to-video', reference: true,
+    durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '8',
+    durationValue: function (d) { return Number(d); }, price: 0.1229, priceSound: 0.1229,
+    extra: { resolution: '1080p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 9, maxScene: 5, maxPrompt: 20000,
+    audioField: null, tag: function (n) { return '<IMAGE_REF_' + (n - 1) + '>'; }
   }
 };
 const REF_MAX_IMAGES = 9;      // fal: up to 9 reference images
