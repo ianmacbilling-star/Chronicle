@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.58",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3658-example-books-layout",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Example books: every photo shown whole, laid out like the Library gallery.",
+        "detail": "The photos on campaignia.com/example-books are no longer cropped: each keeps its own shape, in columns like the Library gallery.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.57",
     "staged_on": "2026-11-16",
     "entries": [
