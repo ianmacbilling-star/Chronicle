@@ -1,5 +1,390 @@
 [
   {
+    "version": "3.6.60",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3660-frozen-windows",
+        "kind": "fix",
+        "public": false,
+        "summary": "A frozen account gets one clear window when it presses a create button, and the Copper plan no longer promises token purchases.",
+        "detail": "TD-1155. Generate Story, Generate Images, Generate Narrative and the other create buttons now say at once that nothing new can be made (Generate Images and Generate Story used to do nothing visible), and Generate Narrative no longer shows a second 'Something went wrong' box. The Copper plan reads: Free, play in a paid Story Master's campaign, no monthly subscription.",
+        "td": [
+          "TD-1155"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.59",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3659-example-books-dots",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Example books: the photos are shown without the dotted overlay.",
+        "detail": "The halftone dots the landing pages lay over everything are gone from campaignia.com/example-books, so the photos show cleanly.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.58",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3658-example-books-layout",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Example books: every photo shown whole, laid out like the Library gallery.",
+        "detail": "The photos on campaignia.com/example-books are no longer cropped: each keeps its own shape, in columns like the Library gallery.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.57",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3657-example-books",
+        "kind": "feature",
+        "public": true,
+        "summary": "A page of photos of real printed Campaignia books.",
+        "detail": "campaignia.com/example-books shows photographs of books made with Campaignia and printed for their owners. Click a photo to see it full size.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.56",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3656-frozen-export",
+        "kind": "change",
+        "public": false,
+        "summary": "Copper can export and print; the help knows about frozen accounts.",
+        "detail": "TD-1155 stage 3 (closes TD-781). A Copper account keeps Export to PDF and printing of what it has made. The help assistant explains frozen accounts: what stops, what stays open, and how to unfreeze.",
+        "td": [
+          "TD-1155",
+          "TD-781"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.55",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3655-frozen-screens",
+        "kind": "change",
+        "public": false,
+        "summary": "A frozen account is told so: a bar under the header, a window at sign-in, and on My Account.",
+        "detail": "TD-1155 stage 2. A lone Copper sees the frozen message under the header, once in a window when they sign in, and on My Account. Inside a campaign with no active Story Master the bar says so for that campaign. A refused action shows the message in a window.",
+        "td": [
+          "TD-1155"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.54",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3654-frozen",
+        "kind": "change",
+        "public": false,
+        "summary": "A frozen account can no longer spend or buy tokens.",
+        "detail": "TD-1155 stage 1. With no paid plan, pass or Free Trial of your own, and no paid Story Master over the campaign, every spending action is refused before any work is done, with a message; a frozen account cannot buy tokens. Viewing, downloading and printing stay open.",
+        "td": [
+          "TD-1155"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.53",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3653-vid-review-answer-shape",
+        "kind": "change",
+        "public": false,
+        "summary": "Take review: answers are one sentence, a few short bullets, then the cause and the fix.",
+        "detail": "An answer to a question now opens with one sentence that answers it, then up to 3 short bullets of what was seen (with the second), then a Cause line and a Fix line.",
+        "td": [
+          "TD-1147"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.52",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3652-vid-tile-name",
+        "kind": "change",
+        "public": false,
+        "summary": "Video: a picture's name is smaller and runs across the whole tile, with the number and arrows under it.",
+        "detail": "The name under each picture (such as Frame of e6s15t2-0162 at 14.9 s) is in small type across the full width; the picture number and the move arrows sit at the bottom of the tile.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.51",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3651-vid-review-choice",
+        "kind": "change",
+        "public": false,
+        "summary": "Take review: it watches first, then asks whether you want its thoughts or have something specific; the token is taken when you choose.",
+        "detail": "? Review watches and listens to the take first (free), then asks \"Want my thoughts, or is there something specific?\" Your thoughts gives the whole review; a typed question is answered first, with a Full thoughts too? button after it (one of the 5 questions). The sound is now sent to the transcriber as an mp3 (it refused the .mp4), and the reviewer checks that the room stays the same room.",
+        "td": [
+          "TD-1147"
+        ]
+      }
+    ]
+  },
+  {
+    "version": "3.6.50",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3650-vid-card-viewer-only",
+        "kind": "change",
+        "public": false,
+        "summary": "Video: the take card has no ? Review and no full screen; the viewer is the way in.",
+        "detail": "? Review is only in the viewer now. The take card's video has no full-screen or picture-in-picture button; double-clicking it opens our viewer.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.49",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3649-vid-move-shot",
+        "kind": "feature",
+        "public": false,
+        "summary": "Video: move a shot up or down, or delete it.",
+        "detail": "Small arrows beside each shot's number move the whole shot (pictures, words, takes, and the transition after it) up or down one place; an x at the end of the top line deletes the shot after asking (its takes are deleted; not while a take is being made, and not the last shot). Shot numbers and take codes follow; the episode video shows as out of date until compiled again.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.48",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3648-vid-review-fix-ask",
+        "kind": "fix",
+        "public": false,
+        "summary": "Take review: the frames are taken again (they failed on the server), and Review asks before it charges.",
+        "detail": "The server's ffmpeg refused to write the review's frames (error -22); they are now made full-range first, and one frame that fails is skipped instead of failing the review. ? Review asks \"Do you want us to review the video and make suggestions? (1 token)\" before making a new review; a saved review opens without asking.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.47",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3647-vid-review-side",
+        "kind": "change",
+        "public": false,
+        "summary": "While reviewing a take, its viewer sits beside the assistant; a second named in the review jumps there.",
+        "detail": "? Review keeps the take viewer open, smaller and on the left, with no cover over the page; closing the assistant puts it back. Seconds in the review (\"from 2.5 s\") are links that show that moment, paused.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.46",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3646-vid-take-review-page",
+        "kind": "change",
+        "public": false,
+        "summary": "Review a take: the assistant watches it and says what went wrong, with fixes.",
+        "detail": "? Review on a finished take (and in the take viewer) opens the assistant panel on that take: a short summary, findings each with its own fix (used one at a time, through the check's own fix code) and Done/Undo, then questions about the take. 1 token, which includes 5 questions.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.45",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3645-vid-take-review-server",
+        "kind": "change",
+        "public": false,
+        "summary": "Take review, the server half: a reviewer watches a take's frames, hears its sound and compares them with what was asked.",
+        "detail": "New: take_reviews table; routes to start a review, follow it, ask about it and mark a finding done. Frames come from the take's own file (2 a second, at most 40, the trimmed part), the sound through our transcription, and the answer is findings like the check's, one fix each. 1 token, including 5 questions, then 1 token per 5 more; nothing charged on a failure. The page half comes next.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.44",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3644-vid-trim-bar",
+        "kind": "change",
+        "public": false,
+        "summary": "The take viewer gets a trim bar and a clock in tenths; trims stop on the marked frame; the episode strip shows each shot's name with Go to.",
+        "detail": "Under the video: the whole take as a bar with the used part in gold, a playhead, and the time in tenths. Letting go of the slider leaves the video paused. Marks keep hundredths and every player stops one frame early, so the last frame shown is the marked one. The strip at the bottom shows Shot N and its name in readable text, with a Go to button that opens and flashes the shot.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.43",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3643-vid-trim-asks",
+        "kind": "change",
+        "public": false,
+        "summary": "The take viewer's trim buttons show their times, and closing with an unsaved trim asks first.",
+        "detail": "Start here and End here show the marked seconds. Closing with marks not yet saved asks Save trim, Discard or Keep editing. Last frame takes the end of a saved trim. The pinned take has a thicker gold border.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.42",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3642-vid-tokens-nearest",
+        "kind": "change",
+        "public": false,
+        "summary": "Video charges round to the nearest token.",
+        "detail": "A take, the Director's Notes and the check: 17.4 tokens is now 17 and 17.5 is 18 (they were always rounded up). Never less than 1.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.41",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3641-vid-h3max-1080",
+        "kind": "change",
+        "public": false,
+        "summary": "MiniMax H3 Max at 1080P as its own test choice.",
+        "detail": "fal makes it at 768P and refines it up to 1080P, at twice the price (2 tokens a second). Admins only, Keyframes and Reference.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.40",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3640-vid-wan30-720",
+        "kind": "change",
+        "public": false,
+        "summary": "Wan 3.0 at 720p as its own test choice.",
+        "detail": "Half the price of the 1080p one, to see whether the cheaper setting holds the look. Admins only, Keyframes and Reference.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.39",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3639-vid-three-models",
+        "kind": "change",
+        "public": false,
+        "summary": "Three more test video models: Wan 3.0, Seedance 2.5 and Gemini Omni Flash 1.2.",
+        "detail": "The top of the public video boards in November 2026, for comparing against MiniMax H3 Max. Admins only, each in Keyframes and Reference mode. Wan 3.0 and Omni at 1080p, Seedance 2.5 at 720p.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.38",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3638-vid-load-in-turn",
+        "kind": "change",
+        "public": false,
+        "summary": "The Video page no longer freezes loading every take.",
+        "detail": "Take players load two at a time, open shots first top to bottom, then folded shots in the background; a shot just opened goes to the front. A redraw keeps players already loaded instead of loading them again.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.37",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3637-vid-check-outline",
+        "kind": "change",
+        "public": false,
+        "summary": "The check writes each finding as a short outline.",
+        "detail": "A headline, then up to three short lines (where, what will happen, the fix). Never cut mid-word: a long one drops whole lines. The mode reason is one short line.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.36",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3636-vid-notes-ask",
+        "kind": "change",
+        "public": false,
+        "summary": "Director's Notes ask what to do: fill the empty boxes, add to what's there, or start over.",
+        "detail": "On a shot's Notes button and the episode's. Add keeps every word written and adds only what is missing at the end, never against it. Start over asks first, then clears all but the Purpose and Concept (pictures, references, mode and model stay) and the check's findings.",
+        "td": []
+      },
+      {
+        "id": "3636-vid-notes-revert",
+        "kind": "change",
+        "public": false,
+        "summary": "Each shot has a Revert after Notes.",
+        "detail": "Before any Notes write a shot, its words, references and check findings are kept; the shot's Revert button puts them back, free.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.35",
+    "staged_on": "2026-11-14",
+    "entries": [
+      {
+        "id": "3635-vid-first-hush",
+        "kind": "fix",
+        "public": false,
+        "summary": "A shot that opens on a line starts with half a second of silence.",
+        "detail": "MiniMax voiced a scrap of made-up speech before a line due at second 0 (takes 131 to 134). Saying no one speaks at first cured it in takes 135 and 136; the first beat with a line now opens with half a second of silence.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.34",
     "staged_on": "2026-11-14",
     "entries": [

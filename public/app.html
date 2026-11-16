@@ -138,6 +138,12 @@
   </div>
 </div>
 
+<!-- v3.6.55 -- TD-1155. Frozen accounts: one bar under the header for both cases (frozenBannerTick in app.js sets the words). -->
+<div id="frozen-banner" role="status" style="display:none;padding:9px 16px;background:var(--panel);border-bottom:2px solid rgba(var(--copper-rgb),0.7);color:var(--on-panel);font-size:13px;line-height:1.4;text-align:center;">
+  <span id="frozen-banner-text"></span>
+  <button type="button" class="btn btn-sm" onclick="goToPlans()" style="margin-left:10px;">See plans</button>
+</div>
+
 <!-- BREADCRUMB ROW -->
 <div class="breadcrumb-row">
   <div class="breadcrumb" id="breadcrumb">

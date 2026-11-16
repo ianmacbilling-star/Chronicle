@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- v3.6.58: laid out like the Library gallery, photos whole. v3.6.57 -- EXAMPLE BOOKS (Ian, 2026-11-16: "a separate page that could have a direct link to it for our
+       marketing"). The ten photos of the "See what they look like" pop-up as a page of its own, in the
+       game-masters order, always in the Campaignia (DnD) look -- no brand sheet is laid over it (Ian: "Follow the
+       Campaignia Branding Look for now"). Served only by the /example-books route in server.js, like /story and
+       /game-masters, and listed in sitemap-pages.xml. The pop-up on the landing pages is unchanged; each tile here
+       opens the same pop-up (book-gallery.js) on its own photo, and links to the full photo without script. -->
+  <link rel="stylesheet" href="/css/fonts.css">
+  <link rel="stylesheet" href="/css/themes/campaignia.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Example Books — Real Campaignia books, really printed</title>
+  <meta name="description" content="Photographs of real books made with Campaignia: tabletop RPG campaigns turned into illustrated graphic novels, printed as comic, hardback or softback and shipped to the door." />
+  <link rel="canonical" href="https://campaignia.com/example-books" />
+  <meta property="og:site_name" content="Campaignia" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://campaignia.com/example-books" />
+  <meta property="og:title" content="Example Books — Real Campaignia books, really printed" />
+  <meta property="og:description" content="Photographs of real books made with Campaignia: tabletop RPG campaigns turned into illustrated graphic novels, printed as comic, hardback or softback and shipped to the door." />
+  <meta property="og:image" content="https://campaignia.com/images/books/book-03.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Example Books — Real Campaignia books, really printed" />
+  <meta name="twitter:description" content="Photographs of real books made with Campaignia: tabletop RPG campaigns turned into illustrated graphic novels, printed as comic, hardback or softback and shipped to the door." />
+  <meta name="twitter:image" content="https://campaignia.com/images/books/book-03.jpg" />
+  <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+  <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
+  <link rel="stylesheet" href="/css/landing.css?v=3.6.57">
+  <meta name="theme-color" content="#0a0806" />
+  <style>
+    .exb-head { margin-bottom: var(--gutter); }
+    .exb-head h1 { margin: 0; font-weight: normal; }
+    /* v3.6.59 -- no halftone dots on this page (Ian, 2026-11-16: "Get rid of the dots"): landing.css lays them over
+       the whole page, photos included. The landing pages keep theirs. */
+    body::before { display: none; }
+    .exb-intro { border: var(--border); background: var(--panel); padding: 18px 24px; margin-bottom: var(--gutter); font-family: var(--font-body); font-size: 17px; font-style: italic; line-height: 1.55; color: rgba(var(--on-panel-rgb),0.8); }
+    /* v3.6.58 -- laid out like the Library gallery (Ian: "the images are cropped. Make it more like the Gallery"):
+       every photo whole, at its own shape, in columns. The script below deals the tiles into columns left to
+       right, shortest column first, as library.html does; without it, CSS columns keep the same look. */
+    .exb-grid { columns: 250px 5; column-gap: 14px; margin-bottom: var(--gutter); }
+    .exb-grid.exb-masonry { columns: auto; display: flex; align-items: flex-start; gap: 14px; }
+    .exb-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+    .exb-tile { display: block; break-inside: avoid; margin: 0 0 14px; border: 3px solid var(--page-bg); background: var(--panel-deep); border-radius: 3px; overflow: hidden; box-shadow: 3px 3px 0 rgba(0,0,0,0.35); text-decoration: none; cursor: zoom-in; transition: transform 0.15s; }
+    .exb-tile:hover, .exb-tile:focus-visible { transform: translate(-2px,-2px); }
+    .exb-tile img { display: block; width: 100%; height: auto; background: var(--panel); }
+    .exb-cap { display: block; padding: 9px 12px; border-top: 2px solid rgba(var(--accent-rgb),0.12); font-family: var(--font-body); font-size: 13px; font-style: italic; line-height: 1.4; color: rgba(var(--on-panel-rgb),0.75); }
+    .exb-end { border: var(--border); background: var(--panel-deep); padding: 28px 24px; text-align: center; margin-bottom: var(--gutter); }
+    .exb-end p { font-family: var(--font-body); font-size: 17px; color: rgba(var(--on-panel-rgb),0.8); margin: 0 0 20px; }
+    .footer-links { flex-wrap: wrap; justify-content: center; row-gap: 8px; }
+    .exb-back { display: inline-block; margin-top: 18px; font-family: var(--font-body); font-size: 15px; color: var(--accent); }
+  </style>
+  <script src="/analytics.js"></script>
+  <script src="/promo.js"></script>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <img src="/images/Campaignia_Logo.png" alt="Campaignia" />
+    <span class="nav-logo-text">Campaignia</span>
+  </a>
+  <div class="nav-actions">
+    <a href="/our-story" class="nav-link">OUR STORY</a>
+    <a href="/library?genre=fantasy,thriller,scifi,horror" class="nav-link">LIBRARY</a>
+    <a href="/game-masters#pricing" class="nav-link">PRICING</a>
+    <a href="/login" class="btn-nav">SIGN IN</a>
+    <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" onclick="cmpToggleNav()">&#9776;</button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/our-story" onclick="cmpCloseNav()">OUR STORY</a>
+  <a href="/library?genre=fantasy,thriller,scifi,horror" onclick="cmpCloseNav()">LIBRARY</a>
+  <a href="/game-masters#pricing" onclick="cmpCloseNav()">PRICING</a>
+</div>
+
+<div class="comic-book">
+<div class="comic-page">
+
+  <div class="how-title-panel exb-head">
+    <span class="section-tag">&#127942; EXAMPLE BOOKS</span>
+    <h1 class="section-title">REAL BOOKS, REALLY PRINTED</h1>
+  </div>
+
+  <div class="exb-intro">
+    Photographs of books made with Campaignia and printed for their owners: tabletop campaigns and family stories turned into illustrated graphic novels, as a comic, hardback or softback, shipped to the door. Click a photo to see it full size.
+  </div>
+
+  <div class="exb-grid">
+      <a class="book-gallery-link exb-tile" href="/images/books/book-03.jpg" data-order="03,08,05,04,09,06,07,10,01,02">
+        <img src="/images/books/book-03-t.jpg" alt="Photo of a printed Campaignia book: Embers of Damnation — front cover" loading="lazy" width="285" height="360">
+        <span class="exb-cap">Embers of Damnation — front cover</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-08.jpg" data-order="08,05,04,09,06,07,10,01,02,03">
+        <img src="/images/books/book-08-t.jpg" alt="Photo of a printed Campaignia book: The Strangers — front cover" loading="lazy" width="277" height="360">
+        <span class="exb-cap">The Strangers — front cover</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-05.jpg" data-order="05,04,09,06,07,10,01,02,03,08">
+        <img src="/images/books/book-05-t.jpg" alt="Photo of a printed Campaignia book: For All the Ages — front cover" loading="lazy" width="277" height="360">
+        <span class="exb-cap">For All the Ages — front cover</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-04.jpg" data-order="04,09,06,07,10,01,02,03,08,05">
+        <img src="/images/books/book-04-t.jpg" alt="Photo of a printed Campaignia book: Embers of Damnation — title page and The Company" loading="lazy" width="360" height="270">
+        <span class="exb-cap">Embers of Damnation — title page and The Company</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-09.jpg" data-order="09,06,07,10,01,02,03,08,05,04">
+        <img src="/images/books/book-09-t.jpg" alt="Photo of a printed Campaignia book: The Strangers — Session 2" loading="lazy" width="360" height="271">
+        <span class="exb-cap">The Strangers — Session 2</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-06.jpg" data-order="06,07,10,01,02,03,08,05,04,09">
+        <img src="/images/books/book-06-t.jpg" alt="Photo of a printed Campaignia book: For All the Ages — Session 1" loading="lazy" width="360" height="258">
+        <span class="exb-cap">For All the Ages — Session 1</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-07.jpg" data-order="07,10,01,02,03,08,05,04,09,06">
+        <img src="/images/books/book-07-t.jpg" alt="Photo of a printed Campaignia book: Streets of Silver &amp; Shadow — Session 2" loading="lazy" width="360" height="264">
+        <span class="exb-cap">Streets of Silver &amp; Shadow — Session 2</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-10.jpg" data-order="10,01,02,03,08,05,04,09,06,07">
+        <img src="/images/books/book-10-t.jpg" alt="Photo of a printed Campaignia book: The Strangers — back cover" loading="lazy" width="286" height="360">
+        <span class="exb-cap">The Strangers — back cover</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-01.jpg" data-order="01,02,03,08,05,04,09,06,07,10">
+        <img src="/images/books/book-01-t.jpg" alt="Photo of a printed Campaignia book: Our Family Stories: A Horse Named Asterisk — front cover" loading="lazy" width="277" height="360">
+        <span class="exb-cap">Our Family Stories: A Horse Named Asterisk — front cover</span>
+      </a>
+      <a class="book-gallery-link exb-tile" href="/images/books/book-02.jpg" data-order="02,03,08,05,04,09,06,07,10,01">
+        <img src="/images/books/book-02-t.jpg" alt="Photo of a printed Campaignia book: A Horse Named Asterisk — inside pages" loading="lazy" width="360" height="244">
+        <span class="exb-cap">A Horse Named Asterisk — inside pages</span>
+      </a>
+  </div>
+
+  <div class="exb-end">
+    <p>Your table's story, in your hands.</p>
+    <a href="/login?signup" class="btn-cta">MAKE YOUR OWN</a><br>
+    <a href="/" class="exb-back">Back to Campaignia</a>
+  </div>
+
+</div>
+</div>
+
+<footer>
+  <div class="footer-top">
+    <div class="footer-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /></div>
+    <div class="footer-links">
+      <a href="/" class="footer-link">Campaignia</a>
+      <a href="/login" class="footer-link">Sign In</a>
+      <a href="/library?genre=fantasy,thriller,scifi,horror" class="footer-link">Public Library</a>
+      <a href="/game-masters#pricing" class="footer-link">Pricing</a>
+      <a href="mailto:info@campaignia.com" class="footer-link">Contact</a>
+      <a href="/terms.html" class="footer-link">Terms</a>
+      <a href="/privacy.html" class="footer-link">Privacy</a>
+    </div>
+  </div>
+  <div class="footer-copy">&copy; <span id="footer-year"></span> So It Begins, LLC &middot; Campaignia. Game systems, settings, and characters are the property of their respective publishers. Campaignia is not affiliated with any game publisher.</div>
+</footer>
+
+<script>
+document.getElementById('footer-year').textContent = new Date().getFullYear();
+// v3.6.58 -- the Library gallery's layout (library.html buildCols): 250px columns, at most 5, each tile into the
+// shortest column so the photos read left to right. Heights come from each photo's own width and height.
+(function () {
+  var grid = document.querySelector('.exb-grid');
+  if (!grid) return;
+  var tiles = Array.prototype.slice.call(grid.querySelectorAll('.exb-tile')), n0 = 0;
+  function lay() {
+    var n = Math.max(1, Math.min(5, Math.floor((grid.clientWidth || 1000) / 250)));
+    if (n === n0) return;
+    n0 = n;
+    var cols = [], h = [];
+    for (var i = 0; i < n; i++) { var c = document.createElement('div'); c.className = 'exb-col'; cols.push(c); h.push(0); }
+    tiles.forEach(function (t) {
+      var im = t.querySelector('img'), r = im ? (+im.getAttribute('height') / +im.getAttribute('width')) || 1 : 1, k = 0;
+      for (var j = 1; j < n; j++) if (h[j] < h[k] - 0.01) k = j;
+      cols[k].appendChild(t); h[k] += r + 0.2;
+    });
+    grid.innerHTML = '';
+    cols.forEach(function (c) { grid.appendChild(c); });
+    grid.classList.add('exb-masonry');
+  }
+  lay();
+  var tm = null;
+  window.addEventListener('resize', function () { clearTimeout(tm); tm = setTimeout(lay, 150); });
+})();
+function cmpToggleNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(!m)return;var open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
+function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');}
+</script>
+<script src="/js/book-gallery.js?v=3.3.00" defer></script>
+</body>
+</html>

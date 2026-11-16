@@ -377,6 +377,12 @@ app.get('/game-masters', function (req, res) {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'views', 'game-masters.html'));
 });
+// v3.6.57 -- EXAMPLE BOOKS (Ian, 2026-11-16): the book photos as a page of their own, for marketing links. Same
+// reasons as /story and /game-masters: served only from views/, no-store, one URL. In sitemap-pages.xml.
+app.get('/example-books', function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'views', 'example-books.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Stripe webhook -- mounted BEFORE the rate limiter and the session-gated
@@ -397,6 +403,9 @@ app.use('/api', apiLimiter);
 // (floods are rejected before the DB read) and AFTER the Stripe webhook above
 // (which has no session and must never be gated).
 app.use('/api', require('./middleware/tiers').attachTier);
+// v3.6.54 -- TD-1155. Frozen accounts: a spending route is refused before any work for a user with no keys
+// in that campaign. After attachTier, which loads req.user; no session (webhooks) passes straight through.
+app.use('/api', require('./middleware/tiers').frozenGate);
 app.use('/api', require('./routes/debug').captureMiddleware);
 // v3.0.589 -- TD-179 STAGE 3. THE IMPERSONATION DENY LIST.
 // Mounted HIGH and ONCE, above every protected route group, so a route added later is covered

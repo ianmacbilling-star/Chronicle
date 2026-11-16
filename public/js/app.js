@@ -3212,7 +3212,7 @@ function renderAccountTier(me) {
   var loneBanner = document.getElementById('account-lone-banner');
   if (loneBanner) {
     if (me.loneCopper) {
-      loneBanner.textContent = 'You are on Copper with no active Story Master coverage. You can keep creating and buying tokens, but consider Silver to unlock more.';
+      loneBanner.textContent = FROZEN_ACCOUNT_TEXT + ' Everything you have made is kept: you can still view it and download your books.';   // v3.6.55 -- TD-1155
       loneBanner.style.display = 'block';
     } else {
       loneBanner.style.display = 'none';
@@ -5819,6 +5819,7 @@ function _helpGreeting() {
 }
 function renderHelpThread() {
   var box = document.getElementById('help-thread'); if (!box) return;
+  if (vlRvOn()) { vlRvRender(box); return; }   // v3.6.46: reviewing a take
   var html = '';
   if (!_helpThread.length) {
     html += '<div class="help-msg help-msg-bot">' + escapeHtml(_helpGreeting()) + '</div>';
@@ -6081,10 +6082,12 @@ function openHelp() {
   if (q) setTimeout(function(){ q.focus(); }, 0);
 }
 function closeHelp() {
+  vlRvLeave();   // v3.6.46: closing leaves review mode; the review is kept on the take
   var m = document.getElementById('help-panel'); if (m) { m.classList.add('hidden'); m.style.zIndex = ''; }
   var fab = document.getElementById('help-fab'); if (fab) fab.style.display = '';
 }
 function submitHelp() {
+  if (vlRvOn()) { vlRvAsk(); return; }   // v3.6.46: a question about the take being reviewed
   if (_helpPending) return;
   var qEl = document.getElementById('help-question');
   var btn = document.getElementById('help-ask-btn');
@@ -42671,7 +42674,9 @@ function vlRenderOpen(force) {
   if (!force && VL.draft && String(VL.draft.id) === String(ep.id) && host.querySelector('#vl-ed-' + ep.id)) { vlRenderLive(); return; }
   if (!VL.draft || String(VL.draft.id) !== String(ep.id)) VL.draft = vlDraftFrom(ep);
   VL.liveSig = {};
+  var keep = vlVidHarvest(host);   // v3.6.38: videos already loaded are moved across, not loaded again
   host.innerHTML = vlEditorHTML(ep);
+  vlVidRestore(host, keep);
   vlShowMode();
   vlShowCost();
   vlRenderLive();
@@ -42691,7 +42696,7 @@ function vlKfCardHTML(d, si, ki, n) {
   var label = k.source === 'title' ? 'Title picture' : (k.label || (k.source === 'archive' ? 'From the Archive' : ''));
   var first = si === 0 && ki === 0, last = si === d.shots.length - 1 && ki === d.shots[si].kfs.length - 1;
   var busy = !!VL.kfBusy[k.url];   // v3.5.09: being retouched
-  return '<div class="storyboard-panel">' +
+  return '<div class="storyboard-panel" style="display:flex;flex-direction:column;flex:1;">' +
     '<div class="storyboard-panel-img" style="position:relative;">' +
       '<img class="moment-img-generated" src="' + escapeHtml(k.url) + '" alt="' + escapeHtml(label) + '" loading="lazy" title="Click to enlarge" onclick="openLightbox(this.src,this.alt)" onload="vlKfMeasure(this)" data-kfu="' + escapeHtml(k.url) + '" style="cursor:zoom-in;' + (busy ? 'opacity:0.45;' : '') + '">' +   // v3.5.12: click to see it bigger, as on the Storyboard
       (busy ? '<div style="position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;pointer-events:none;">' + vlSpin(34) +
@@ -42705,12 +42710,16 @@ function vlKfCardHTML(d, si, ki, n) {
         vlArchivePillHTML(k.url) +   // v3.5.20
       '</div>' +
     '</div>' +
-    '<div class="storyboard-panel-meta">' +
-      '<span class="moment-num">' + n + '</span>' +
-      '<span class="moment-title" style="flex:1;min-width:0;" data-no-words>' + escapeHtml(label) + '</span>' +
-      '<span style="display:inline-flex;gap:3px;margin-left:auto;">' +
-        vlBtn(!first, '&#9664;', 'One place earlier (into the shot before, at the start of a shot)', 'vlMove(' + si + ',' + ki + ',-1)') +
-        vlBtn(!last, '&#9654;', 'One place later (into the next shot, at the end of a shot)', 'vlMove(' + si + ',' + ki + ',1)') +
+    // v3.6.52 (Ian, 2026-11-15: "make this circled text smaller and go all the way across the tile. You can move the buttons
+    // down to the bottom of the tile"): the name in small type across the whole tile; the number and the arrows under it.
+    '<div class="storyboard-panel-meta" style="display:flex;flex-direction:column;align-items:stretch;gap:4px;flex:1;padding:6px 8px;">' +
+      '<span class="moment-title" style="display:block;width:100%;font-size:11px;line-height:1.3;overflow-wrap:anywhere;" data-no-words>' + escapeHtml(label) + '</span>' +
+      '<span style="display:flex;align-items:center;gap:3px;margin-top:auto;">' +
+        '<span class="moment-num">' + n + '</span>' +
+        '<span style="display:inline-flex;gap:3px;margin-left:auto;">' +
+          vlBtn(!first, '&#9664;', 'One place earlier (into the shot before, at the start of a shot)', 'vlMove(' + si + ',' + ki + ',-1)') +
+          vlBtn(!last, '&#9654;', 'One place later (into the next shot, at the end of a shot)', 'vlMove(' + si + ',' + ki + ',1)') +
+        '</span>' +
       '</span>' +
     '</div>' +
   '</div>';
@@ -42722,7 +42731,7 @@ function vlShotHTML(d, si, m, n0) {
   // each, then the takes and Generate take at the bottom.
   var cells = [];
   for (var ki = 0; ki < s.kfs.length; ki++) {
-    cells.push('<div class="vl-pic" style="flex:0 0 160px;width:160px;">' + vlKfCardHTML(d, si, ki, n0 + ki) + '</div>');
+    cells.push('<div class="vl-pic" style="flex:0 0 160px;width:160px;display:flex;flex-direction:column;">' + vlKfCardHTML(d, si, ki, n0 + ki) + '</div>');
     if (ki < s.kfs.length - 1) cells.push('<button type="button" class="vl-cut" style="' + VL_CUT_BTN + '" title="Cut here: the camera cuts away after picture ' + (n0 + ki) + ' and a new shot starts on picture ' + (n0 + ki + 1) + '" onclick="vlCutHere(' + si + ',' + ki + ')">&#9986;</button>');
   }
   cells.push('<div class="storyboard-panel" style="flex:0 0 120px;width:120px;cursor:pointer;" onclick="vlChoose(\'add:' + si + '\')" title="Add a picture from the Archive at the end of this shot">' +
@@ -42737,6 +42746,7 @@ function vlShotHTML(d, si, m, n0) {
       // v3.5.59 (Ian, 2026-11-10: "collapse the shot panels like the Accordion leaving their name and purpose readable")
       '<button type="button" class="vl-fold" onclick="vlFold(' + si + ')" title="' + (vlFolded(s) ? 'Open this shot' : 'Fold this shot away (its name and purpose stay)') + '" style="background:none;border:none;color:var(--accent-bright);cursor:pointer;font-size:13px;padding:0 2px;flex:none;">' + (vlFolded(s) ? '&#9656;' : '&#9662;') + '</button>' +
       '<div style="' + VL_TITLE + 'font-size:14px;flex:none;">Shot ' + (si + 1) + '</div>' +
+      vlMoveBtnsHTML(si, d.shots.length) +   // v3.6.49
       '<input id="vl-sn-' + si + '" class="form-input vl-shot-name" type="text" maxlength="120" value="' + escapeHtml(s.name || '') + '" placeholder="Name this shot" title="The shot\'s name" style="' + VL_SHOT_NAME + '" oninput="vlEdit()" onblur="vlFlushSave()" data-no-words autocomplete="off" data-1p-ignore data-lpignore="true">' +
       // v3.5.59 (Ian, 2026-11-10: "every shot needs a Purpose field. It's more for the user and what the shot creating process can
       // fill in"): on the top line, so it stays readable when the shot is folded and the pictures stay right under it.
@@ -42744,6 +42754,7 @@ function vlShotHTML(d, si, m, n0) {
       '<div id="vl-live-' + s.ck + '" style="flex:1;min-width:160px;"></div>' +   // v3.5.86: the length and the Mode moved to the row below
       '<span id="vl-todo-' + s.ck + '" style="flex:none;margin-left:auto;">' + vlTodoBtnHTML(si) + '</span>' +   // v3.5.34
       ((typeof state !== 'undefined' && state.user && state.user.is_admin) ? '<button type="button" class="narrative-regen-btn" style="flex:none;" title="Admin: copy this shot\'s outline to the clipboard" onclick="vlOutline(' + si + ')">&#128203;</button>' : '') +   // v3.5.74
+      vlDelBtnHTML(si, d.shots.length) +   // v3.6.49
     '</div>' +
     '<div id="vl-body-' + s.ck + '" style="' + (vlFolded(s) ? 'display:none;' : '') + '">' +
     '<div class="vl-halves">' +
@@ -42800,6 +42811,7 @@ function vlFold(si) {
   var b = document.getElementById('vl-body-' + s.ck); if (b) b.style.display = VL.folded[k] ? 'none' : '';
   var shot = b && b.parentNode, t = shot && shot.querySelector('.vl-fold');
   if (t) { t.innerHTML = VL.folded[k] ? '&#9656;' : '&#9662;'; t.title = VL.folded[k] ? 'Open this shot' : 'Fold this shot away (its name and purpose stay)'; }
+  vlVidQueue();   // v3.6.38: a shot just opened goes to the front
 }
 function vlAddShotBelow(si) {
   vlReadForm();
@@ -42889,8 +42901,8 @@ function vlPreviewPlay(si) {
         B.play().catch(function () {});
         vlPreviewAnim(info.key, A, B, d);
       }
-      if (A.currentTime >= aE - 0.02 && !A.paused) A.pause();
-      if (started && B.currentTime >= Math.min(bE, bS + d + 2.5)) { B.pause(); clearInterval(VL.pvTimer); VL.pvTimer = null; }
+      if (A.currentTime >= aE - 0.04 && !A.paused) A.pause();   // v3.6.44: one frame early, so the last frame shown is the marked one
+      if (started && B.currentTime >= Math.min(bE - 0.04, bS + d + 2.5)) { B.pause(); clearInterval(VL.pvTimer); VL.pvTimer = null; }
     }, 30);
   });
 }
@@ -42944,6 +42956,16 @@ function vlEpPvList(ep, d) {
       from: ok && t.trim_start != null ? Number(t.trim_start) || 0 : 0, to: ok && t.trim_end != null ? Number(t.trim_end) : null, cut: vlCutInfo(ds.cut_style || 'instant') };
   });
 }
+// v3.6.44 (Ian, 2026-11-15: "on each shot... the shots name. and Shot Number. a small goto button that will take you back up to
+// that shot opened up"): scroll to the shot, open it if folded, and flash its border so the eye lands on it.
+function vlGoShot(si) {
+  var s = VL.draft && VL.draft.shots[si]; if (!s) return;
+  if (vlFolded(s)) vlFold(si);
+  var b = document.getElementById('vl-body-' + s.ck), el = b && b.parentNode;
+  if (!el) return;
+  try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { el.scrollIntoView(); }
+  if (el.animate) el.animate([{ boxShadow: '0 0 0 3px rgba(var(--accent-rgb),0.95)' }, { boxShadow: '0 0 0 3px rgba(var(--accent-rgb),0.95)', offset: 0.6 }, { boxShadow: '0 0 0 0 rgba(var(--accent-rgb),0)' }], { duration: 1800 });
+}
 function vlEpPvStripHTML(ep, d) {
   var L = vlEpPvList(ep, d);
   if (!L.length) return '';
@@ -42952,7 +42974,9 @@ function vlEpPvStripHTML(ep, d) {
     var item = '<div class="vl-eppv-item" data-i="' + k + '" onclick="vlEpPvPlay(' + k + ')" title="Preview from shot ' + (k + 1) + '" style="width:150px;cursor:pointer;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;padding:4px;">' +
       (x.t ? '<video src="' + escapeHtml(x.t.video_url) + '#t=' + x.from + '" preload="metadata" muted playsinline style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:4px;pointer-events:none;"></video>'
            : '<div style="aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(0,0,0,0.3);border-radius:4px;font-size:11px;padding:4px;color:var(--danger);">' + escapeHtml(x.why) + '</div>') +
-      '<div style="font-size:12px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Shot ' + (k + 1) + (x.name ? ': ' + escapeHtml(x.name) : '') + '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;font-weight:600;color:var(--accent-pale);">Shot ' + (k + 1) +   // v3.6.44 (Ian: the name could not be seen; "a small goto button")
+        '<button type="button" class="btn btn-sm" style="margin-left:auto;padding:0 6px;font-size:10px;line-height:16px;" title="Go up to shot ' + (k + 1) + ' and open it" onclick="event.stopPropagation();vlGoShot(' + k + ')">Go to</button></div>' +
+      (x.name ? '<div style="font-size:12px;line-height:1.3;color:rgb(var(--on-panel-rgb));overflow-wrap:anywhere;">' + escapeHtml(x.name) + '</div>' : '') +
       '<div style="' + VL_DESC + 'font-size:11px;">' + (x.t ? escapeHtml(x.code) + trim : '&nbsp;') + '</div></div>';
     var cut = k < L.length - 1 ? '<div style="' + VL_DESC + 'align-self:center;text-align:center;width:64px;font-size:11px;">&#8594;<br>' + escapeHtml(x.cut.label) + (x.cut.secs ? '<br>' + x.cut.secs + ' s' : '') + '</div>' : '';
     return item + cut;
@@ -43054,7 +43078,7 @@ function vlEpPvPlay(start) {
           vlEpPvSay(y, L.length);
         }
       }
-      if (v.currentTime >= end - 0.02 || v.ended) {
+      if (v.currentTime >= end - 0.04 || v.ended) {   // v3.6.44: one frame early
         v.pause(); clearInterval(P.timer); P.timer = null;
         if (started) { var o = P.cur; P.cur = P.nxt; P.nxt = o; vlEpPvReset(P.nxt); P.nxt.style.opacity = '0'; P.cur.style.opacity = '1'; P.k = k + 1; run(k + 1); }
         else { var o2 = P.cur; P.cur = P.nxt; P.nxt = o2; vlEpPvReset(P.nxt); P.nxt.style.opacity = '0'; begin(k + 1); }
@@ -43072,26 +43096,31 @@ function vlTrimTake(takeId) {
   if (!f || f.t.status !== 'done' || !f.t.video_url) return;
   vlTrimClose();
   VL.trim = { id: takeId, st: f.t.trim_start != null ? Number(f.t.trim_start) : 0, en: f.t.trim_end != null ? Number(f.t.trim_end) : null, len: vlTakeSecs(f.t) };
+  VL.trim.st0 = VL.trim.st; VL.trim.en0 = VL.trim.en;   // v3.6.43: what is saved, to tell unsaved marks on closing
   var box = document.createElement('div');
   box.id = 'vl-trim-modal';
   box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(var(--scrim-rgb),0.66);display:flex;align-items:center;justify-content:center;padding:20px;';
-  box.addEventListener('click', function (e) { if (e.target === box) vlTrimClose(); });
+  box.addEventListener('click', function (e) { if (e.target === box) vlTrimAsk(); });
   box.innerHTML = '<div id="vl-trim-panel" style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;width:min(1100px,94vw);max-width:98vw;min-width:360px;max-height:96vh;overflow:auto;resize:both;padding:18px;box-sizing:border-box;" title="Drag the bottom-right corner to resize">' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Take ' + f.n + '</div><button class="modal-close" onclick="vlTrimClose()">&times;</button></div>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div style="' + VL_TITLE + 'font-size:15px;flex:1;">Take ' + f.n + '</div><button class="modal-close" onclick="vlTrimAsk()">&times;</button></div>' +
     '<video id="vl-trim-v" src="' + escapeHtml(vlViewSrc(f.t.video_url)) + '" controls preload="auto" style="display:block;width:100%;aspect-ratio:16/9;max-height:calc(96vh - 230px);object-fit:contain;background:#000;border-radius:6px;"></video>' +
+    '<div id="vl-trim-bar" onclick="vlTrimBarClick(event)" title="The whole take; the gold part is what the episode uses. Click to jump there." style="position:relative;height:12px;margin-top:6px;border-radius:6px;background:rgba(var(--accent-rgb),0.15);cursor:pointer;">' +   // v3.6.44
+      '<div id="vl-trim-sel" style="position:absolute;top:0;bottom:0;left:0;width:100%;background:rgba(var(--accent-rgb),0.5);border-left:3px solid rgb(var(--accent-rgb));border-right:3px solid rgb(var(--accent-rgb));box-sizing:border-box;"></div>' +
+      '<div id="vl-trim-head" style="position:absolute;top:-3px;bottom:-3px;left:0;width:2px;background:#fff;box-shadow:0 0 3px #000;"></div></div>' +
+    '<div id="vl-trim-clock" style="' + VL_DESC + 'margin-top:4px;font-variant-numeric:tabular-nums;"></div>' +
     '<div style="' + VL_DESC + 'margin-top:8px;">Play or drag to a moment. Save frame keeps that frame for another shot; Start here and End here trim the part the episode uses (the take itself is not changed).</div>' +
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-sm btn-primary vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', false)">Save frame</button><button class="btn btn-sm vl-frm-btn" onclick="vlFrmOpen(' + takeId + ', ' + f.n + ', true)">Last frame</button><span style="' + VL_DESC + '">for the next shot, another shot or the Archive</span>' +
       '<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;"><a class="btn btn-sm vl-view-dl" style="text-decoration:none;" href="/api/video-lab/takes/' + takeId + '/download?code=' + encodeURIComponent(vlTakeCode(f.t, f.n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(f.t, f.n)) + '" aria-label="Download">&#8681;</a>' +
-      '<button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + takeId + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')" ondblclick="vlTakeInfoQuick(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
+      '<button class="btn btn-sm vl-rv-btn" title="Have the assistant watch this take and say what went wrong, with fixes. 1 token, including 5 questions." onclick="vlReviewTake(' + takeId + ')">? Review</button><button class="btn btn-sm vl-rt-btn" title="Retouch this take: change one thing and keep the rest. The result is a new take." onclick="vlRetouchTake(' + takeId + ')">Retouch</button><button class="btn btn-sm" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + takeId + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button><button class="btn btn-sm" title="Everything we know about this take" onclick="vlTakeInfo(' + takeId + ', ' + f.n + ')" ondblclick="vlTakeInfoQuick(' + takeId + ', ' + f.n + ')">Info</button></span></div>' +   // v3.6.08 (Ian: "Also put the Download and copy link and info buttons on our viewer")
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
-      '<button class="btn btn-sm" onclick="vlTrimMark(\'st\')">Start here</button>' +
-      '<button class="btn btn-sm" onclick="vlTrimMark(\'en\')">End here</button>' +
+      '<button class="btn btn-sm" id="vl-trim-stb" onclick="vlTrimMark(\'st\')">Start here</button>' +
+      '<button class="btn btn-sm" id="vl-trim-enb" onclick="vlTrimMark(\'en\')">End here</button>' +
       '<button class="btn btn-sm" onclick="vlTrimPlay()">Play the trimmed part</button>' +
       '<button class="btn btn-sm" onclick="vlTrimMark(\'reset\')">Use the whole take</button>' +
       '<span id="vl-trim-read" style="' + VL_DESC + 'margin-left:auto;"></span>' +
     '</div>' +
     '<div id="vl-trim-msg" style="' + VL_DESC + 'margin-top:8px;"></div>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimClose()">Close</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save trim</button></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;"><button class="btn btn-sm" onclick="vlTrimAsk()">Close</button><button class="btn btn-sm btn-primary" id="vl-trim-save" onclick="vlTrimSave()">Save trim</button></div>' +
   '</div>';
   // v3.6.22+ (Ian, 2026-11-14, take 107: the link and the card played it, View showed 0:00 with no error): Chrome lets one player
   // at a time read a video address from its cache, so View waited behind the card's player. Pause the page's other videos
@@ -43099,6 +43128,13 @@ function vlTrimTake(takeId) {
   try { document.querySelectorAll('video').forEach(function (x) { try { x.pause(); } catch (e) {} }); } catch (e) {}
   document.body.appendChild(box);
   var v = document.getElementById('vl-trim-v');
+  // v3.6.44 (Ian: "stop playing the video when they let go" of the slider): a seek that is not ours (the player's slider) leaves it
+  // paused on that frame; the browser plays again on release, so a play straight after it is undone
+  v.addEventListener('seeking', function () { if (VL.trim && VL.trim.selfSeek) { VL.trim.selfSeek = false; return; } VL.trimScrub = Date.now(); if (!v.paused) try { v.pause(); } catch (e) {} });
+  v.addEventListener('play', function () { if (VL.trimScrub && Date.now() - VL.trimScrub < 500) { VL.trimScrub = 0; try { v.pause(); } catch (e) {} } });
+  v.addEventListener('seeked', function () { if (VL.trimScrub && Date.now() - VL.trimScrub < 500 && !v.paused) try { v.pause(); } catch (e) {} });
+  if (VL.trimTick) clearInterval(VL.trimTick);
+  VL.trimTick = setInterval(function () { if (!document.getElementById('vl-trim-v')) { clearInterval(VL.trimTick); VL.trimTick = null; return; } vlTrimDraw(); }, 50);   // the clock and playhead
   v.addEventListener('loadedmetadata', function () { if (VL.trim && v.duration) { VL.trim.len = v.duration; vlTrimRead(); } var m = document.getElementById('vl-trim-msg'); if (m && m.getAttribute('data-load') === '1') { m.textContent = ''; m.removeAttribute('data-load'); } });
   var slow = function (why) {
     var m = document.getElementById('vl-trim-msg');
@@ -43119,15 +43155,48 @@ function vlTrimRetry(takeId) {
   v.src = vlViewSrc(f.t.video_url);
   v.load();
 }
+// v3.6.43 (Ian, 2026-11-15: the preview ignored his End here; the marks are kept only by Save trim, and closing threw them
+// away without a word). Closing with unsaved marks asks: Save trim, Discard, or keep editing.
+function vlTrimDirty() { return !!(VL.trim && (VL.trim.st !== VL.trim.st0 || VL.trim.en !== VL.trim.en0)); }
+function vlTrimAsk() {
+  if (!vlTrimDirty()) { vlTrimClose(); return; }
+  uiConfirm('You marked a new start or end (' + VL.trim.st.toFixed(2) + ' s to ' + vlTrimEnd().toFixed(2) + ' s). It is only used once it is saved.', { title: 'Save the trim?', okText: 'Save trim', middleText: 'Discard', cancelText: 'Keep editing' })
+    .then(function (v) { if (v === true) vlTrimSave(); else if (v === 'middle') vlTrimClose(); });
+}
+// v3.6.44 (Ian, 2026-11-15: "put 10th of a second on the running clock"; "put markers on the Slider where the start and end are"):
+// the browser draws its own slider and clock, so ours sit under the video: the take as a bar, the used part in gold with its
+// ends marked, a playhead, and the time in tenths.
+function vlTrimDraw() {
+  var v = document.getElementById('vl-trim-v'); if (!v || !VL.trim) return;
+  var len = VL.trim.len || v.duration || 0; if (!(len > 0) || !isFinite(len)) return;
+  var sel = document.getElementById('vl-trim-sel'), head = document.getElementById('vl-trim-head'), clk = document.getElementById('vl-trim-clock');
+  var a = Math.max(0, Math.min(1, VL.trim.st / len)), b = Math.max(a, Math.min(1, vlTrimEnd() / len)), c = Math.max(0, Math.min(1, (v.currentTime || 0) / len));
+  if (sel) { sel.style.left = (a * 100) + '%'; sel.style.width = ((b - a) * 100) + '%'; }
+  if (head) head.style.left = 'calc(' + (c * 100) + '% - 1px)';
+  if (clk) clk.textContent = (Math.floor((v.currentTime || 0) * 10) / 10).toFixed(1) + ' s of ' + len.toFixed(1) + ' s' + (v.paused ? '' : ' \u00b7 playing');
+}
+function vlTrimBarClick(e) {
+  var v = document.getElementById('vl-trim-v'), bar = document.getElementById('vl-trim-bar'); if (!v || !bar || !VL.trim) return;
+  var r = bar.getBoundingClientRect(), len = VL.trim.len || v.duration || 0; if (!(len > 0) || !r.width) return;
+  VL.trim.selfSeek = true;
+  try { v.pause(); } catch (x) {}
+  v.currentTime = Math.max(0, Math.min(len, ((e.clientX - r.left) / r.width) * len));
+  vlTrimDraw();
+}
 function vlTrimEnd() { return VL.trim ? (VL.trim.en != null ? VL.trim.en : VL.trim.len) : 0; }
 function vlTrimRead() {
   var el = document.getElementById('vl-trim-read'); if (!el || !VL.trim) return;
-  el.textContent = 'Uses ' + VL.trim.st.toFixed(1) + ' s to ' + vlTrimEnd().toFixed(1) + ' s (' + Math.max(0, vlTrimEnd() - VL.trim.st).toFixed(1) + ' s)';
+  // v3.6.43 (Ian, 2026-11-15: "On the End Here button on the viewer can you put the time that was selected. Same with the start here")
+  var sb = document.getElementById('vl-trim-stb'), eb = document.getElementById('vl-trim-enb');
+  if (sb) sb.textContent = 'Start here \u00b7 ' + VL.trim.st.toFixed(2) + ' s';
+  if (eb) eb.textContent = 'End here \u00b7 ' + vlTrimEnd().toFixed(2) + ' s';
+  el.textContent = 'Uses ' + VL.trim.st.toFixed(2) + ' s to ' + vlTrimEnd().toFixed(2) + ' s (' + Math.max(0, vlTrimEnd() - VL.trim.st).toFixed(2) + ' s)';
+  vlTrimDraw();   // v3.6.44: the bar under the video
 }
 function vlTrimMark(which) {
   var v = document.getElementById('vl-trim-v'), m = document.getElementById('vl-trim-msg'); if (!v || !VL.trim) return;
   if (m) m.textContent = '';
-  var t = Math.round((v.currentTime || 0) * 10) / 10;
+  var t = Math.round((v.currentTime || 0) * 100) / 100;   // v3.6.44: hundredths, the frame paused on (was tenths)
   if (which === 'reset') { VL.trim.st = 0; VL.trim.en = null; }
   else if (which === 'st') { if (t > vlTrimEnd() - 1) { if (m) m.textContent = 'The start must be at least 1 second before the end.'; return; } VL.trim.st = t; }
   else { if (t < VL.trim.st + 1) { if (m) m.textContent = 'The end must be at least 1 second after the start.'; return; } VL.trim.en = (VL.trim.len && t >= VL.trim.len - 0.05) ? null : t; }
@@ -43136,9 +43205,14 @@ function vlTrimMark(which) {
 function vlTrimPlay() {
   var v = document.getElementById('vl-trim-v'); if (!v || !VL.trim) return;
   var en = vlTrimEnd();
-  v.currentTime = VL.trim.st; v.play().catch(function () {});
-  var stop = function () { if (v.currentTime >= en - 0.03) { v.pause(); v.removeEventListener('timeupdate', stop); } };
-  v.addEventListener('timeupdate', stop);
+  VL.trim.selfSeek = true; v.currentTime = VL.trim.st; v.play().catch(function () {});
+  // v3.6.44 (Ian: "I tell it to trim at x but it always goes a little longer"): timeupdate comes about 4 times a second, so it ran up
+  // to 0.25 s past the end; looked at every 20 ms now, and stopped one frame early so the last frame shown is the marked one
+  if (VL.trimStop) clearInterval(VL.trimStop);
+  VL.trimStop = setInterval(function () {
+    if (!document.getElementById('vl-trim-v') || v.paused) { clearInterval(VL.trimStop); VL.trimStop = null; return; }
+    if (v.currentTime >= en - 0.04) { v.pause(); clearInterval(VL.trimStop); VL.trimStop = null; }
+  }, 20);
 }
 function vlTrimSave() {
   if (!VL.trim) return;
@@ -43285,7 +43359,7 @@ function vlMovesOf(s) {
 }
 // v3.5.46 -- TAKES IN TOKENS (Ian, 2026-11-09). A take's price: fal's cost at VL.cpt cents a token, rounded up, for the
 // model the shot is made with (its own mode can switch it, as the server's shotModelKey does). The server is the judge.
-function vlTakeTok(usd) { return Math.max(1, Math.ceil((Number(usd) || 0) * 100 / (VL.cpt || 8) - 1e-9)); }
+function vlTakeTok(usd) { return Math.max(1, Math.round((Number(usd) || 0) * 100 / (VL.cpt || 8) + 1e-9)); }   // v3.6.42: to the nearest token, as the server charges
 // v3.5.86 -- TD-1122: the shot's own model wins; its Mode then only switches to the same model in the other mode
 // (as the server's shotModelKey). The pair rule of v3.5.82 was missing here, so it is added for the episode's model too.
 function vlShotModelKey(d, ds) {
@@ -43487,6 +43561,50 @@ function vlCutHere(si, ki) {
   vlStructural();
 }
 // Remove the cut after shot si: the next shot's keyframes join it (vlStructural asks first if that shot has takes).
+// v3.6.49 (Ian, 2026-11-15: "a way to Move a Shot up or down"): the whole shot trades places with its neighbour -- its
+// pictures, words, takes and the transition after it go with it. Saved like any other change; the episode video then
+// shows as out of date (its signature follows the order), and take codes follow the new shot numbers.
+function vlMoveBtnsHTML(si, n) {
+  if (n < 2) return '';
+  var b = function (dir, on, ch, tip) {
+    return '<button type="button" class="vl-move" ' + (on ? 'onclick="vlMoveShot(' + si + ',' + dir + ')"' : 'disabled') + ' title="' + tip + '" style="background:none;border:none;color:var(--accent-bright);cursor:' + (on ? 'pointer' : 'default') + ';opacity:' + (on ? '1' : '0.25') + ';font-size:12px;padding:0 2px;line-height:1;">' + ch + '</button>';
+  };
+  return '<span style="flex:none;display:inline-flex;flex-direction:column;gap:1px;">' + b(-1, si > 0, '&#9650;', 'Move this shot up') + b(1, si < n - 1, '&#9660;', 'Move this shot down') + '</span>';
+}
+function vlMoveShot(si, dir) {
+  vlReadForm();
+  var d = VL.draft, to = si + dir;
+  if (!d || !d.shots[si] || !d.shots[to]) return;
+  var s = d.shots.splice(si, 1)[0];
+  d.shots.splice(to, 0, s);
+  vlStructural();
+  setTimeout(function () { var el = document.getElementById('vl-sn-' + to); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 50);
+}
+// v3.6.49 (Ian, 2026-11-15: "add the x to delete one too"): a shot can be deleted outright, after a question that says
+// what goes with it. Its takes are deleted by the save (as when shots are joined); the last shot cannot be deleted.
+function vlDelBtnHTML(si, n) {
+  if (n < 2) return '';
+  return '<button type="button" class="vl-del-shot" title="Delete this shot" onclick="vlDeleteShot(' + si + ')" style="flex:none;background:none;border:none;color:var(--danger,#c0392b);cursor:pointer;font-size:16px;padding:0 4px;line-height:1;">&times;</button>';
+}
+function vlDeleteShot(si) {
+  vlReadForm();
+  var d = VL.draft; if (!d || !d.shots[si] || d.shots.length < 2) return;
+  var s = d.shots[si], ep = vlFindEp(d.id), n = 0;
+  var busy = false;
+  if (s.id && ep) (ep.shots || []).forEach(function (x) { if (String(x.id) === String(s.id)) { n = (x.takes || []).length; busy = (x.takes || []).some(function (t) { return t.status === 'making'; }); } });
+  if (busy) { showError('A take of this shot is being made. Wait until it is made, then delete the shot.'); return; }
+  var nm = String(s.name || '').trim();
+  uiConfirm('Delete shot ' + (si + 1) + (nm ? ' (' + nm + ')' : '') + '? Its pictures and words leave the episode' + (n ? ', and its ' + n + ' take' + (n === 1 ? ' is' : 's are') + ' deleted' : '') + '. This cannot be undone.',
+    { title: 'Delete this shot', okText: 'Delete shot', cancelText: 'Keep it', danger: true })
+    .then(function (yes) {
+      if (!yes || VL.draft !== d) return;
+      var at = d.shots.indexOf(s); if (at < 0) return;
+      d.shots.splice(at, 1);
+      vlRenderOpen(true);
+      if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
+      vlSave();
+    });
+}
 function vlJoinShots(si) {
   vlReadForm();
   var d = VL.draft;
@@ -43795,15 +43913,276 @@ function vlTakeInfoHTML(j) {
   }
   return H.join('');
 }
+// v3.6.38 (Ian, 2026-11-14: "it kinda freezes until all the videos are loaded. Maybe only load up the ones for the shots that
+// are open... Load the other in the background"). A take's player is drawn empty (data-vl-src); two at a time are loaded,
+// shots on view first, top to bottom, then folded ones. A redraw moves players already loaded across instead of reloading.
+function vlVidHarvest(root) {
+  var keep = {};
+  if (!root || !root.querySelectorAll) return keep;
+  root.querySelectorAll('video[data-vl-src][src]').forEach(function (v) { keep[v.getAttribute('data-vl-src')] = v; });
+  return keep;
+}
+function vlVidRestore(root, keep) {
+  if (root && root.querySelectorAll) root.querySelectorAll('video[data-vl-src]:not([src])').forEach(function (v) {
+    var old = keep[v.getAttribute('data-vl-src')];
+    if (!old || old === v) return;
+    delete keep[v.getAttribute('data-vl-src')];
+    var card = v.closest('[data-take]');
+    if (card && !card._vlHtml) card._vlHtml = card.outerHTML;
+    var w = v.parentNode && v.parentNode.querySelector('.vl-vid-wait');
+    v.parentNode.replaceChild(old, v);
+    if (w && old._vlDone) w.parentNode.removeChild(w);
+  });
+  vlVidQueue();
+}
+function vlVidQueue() {
+  if (VL.vidTimer) return;
+  VL.vidTimer = setTimeout(function () { VL.vidTimer = null; vlVidNext(); }, 0);
+}
+function vlVidNext() {
+  VL.vidBusy = (VL.vidBusy || []).filter(function (v) { return !v._vlDone && document.contains(v); });
+  while (VL.vidBusy.length < 2) {
+    var all = document.querySelectorAll('#vl-open video[data-vl-src]:not([src])');
+    if (!all.length) return;
+    var pick = null;
+    for (var i = 0; i < all.length && !pick; i++) if (all[i].offsetParent !== null) pick = all[i];
+    vlVidStart(pick || all[0]);
+  }
+}
+function vlVidStart(v) {
+  var card = v.closest('[data-take]');
+  if (card && !card._vlHtml) card._vlHtml = card.outerHTML;
+  var fin = function () {
+    if (v._vlDone) return;
+    v._vlDone = true;
+    var w = v.parentNode && v.parentNode.querySelector('.vl-vid-wait');
+    if (w) w.parentNode.removeChild(w);
+    vlVidQueue();
+  };
+  v.addEventListener('loadedmetadata', fin, { once: true });
+  v.addEventListener('error', fin, { once: true });
+  setTimeout(fin, 15000);
+  VL.vidBusy.push(v);
+  v.preload = 'metadata';
+  v.src = v.getAttribute('data-vl-src');
+}
+// =================================================================================================
+// v3.6.46 -- TD-1147 TAKE REVIEW, THE PAGE (Ian, 2026-11-15: "A conversation about the take in the assistant"; "you can select
+// one at a time. You shouldn't have to do all of it at once"; spec claude/VIDEO_TAKE_REVIEW_SPEC.md). Review on a finished
+// take opens the ? panel in review mode: the reviewer's summary and findings, each with its own Fix (the check's fixes, applied
+// through the same code, one at a time) and Done/Undo, then the conversation. Typing in the panel asks about the take.
+// Closing the panel leaves review mode; Review again shows the saved review.
+// =================================================================================================
+var VL_RV = null;   // { takeId, code, rv, price, freeAsks, msg, timer, busy }
+function vlRvOn() { return !!(VL_RV && VL_RV.takeId); }
+function vlReviewTake(takeId) {
+  var f = vlRtFind(takeId); if (!f) return;
+  // v3.6.51 (Ian, 2026-11-15: "let it look at the video and info.. then ask... Do you want my thoughts or do you have something
+  // specific"; "Fine you can charge at the selection."): no question up front any more; watching is free, the token is taken
+  // when a choice is made. A review already under way, waiting or done just opens.
+  fetch('/api/video-lab/takes/' + takeId + '/review').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    var rv = res.ok && res.j ? res.j.review : null, price = res.ok && res.j && res.j.price != null ? res.j.price : 1;
+    if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer);
+    VL_RV = { takeId: takeId, code: vlTakeCode(f.t, f.n), rv: null, price: price, freeAsks: (res.ok && res.j && res.j.free_asks) || 5, msg: '', timer: null, busy: false };
+    openHelp();
+    try { vlRvViewer(takeId); } catch (e) {}   // v3.6.47: the viewer stays, beside the panel
+    var m = document.getElementById('help-panel'); if (m) m.style.zIndex = '120';
+    if (!res.ok) { VL_RV.msg = (res.j && res.j.error) || 'Could not open the review.'; renderHelpThread(); return; }
+    if (rv && rv.status !== 'error') { VL_RV.rv = rv; renderHelpThread(); vlRvFollow(); return; }
+    vlRvStart();
+  }).catch(function () { showError('Could not reach the server.'); });
+}
+function vlRvStart() {
+  if (!VL_RV || VL_RV.busy) return;
+  var id = VL_RV.takeId;
+  VL_RV.busy = true; VL_RV.msg = ''; VL_RV.rv = { status: 'preparing', findings: [], turns: [] }; renderHelpThread();   // v3.6.51 watching first
+  fetch('/api/video-lab/takes/' + id + '/review', { method: 'POST' }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (res) {
+    if (!VL_RV || VL_RV.takeId !== id) return;
+    VL_RV.busy = false;
+    if (!res.ok || !res.j.review) { VL_RV.rv = null; VL_RV.msg = (res.j && (res.j.message || res.j.error)) || 'Could not start the review.'; renderHelpThread(); return; }
+    VL_RV.rv = res.j.review; renderHelpThread(); vlRvFollow();
+  }).catch(function () { if (VL_RV) { VL_RV.busy = false; VL_RV.rv = null; VL_RV.msg = 'Could not reach the server.'; renderHelpThread(); } });
+}
+// While the review is being made or a question is being answered, look again every 3 seconds.
+function vlRvFollow() {
+  if (!VL_RV || !VL_RV.rv || !VL_RV.rv.id) return;
+  if (VL_RV.timer) { clearTimeout(VL_RV.timer); VL_RV.timer = null; }
+  var rv = VL_RV.rv, id = rv.id, tid = VL_RV.takeId;
+  if (rv.status !== 'running' && rv.status !== 'preparing' && !rv.pending) return;   // v3.6.51 preparing
+  VL_RV.timer = setTimeout(function () {
+    if (!VL_RV || VL_RV.takeId !== tid) return;
+    fetch('/api/video-lab/reviews/' + id).then(function (r) { return r.json(); }).then(function (j) {
+      if (!VL_RV || VL_RV.takeId !== tid || !j || !j.review) return;
+      var was = VL_RV.rv; VL_RV.rv = j.review;
+      if (was && was.status === 'running' && j.review.status === 'done' && typeof refreshTokenBalance === 'function') refreshTokenBalance();
+      renderHelpThread(); vlRvFollow();
+    }).catch(function () { if (VL_RV && VL_RV.takeId === tid) vlRvFollow(); });
+  }, 3000);
+}
+function vlRvLeave() { if (VL_RV && VL_RV.timer) clearTimeout(VL_RV.timer); VL_RV = null; try { vlTrimSide(false); } catch (e) {} }   // v3.6.47: the viewer back to its size
+// v3.6.47 (Ian, 2026-11-15: "can you make the viewer smaller and to the left so you can see the video when looking at the
+// assistant"; "Sure" to a second in a finding jumping there). While a take is reviewed, its viewer sits left of the ? panel
+// with no cover over the page; closing the assistant puts it back. A second named in the review ("at 1.5 s") is a link that
+// jumps the viewer there, paused.
+function vlTrimSide(on) {
+  var box = document.getElementById('vl-trim-modal'), panel = document.getElementById('vl-trim-panel');
+  if (!box || !panel) return;
+  if (on) {
+    if (box.getAttribute('data-full') == null) { box.setAttribute('data-full', box.style.cssText); panel.setAttribute('data-full', panel.style.cssText); }
+    var hp = document.getElementById('help-panel'), w = hp && !hp.classList.contains('hidden') ? hp.getBoundingClientRect().width : 0;
+    box.style.cssText = 'position:fixed;left:12px;top:12px;bottom:12px;right:' + Math.round(w + 24) + 'px;z-index:110;display:flex;align-items:flex-start;justify-content:flex-start;pointer-events:none;';
+    panel.style.width = '100%'; panel.style.minWidth = '0'; panel.style.maxWidth = '760px'; panel.style.maxHeight = '100%'; panel.style.pointerEvents = 'auto';
+    box.setAttribute('data-side', '1');
+  } else if (box.getAttribute('data-full') != null) {
+    box.style.cssText = box.getAttribute('data-full'); panel.style.cssText = panel.getAttribute('data-full') || '';
+    box.removeAttribute('data-full'); panel.removeAttribute('data-full'); box.removeAttribute('data-side');
+  }
+}
+function vlRvViewer(takeId) {
+  var b = document.getElementById('vl-trim-modal');
+  if (!b || !VL.trim || String(VL.trim.id) !== String(takeId)) vlTrimTake(takeId);
+  vlTrimSide(true);
+}
+function vlRvSeek(t) {
+  if (!VL_RV) return;
+  vlRvViewer(VL_RV.takeId);
+  var v = document.getElementById('vl-trim-v'); if (!v) return;
+  var go = function () { if (VL.trim) VL.trim.selfSeek = true; try { v.pause(); } catch (e) {} v.currentTime = Math.max(0, Number(t) || 0); };
+  if (v.readyState >= 1) go(); else v.addEventListener('loadedmetadata', go, { once: true });
+}
+// "1.5 s", "2-3 s", "t = 4.0 s" in the review's words become links to that second (the first number of a range).
+function vlRvSecLinks(html) {
+  return String(html).replace(/(^|[^\w.#&;-])(\d{1,2}(?:\.\d{1,2})?)((?:\s?[-\u2013]\s?\d{1,2}(?:\.\d{1,2})?)?\s?s)\b/g, function (m, pre, a, rest) {
+    return pre + '<a href="#" onclick="vlRvSeek(' + Number(a) + ');return false;" title="Show this moment in the viewer" style="color:var(--accent-pale);text-decoration:underline;">' + a + rest + '</a>';
+  });
+}
+function vlRvFindingHTML(f) {
+  var x = f.fix, B = 'btn btn-sm', fix = '';
+  if (!f.done && x && !f.ours) {
+    var label = x.type === 'words' ? (x.label ? 'Use: ' + x.label : 'Use this') : x.type === 'add_reference' ? 'Add ' + x.name : x.type === 'untick_reference' ? 'Stop sending ' + x.name + '\u2019s picture' :
+      x.type === 'mode' ? 'Switch to ' + (x.mode === 'reference' ? 'Reference' : 'Keyframes') : x.type === 'seconds' ? 'Make it ' + Number(x.seconds) + ' s' : '';
+    if (label) fix = '<button type="button" class="' + B + '" onclick="vlRvFix(' + Number(f.id) + ')">' + escapeHtml(label) + '</button>';
+  }
+  var detail = x && x.type === 'words' && !f.done ? '<div style="font-size:12px;margin-top:4px;padding:4px 6px;border-left:2px solid rgba(var(--accent-rgb),0.5);white-space:pre-wrap;" data-no-words>' + escapeHtml(x.text || '') + '</div>' : '';
+  return '<div class="vl-rv-f" data-fid="' + Number(f.id) + '" style="padding:8px 0;border-top:1px solid rgba(var(--accent-rgb),0.15);' + (f.done ? 'opacity:0.5;' : '') + '">' +
+    (f.ours ? '<div style="font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:#e8a85a;">Our prompt, not your words</div>' : '') +
+    '<div style="font-size:13px;line-height:1.45;" data-no-words>' + vlRvSecLinks(vlPcTextHTML(f.text)) + '</div>' + detail +   // v3.6.47: seconds jump the viewer
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">' + fix +
+      '<button type="button" class="' + B + '" onclick="vlRvDone(' + Number(f.id) + ',' + (f.done ? 'false' : 'true') + ')">' + (f.done ? 'Undo' : 'Done') + '</button></div></div>';
+}
+function vlRvRender(box) {
+  var R = VL_RV, rv = R.rv, H = [];
+  H.push('<div class="help-msg help-msg-bot" style="max-width:100%;"><div style="font-weight:600;margin-bottom:4px;">Reviewing take ' + escapeHtml(R.code) + '</div>' +
+    '<div style="font-size:12px;opacity:0.8;">I watch frames of the take, listen to what is said, and compare them with what was asked. Watching is free; ' + R.price + ' token' + (R.price === 1 ? '' : 's') + ' when you choose, including ' + R.freeAsks + ' questions.</div></div>');
+  if (R.msg) H.push('<div class="help-msg help-msg-error">' + escapeHtml(R.msg) + '</div>');
+  if (rv && rv.status === 'preparing') H.push('<div class="help-msg help-msg-bot help-msg-pending">Watching the take and listening to it\u2026</div>');   // v3.6.51
+  if (rv && rv.status === 'ready') {   // v3.6.51: the choice
+    var sp = rv.span || {}, len = sp.to != null && sp.from != null ? (Number(sp.to) - Number(sp.from)).toFixed(1) + ' s' : '';
+    H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.error ? '<div style="color:var(--danger);font-size:12px;margin-bottom:6px;">' + escapeHtml(rv.error) + '</div>' : '') +
+      'I\u2019ve watched take ' + escapeHtml(R.code) + (len ? ' (' + len + ')' : '') + '. Want my thoughts, or is there something specific you\u2019d like help with?' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="btn btn-sm btn-primary" id="vl-rv-thoughts" onclick="vlRvBegin(\'\')">Your thoughts &middot; ' + R.price + ' token' + (R.price === 1 ? '' : 's') + '</button></div>' +
+      '<div style="font-size:12px;opacity:0.75;margin-top:6px;">Or type your question below (' + R.price + ' token' + (R.price === 1 ? '' : 's') + ', including ' + R.freeAsks + ' more questions).</div></div>');
+  }
+  if (rv && rv.status === 'running') H.push((rv.pending ? '<div class="help-msg help-msg-user">' + escapeHtml(rv.pending) + '</div>' : '') + '<div class="help-msg help-msg-bot help-msg-pending">' + (rv.pending ? 'Looking into it\u2026' : 'Putting my thoughts together\u2026') + '</div>');
+  if (rv && rv.status === 'error') H.push('<div class="help-msg help-msg-error">' + escapeHtml(rv.error || 'The review failed. Nothing was charged.') + '</div><div style="margin:6px 0;"><button type="button" class="btn btn-sm" onclick="vlRvStart()">Try again</button></div>');
+  if (rv && rv.status === 'done') {
+    var byTurn = {};
+    (rv.turns || []).forEach(function (tu) { (tu.findings || []).forEach(function (id) { byTurn[id] = true; }); });
+    var first = (rv.findings || []).filter(function (f) { return !byTurn[f.id]; });
+    var t0 = (rv.turns || [])[0], qFirst = !!(t0 && t0.first), rvTurn = (rv.turns || []).filter(function (tu) { return tu.role === 'review'; })[0] || {};   // v3.6.51
+    var fullAsked = (rv.turns || []).some(function (tu) { return tu.full; }) || (rv.pending === VL_RV_FULL_Q);
+    if (qFirst) H.push('<div class="help-msg help-msg-user">' + escapeHtml(t0.text) + '</div>');
+    H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.summary ? '<div style="margin-bottom:4px;' + (qFirst ? 'font-weight:600;' : '') + '">' + vlRvSecLinks(escapeHtml(rv.summary)) + '</div>' : '') +
+      (qFirst && rvTurn.answer ? '<div style="margin-bottom:4px;">' + vlRvSecLinks(_helpFormat(rvTurn.answer)) + '</div>' : '') +
+      (first.length ? first.map(vlRvFindingHTML).join('') : (qFirst ? '' : '<div style="font-size:13px;">Nothing to fix.</div>')) +
+      (qFirst && !fullAsked ? '<div style="margin-top:8px;"><button type="button" class="btn btn-sm" onclick="vlRvFull()" title="The whole review of the take; counts as one of your questions">Full thoughts too?</button></div>' : '') + '</div>');
+    (rv.turns || []).forEach(function (tu) {
+      if (tu.first) return;
+      if (tu.role === 'user') H.push('<div class="help-msg help-msg-user">' + escapeHtml(tu.text) + '</div>');
+      else if (tu.role === 'answer') {
+        var nf = (rv.findings || []).filter(function (f) { return (tu.findings || []).indexOf(f.id) >= 0; });
+        H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + vlRvSecLinks(_helpFormat(tu.text || '')) + nf.map(vlRvFindingHTML).join('') + '</div>');   // v3.6.47
+      } else if (tu.role === 'error') H.push('<div class="help-msg help-msg-error">' + escapeHtml(tu.text) + '</div>');
+    });
+    if (rv.pending) H.push('<div class="help-msg help-msg-user">' + escapeHtml(rv.pending) + '</div><div class="help-msg help-msg-bot help-msg-pending">Thinking\u2026</div>');
+    var used = Number(rv.asks_used) || 0, free = Number(rv.free_asks) || R.freeAsks, left = used < free ? free - used : (free - ((used - free) % free)) % free;
+    H.push('<div style="font-size:11px;opacity:0.75;margin:6px 2px;">' + (used < free ? left + ' question' + (left === 1 ? '' : 's') + ' left in this review.' : (left ? left + ' question' + (left === 1 ? '' : 's') + ' left before the next token.' : 'The next question costs 1 token and covers ' + free + '.')) +
+      ' <a href="#" onclick="vlRvAgain();return false;" style="color:var(--accent-pale);">Review it again</a></div>');
+  }
+  box.innerHTML = H.join('');
+  box.scrollTop = box.scrollHeight;
+}
+function vlRvAgain() { uiConfirm('Review this take again from the start? Watching it is free; ' + VL_RV.price + ' token' + (VL_RV.price === 1 ? '' : 's') + ' when you choose. The review you have stays in the take\u2019s Info.', { okText: 'Review again' }).then(function (ok) { if (ok) vlRvStart(); }); }
+// v3.6.51 -- the choice: '' the whole review, or the user's own question first.
+var VL_RV_FULL_Q = 'Your full thoughts on the whole take, please.';   // the server's RV_FULL_Q
+function vlRvBegin(q) {
+  if (!VL_RV || !VL_RV.rv || !VL_RV.rv.id || VL_RV.rv.status !== 'ready' || VL_RV.busy) return;
+  var id = VL_RV.rv.id, qEl = document.getElementById('help-question');
+  VL_RV.busy = true; VL_RV.msg = ''; VL_RV.rv.status = 'running'; VL_RV.rv.pending = q || null; VL_RV.rv.error = null;
+  if (q && qEl) qEl.value = '';
+  renderHelpThread();
+  fetch('/api/video-lab/reviews/' + id + '/begin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: q || '' }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!VL_RV || !VL_RV.rv || VL_RV.rv.id !== id) return;
+      VL_RV.busy = false;
+      if (!res.ok || !res.j.review) { VL_RV.rv.status = 'ready'; VL_RV.rv.pending = null; if (q && qEl) qEl.value = q; VL_RV.msg = (res.j && (res.j.message || res.j.error)) || 'Could not start the review.'; renderHelpThread(); return; }
+      VL_RV.rv = res.j.review; renderHelpThread(); vlRvFollow();
+    }).catch(function () { if (VL_RV && VL_RV.rv) { VL_RV.busy = false; VL_RV.rv.status = 'ready'; VL_RV.rv.pending = null; if (q && qEl) qEl.value = q; VL_RV.msg = 'Could not reach the server.'; renderHelpThread(); } });
+}
+function vlRvFull() { var qEl = document.getElementById('help-question'); if (qEl) qEl.value = VL_RV_FULL_Q; vlRvAsk(); }
+function vlRvAsk() {
+  var qEl = document.getElementById('help-question'), q = qEl ? qEl.value.trim() : '';
+  if (!q || !VL_RV || !VL_RV.rv || !VL_RV.rv.id) return;
+  if (VL_RV.rv.status === 'ready') { vlRvBegin(q); return; }   // v3.6.51: a question typed at the choice goes first
+  if (VL_RV.rv.status !== 'done') { VL_RV.msg = 'Wait for the review to finish first.'; renderHelpThread(); return; }
+  if (VL_RV.rv.pending) return;
+  var id = VL_RV.rv.id; VL_RV.msg = '';
+  VL_RV.rv.pending = q; if (qEl) qEl.value = ''; renderHelpThread();
+  fetch('/api/video-lab/reviews/' + id + '/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: q }) })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!VL_RV || !VL_RV.rv || VL_RV.rv.id !== id) return;
+      if (!res.ok) { VL_RV.rv.pending = null; if (qEl) qEl.value = q; VL_RV.msg = (res.j && (res.j.message || res.j.error)) || 'Could not send the question.'; renderHelpThread(); return; }
+      VL_RV.rv = res.j.review; renderHelpThread(); vlRvFollow();
+    }).catch(function () { if (VL_RV && VL_RV.rv) { VL_RV.rv.pending = null; if (qEl) qEl.value = q; VL_RV.msg = 'Could not reach the server.'; renderHelpThread(); } });
+}
+function vlRvSay(t) { if (VL_RV) { VL_RV.msg = t || ''; renderHelpThread(); } }
+function vlRvDone(fid, done, quiet) {
+  if (!VL_RV || !VL_RV.rv || !VL_RV.rv.id) return;
+  var id = VL_RV.rv.id;
+  fetch('/api/video-lab/reviews/' + id + '/done', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ finding: fid, done: done }) })
+    .then(function (r) { return r.json(); }).then(function (j) { if (VL_RV && VL_RV.rv && VL_RV.rv.id === id && j && j.review) { VL_RV.rv = j.review; if (!quiet) VL_RV.msg = ''; renderHelpThread(); } }).catch(function () {});
+}
+// One finding's fix, through the check's own fix code (vlPcWords / vlPcRef / vlPcSeconds / vlPcSetMode / vlPcApply), with
+// the finding handed over (VL.pcOver) so nothing touches the check's own findings; when it is saved, only this finding is
+// marked done.
+function vlRvFix(fid) {
+  var rv = VL_RV && VL_RV.rv, f = rv && (rv.findings || []).filter(function (z) { return Number(z.id) === Number(fid); })[0];
+  if (!f || !f.fix || f.done) return;
+  var w = vlRtFind(VL_RV.takeId);
+  if (!w || !(w.si >= 0)) { vlRvSay('Open this take\u2019s episode to use its fixes.'); return; }
+  VL.pcOver = { f: f, done: function () { VL.pcOver = null; vlRvDone(f.id, true, true); vlRvSay('Done: the shot\u2019s words are changed. Make a new take when you are ready.'); } };
+  var x = f.fix, si = w.si;
+  try {
+    if (x.type === 'words') vlPcWords(si, f.id);
+    else if (x.type === 'add_reference') vlPcRef(si, f.id);
+    else if (x.type === 'seconds') vlPcSeconds(si, f.id);
+    else if (x.type === 'mode') vlPcSetMode(si, x.mode, f.id);
+    else if (x.type === 'untick_reference') vlPcApply(si, f.id, function (s) { s.refs = (s.refs || []).filter(function (r) { return !(r.type === x.ref_type && Number(r.id) === Number(x.ref_id)); }); });
+    else VL.pcOver = null;
+  } catch (e) { VL.pcOver = null; vlRvSay('That fix could not be used (' + (e && e.message) + ').'); }
+  if (VL.pcOver && !VL.pcOver.started) VL.pcOver = null;   // it did not get as far as changing the shot (it said why)
+}
 function vlTakeCardHTML(t, chosen, n, fromN) {
   var making = t.status === 'making';
   var body = t.status === 'done' && t.video_url
-    ? '<video src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload" oncontextmenu="return false;" title="To save this take, use the &#8681; button under it: it names the file by the take\'s code. The link button copies its address." preload="metadata" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video>'   // v3.5.96 (Ian: "make the save as file names match"): the player's own Save named the file by its storage name, so only the code-named download is offered
+    ? '<div style="position:relative;"><video data-vl-src="' + escapeHtml(t.video_url) + '" controls controlsList="nodownload nofullscreen" disablePictureInPicture ondblclick="event.preventDefault();vlTrimTake(' + t.id + ')" oncontextmenu="return false;" title="To save this take, use the &#8681; button under it: it names the file by the take\'s code. The link button copies its address." preload="none" style="display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;"></video><div class="vl-vid-wait" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-size:11px;color:rgba(var(--accent-text-rgb),0.6);">Loading...</div></div>'   // v3.6.38: loaded in turn by vlVidNext; v3.5.96 (Ian: "make the save as file names match"): the player's own Save named the file by its storage name, so only the code-named download is offered
     : '<div class="moment-img-placeholder" style="aspect-ratio:16/9;min-height:0;gap:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;">' +
         (making ? vlSpin(20) + '<div class="moment-img-inner" style="color:rgba(var(--accent-text-rgb),0.7);">' + escapeHtml(vlTakeProgress(t)) + ' &middot; ' + vlElapsed(t.created_at) + '</div>'
                 : '<div class="moment-img-inner" style="color:var(--danger);" data-no-words>' + escapeHtml(t.merge_error || t.error || ((t.moves || []).filter(function (x) { return x.error; }).map(function (x) { return x.error; })[0]) || 'Failed') + '</div>') +
       '</div>';
-  return '<div data-take="' + t.id + '" style="width:220px;flex:0 0 auto;border:1px solid ' + (chosen ? 'rgba(var(--accent-rgb),0.8)' : 'rgba(var(--accent-rgb),0.2)') + ';border-radius:8px;padding:6px;">' +
+  return '<div data-take="' + t.id + '" style="width:220px;flex:0 0 auto;' + (chosen ? 'border:3px solid rgb(var(--accent-rgb));padding:4px;box-shadow:0 0 10px rgba(var(--accent-rgb),0.55);' : 'border:1px solid rgba(var(--accent-rgb),0.2);padding:6px;') + 'border-radius:8px;">' +   // v3.6.43 (Ian: "bolden the gold border around the pinned take")
     body +
     // v3.5.75 (Ian, 2026-11-11): pin, take, current or out of date, date / the model and mode / the buttons at the foot
     '<div style="display:flex;gap:4px;align-items:center;margin-top:5px;flex-wrap:wrap;">' +
@@ -43814,6 +44193,7 @@ function vlTakeCardHTML(t, chosen, n, fromN) {
     '</div>' +
     '<div style="' + VL_DESC + 'margin:2px 0 0 2px;">' + escapeHtml(vlTakeModelText(t)) + '</div>' +
     '<div style="display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap;">' +
+      // v3.6.50 (Ian, 2026-11-15: "Remove the Review button on the take card. We'll just leave it on the viewer.")
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="View this take larger: save a frame for another shot, or trim the part the episode uses" onclick="vlTrimTake(' + t.id + ')">View</button>' : '') +   // v3.5.54 Trim; v3.6.08 View (Ian, 2026-11-13: "change it to view"), with Save frame and Last frame inside; Retouch moved there too (Ian: "take the retouch off the card")
       (t.status === 'done' && t.video_url ? '<a class="narrative-regen-btn" style="text-decoration:none;" href="/api/video-lab/takes/' + t.id + '/download?code=' + encodeURIComponent(vlTakeCode(t, n)) + '" title="Download this take as ' + escapeHtml(vlTakeCode(t, n)) + '" aria-label="Download">&#8681;</a>' : '') +   // v3.5.97: says what it is (Ian missed the bare arrow)
       (t.status === 'done' && t.video_url ? '<button type="button" class="narrative-regen-btn" title="Copy this take\'s video address" aria-label="Copy link" onclick="vlCopyTakeLink(' + t.id + ')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button>' : '') +   // v3.5.97 (Ian: "make it so I can get the video\'s link")
@@ -44016,7 +44396,11 @@ function vlPatchTakes(el, key, html) {
   for (var i = 0; i < newCards.length; i++) if (newCards[i].getAttribute('data-take') !== oldCards[i].getAttribute('data-take')) return false;
   var newRow = tmp.firstElementChild, oldRow = el.firstElementChild;
   if (!newRow || !oldRow || newRow.children.length !== oldRow.children.length) return false;
-  for (var k = 0; k < newCards.length; k++) if (newCards[k].outerHTML !== oldCards[k].outerHTML) oldCards[k].parentNode.replaceChild(newCards[k].cloneNode(true), oldCards[k]);
+  for (var k = 0; k < newCards.length; k++) if (newCards[k].outerHTML !== (oldCards[k]._vlHtml || oldCards[k].outerHTML)) {   // v3.6.38: _vlHtml = the card as drawn, before its video was loaded
+    var keep = vlVidHarvest(oldCards[k]), nc = newCards[k].cloneNode(true);
+    oldCards[k].parentNode.replaceChild(nc, oldCards[k]);
+    vlVidRestore(nc, keep);
+  }
   var nb = newRow.lastElementChild, ob = oldRow.lastElementChild;   // the Generate take button
   if (nb && ob && nb.outerHTML !== ob.outerHTML) ob.parentNode.replaceChild(nb.cloneNode(true), ob);
   VL.liveSig[key] = html;
@@ -44026,7 +44410,9 @@ function vlSetLive(el, key, html) {
   if (!el) return;
   if (VL.liveSig[key] === html) return;
   VL.liveSig[key] = html;
+  var keep = vlVidHarvest(el);   // v3.6.38
   el.innerHTML = html;
+  vlVidRestore(el, keep);
 }
 function vlRenderLive() {
   var d = VL.draft, ep = d ? vlFindEp(d.id) : null;
@@ -44047,6 +44433,7 @@ function vlRenderLive() {
   vlSetLive(document.getElementById('vl-epnote'), 'note', vlEpNoteHTML(ep));   // v3.5.33
   vlShapeTagsRefresh();   // v3.5.35
   if (vlBusyEp(ep)) vlStartTimer();
+  vlVidQueue();   // v3.6.38
 }
 
 // ---- making --------------------------------------------------------------------------------
@@ -44144,6 +44531,9 @@ function vlFrmOpen(takeId, n, last) {
   if (!t) return;
   d.shots.forEach(function (ds, i) { if (String(ds.id) === String(t.shot_id)) si = i; });
   var at = 'end';
+  // v3.6.43 (Ian, 2026-11-15: "Last Frame will that take the last frame of the trim or the whole thing?"): the trim's end
+  // when the take has one saved, a moment before it so it is a frame that is shown
+  if (last && t.trim_end != null && isFinite(Number(t.trim_end)) && Number(t.trim_end) > 0.1) at = Math.round((Number(t.trim_end) - 0.05) * 100) / 100;
   if (!last) {
     var v = vlFrmPlayer(takeId);
     if (!v || !isFinite(v.currentTime)) { vlFrmSay('Open the take with View, pause on the frame you want, then press Save frame.'); return; }
@@ -44159,7 +44549,7 @@ function vlFrmOpen(takeId, n, last) {
   box.addEventListener('click', function (e) { if (e.target === box) vlFrmClose(); });
   box.innerHTML = '<div style="background:var(--panel);color:rgb(var(--on-panel-rgb));border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:520px;width:100%;padding:18px;">' +
     '<div style="display:flex;align-items:center;gap:8px;"><div style="' + VL_TITLE + 'flex:1;">' + (last ? 'Last frame' : 'Save this frame') + '</div><button class="modal-close" onclick="vlFrmClose()">&times;</button></div>' +
-    '<div style="font-size:13px;line-height:1.5;margin:6px 0 12px;">' + escapeHtml(VL_FRM.code) + (last ? ', the last frame.' : ', at ' + at + ' s.') + ' It is saved in the campaign\'s Archive either way. Free.</div>' +
+    '<div style="font-size:13px;line-height:1.5;margin:6px 0 12px;">' + escapeHtml(VL_FRM.code) + (last ? (at === 'end' ? ', the last frame.' : ', the last frame of the trimmed part (' + at + ' s).') : ', at ' + at + ' s.') + ' It is saved in the campaign\'s Archive either way. Free.</div>' +
     '<div style="display:flex;flex-direction:column;gap:10px;">' +
       '<div><button type="button" class="btn btn-sm btn-primary vl-frm-go" id="vl-frm-next"' + (hasNext ? '' : ' disabled title="This is the last shot"') + ' onclick="vlFrmGo(\'next\')">Next shot' + (hasNext ? ' (shot ' + (si + 2) + ')' : '') + '</button> <span style="font-size:12px;opacity:0.8;">It becomes the first picture of the next shot.</span></div>' +
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><select id="vl-frm-shot" style="min-width:200px;">' + shots + '</select><button type="button" class="btn btn-sm vl-frm-go" onclick="vlFrmGo(\'pick\')">Put it in this shot</button> <span style="font-size:12px;opacity:0.8;">as its first picture.</span></div>' +
@@ -44636,9 +45026,10 @@ function vlSlRefresh(id) {
     })
     .catch(function () {});
 }
-function vlWriteShotList(mode, chained) {
+function vlWriteShotList(mode, chained, asked) {   // v3.6.36: asked = the Notes window already chose Start over
   mode = mode === 'shots' ? 'shots' : 'notes';
   var d = VL.draft;
+  if (mode === 'notes' && !chained && !asked && d && !VL.busy && !vlSlWriting(d.id) && !vlAnyChecking(d.id) && vlHasWords(d) && d.shots.some(function (s) { return s.id; })) { vlNotesAsk(null); return; }   // v3.6.36: fill, add or start over
   if (d && vlAnyChecking(d.id)) { var m9 = document.getElementById('vl-sl-msg'); if (m9) m9.textContent = 'Shots are being checked. The Director can start when they are done.'; return; }   // v3.5.43
   if (!d || VL.busy || vlSlWriting(d.id)) return;
   vlReadForm();
@@ -45015,7 +45406,17 @@ var VL_MODEL_TIPS = {
   klingo3pro: '\u2022 TEST: Kuaishou Kling O3 Pro, Keyframes mode\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 3 to 15 seconds; shape from the picture\n\u2022 Its own sound costs extra\n\u2022 Not yet tried on our shots',
   viduq3: '\u2022 TEST: Shengshu Vidu Q3, Keyframes mode\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 Up to 16 seconds (we use up to 15); 720p\n\u2022 Makes its own sound by default, at no extra cost\n\u2022 Words limited to 2000 characters; not yet tried',
   h3max: '\u2022 TEST: MiniMax H3 Max, Keyframes mode (fal\u2019s own tuned MiniMax H3)\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 Up to 15 seconds; 768p; shape from the picture; fast\n\u2022 Makes its own soundtrack; no sound switch; not yet tried',
-  wan27: '\u2022 TEST: Alibaba Wan 2.7, Keyframes mode\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 2 to 15 seconds; 720p; shape from the picture\n\u2022 No sound switch; fal\u2019s page does not say whether it makes sound; not yet tried'
+  h3max1080ref: '\u2022 TEST: MiniMax H3 Max at 1080P, Reference mode: twice the price of 768P\n\u2022 fal makes it at 768P and refines it up to 1080P: sharper, the same movement\n\u2022 Up to 9 pictures sent (fal allows 12 files); the words name them \u2019Image 1\u2019...\n\u2022 Up to 15 seconds; wide 16:9; makes its own soundtrack, no sound switch',
+  h3max1080: '\u2022 TEST: MiniMax H3 Max at 1080P, Keyframes mode: twice the price of 768P\n\u2022 fal makes it at 768P and refines it up to 1080P\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 Up to 15 seconds; shape from the picture; no sound switch',
+  wan27: '\u2022 TEST: Alibaba Wan 2.7, Keyframes mode\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 2 to 15 seconds; 720p; shape from the picture\n\u2022 No sound switch; fal\u2019s page does not say whether it makes sound; not yet tried',
+  wan30ref: '\u2022 TEST: Alibaba Wan 3.0, Reference mode: top of the text-to-video board (Nov 2026)\n\u2022 Up to 9 pictures sent (5 from the shot, the rest the cast); the words name them \u2019Image 1\u2019...\n\u2022 2 to 15 seconds; 1080p, wide 16:9\n\u2022 Makes its own sound (the sound switch works)\n\u2022 Not yet tried on our shots',
+  wan30: '\u2022 TEST: Alibaba Wan 3.0, Keyframes mode\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 2 to 15 seconds; 1080p; shape from the picture\n\u2022 Makes its own sound (the sound switch works); not yet tried',
+  wan30sref: '\u2022 TEST: Alibaba Wan 3.0 at 720p, Reference mode: half the price of 1080p\n\u2022 Up to 9 pictures sent (5 from the shot, the rest the cast); the words name them \u2019Image 1\u2019...\n\u2022 2 to 15 seconds; 720p, wide 16:9\n\u2022 Makes its own sound (the sound switch works)\n\u2022 1080p made shot 10 first try with clean speech (take 144)',
+  wan30s: '\u2022 TEST: Alibaba Wan 3.0 at 720p, Keyframes mode: half the price of 1080p\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 2 to 15 seconds; 720p; shape from the picture\n\u2022 Makes its own sound (the sound switch works)',
+  seedance25ref: '\u2022 TEST: ByteDance Seedance 2.5 (US), Reference mode: top of the image-to-video board (Nov 2026)\n\u2022 Up to 9 pictures (5 from the shot, the rest the cast); pictures named @Image1... in the words\n\u2022 4 to 15 seconds; 720p, wide 16:9; its own sound costs nothing extra\n\u2022 The dearest model here, roughly 4 times MiniMax a second\n\u2022 Seedance 2.0 refused lifelike faces: try one shot before relying on it',
+  seedance25: '\u2022 TEST: ByteDance Seedance 2.5 (US), Keyframes mode\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 4 to 15 seconds; 720p; shape from the picture; sound costs nothing extra\n\u2022 The dearest model here; Seedance 2.0 refused lifelike faces, so try one shot first',
+  omni12ref: '\u2022 TEST: Google Gemini Omni Flash 1.2, Reference mode: top of the LMArena image-to-video board (Nov 2026)\n\u2022 Up to 9 pictures (5 from the shot, the rest the cast); the words name them <IMAGE_REF_0>... (counted from 0)\n\u2022 3 to 15 seconds; 1080p, wide 16:9\n\u2022 Makes its own sound; there is no sound switch\n\u2022 Not yet tried on our shots',
+  omni12: '\u2022 TEST: Google Gemini Omni Flash 1.2, Keyframes mode\n\u2022 Starts on the first picture; can land on an end picture; no cast pictures sent\n\u2022 3 to 10 seconds; 1080p, wide 16:9\n\u2022 Makes its own sound; no sound switch; not yet tried'
 };
 // v3.5.82 (Ian, 2026-11-11: "put in the drop down along with token cost / second reference image count")
 function vlModelPics(m) { return m.reference ? 'up to ' + (Number(m.max_refs) || 9) + ' pictures' : 'start (and end) picture'; }
@@ -45614,39 +46015,113 @@ function vlShotEmpty(s) {
 function vlShotFillBtnHTML(si) {
   var d = VL.draft, s = d && d.shots[si];
   if (!s || !s.id) return '';
-  var empty = vlShotEmpty(s), busy = VL.filling && VL.filling[s.id];
-  // v3.5.78 (Ian, 2026-11-11: "leave it there all the time but greyed out if there isn't anything empty")
-  var off = busy || vlSlWriting(d.id) || !empty.length;
-  return '<button type="button" class="btn btn-sm" id="vl-fill-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;' + (!empty.length && !busy ? 'opacity:0.45;' : '') + '"' + (off ? ' disabled' : '') +
-    ' title="' + (empty.length ? 'The Director writes this shot\'s empty parts (' + escapeHtml(empty.join(', ')) + ') to follow on from the shots either side. What you wrote stays as it is.' : 'Nothing empty in this shot. Clear a box you want the Director to write.') + '" onclick="vlFillShot(' + si + ')">' +
-    (busy ? vlSpin(12) + ' Writing...' : 'Notes (1 token)') + '</button>';
+  var busy = VL.filling && VL.filling[s.id];
+  // v3.6.36 (Ian, 2026-11-14): Notes asks what to do (fill the empty boxes, add to what is there, or start over), so it is never greyed out
+  var off = busy || vlSlWriting(d.id);
+  var eps = vlFindEp(d.id), es = eps && (eps.shots || []).filter(function (x) { return String(x.id) === String(s.id); })[0];
+  return '<button type="button" class="btn btn-sm" id="vl-fill-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;"' + (off ? ' disabled' : '') +
+    ' title="The Director writes this shot: fill in the empty boxes, add to what is there, or start over." onclick="vlNotesAsk(' + si + ')">' +
+    (busy ? vlSpin(12) + ' Writing...' : 'Notes (1 token)') + '</button>' +
+    (es && es.can_revert && !busy ? '<button type="button" class="btn btn-sm" style="font-size:12px;padding:3px 10px;white-space:nowrap;"' + (vlSlWriting(d.id) ? ' disabled' : '') +
+      ' title="Put back this shot\'s words as they were before the last Notes (free)" onclick="vlRevertNotes(' + si + ')">Revert</button>' : '');
 }
-function vlFillShot(si) {
+// v3.6.36: the three ways the Director can write a shot (or, from the episode's button, every shot)
+function vlNotesAsk(si) {
+  vlReadForm();
+  var d = VL.draft; if (!d) return;
+  var all = si == null, s = all ? null : d.shots[si];
+  var anyEmpty = all ? d.shots.some(function (x) { return x.id && vlShotEmpty(x).length; }) : vlShotEmpty(s).length > 0;
+  var n = all ? d.shots.filter(function (x) { return x.id; }).length : 1;
+  var old = document.getElementById('vl-notes-ask'); if (old) old.parentNode.removeChild(old);
+  var w = document.createElement('div'); w.id = 'vl-notes-ask';
+  w.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;');
+  function opt(how, title, desc, dis) {
+    return '<button type="button" class="btn btn-sm" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:8px;white-space:normal;' + (dis ? 'opacity:0.45;' : '') + '"' + (dis ? ' disabled' : '') + ' onclick="vlNotesPick(' + (all ? 'null' : si) + ',\'' + how + '\')">' +
+      '<div style="font-weight:600;">' + title + '</div><div style="' + VL_DESC + 'margin-top:2px;">' + desc + '</div></button>';
+  }
+  w.innerHTML = '<div style="' + VL_BOX + 'max-width:520px;width:92%;padding:16px 18px;color:rgb(var(--on-panel-rgb));">' +
+    '<div style="font-weight:600;margin-bottom:10px;">' + (all ? 'Director\'s Notes for every shot' : 'Director\'s Notes for shot ' + (si + 1)) + '</div>' +
+    opt('fill', 'Fill in the empty boxes', anyEmpty ? 'What you wrote stays as it is.' : 'Nothing is empty' + (all ? ' in any shot.' : ' in this shot.'), !anyEmpty) +
+    opt('add', 'Add to what\'s there', 'Your words stay as they are; the Director adds only what is missing, never anything that contradicts them.') +
+    opt('fresh', 'Clear it and start over', 'Everything but the Purpose and Concept is cleared and written again' + (all ? ', in every shot, with the overall direction' : '') + '. Pictures, references, mode and model stay.') +
+    '<div style="' + VL_DESC + 'margin:4px 0 10px;">' + (all ? 'About 1 token a shot (' + n + ' shot' + (n === 1 ? '' : 's') + ') to fill or add; starting over is priced on the button. ' : '1 token. ') + 'Each shot keeps a Revert that puts its words back.</div>' +
+    '<div style="text-align:right;"><button type="button" class="btn btn-sm" onclick="vlNotesAskClose()">Cancel</button></div></div>';
+  w.addEventListener('click', function (e) { if (e.target === w) vlNotesAskClose(); });
+  document.body.appendChild(w);
+}
+function vlNotesAskClose() { var w = document.getElementById('vl-notes-ask'); if (w) w.parentNode.removeChild(w); }
+function vlNotesPick(si, how) {
+  vlNotesAskClose();
+  var all = si == null;
+  if (how === 'fresh') {
+    if (all) { vlWriteShotList('notes', false, true); return; }   // the episode's own start over, with its own question
+    uiConfirm('You sure? Shot ' + (si + 1) + '\'s Opening, beats, lines, Camera, Sound, Around them and Closing are cleared, with the check\'s findings, and the Director writes them again from the Purpose and Concept. Revert puts them back.', { okText: 'Start over', danger: true })
+      .then(function (yes) { if (yes) vlFillShot(si, 'fresh'); });
+    return;
+  }
+  if (all) vlNotesEvery(how); else vlFillShot(si, how);
+}
+// Fill or add for every shot, one after another (each its own 1-token Notes); a shot with nothing to do is passed over.
+function vlNotesEvery(how) {
+  var d = VL.draft; if (!d) return;
+  var list = d.shots.map(function (s, i) { return i; }).filter(function (i) { return d.shots[i].id && (how === 'add' || vlShotEmpty(d.shots[i]).length); });
+  var k = 0, wrote = 0, msg = function (t) { var m = document.getElementById('vl-sl-msg'); if (m) m.innerHTML = t; };
+  function next() {
+    if (!VL.draft || VL.draft.id !== d.id) return;
+    if (k >= list.length) { msg(escapeHtml('The Director ' + (how === 'add' ? 'added to ' : 'filled in ') + wrote + ' shot' + (wrote === 1 ? '' : 's') + '.')); return; }
+    var si = list[k++];
+    msg(vlSpin(12) + ' ' + escapeHtml('Shot ' + (si + 1) + ' (' + k + ' of ' + list.length + ')...'));
+    vlFillShot(si, how, function (ok, stop) { if (ok) wrote++; if (stop) return; next(); });
+  }
+  next();
+}
+function vlRevertNotes(si) {
+  var d = VL.draft, s = d && d.shots[si]; if (!d || !s || !s.id) return;
+  var id = d.id, sid = s.id, msg = function (t) { var m = document.getElementById('vl-sl-msg'); if (m) m.innerHTML = t; };
+  fetch('/api/video-lab/shots/' + sid + '/revert-notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.j || !res.j.episode) { msg(escapeHtml((res.j && (res.j.message || res.j.error)) || 'Could not put the words back.')); return; }
+      vlPutEp(res.j.episode);
+      vlTakeShotWords(id, sid, res.j.episode);
+      vlRenderOpen(true);
+      msg(escapeHtml('Shot ' + (si + 1) + ': the words are back as they were before the last Notes.'));
+    })
+    .catch(function () { msg('Could not reach the server.'); });
+}
+// The shot's words (and references) from the server's copy into the page's draft
+function vlTakeShotWords(id, sid, ep) {
+  var fresh = vlDraftFrom(ep), cur = VL.draft;
+  if (!cur || cur.id !== id) return;
+  var f = fresh.shots.filter(function (x) { return x.id === sid; })[0], k = cur.shots.findIndex(function (x) { return x.id === sid; });
+  if (f && k >= 0) ['start', 'actions', 'lines', 'camera', 'end', 'sounds', 'around', 'seconds', 'beats', 'more', 'refs'].forEach(function (key) { cur.shots[k][key] = f[key]; });
+}
+
+function vlFillShot(si, how, after) {   // v3.6.36: how = fill, add or fresh; after(ok, stop) when run for every shot
   var d = VL.draft, s = d && d.shots[si];
   if (!d || !s || !s.id) return;
   vlReadForm();
   var id = d.id, sid = s.id;
   VL.filling = VL.filling || {}; VL.filling[sid] = true; vlRenderOpen(true);
   var msg = function (t) { var m = document.getElementById('vl-sl-msg'); if (m) m.innerHTML = t; };
+  how = how === 'add' || how === 'fresh' ? how : 'fill';
   var done = function () { delete VL.filling[sid]; vlRenderOpen(true); };
   if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
   vlSave(function (saved) {
-    if (!saved) { done(); msg(escapeHtml('Could not save the episode first, so the Director did not start.')); return; }
-    fetch('/api/video-lab/shots/' + sid + '/fill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    if (!saved) { done(); msg(escapeHtml('Could not save the episode first, so the Director did not start.')); if (after) after(false, true); return; }
+    fetch('/api/video-lab/shots/' + sid + '/fill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: how }) })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        if (!res.ok || !res.j || !res.j.episode) { done(); msg(res.j && res.j.error === 'INSUFFICIENT_TOKENS' ? insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')) : escapeHtml((res.j && (res.j.message || res.j.error)) || 'The Director could not write it.')); return; }
+        if (!res.ok || !res.j || !res.j.episode) { done(); msg(res.j && res.j.error === 'INSUFFICIENT_TOKENS' ? insufficientTokensHtml(escapeHtml(res.j.message || 'You are out of tokens.')) : escapeHtml((res.j && (res.j.message || res.j.error)) || 'The Director could not write it.')); if (after) after(false, res.j && res.j.error === 'INSUFFICIENT_TOKENS'); return; }
         vlPutEp(res.j.episode);
-        var fresh = vlDraftFrom(res.j.episode), cur = VL.draft;
-        if (cur && cur.id === id) {
-          var f = fresh.shots.filter(function (x) { return x.id === sid; })[0], k = cur.shots.findIndex(function (x) { return x.id === sid; });
-          if (f && k >= 0) ['start', 'actions', 'lines', 'camera', 'end', 'sounds', 'around', 'seconds', 'beats', 'more'].forEach(function (key) { cur.shots[k][key] = f[key]; });
-        }
+        vlTakeShotWords(id, sid, res.j.episode);   // v3.6.36
         done();
-        msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', lines: 'the lines', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.') + (res.j.note ? '<br><span style="' + VL_WARN + '">' + escapeHtml(res.j.note) + '</span>' : ''));   // v3.6.01 lines, the note
+        if (res.j.how === 'add') msg(escapeHtml('Shot ' + (si + 1) + ': the Director added to ' + ((res.j.added || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') || 'nothing') + '. Revert puts it back.'));
+        else msg(escapeHtml('Shot ' + (si + 1) + ': the Director wrote ' + (res.j.filled || []).map(function (x) { return { start: 'the Opening', end: 'the Closing', actions: 'the beats', lines: 'the lines', camera: 'the camera', sounds: 'the sounds', around: 'what is around them' }[x] || x; }).join(', ') + ' for ' + res.j.tokens + ' token' + (res.j.tokens === 1 ? '' : 's') + '.') + (res.j.note ? '<br><span style="' + VL_WARN + '">' + escapeHtml(res.j.note) + '</span>' : ''));   // v3.6.01 lines, the note
         if (typeof refreshTokenBalance === 'function') refreshTokenBalance();
+        if (after) after(true, false);
       })
-      .catch(function () { done(); msg('Could not reach the server.'); });
+      .catch(function () { done(); msg('Could not reach the server.'); if (after) after(false, true); });
   });
 }
 // v3.5.77 -- TD-1127, CUT BETWEEN BEATS (Ian, 2026-11-11). The beats after the cut become a new shot right after this one,
@@ -45754,6 +46229,12 @@ function vlTodoPaint() {
   rows.push('<div style="' + VL_DESC + 'margin:14px 0 4px;">Optional Checks</div>' + (quick.length ? quick.map(function (c) { return '<div style="' + VL_WARN + 'margin-bottom:4px;">&#9888; ' + escapeHtml(c.t) + '</div>'; }).join('') : '<div style="' + VL_DESC + '">None.</div>'));
   box.innerHTML = '<div style="background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;max-width:680px;width:100%;max-height:88vh;overflow:auto;padding:18px;">' + head + rows.join('') + '<div id="vl-todo-msg" style="' + VL_DESC + 'margin-top:8px;"></div></div>';
 }
+// v3.6.37: a check finding written as an outline -- the headline in bold, each "- " line on its own line
+function vlPcTextHTML(t) {
+  var rows = String(t == null ? '' : t).split('\n').map(function (r) { return r.trim(); }).filter(Boolean);
+  if (rows.length < 2) return escapeHtml(rows[0] || '');
+  return '<b>' + escapeHtml(rows[0]) + '</b>' + rows.slice(1).map(function (r) { return '<div style="padding-left:12px;text-indent:-10px;">\u2013 ' + escapeHtml(r.replace(/^-\s*/, '')) + '</div>'; }).join('');
+}
 function vlPcRowHTML(si, f, done) {
   var B = 'btn btn-sm', x = f.fix, fixBtn = '', extra = '';
   if (!done && x) {
@@ -45767,7 +46248,7 @@ function vlPcRowHTML(si, f, done) {
   }
   return '<div style="padding:8px 0;border-top:1px solid rgba(var(--accent-rgb),0.12);' + (done ? 'opacity:0.5;' : '') + '">' +
     '<div style="font-size:11px;letter-spacing:0.5px;text-transform:uppercase;color:' + (done ? 'inherit' : '#e8a85a') + ';">' + escapeHtml((x && x.type === 'words' && x.label) ? x.label : (VL_PC_KIND[f.kind] || 'Note')) + '</div>' +   // v3.5.64: named after the box it changes
-    '<div style="font-size:13px;line-height:1.45;color:var(--accent-pale);" data-no-words>' + escapeHtml(f.text) + '</div>' + extra +
+    '<div style="font-size:13px;line-height:1.45;color:var(--accent-pale);" data-no-words>' + vlPcTextHTML(f.text) + '</div>' + extra +
     '<div style="display:flex;gap:8px;margin-top:6px;">' + fixBtn +
       '<button class="' + B + '" onclick="vlPcDone(' + Number(vlShotIdAt(si)) + ',' + f.id + ',false,' + (done ? 'true' : 'false') + ')">' + (done ? 'Undo' : 'Dismiss') + '</button></div></div>';
 }
@@ -45781,12 +46262,15 @@ function vlPcCut(si, fid) {
   vlBeatCut(si, bi);
 }
 function vlShotIdAt(si) { var s = VL.draft && VL.draft.shots[si]; return s && s.id ? s.id : 0; }
-function vlPcFinding(si, fid) { var pc = vlShotPc(si); return pc ? (pc.findings || []).filter(function (f) { return Number(f.id) === Number(fid); })[0] : null; }
-function vlPcMsg(t) { var m = document.getElementById('vl-todo-msg'); if (m) m.textContent = t || ''; }
+function vlPcFinding(si, fid) { if (VL.pcOver && Number(VL.pcOver.f.id) === Number(fid)) return VL.pcOver.f;   // v3.6.46: a review's finding handed over
+  var pc = vlShotPc(si); return pc ? (pc.findings || []).filter(function (f) { return Number(f.id) === Number(fid); })[0] : null; }
+function vlPcMsg(t) { if (VL.pcOver) { vlRvSay(t); return; }   // v3.6.46: a review's fix speaks in the panel
+  var m = document.getElementById('vl-todo-msg'); if (m) m.textContent = t || ''; }
 // A fix changes the shot, saves it, then marks the finding done and signs the check to the shot as it is now.
 function vlPcApply(si, fid, change) {
   var d = VL.draft, s = d && d.shots[si];
   if (!s || vlSlLocked(d.id)) return;
+  var ov = VL.pcOver; if (ov) ov.started = true;   // v3.6.46: a review's fix -- done is told to the review, not the check
   vlReadForm();
   change(s);
   var sid = s.id;
@@ -45794,6 +46278,7 @@ function vlPcApply(si, fid, change) {
   if (VL.saveTimer) { clearTimeout(VL.saveTimer); VL.saveTimer = null; }
   vlPcMsg('Saving...');
   vlSave(function (ok) {
+    if (ov) { if (VL.pcOver === ov) VL.pcOver = null; if (!ok) vlRvSay('Could not save the shot (' + (VL.saveError || 'no reason given') + ').'); else ov.done(); return; }
     if (!ok) { vlPcMsg('Could not save the shot (' + (VL.saveError || 'no reason given') + ').'); return; }
     if (fid != null && sid) vlPcDone(sid, fid, true); else vlTodoPaint();
   });
@@ -46422,4 +46907,112 @@ function _sbStill(w) { return !!(w && state.currentSession && String(state.curre
   window.addEventListener('scroll', hide, true);
   window.addEventListener('blur', hide);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); }, true);
+})();
+
+// =====================================================================================
+// v3.6.55 -- TD-1155 stage 2. FROZEN ACCOUNTS ON SCREEN (spec claude/FROZEN_ACCOUNT_SPEC.md).
+// Ian, 2026-11-16: the frozen message "on the top banner too. Along with a modal at sign in and on the
+// My Account page". The bar under the header says it for a lone Copper (frozen everywhere) or, inside
+// a campaign with no active Story Master, for that campaign only (campaign.frozen, from GET /api/campaigns).
+// Polled, because a dozen paths set state.currentCampaign. A refused spend (403, error FROZEN, from
+// frozenGate) is shown once as a window, and its body is rewritten so any page that prints data.error
+// prints the sentence rather than the word FROZEN.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var FROZEN_ACCOUNT_TEXT = "Your account is currently frozen and you won't be allowed to make new content without an active pass or subscription. Please upgrade to continue.";
+var FROZEN_CAMPAIGN_TEXT = 'This campaign has no active Story Master, so nothing new can be made in it. You can still view, download and print what is already here.';
+var _frozenUi = { shown: null, noticed: false, refusedAt: 0 };
+function frozenBannerText() {
+  var u = (typeof state !== 'undefined' && state) ? state.user : null;
+  if (!u) return '';
+  if (u.loneCopper) return FROZEN_ACCOUNT_TEXT;
+  var c = state.currentCampaign;
+  if (c && c.frozen === true) return FROZEN_CAMPAIGN_TEXT;
+  return '';
+}
+function frozenBannerTick() {
+  var bar = document.getElementById('frozen-banner');
+  if (!bar) return;
+  var t = frozenBannerText();
+  if (t === _frozenUi.shown) return;
+  _frozenUi.shown = t;
+  var tx = document.getElementById('frozen-banner-text');
+  if (tx) tx.textContent = t;
+  bar.style.display = t ? 'block' : 'none';
+  if (t === FROZEN_ACCOUNT_TEXT) frozenSignInNotice();
+}
+function frozenSignInNotice() {
+  if (_frozenUi.noticed) return;
+  _frozenUi.noticed = true;
+  var k = 'campaigniaFrozenNotice:' + String((state.user && (state.user.id || state.user.email)) || '');
+  try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); } catch (e) {}
+  uiConfirm(FROZEN_ACCOUNT_TEXT + '\n\nEverything you have made is kept: you can still view it and download your books.',
+    { title: 'Your account is frozen', okText: 'See plans', cancelText: 'Not now', preserveLines: true })
+    .then(function (ok) { if (ok === true) goToPlans(); });
+}
+function frozenShowRefusal(msg) {
+  var now = Date.now();
+  if (now - _frozenUi.refusedAt < 3000) return;
+  _frozenUi.refusedAt = now;
+  uiConfirm(String(msg || FROZEN_ACCOUNT_TEXT), { title: 'Nothing new can be made here', okText: 'See plans', cancelText: 'Close' })
+    .then(function (ok) { if (ok === true) goToPlans(); });
+}
+(function () {
+  if (window._frozenFetchWrapped || typeof window.fetch !== 'function') return;
+  window._frozenFetchWrapped = true;
+  var _fetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    return _fetch(input, init).then(function (r) {
+      if (!r || r.status !== 403) return r;
+      var ct = (r.headers && r.headers.get('content-type')) || '';
+      if (ct.indexOf('application/json') < 0) return r;
+      return r.clone().json().then(function (j) {
+        if (!j || j.error !== 'FROZEN') return r;
+        var m = String(j.message || FROZEN_ACCOUNT_TEXT);
+        frozenShowRefusal(m);
+        return new Response(JSON.stringify({ error: m, message: m, frozen: true }), { status: 403, statusText: 'Forbidden', headers: { 'Content-Type': 'application/json' } });
+      }, function () { return r; });
+    });
+  };
+  setInterval(frozenBannerTick, 700);
+})();
+
+// =====================================================================================
+// v3.6.60 -- TD-1155, the testers' findings of 16 Nov on v3.6.55 (Ian: "build 1,2,4 ... account for the Brand").
+// (1) ONE WINDOW PER PRESS. Generate Narrative showed the frozen window AND its own "Something went wrong" box
+//     with the same sentence. For a few seconds after a frozen window, an error box whose words carry a
+//     frozen sentence is not opened (the frozen window already said it).
+// (2) SAY IT BEFORE IT STARTS. Generate Images and Generate Story were refused with no window at all. The main
+//     create buttons now check the frozen state first and show the window without asking the server; the
+//     server still refuses on its own (frozenGate). The words are swapped for the brand on screen by
+//     brand-words.js like every other window ("campaign" -> "story" on Story), so no second copy is kept here.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function frozenHereText() {
+  var u = (typeof state !== 'undefined' && state) ? state.user : null;
+  if (!u) return '';
+  if (u.loneCopper) return FROZEN_ACCOUNT_TEXT;
+  var c = state.currentCampaign;
+  return (c && c.frozen === true) ? FROZEN_CAMPAIGN_TEXT : '';
+}
+function frozenEchoed(msg) {
+  var s = String(msg == null ? '' : msg);
+  return (Date.now() - _frozenUi.refusedAt < 5000) && (s.indexOf(FROZEN_ACCOUNT_TEXT) >= 0 || s.indexOf(FROZEN_CAMPAIGN_TEXT) >= 0);
+}
+(function () {
+  ['showErrorDialog', 'showError', 'showAlert'].forEach(function (n) {
+    var f = window[n];
+    if (typeof f !== 'function' || f._frozenWrapped) return;
+    var w = function (msg) { if (frozenEchoed(msg)) return; return f.apply(this, arguments); };
+    w._frozenWrapped = true;
+    window[n] = w;
+  });
+  ['extractMoments', 'generateAllImages', 'generateNarrativeAndImages', 'generateNarrativeOnly', 'restyleAllReferences',
+   'rebuildCharPrompt', 'submitRetouch', 'titleBuildGenerate', 'runLayoutAiDryRun', 'npSend'].forEach(function (n) {
+    var f = window[n];
+    if (typeof f !== 'function' || f._frozenWrapped) return;
+    var w = function () { var t = frozenHereText(); if (t) { frozenShowRefusal(t); return; } return f.apply(this, arguments); };
+    w._frozenWrapped = true;
+    window[n] = w;
+  });
 })();

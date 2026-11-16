@@ -185,6 +185,16 @@ async function creditTokens(userId, amount, opts = {}) {
 // ------------------------------------------------------------
 async function spendTokens(userId, amount, opts = {}) {
   if (!amount || amount <= 0) throw new Error('Spend amount must be positive');
+  // v3.6.54 -- TD-1155 backstop. The routes refuse a frozen user before any work (frozenGate); a spend that
+  // still arrives for one is refused here and logged, so a frozen account is never charged. A route that
+  // shows up in this log belongs in FROZEN_SPEND_ROUTES.
+  if (await require('../middleware/tiers').frozenIn(userId, opts.related_campaign_id || null)) {
+    console.error('[frozen] spend refused: user ' + userId + ', ' + amount + ' token(s), ' + (opts.source || '?') + ', campaign ' + (opts.related_campaign_id || '-'));
+    try { await logDebug(userId, { level: 'error', source: 'api', page: 'Tokens', fn: 'spendTokens', message: 'Frozen account: spend refused (' + (opts.source || '?') + '). This route is missing from FROZEN_SPEND_ROUTES.' }); } catch (_e) {}
+    const err = new Error('Frozen account');
+    err.code = 'FROZEN';
+    throw err;
+  }
   const db = await getDb();
   const bal = await getBalance(userId);
   if (bal.total < amount) {

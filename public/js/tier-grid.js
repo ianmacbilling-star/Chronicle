@@ -187,8 +187,8 @@
       '<div class="tg-foot">' +
         '<div class="tg-note tg-note-coin">' +
           '<img src="' + COINS.copper + '" alt="" />' +
-          '<span><b>Copper is invite only.</b> No monthly subscription \u2014 token purchases only, to ' +
-          'make your own version of the story. Copper inherits its Story Master\u2019s tier features.' +
+          '<span><b>Copper is invite only.</b> No monthly subscription. In a paid Story Master\u2019s campaign, buy tokens to ' +
+          'make your own version of the story. Copper inherits its Story Master\u2019s tier features.' +   // v3.6.60 -- TD-1155
           '</span></div>' +
         // v3.0.924 -- TD-780 Push 7. A PASS GETS A LINE, NOT A COLUMN. A Platinum Pass grants the
         // Platinum column exactly as it reads; a fifth column would be a second copy of it.

@@ -173,6 +173,21 @@ const MODELS = {
     extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'disabled' }, promptRequired: true, maxRefs: 9, maxScene: 5,   // v3.5.91: no rewrite (was 'balanced')
     audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
   },
+  // v3.6.41 (Ian, 2026-11-15: "Does MiniMax have a 1080 option?... Do it as a small build"): H3 Max at 1080P, which fal
+  // makes as a 768P video refined up to 1080P, $0.16 a second (768P is $0.08). Otherwise the same as h3max / h3maxref.
+  h3max1080: {
+    label: 'MiniMax H3 Max 1080P', group: 'keyframes', test: true, pair: 'h3max1080ref', endpoint: 'minimax/h3-max/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.16, priceSound: 0.16,
+    extra: { resolution: '1080P', prompt_expansion_mode: 'disabled' }, promptRequired: true, audioField: null
+  },
+  h3max1080ref: {
+    label: 'MiniMax H3 Max 1080P', group: 'reference', test: true, pair: 'h3max1080', endpoint: 'minimax/h3-max/reference-to-video', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.18, priceSound: 0.18,   // $0.16 at 1080P, plus a little for pictures past the fourth
+    extra: { resolution: '1080P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'disabled' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
+  },
   wan27: {
     label: 'Wan 2.7', group: 'keyframes', test: true, pair: 'wan27ref', endpoint: 'fal-ai/wan/v2.7/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
@@ -185,6 +200,65 @@ const MODELS = {
     durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,
     extra: { aspect_ratio: VIDEO_ASPECT, resolution: '720p' }, promptRequired: true, maxRefs: 5, maxScene: 2, maxPrompt: 5000,
     audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'image ' + n; }
+  },
+  // v3.6.39 (Ian, 2026-11-15: "Add Wan 3.0 and Gemini Omni Flash and Seedance 2.5 to our list of options"): the top of the
+  // public video boards in November 2026, for a bake-off against MiniMax H3 Max. Test models (admins only), both modes.
+  // Read from fal's pages on 2026-11-15. Wan 3.0 at 1080p ($0.20 a second; 720p is $0.10) because the look is being judged;
+  // its words name pictures 'Image 1'. Seedance 2.5 (US) at 720p, about $0.47 a second (billed by tokens; 1080p is about
+  // $1.16); always its own shape on image-to-video, so no aspect_ratio there. Gemini Omni Flash 1.2 at 1080p ($0.1229 a
+  // second): the words name pictures <IMAGE_REF_0>, counted from 0; no sound switch is documented, so none is sent.
+  wan30: {
+    label: 'Wan 3.0', group: 'keyframes', test: true, pair: 'wan30ref', endpoint: 'alibaba/wan-3.0/image-to-video',
+    start: 'start_image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.20, priceSound: 0.20,
+    extra: { resolution: '1080p' }, promptRequired: true, audioField: 'audio'
+  },
+  wan30ref: {
+    label: 'Wan 3.0', group: 'reference', test: true, pair: 'wan30', endpoint: 'alibaba/wan-3.0/reference-to-video', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.20, priceSound: 0.20,
+    extra: { aspect_ratio: VIDEO_ASPECT, resolution: '1080p' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    audioField: 'audio', refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
+  },
+  // v3.6.40 (Ian, 2026-11-15: "yes... add Wan 3.0" at 720p): Wan 3.0 made shot 10 first try (take 144, 1080p); the same
+  // model at 720p, $0.10 a second (half), to see whether the cheaper setting holds the look.
+  wan30s: {
+    label: 'Wan 3.0 720p', group: 'keyframes', test: true, pair: 'wan30sref', endpoint: 'alibaba/wan-3.0/image-to-video',
+    start: 'start_image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,
+    extra: { resolution: '720p' }, promptRequired: true, audioField: 'audio'
+  },
+  wan30sref: {
+    label: 'Wan 3.0 720p', group: 'reference', test: true, pair: 'wan30s', endpoint: 'alibaba/wan-3.0/reference-to-video', reference: true,
+    durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
+    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,
+    extra: { aspect_ratio: VIDEO_ASPECT, resolution: '720p' }, promptRequired: true, maxRefs: 9, maxScene: 5,
+    audioField: 'audio', refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
+  },
+  seedance25: {
+    label: 'Seedance 2.5', group: 'keyframes', test: true, pair: 'seedance25ref', endpoint: 'bytedance/seedance-2.5/us/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.473, priceSound: 0.473,
+    extra: { resolution: '720p' }, promptRequired: true
+  },
+  seedance25ref: {
+    label: 'Seedance 2.5', group: 'reference', test: true, pair: 'seedance25', endpoint: 'bytedance/seedance-2.5/us/reference-to-video', reference: true,
+    durations: ['4', '5', '6', '8', '10', '12', '15'], defDuration: '5',
+    durationValue: function (d) { return String(d); }, price: 0.473, priceSound: 0.473,
+    extra: { resolution: '720p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true
+  },
+  omni12: {
+    label: 'Gemini Omni Flash 1.2', group: 'keyframes', test: true, pair: 'omni12ref', endpoint: 'google/gemini-omni-flash/v1.2/image-to-video',
+    start: 'image_url', end: 'end_image_url', durations: ['3', '4', '5', '6', '7', '8', '9', '10'], defDuration: '8',
+    durationValue: function (d) { return Number(d); }, price: 0.1229, priceSound: 0.1229,
+    extra: { resolution: '1080p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true, audioField: null
+  },
+  omni12ref: {
+    label: 'Gemini Omni Flash 1.2', group: 'reference', test: true, pair: 'omni12', endpoint: 'google/gemini-omni-flash/v1.2/reference-to-video', reference: true,
+    durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '8',
+    durationValue: function (d) { return Number(d); }, price: 0.1229, priceSound: 0.1229,
+    extra: { resolution: '1080p', aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 9, maxScene: 5, maxPrompt: 20000,
+    audioField: null, tag: function (n) { return '<IMAGE_REF_' + (n - 1) + '>'; }
   }
 };
 const REF_MAX_IMAGES = 9;      // fal: up to 9 reference images
@@ -234,7 +308,7 @@ function estCost(m, duration, sound) {
 // tokens come off when the video lands; a take that fails costs nothing.
 async function takeTokens(db, usd) {
   const pr = await shotListPrices(db);
-  return Math.max(1, Math.ceil((Number(usd) || 0) * 100 / pr.shotlist_cents_per_token - 1e-9));
+  return Math.max(1, Math.round((Number(usd) || 0) * 100 / pr.shotlist_cents_per_token + 1e-9));   // v3.6.42 (Ian, 2026-11-15: "do the Nearest"): 17.4 -> 17, 17.5 -> 18 (was rounded up)
 }
 async function tokensFree(db, userId) {
   const bal = await require('./tokens').getBalance(userId);
@@ -491,6 +565,7 @@ function ensureTables() {
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS mode TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS precheck TEXT');
     await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS model TEXT');   // v3.5.86 -- TD-1122: a shot's own video model (NULL = the episode's)
+    await db.exec('ALTER TABLE shots ADD COLUMN IF NOT EXISTS notes_prev TEXT');   // v3.6.36: the shot's words before the last Notes (Revert)
     // v3.5.92 -- a take's Info (Ian, 2026-11-12: "Everything we know about the video"): the shot's words when it was made, the
     // exact input sent to fal for each move, and the prompt the model says it used (fal's expanded_prompt).
     await db.exec('ALTER TABLE takes ADD COLUMN IF NOT EXISTS words_at TEXT');
@@ -655,6 +730,7 @@ async function loadEpisodes(db, where, params) {
       s.mode = shotMode(s);   // v3.5.34
       s.model = shotModel(s);   // v3.5.86 -- TD-1122
       s.model_used = shotModelKey(ep.model, s.mode, s.model);
+      s.can_revert = !!s.notes_prev; delete s.notes_prev;   // v3.6.36: Revert puts back the words from before the last Notes
       s.precheck = parseJson(s.precheck, null);
       if (s.precheck && typeof s.precheck === 'object') s.precheck.stale = s.precheck.sig !== s.sig; else s.precheck = null;
       s.takes = takes.filter(function (t) { return t.shot_id === s.id; });
@@ -1228,10 +1304,13 @@ function shotScript(ep, w, pics) {
       if (spare >= 1) said.push('    (then silence for about ' + secsText(Math.round(spare * 2) / 2) + ' s; no one speaks)');
       const b = beats[i] || {}, at = w.actions.length >= 2 && times[i] ? '(' + secsText(times[i].from) + '-' + secsText(times[i].to) + ' s) ' : '';
       function stop(x) { x = String(x).trim(); return /[.!?"\u201d]$/.test(x) ? x : x + '.'; }
-      out.push((i + 1) + '. ' + at + ((said.length || b.camera || b.sound) ? stop(a) : a) + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
+      // v3.6.35 (Ian, 2026-11-14, takes 131-135: MiniMax voiced a scrap of made-up speech before a line due at second 0; "For the
+      // first second no one speaks" cured it in takes 135-136; Ian: try half a second, a whole one could be too much)
+      const hush = i === 0 && w.lines.some(function (l) { return l.when === 1 && String(l.text || '').trim(); }) ? 'For the first half second no one speaks. ' : '';
+      out.push((i + 1) + '. ' + at + hush + ((said.length || b.camera || b.sound) ? stop(a) : a) + (b.camera ? ' Camera in this part: ' + stop(b.camera) : '') + (b.sound ? ' Sound in this part: ' + stop(b.sound) : ''));
       if (said.length) { out.push(''); said.forEach(function (x) { out.push(x); out.push(''); }); }   // v3.6.34: each line on its own, a blank line either side
     });
-    if (loose.length) { out.push(w.actions.length ? 'Then:' : 'Said in this shot:'); out.push(''); loose.forEach(function (l) { out.push('    ' + sayLine(l, hearers)); out.push(''); }); }   // v3.6.34: outlined
+    if (loose.length) { out.push(w.actions.length ? 'Then:' : 'Said in this shot (for the first half second no one speaks):'); out.push(''); loose.forEach(function (l) { out.push('    ' + sayLine(l, hearers)); out.push(''); }); }   // v3.6.34: outlined; v3.6.35 the half second
   }
   voiceRules(w, pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []).forEach(function (r) { out.push(r); });   // v3.5.25
   const ex = exitLines(w, (ep.castNames || []).concat(pics ? pics.cast.filter(function (c) { return c.kind !== 'asset'; }).map(function (c) { return c.name; }) : []), pics ? w.seconds : 0);   // v3.5.47; v3.5.49 the deadline
@@ -2603,7 +2682,7 @@ function usdFor(prices, inTok, outTok) {
   return (Number(inTok || 0) * prices.shotlist_price_in_per_mtok + Number(outTok || 0) * prices.shotlist_price_out_per_mtok) / 1000000;
 }
 function tokensFor(prices, usd) {
-  const n = Math.ceil((Number(usd || 0) * 100) / prices.shotlist_cents_per_token - 1e-9);
+  const n = Math.round((Number(usd || 0) * 100) / prices.shotlist_cents_per_token + 1e-9);   // v3.6.42: to the nearest token (was rounded up)
   return Math.max(1, Number.isFinite(n) ? n : 1);
 }
 function textOf(v) { return String(v == null ? '' : v).replace(/\r\n/g, '\n').trim(); }
@@ -2994,6 +3073,7 @@ async function runShotList(jobId, episodeId, userId, ctx, prices, key) {
       // is rewritten, the references become the characters named, and a shot without a name gets the Director's.
       for (let i = 0; i < live.length; i++) {
         const sh = result.shots[i];
+        await keepNotesPrev(tx, live[i]);   // v3.6.36: each shot's Revert
         await writeWords(tx, live[i].id, sh.words);
         // v3.5.65 (Ian, 2026-11-10: shot 14 lost the Goliath Rider): the assets already on the shot stay
         const keepAssets = (shotRefs(live[i]) || []).filter(function (r) { return r.type === 'asset'; });
@@ -3319,7 +3399,7 @@ function precheckRequest(ctx, images) {
     '- REFERENCE: the model is given the shot\'s pictures and the cast\'s reference pictures as references and directs the shot from the words. Its first picture decides who is there and how they are laid out, but it is not a strict first frame: the model may redraw the setting or open with a move of its own and reach the picture later (v3.5.97, takes 85 and 86). A reference picture alone never brings anyone into the shot. When a shot must open exactly on its picture, Keyframes is the safe mode. Later pictures only show the place, the light and who is there. Best when the pictures disagree on place, poses, facing or who is where.\n' +
     '- KEYFRAMES: the video moves from each picture EXACTLY to the next one, morphing the first into the second. Best only when neighbouring pictures match closely: the same place, the same people in nearly the same poses and positions, a small change. When neighbouring pictures differ in place, in someone\'s pose or facing (a man carried with his head to the left in one picture and lying with his head to the right in the next), in who is holding what, or in who is where, a Keyframes take morphs nonsense.\n\n' +
     'WHAT TO LOOK FOR, SHOT BY SHOT\n' +
-    '1. mode: which mode suits the shot, and why, in one sentence. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
+    '1. mode: which mode suits the shot, and why, in one short line of at most 15 words. If the shot is set to the other one, add a finding of kind "mode" with a fix to switch.\n' +
     // v3.5.82 (Ian, 2026-11-11: "Can it mention it in the findings that you need a reference for X because they are not pictured?").
     // v3.5.83 (Ian: "should it recommend Keyframes when everyone is in the picture?... What I was hoping for was... to recommend
     // adding a reference image when someone isn't in the inital or any Keyframe"): the Keyframes preference is gone again.
@@ -3358,7 +3438,7 @@ function precheckRequest(ctx, images) {
     'IN THE PICTURE AND IN THE REFERENCES (optional): when someone is plainly in the shot\'s first picture and their reference picture is sent as well, the model may now and then add a second copy of them. Say so in one sentence, as optional, with no fix: if a take shows two of them, untick their reference.\n' +
     '6. style: only a picture that is plainly a different kind of art from the shot\'s other pictures (a photo among paintings, a flat cartoon among painted pictures, black and white among colour). The art style\'s name' + (ctx.artStyle ? ' (' + ctx.artStyle + ')' : '') + ' is a loose label, not a test: never report that a picture is not that style, and never report differences of colour, light or detail.\n' +
     'LIKENESS: never judge whether a character in a picture looks like their reference (build, height, proportions, face, hair, clothing details): the reference picture is sent and the video follows it. Report only a picture where it plainly cannot be them (another skin colour, another kind of creature, a man where a woman should be).\n\n' +   // v3.5.50 (Ian, 2026-11-09: "it\'s saying this isn\'t Emanon because he\'s too bulky... a little over the top")
-    'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is one or two plain sentences a writer understands, naming the picture numbers and the characters.\n\n' +
+    'Do NOT report the pictures\' shape (it is measured separately). At most ' + PC_MAX_FINDINGS + ' findings a shot, most important first. Each "text" is a quick outline, never a paragraph: a headline of at most 12 words saying what is wrong, then at most 3 lines that each start with "- " and have at most 15 words (where it is, what will happen, the fix), separated by line breaks (\\n in the JSON). Name the picture numbers and the characters; do not repeat the shot\'s words back or explain how the model works.\n\n' +
     (ctx.only != null ? 'THIS TIME, CHECK ONLY SHOT ' + (ctx.only + 1) + '. The other shots are listed so you know what comes before and after it (the last picture of the shot before and the first of the shot after are shown): look at the cut into it and out of it, but report only on shot ' + (ctx.only + 1) + '.\n\n' : '') +   // v3.5.38
     'ANSWER WITH ONLY THIS JSON, no other text:\n' +
     '{"shots": [{"shot": 1, "mode": "reference", "mode_why": "...", "findings": [{"kind": "gap", "level": "optional", "text": "...", "fix": {"type": "add_picture", "after_picture": 3, "describe": "..."}}]}]}\n' +
@@ -3451,6 +3531,29 @@ function pcDealt(s) {
   return pc.findings.filter(function (f) { return f && f.done && f.kind !== 'aspect'; }).map(function (f) { return pcText(f.text, 240); }).filter(Boolean).slice(0, 12);
 }
 function pcText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }
+// v3.6.37 (Ian, 2026-11-14: "This check cuts off at the f... write these check in more quick outline form. They are very
+// verbose"). Never cut mid-word: back to the last whole word, with an ellipsis.
+function pcCut(v, max) {
+  const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const c = t.slice(0, max - 1), sp = c.lastIndexOf(' ');
+  return (sp > max * 0.5 ? c.slice(0, sp) : c).replace(/[\s,;:.\-\u2013\u2014]+$/, '') + '\u2026';
+}
+// A finding as a headline and up to four "- " lines; when too long, whole lines are dropped from the end, never cut.
+function pcOutline(v, max) {
+  let rows = String(v == null ? '' : v).replace(/\r\n?/g, '\n').split('\n').map(function (r) { return r.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+  if (!rows.length) return '';
+  if (rows.length === 1 && rows[0].length > 120) rows = rows[0].split(/(?<=[.!?])\s+(?=[A-Z"(])/).map(function (r) { return r.trim(); }).filter(Boolean);   // a paragraph after all: a line a sentence
+  const head = pcCut(rows[0].replace(/^\*\*(.*)\*\*$/, '$1').replace(/^[-*\u2022\u2013\u2014]\s*/, ''), Math.min(max, 160));
+  const dash = rows.slice(1).map(function (r) { return r.replace(/^[-*\u2022\u2013\u2014]\s*/, '').trim(); }).filter(Boolean).slice(0, 4);
+  let out = head;
+  for (let i = 0; i < dash.length; i++) {
+    const d = '\n- ' + pcCut(dash[i], 200);
+    if ((out + d).length > max) { out += '\n- \u2026'; break; }
+    out += d;
+  }
+  return out;
+}
 function parsePrecheck(raw, ctx) {
   const j = readJson(raw);
   if (!j || !Array.isArray(j.shots)) return { error: 'no shots in the answer' };
@@ -3465,7 +3568,7 @@ function parsePrecheck(raw, ctx) {
     const findings = [];
     (Array.isArray(x.findings) ? x.findings : []).forEach(function (f) {
       if (!f || findings.length >= PC_MAX_FINDINGS) return;
-      const text = pcText(f.text, 500);
+      const text = pcOutline(f.text, 700);   // v3.6.37: an outline, never cut mid-word
       if (!text) return;
       const kind = PC_KINDS.indexOf(f.kind) >= 0 && f.kind !== 'aspect' ? f.kind : 'other';
       let fix = null;
@@ -3504,7 +3607,7 @@ function parsePrecheck(raw, ctx) {
       if (fix && fix.type === 'words') fix.label = pcBoxLabel(fix);
       findings.push({ kind: kind, level: f.level === 'optional' && kind !== 'cut' ? 'optional' : 'recommended', text: text, fix: fix });   // v3.5.79
     });
-    out[si] = { mode: mode, mode_why: pcText(x.mode_why, 400), findings: findings };
+    out[si] = { mode: mode, mode_why: pcCut(x.mode_why, 200), findings: findings };
   });
   if (ctx.only != null) {   // v3.5.38: one shot -- its entry is all that counts (the shot number given, or the only entry)
     if (!out[ctx.only] && j.shots.length === 1 && out.filter(Boolean).length === 1) { const k = out.findIndex(Boolean); out[ctx.only] = out[k]; out[k] = null; }
@@ -3623,6 +3726,29 @@ async function fillTokens(db) {
   try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get('video_fill_tokens'); v = r ? parseInt(r.value, 10) : null; } catch (e) { v = null; }
   return (Number.isFinite(v) && v >= 1) ? v : 1;
 }
+// v3.6.36 (Ian, 2026-11-14: Notes asks "clear fields and start over, or append to what's there, or fill in the missing fields";
+// "put the revert on each shot"). Before any Notes write a shot's words, they are kept so its Revert can put them back exactly.
+async function keepNotesPrev(tx, shot) {
+  await tx.prepare('UPDATE shots SET notes_prev = ? WHERE id = ?').run(JSON.stringify({ words: shotWords(shot), refs: shot.refs == null ? null : String(shot.refs), precheck: shot.precheck == null ? null : String(shot.precheck) }), shot.id);
+}
+// Add to what's there: the Director's additions go at the end of the user's own words, which are never changed.
+function addToWords(w, j) {
+  const out = JSON.parse(JSON.stringify(w)), added = [];
+  Object.keys(FILL_BOXES).forEach(function (k) {
+    const add = typeof j['add_' + k] === 'string' ? j['add_' + k].trim() : '';
+    if (!add || !String(w[k] || '').trim()) return;
+    if (String(w[k]).indexOf(add) >= 0) return;
+    out[k] = String(w[k]).trim().replace(/[^.!?"\u201d]$/, '$&.') + ' ' + add;
+    added.push(k);
+  });
+  (Array.isArray(j.add_beats) ? j.add_beats : []).forEach(function (b) {
+    const i = parseInt(b && b.beat, 10) - 1, add = textOf(b && b.add);
+    if (!add || !(i >= 0 && i < out.actions.length) || String(out.actions[i]).indexOf(add) >= 0) return;
+    out.actions[i] = String(out.actions[i]).trim().replace(/[^.!?"\u201d]$/, '$&.') + ' ' + add;
+    if (added.indexOf('actions') < 0) added.push('actions');
+  });
+  return { words: out, added: added };
+}
 function fillWordsText(w, label) {
   if (!w) return label + ': (none)';
   const t = beatTimes(w);
@@ -3680,10 +3806,14 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     if (!key) return vlRefuse(req, res, FN, 500, 'The writer is not set up on this server (ANTHROPIC_API_KEY).');
     const busy = await db.prepare("SELECT id FROM episode_writer_jobs WHERE episode_id = ? AND shot_id IS NULL AND status = 'running' LIMIT 1").get(ep.id);
     if (busy) return vlRefuse(req, res, FN, 409, 'The Director is rewriting the episode. Try when that is done.');
-    const w = shotWords(shot) || cleanWords({ seconds: shot.seconds });
+    // v3.6.36: fill (the empty boxes, as before), add (to what is there, never against it) or fresh (start over: everything but the
+    // name, Purpose, Concept, pictures, references, mode and model is cleared, the check's findings too)
+    const how = req.body && (req.body.mode === 'add' || req.body.mode === 'fresh') ? req.body.mode : 'fill';
+    const w = how === 'fresh' ? cleanWords({ seconds: shot.seconds }) : (shotWords(shot) || cleanWords({ seconds: shot.seconds }));
     const empty = Object.keys(FILL_BOXES).filter(function (k) { return !String(w[k] || '').trim(); });
     const noBeats = !w.actions.length;
-    if (!empty.length && !noBeats) return res.status(400).json({ error: 'NOTHING', message: 'Every box of this shot is filled in already. Clear a box you want the Director to write.' });
+    const full = Object.keys(FILL_BOXES).filter(function (k) { return String(w[k] || '').trim(); });
+    if (how === 'fill' && !empty.length && !noBeats) return res.status(400).json({ error: 'NOTHING', message: 'Every box of this shot is filled in already. Clear a box you want the Director to write.' });
     const tokens = await fillTokens(db);
     const bal = await require('./tokens').getBalance(req.session.userId);
     if (bal.total < tokens) return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'The Director\u2019s Notes for one shot cost ' + tokens + ' token' + (tokens === 1 ? '' : 's') + '.' });
@@ -3697,8 +3827,10 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     let story = '';
     try { const ss = await shotStories(db, ep); story = shotStoryText(ss.shots.filter(function (x) { return x.id === shot.id; })[0]); } catch (e) { story = ''; }
     const ask = empty.map(function (k) { return '"' + k + '": ' + FILL_BOXES[k]; }).concat(noBeats ? ['"actions": the shot\'s beats in order, a list of {"do": what happens, in plain words with no spoken words in it, "seconds": how long it takes}'] : [])
-      .concat(askLines ? ['"lines": what is said, in order, a list of {"who": a name from the Characters, "line": the exact words, "during": the number of the beat it is said in, "offscreen": false}'] : []);
-    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for. Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Name each person on screen by name; never vague words for people (the others, the party, the group, people, everyone, each character), as the video model invents people to fill them; a nameless crowd is the only exception. The Opening names every person who can be seen in the shot\'s first picture (shown below), by name, where each one is and which way they face; tell who is who from the reference pictures shown; someone seen only as a face in a mirror or a vision is said to be only that; name no one who is not in the first picture. Reply with JSON only, with just the boxes asked for.' +
+      .concat(askLines ? ['"lines": what is said, in order, a list of {"who": a name from the Characters, "line": the exact words, "during": the number of the beat it is said in, "offscreen": false}'] : [])
+      .concat(how === 'add' ? full.map(function (k) { return '"add_' + k + '": words to ADD at the end of the user\'s ' + FILL_BOXES[k].split(' (')[0] + ', only what is missing and nothing that contradicts or repeats it; "" when nothing is missing'; }) : [])   // v3.6.36
+      .concat(how === 'add' && !noBeats ? ['"add_beats": a list of {"beat": its number, "add": words to ADD at the end of that beat, only what is missing and nothing that contradicts or repeats it}; [] when nothing is missing'] : []);
+    const system = 'You are the director of an animated episode, writing the words a video model will follow for ONE shot. Fill ONLY the boxes asked for.' + (how === 'add' ? ' ADDING (v3.6.36): for a box the user has written, never change, repeat or contradict their words; return only what to add at its end, and only what is missing (who is where, which way they face, who speaks, how long); "" when nothing is missing.' : '') + ' Everything else in the shot was written by the user: keep to it exactly and make what you write agree with it. Make the Opening follow on from the shot before it and the Closing lead into the shot after it. Plain, visual, present tense; no camera jargon in the Opening or Closing; one or two sentences a box. Name each person on screen by name; never vague words for people (the others, the party, the group, people, everyone, each character), as the video model invents people to fill them; a nameless crowd is the only exception. The Opening names every person who can be seen in the shot\'s first picture (shown below), by name, where each one is and which way they face; tell who is who from the reference pictures shown; someone seen only as a face in a mirror or a vision is said to be only that; name no one who is not in the first picture. Reply with JSON only, with just the boxes asked for.' +
       (noBeats ? ' THE BEATS (v3.6.01): what the user wants is in the Purpose and Concept; follow them, and the story where they say nothing. The Opening is the first frame only: entrances, moves and speech happen in the beats. Give every beat its seconds. A beat with a line lasts at least as long as the line takes to say (about 2.5 words a second, plus a second). Never squeeze: if it all needs more than ' + maxSecs + ' seconds, still write all of it with honest seconds; the user is told where to cut.' : '') +
       (askLines ? ' THE LINES: when the Concept gives words to say, use them word for word, in its order, and fix only spelling; when it gives none, take them from the story; otherwise write none. Every line goes in "lines", never inside a beat\'s "do".' : '');
     const text = ['Overall direction: ' + (ep.overall || '(none)'), 'Characters: ' + (pool.characters.map(function (c) { return c.name; }).join(', ') || '(none)'),
@@ -3737,9 +3869,17 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
         if (lines.length) got.lines = lines;
       }
     }
-    if (!Object.keys(got).length) return vlRefuse(req, res, FN, 502, 'The Director\u2019s answer had nothing usable. Nothing was charged; try again.');
+    let addedTo = [];
+    if (how === 'add') {   // v3.6.36: the additions go at the end of the user's words
+      const ad = addToWords(Object.assign({}, w, got), j);
+      full.concat(noBeats ? [] : ['actions']).forEach(function (k) { if (ad.added.indexOf(k) >= 0) got[k] = ad.words[k]; });
+      addedTo = ad.added;
+      if (addedTo.indexOf('actions') >= 0 && !got.beats) got.beats = w.beats;   // an addition keeps the beats' seconds
+    }
+    if (!Object.keys(got).length) return vlRefuse(req, res, FN, how === 'add' ? 400 : 502, how === 'add' ? 'The Director found nothing to add to this shot. Nothing was charged.' : 'The Director\u2019s answer had nothing usable. Nothing was charged; try again.');
     const merged = cleanWords(Object.assign({}, w, got, { beats: got.actions ? got.beats : w.beats }));   // v3.6.01 the sized beats
     await db.transaction(async function (tx) {
+      await keepNotesPrev(tx, shot);   // v3.6.36: for Revert
       await writeWords(tx, shot.id, merged);
       await tx.prepare('UPDATE shots SET precheck = NULL WHERE id = ?').run(shot.id);
     });
@@ -3749,11 +3889,37 @@ router.post('/shots/:id/fill', requireAuth, requireVideo, async function (req, r
     vlDebug(req.session.userId, 'info', FN, 'Filled ' + Object.keys(got).join(', ') + ' for ' + tokens + ' token(s), $' + usd + ' to Campaignia', { usage: r.usage });
     const note = sized && sized.over ? 'The beats need about ' + secsText(sized.total) + ' s and ' + (sm.label || 'this model') + ' makes at most ' + maxSecs + ' s, so nothing was squeezed: ' +   // v3.6.01
       (sized.cutAfter ? 'press \u2702 Cut here under beat ' + sized.cutAfter + ' to make the rest a new shot, or shorten it.' : 'shorten it, or cut it into two shots.') : '';
-    res.json({ ok: true, filled: Object.keys(got).filter(function (k) { return k !== 'beats' && k !== 'seconds'; }), tokens: tokens, note: note, episode: await loadEpisode(db, ep.id) });
+    res.json({ ok: true, how: how, added: addedTo, filled: Object.keys(got).filter(function (k) { return k !== 'beats' && k !== 'seconds'; }), tokens: tokens, note: note, episode: await loadEpisode(db, ep.id) });
   } catch (e) {
     console.error('[video] shot fill error:', e && e.message);
     vlDebug(req.session && req.session.userId, 'error', FN, 'Could not fill: ' + (e && e.message), { stack: e && e.stack ? String(e.stack).slice(0, 1500) : '' });
     if (!res.headersSent) res.status(500).json({ error: 'Could not write the notes. Nothing was charged.' });
+  }
+});
+// v3.6.36 -- REVERT (Ian, 2026-11-14: "put the revert on each shot"): the shot's words, references and check findings as they
+// were before the last Notes (the shot's own or the episode's). Free; one step back only.
+router.post('/shots/:id/revert-notes', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/shots/' + req.params.id + '/revert-notes';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(parseInt(req.params.id, 10));
+    const ep = shot ? await db.prepare('SELECT * FROM episodes WHERE id = ?').get(shot.episode_id) : null;
+    if (!shot || !(await canChange(req, ep))) return vlRefuse(req, res, FN, 404, 'Not found.', { found: !!shot });
+    const busy = await db.prepare("SELECT id FROM episode_writer_jobs WHERE episode_id = ? AND status = 'running' LIMIT 1").get(ep.id);
+    if (busy) return vlRefuse(req, res, FN, 409, 'The Director is working on this episode. Try when that is done.');
+    const prev = parseJson(shot.notes_prev, null);
+    if (!prev || typeof prev !== 'object') return vlRefuse(req, res, FN, 400, 'There is nothing to put back for this shot.');
+    await db.transaction(async function (tx) {
+      if (prev.words) await writeWords(tx, shot.id, cleanWords(prev.words));
+      else await tx.prepare('UPDATE shots SET start_text = NULL, actions = NULL, lines = NULL, camera = NULL, end_text = NULL, sounds = NULL, around = NULL, beats = NULL WHERE id = ?').run(shot.id);
+      await tx.prepare('UPDATE shots SET refs = ?, precheck = ?, notes_prev = NULL WHERE id = ?').run(prev.refs == null ? null : prev.refs, prev.precheck == null ? null : prev.precheck, shot.id);
+    });
+    vlDebug(req.session.userId, 'info', FN, 'Put back shot ' + shot.id + '\u2019s words from before the last Notes');
+    res.json({ ok: true, episode: await loadEpisode(db, ep.id) });
+  } catch (e) {
+    console.error('[video] revert notes error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not put the words back.' });
   }
 });
 router.post('/episodes/:id/precheck', requireAuth, requireVideo, async function (req, res) {
@@ -3821,8 +3987,566 @@ router.post('/shots/:id/precheck-done', requireAuth, requireVideo, async functio
 
 startSweep();
 
+// =================================================================================================
+// v3.6.45 -- TD-1147 TAKE REVIEW (Ian, 2026-11-15: "put the ?s brain on every take and then ask our brain to do what you do
+// here. Watch the video and then make comments based on what it sees and the info passed in"; spec
+// claude/VIDEO_TAKE_REVIEW_SPEC.md). On demand: frames of the take (ffmpeg, from its own file), what was heard (the take's
+// sound through our transcription, with times), and what was asked (the take's prompt, pictures and the shot's words) go to
+// VIDEO_REVIEW_MODEL, which answers like the Pre-production check: short findings, each with at most one fix, applied one at
+// a time on the page. Then a conversation about the take. 1 token for the review, which includes RV_FREE_ASKS questions;
+// then 1 token per RV_FREE_ASKS more. Nothing is charged when it fails. A job: the page asks and then polls.
+// =================================================================================================
+const RV_MAX_FRAMES = 40, RV_FPS = 2, RV_FRAME_W = 640, RV_FREE_ASKS = 5, RV_STALE_MS = 6 * 60 * 1000, RV_MODEL_TIMEOUT_MS = 150000;
+const RV_SCRIBE = 'fal-ai/elevenlabs/speech-to-text/scribe-v2';
+// The reviewer's model: the one the shot list writer uses (it sees pictures) unless VIDEO_REVIEW_MODEL is set in Railway. The ?
+// assistant everywhere else keeps HELP_MODEL (Ian: "the video assistant could run a different model underneath... everywhere else the old model").
+function rvModel() { return String(process.env.VIDEO_REVIEW_MODEL || '').trim() || require('../config/models').TEXT_MODEL; }
+const RV_FRAMES = {};   // review id -> { at, frames }: frames are made again from the take when a question comes after a restart
+async function rvTables(db) {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS take_reviews (
+      id SERIAL PRIMARY KEY,
+      take_id INTEGER NOT NULL,
+      episode_id INTEGER,
+      user_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'running',
+      error TEXT,
+      span TEXT,
+      transcript TEXT,
+      turns TEXT,
+      findings TEXT,
+      summary TEXT,
+      tokens_charged INTEGER NOT NULL DEFAULT 0,
+      asks_used INTEGER NOT NULL DEFAULT 0,
+      pending TEXT,
+      busy_since TIMESTAMP,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cost_usd REAL NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`);
+  await db.exec('CREATE INDEX IF NOT EXISTS take_reviews_take ON take_reviews (take_id)');
+}
+async function rvSetting(db, key, dflt) {
+  try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(key); const v = r ? parseInt(r.value, 10) : NaN; return Number.isFinite(v) && v >= 0 ? v : dflt; } catch (e) { return dflt; }
+}
+// The seconds frames are taken at: RV_FPS a second across [from, to], at most RV_MAX_FRAMES spread evenly, and always the
+// first and the last frame (a moment before the end, so it is a frame that is shown).
+function rvTimes(from, to) {
+  const len = Math.max(0, to - from), out = [];
+  if (!(len > 0)) return [Math.max(0, from)];
+  const n = Math.min(RV_MAX_FRAMES, Math.max(2, Math.floor(len * RV_FPS) + 1));
+  const last = Math.max(from, to - 0.06);
+  for (let i = 0; i < n; i++) out.push(Math.round((from + (last - from) * (n === 1 ? 0 : i / (n - 1))) * 100) / 100);
+  return out;
+}
+async function rvFrames(url, from, to) {
+  const fs = require('fs'), path = require('path'), os = require('os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vlreview-'));
+  try {
+    const f = path.join(dir, 'take.mp4');
+    fs.writeFileSync(f, await fetchVideo(url));
+    const p = await probeClip(f);
+    const end = to == null ? p.dur : Math.min(to, p.dur), start = Math.max(0, Math.min(from || 0, end));
+    const times = rvTimes(start, end), frames = [];
+    let lastErr = null;
+    for (let i = 0; i < times.length; i++) {
+      const out = path.join(dir, 'f' + i + '.jpg');
+      // v3.6.48 (Ian's first real review: "ffmpeg failed: [vost#0:0/mjpeg] ... error code: -22 (Invalid argument)"): the server's
+      // ffmpeg 7 will not write a JPEG from limited-range YUV, so the frame is made full-range first. One frame that still fails
+      // is skipped, not the whole review; only no frames at all is a failure.
+      try {
+        await runTool('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(times[i]), '-i', f, '-frames:v', '1', '-vf', 'scale=' + RV_FRAME_W + ':-2,format=yuvj420p', '-q:v', '5', out], 60000);
+        if (fs.existsSync(out)) frames.push({ t: times[i], b64: fs.readFileSync(out).toString('base64') });
+      } catch (e) { lastErr = e; }
+    }
+    if (!frames.length) throw (lastErr || new Error('no frames could be taken from the take'));
+    // v3.6.51 (take 159's review: "audio format unsupported"): the transcriber takes sound files, not the take's .mp4, so the
+    // sound is taken out as a small mp3 here, while the take is on disk. Only for the transcript; it is never kept.
+    let mp3 = null;
+    if (p.audio) {
+      try {
+        const a = path.join(dir, 'sound.mp3');
+        await runTool('ffmpeg', ['-y', '-loglevel', 'error', '-i', f, '-vn', '-ac', '1', '-ar', '22050', '-b:a', '64k', a], 120000);
+        if (fs.existsSync(a)) mp3 = fs.readFileSync(a);
+      } catch (e) { mp3 = null; }
+    }
+    return { frames: frames, dur: p.dur, from: start, to: end, audio: p.audio, mp3: mp3 };
+  } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
+}
+// What was heard, with times: the take's own file through our transcription (fal's ElevenLabs Scribe). Words are grouped
+// into phrases (a pause over 0.6 s, or another speaker, starts a new one). Only what falls in the used part is kept.
+async function rvTranscript(fr, from, to, takeId) {
+  const key = process.env.FAL_API_KEY;
+  if (!key) return { error: 'transcription is not set up on this server' };
+  if (!fr || !fr.audio) return { error: 'the take has no sound track' };
+  if (!fr.mp3) return { error: 'the sound could not be taken out of the take' };
+  let url = null;
+  try {
+    url = await storage.uploadFile(fr.mp3, 'vlreview-sound-take-' + takeId + '-' + Date.now() + '.mp3', 'audio/mpeg', 'video-lab');   // v3.6.51: an mp3, not the .mp4
+    const axios = require('axios');
+    const r = await axios.post('https://fal.run/' + RV_SCRIBE, { audio_url: url, tag_audio_events: true, diarize: true },
+      { headers: { Authorization: 'Key ' + key, 'Content-Type': 'application/json' }, timeout: 120000 });
+    return rvPhrases(r.data, from, to);
+  } catch (e) {
+    const d = e && e.response && e.response.data;
+    return { error: 'the sound could not be transcribed (' + String((d && (d.detail && JSON.stringify(d.detail) || d.error)) || (e && e.message) || 'no reason').slice(0, 200) + ')' };
+  } finally {
+    if (url) deleteFiles([url], 'take review sound').catch(function () {});
+    fr.mp3 = null;
+  }
+}
+function rvPhrases(data, from, to) {
+  const words = Array.isArray(data && data.words) ? data.words : [];
+  const lo = from || 0, hi = to == null ? Infinity : to, out = [];
+  let cur = null;
+  words.forEach(function (w) {
+    const s = Number(w && w.start), e = Number(w && w.end), txt = String((w && w.text) || '');
+    if (!isFinite(s) || s < lo - 0.05 || s > hi + 0.05) return;
+    if (w.type === 'spacing') { if (cur) cur.text += ' '; return; }
+    const who = w.speaker_id != null ? String(w.speaker_id) : '', ev = w.type === 'audio_event';
+    if (!cur || ev || cur.event || s - cur.end > 0.6 || who !== cur.who) { cur = { from: s, end: isFinite(e) ? e : s, who: who, event: ev, text: '' }; out.push(cur); }
+    cur.text += txt; cur.end = isFinite(e) ? e : cur.end;
+  });
+  return { phrases: out.map(function (p) { return { from: Math.round(p.from * 10) / 10, to: Math.round(p.end * 10) / 10, who: p.who, event: !!p.event, text: p.text.replace(/\s+/g, ' ').trim() }; }).filter(function (p) { return p.text; }).slice(0, 80),
+    text: String((data && data.text) || '').slice(0, 4000) };
+}
+function rvHeard(tr) {
+  if (!tr) return 'THE SOUND: not available.';
+  if (tr.error) return 'THE SOUND: ' + tr.error + '. Judge the speech only from mouths in the frames, and say you could not hear it.';
+  if (!tr.phrases || !tr.phrases.length) return 'THE SOUND: no words were heard in the take.';
+  return 'THE SOUND, as heard (speaker numbers are the transcriber\'s guesses, not names; [brackets] are sounds, not speech):\n' +
+    tr.phrases.map(function (p) { return '  ' + p.from.toFixed(1) + '-' + p.to.toFixed(1) + ' s' + (p.who !== '' && !p.event ? ' (voice ' + p.who + ')' : '') + ': ' + p.text; }).join('\n');
+}
+// What was asked: the take's words as sent (each move's prompt), its pictures with their names, and the shot's words now
+// (the fixes change those). The pictures go as images by address; a picture we cannot name is "a shot picture".
+async function rvAsked(db, ep, t) {
+  const mvs = await db.prepare('SELECT position, prompt, sent_input, duration, start_url, end_url FROM moves WHERE take_id = ? ORDER BY position, id').all(t.id);
+  const shot = await db.prepare('SELECT * FROM shots WHERE id = ?').get(t.shot_id);
+  const all = await db.prepare('SELECT id, position, name FROM shots WHERE episode_id = ? ORDER BY position, id').all(ep.id);
+  const pos = all.findIndex(function (s) { return s.id === t.shot_id; });
+  const tm = MODELS[t.model] || {};
+  const pics = [], seen = {};
+  function addPic(url, label) { if (!url || seen[url] || pics.length >= 12 || !/^https:\/\//.test(url)) return; seen[url] = true; pics.push({ url: url, label: label }); }
+  const dir = parseJson(t.directions, {}) || {}, mv0 = (dir.moves && dir.moves[0]) || {}, castNames = mv0.cast || [];   // the names the words gave the pictures, as the take's Info shows them
+  mvs.forEach(function (m, mi) {
+    const sent = (parseJson(m.sent_input, null) || {}).input || {};
+    const list = sent.reference_image_urls || sent.image_urls || null;
+    if (Array.isArray(list)) list.forEach(function (u, k) { addPic(u, 'Image ' + (k + 1) + (castNames[k] ? ': ' + castNames[k] : ': a shot picture')); });
+    ['image_url', 'start_image_url', 'first_frame_url'].forEach(function (f) { if (sent[f]) addPic(sent[f], 'move ' + (mi + 1) + ' start picture'); });
+    ['end_image_url', 'last_frame_url'].forEach(function (f) { if (sent[f]) addPic(sent[f], 'move ' + (mi + 1) + ' end picture'); });
+    if (!list) { addPic(m.start_url, 'move ' + (mi + 1) + ' start picture'); addPic(m.end_url, 'move ' + (mi + 1) + ' end picture'); }
+  });
+  if (!pics.length && Array.isArray(mv0.images)) mv0.images.forEach(function (u, k) { addPic(u, 'Image ' + (k + 1) + (castNames[k] ? ': ' + castNames[k] : ': a shot picture')); });   // an older take: no input recorded
+  let nextPic = null;
+  if (pos >= 0 && all[pos + 1]) { const k = await db.prepare('SELECT image_url FROM keyframes WHERE shot_id = ? ORDER BY position, id LIMIT 1').get(all[pos + 1].id); nextPic = k && k.image_url; }
+  const words = shot ? (shotWords(shot) || null) : null;
+  return { mvs: mvs, shot: shot, words: words, pics: pics, nextPic: nextPic, shotNo: pos + 1, nextName: pos >= 0 && all[pos + 1] ? (all[pos + 1].name || '') : null,
+    model: (tm.label || t.model) + (tm.reference ? ' (Reference mode)' : ' (Keyframes mode)'), modeNow: shot ? shotMode(shot) : null };
+}
+function rvWordsText(w) {
+  if (!w) return '(none)';
+  const L = [];
+  if (w.purpose) L.push('Purpose: ' + w.purpose);
+  if (w.start) L.push('Opening: ' + w.start);
+  (w.actions || []).forEach(function (a, i) { const b = (w.beats || [])[i] || {}; L.push('Beat ' + (i + 1) + ': ' + a + (b.camera ? ' / Camera: ' + b.camera : '') + (b.sound ? ' / Sound: ' + b.sound : '')); });
+  (w.lines || []).forEach(function (l) { if (l && String(l.text || '').trim()) L.push('Line (beat ' + (l.when || '?') + '): ' + (l.who || '?') + ': "' + String(l.text).trim() + '"'); });
+  if (w.camera) L.push('Camera: ' + w.camera);
+  if (w.end) L.push('Closing: ' + w.end);
+  if (w.sounds) L.push('Sound: ' + w.sounds);
+  if (w.around) L.push('Around them: ' + w.around);
+  return L.join('\n');
+}
+const RV_SYSTEM = 'You are the take reviewer in Campaignia, an app that turns tabletop role-playing sessions into illustrated stories and short videos. ' +
+  'A user made one take (one AI video clip) of a shot. You are given FRAMES from the take (each labelled with its second), WHAT WAS HEARD (a transcript with times), and WHAT WAS ASKED (the words sent to the video model, the pictures sent, and the shot\'s words now). ' +
+  'Compare what you SEE and HEAR with what was ASKED, and say plainly what went wrong and how to fix it.\n' +
+  'WHAT TO CHECK\n' +
+  '- WHO IS THERE: count the people in the frames. Anyone not in the words or pictures (an invented person), anyone twice (a double), anyone missing who should be there. Say from which second.\n' +
+  '- THE BEATS: each beat happens, in order, by the right person.\n' +
+  '- THE LINES: each line said word for word, by the right person, with nothing added before or after it; no one else speaking. Words heard that are not in any line (mumbles, a label or heading read aloud) are faults; say the second.\n' +
+  '- THE END: where everyone is in the last frame against the Closing; and whether the last frame will cut well to the next shot\'s opening picture when one is given.\n' +
+  '- THE PLACE: compare the background of every frame with the opening picture and the first frame. Walls, doors, arches, windows, furniture and what lies on it stay as they were; a camera move or turn shows more of the same place, never a new room, a new door or arch, or a table that vanishes. Say from which second it changes.\n' +   // v3.6.51 (take 159: the room changed and the review missed it)
+  'WHAT VIDEO MODELS OFTEN DO WRONG (look for these): vague group words (others, everyone, the party, the group) invent people; words that say what NOT to show often make it appear; a speaker whose mouth is not visible (a voice from a mirror, off screen) gets a body; a face in a mirror becomes a second person in the room; a character in the opening picture who is also sent as a reference picture can appear twice; a line at the very start can get a mumble before it; the background drifts when the camera turns; headings or directions get spoken aloud.\n' +
+  'WHAT FRAMES CANNOT SHOW: smoothness of motion, walls or objects stretching or warping as the camera moves, natural hands, exact lip-sync timing. Do not judge these; say once, briefly, that they are for the user\'s eye.\n' +
+  'HOW TO ANSWER\n' +
+  '- Only real faults. Never invent one to have something to say. If the take is good, say so in the summary and give no findings.\n' +
+  '- Say how sure you are: clearly / probably / I can\'t tell from the frames.\n' +
+  '- At most 6 findings. Each "text" is a quick outline, never a paragraph: a headline of at most 12 words saying what is wrong, then at most 3 lines that each start with "- " and have at most 15 words (what you saw, from which second, the fix), separated by line breaks (\\n in the JSON).\n' +
+  '- At most ONE fix per finding, and the smallest that would help: one box or one beat. Never rewrite the whole shot. A fix changes the shot\'s words for the next take; the user applies fixes one at a time.\n' +
+  '- When the fault is not in the user\'s words but in how the app asked the model (a heading or label spoken aloud, a rule the model misread), set "ours": true, say so in plain words, and give no fix.\n' +
+  'THE FIXES you may give (exactly these shapes):\n' +
+  '  {"type":"words","box":"start|camera|end|sounds|around","text":"the whole new text of that box"}  (start = Opening, end = Closing, sounds = Sound)\n' +
+  '  {"type":"words","box":"beat","beat":N,"field":"do|camera|sound","text":"the new words of that part of beat N","remove_line":true|false}\n' +
+  '  {"type":"add_reference","name":"a cast name"}   {"type":"untick_reference","name":"a name whose reference picture should not be sent"}\n' +
+  '  {"type":"mode","mode":"reference|keyframes"}   {"type":"seconds","seconds":4-15}\n' +
+  'For a box fix, keep what is already there and change only what the fault needs; the text replaces the box.\n';
+const RV_FIRST = 'Review this take. Answer with JSON only: {"summary":"one short line: how the take did overall","findings":[{"kind":"continuity|words|reference|mode|gap|other","level":"recommended|optional","text":"...","ours":false,"fix":{...} or null}]}';
+// v3.6.53 (Ian, 2026-11-15, on an answer about a doubled Ori: "this is too much... The first sentence is good... Short bullets
+// after that... with a clear sentence stating the cause. Then a clear sentence with solution."): every answer has that shape.
+const RV_ANSWER_SHAPE = 'Lay the answer out exactly like this, with line breaks (\\n in the JSON): first ONE short sentence that answers the question directly; ' +
+  'then at most 3 lines that each start with "- " and have at most 12 words (what you saw, with the second); then one line starting "**Cause:** " (one plain sentence); ' +
+  'then one line starting "**Fix:** " (one plain sentence: what to change). Nothing else: no paragraphs, no repeating the first sentence.';
+const RV_FOLLOW = 'Answer the user\'s question about this take, briefly, from the frames, the sound and the words. ' + RV_ANSWER_SHAPE + ' Answer with JSON only: {"text":"your answer, laid out as above","findings":[...new findings in the same shape, only if the answer gives a new fix; usually none]}';
+// v3.6.51 (Ian, 2026-11-15: "let it look at the video and info.. then ask... Do you want my thoughts or do you have something
+// specific you want help with?"): the user's own question can come first, instead of the whole review; the whole review can
+// still be asked for after it (it counts as one of the questions).
+function rvQuestionFirst(q) {
+  return 'The user has a specific question about this take: "' + String(q).slice(0, 1500) + '"\nAnswer that question, from the frames, the sound and the words. Do not review everything else; name another fault only if it is serious, in one line at most. ' +
+    RV_ANSWER_SHAPE + ' Answer with JSON only: {"summary":"the first sentence of your answer","text":"the rest of your answer: the - lines, the Cause line and the Fix line, as above","findings":[findings about the question only, in the shape {"kind":"continuity|words|reference|mode|gap|other","level":"recommended|optional","text":"...","ours":false,"fix":{...} or null}; usually 0 to 2]}';
+}
+const RV_FULL_Q = 'Your full thoughts on the whole take, please.';
+const RV_FULL = 'Now review the whole take: every real fault, as in a full review, leaving out any finding already given above. Answer with JSON only: {"text":"one short line: how the take did overall","findings":[at most 6, in the same shape as a review\'s findings]}';
+function rvFirstContent(rv, asked, fr, tr, ep, t) {
+  const c = [];
+  c.push({ type: 'text', text: 'THE TAKE: shot ' + asked.shotNo + (asked.shot && asked.shot.name ? ' ("' + asked.shot.name + '")' : '') + ' of episode "' + (ep.name || '') + '", made with ' + asked.model +
+    (t.sound ? ', with sound' : ', without sound') + '. ' + (fr.to - fr.from).toFixed(1) + ' s' + (t.trim_start != null || t.trim_end != null ? ' (the trimmed part, ' + fr.from.toFixed(1) + '-' + fr.to.toFixed(1) + ' s of ' + fr.dur.toFixed(1) + ' s)' : '') + '.' });
+  c.push({ type: 'text', text: 'THE PICTURES SENT with the take:' });
+  asked.pics.forEach(function (p) { c.push({ type: 'text', text: p.label }); c.push({ type: 'image', source: { type: 'url', url: p.url } }); });
+  if (asked.nextPic) { c.push({ type: 'text', text: 'THE NEXT SHOT\'S OPENING PICTURE' + (asked.nextName ? ' ("' + asked.nextName + '")' : '') + ' (this take\'s end should cut to it):' }); c.push({ type: 'image', source: { type: 'url', url: asked.nextPic } }); }
+  c.push({ type: 'text', text: 'THE WORDS SENT to the video model' + (asked.mvs.length > 1 ? ' (one part per move)' : '') + ':\n' + asked.mvs.map(function (m, i) { return (asked.mvs.length > 1 ? 'Move ' + (i + 1) + ':\n' : '') + String(m.prompt || '(not recorded)').slice(0, 9000); }).join('\n\n') });
+  c.push({ type: 'text', text: 'THE SHOT\'S WORDS NOW (your fixes change these):\n' + rvWordsText(asked.words) });
+  c.push({ type: 'text', text: rvHeard(tr) });
+  c.push({ type: 'text', text: 'THE FRAMES (' + fr.frames.length + '):' });
+  fr.frames.forEach(function (f, i) {
+    c.push({ type: 'text', text: 't = ' + f.t.toFixed(2) + ' s' });
+    const img = { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: f.b64 } };
+    if (i === fr.frames.length - 1) img.cache_control = { type: 'ephemeral' };   // everything up to here is the same for every question
+    c.push(img);
+  });
+  return c;
+}
+async function rvCall(key, messages) {
+  const ac = new AbortController();
+  const tmr = setTimeout(function () { try { ac.abort(); } catch (e) {} }, RV_MODEL_TIMEOUT_MS);
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: rvModel(), max_tokens: 2500, system: RV_SYSTEM, messages: messages }), signal: ac.signal });
+    const data = await r.json();
+    if (!data || data.error || !Array.isArray(data.content)) return { error: (data && data.error && data.error.message) || ('the reviewer answered ' + r.status), usage: (data && data.usage) || {} };
+    return { text: data.content.map(function (b) { return b.text || ''; }).join(''), usage: data.usage || {} };
+  } catch (e) {
+    return { error: (e && e.name === 'AbortError') ? 'the reviewer took too long to answer' : 'the reviewer could not be reached', usage: {} };
+  } finally { clearTimeout(tmr); }
+}
+// Findings checked like the Pre-production check's (parsePrecheck, one finding at a time against the shot's words now),
+// plus "ours" (no fix) and untick_reference (only a reference the shot sends now).
+async function rvFindings(db, ep, shot, list, firstId) {
+  const out = [];
+  if (!Array.isArray(list) || !shot) return out;
+  const pool = await refsPool(db, ep).catch(function () { return { characters: [], assets: [] }; });
+  const w = shotWords(shot) || { actions: [], lines: [] };
+  const ctx = { pictures: [], pool: pool, shots: [{ id: shot.id }], only: 0, info: [{ words: w }] };
+  const ticked = (shotRefs(shot) || []).map(function (r) { const it = (r.type === 'asset' ? pool.assets : pool.characters).filter(function (c) { return Number(c.id) === Number(r.id); })[0]; return it ? { type: r.type, id: r.id, name: it.name } : null; }).filter(Boolean);
+  for (let k = 0; k < list.length && out.length < 6; k++) {
+    const f = list[k]; if (!f || typeof f !== 'object') continue;
+    const ours = f.ours === true;
+    let fix = null, base = null;
+    if (!ours && f.fix && f.fix.type === 'untick_reference') {
+      const nm = String(f.fix.name || '').trim().toLowerCase(), hit = ticked.filter(function (r) { return String(r.name).toLowerCase() === nm; })[0];
+      if (hit) fix = { type: 'untick_reference', name: hit.name, ref_type: hit.type, ref_id: hit.id };
+      const p = parsePrecheck(JSON.stringify({ shots: [{ shot: 1, findings: [{ kind: f.kind, level: f.level, text: f.text }] }] }), ctx);
+      base = p && p.shots && p.shots[0] && p.shots[0].findings[0];
+    } else {
+      const p = parsePrecheck(JSON.stringify({ shots: [{ shot: 1, findings: [{ kind: f.kind, level: f.level, text: f.text, fix: ours ? null : f.fix }] }] }), ctx);
+      base = p && p.shots && p.shots[0] && p.shots[0].findings[0];
+      if (base) fix = base.fix && ['words', 'add_reference', 'mode', 'seconds'].indexOf(base.fix.type) >= 0 ? base.fix : null;
+    }
+    if (!base) continue;
+    out.push({ id: firstId + out.length, kind: base.kind, level: base.level, text: base.text, fix: fix, ours: ours, done: false });
+  }
+  return out;
+}
+function rvPublic(r) {
+  if (!r) return null;
+  return { id: r.id, take_id: r.take_id, status: r.status, error: r.error || null, summary: r.summary || '', span: parseJson(r.span, null), transcript: parseJson(r.transcript, null),
+    turns: parseJson(r.turns, []), findings: parseJson(r.findings, []), tokens_charged: r.tokens_charged, asks_used: r.asks_used, free_asks: RV_FREE_ASKS,
+    pending: r.pending || null, created_at: r.created_at, updated_at: r.updated_at };
+}
+async function rvCharge(db, userId, n, campaignId, what) {
+  if (!(n > 0)) return 0;
+  try {
+    const tk = require('./tokens');
+    const bal = await tk.getBalance(userId);
+    const c = Math.min(n, Math.max(0, bal.total));
+    if (c > 0) await tk.spendTokens(userId, c, { source: 'video_review', event_type: 'generation_spend', related_campaign_id: campaignId });
+    await tk.recordGeneration(userId, { event_type: 'video_review', tokens_redeemed: c, quantity: 1, unit: what, model: rvModel(), related_campaign_id: campaignId });
+    return c;
+  } catch (e) { console.error('[video] review charge failed:', e && e.message); return 0; }
+}
+function rvUsd(u) { return ((Number(u.input_tokens) || 0) * 3 + (Number(u.cache_creation_input_tokens) || 0) * 3.75 + (Number(u.cache_read_input_tokens) || 0) * 0.3 + (Number(u.output_tokens) || 0) * 15) / 1000000; }
+async function rvGetFrames(db, rv, t) {
+  const hit = RV_FRAMES[rv.id];
+  if (hit && hit.frames) { hit.at = Date.now(); return hit.frames; }
+  const sp = parseJson(rv.span, {}) || {};
+  const fr = await rvFrames(t.video_url, sp.from || 0, sp.to == null ? null : sp.to);
+  RV_FRAMES[rv.id] = { at: Date.now(), frames: fr };
+  const ids = Object.keys(RV_FRAMES).sort(function (a, b) { return RV_FRAMES[b].at - RV_FRAMES[a].at; });
+  ids.slice(4).forEach(function (k) { delete RV_FRAMES[k]; });   // keep the four reviews used last
+  return fr;
+}
+// v3.6.51 -- a review is made in two steps. rvPrepare watches and listens (frames and transcript; cheap, never charged)
+// and leaves the review 'ready'; the user then chooses (the whole review, or a question of their own), and runReview asks
+// the model and charges. statuses: preparing -> ready -> running -> done; a failed choice goes back to ready.
+async function rvPrepare(rvId) {
+  const db = await getDb();
+  const FN = 'Take review ' + rvId + ' (watching)';
+  const rv = await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(rvId);
+  if (!rv) return;
+  const fail = async function (why) { await db.prepare("UPDATE take_reviews SET status = 'error', error = ?, updated_at = NOW() WHERE id = ? AND status = 'preparing'").run(String(why).slice(0, 400) + ' Nothing was charged.', rvId); vlDebug(rv.user_id, 'warn', FN, why); };
+  try {
+    const x = await takeAndEpisode(db, rv.take_id);
+    if (!x.t || !x.ep || x.t.status !== 'done' || !x.t.video_url) return fail('The take is not there any more.');
+    const t = x.t;
+    const from = t.trim_start != null ? Number(t.trim_start) || 0 : 0, to = t.trim_end != null ? Number(t.trim_end) : null;
+    const fr = await rvGetFrames(db, Object.assign({}, rv, { span: JSON.stringify({ from: from, to: to }) }), t);
+    const tr = t.sound ? await rvTranscript(fr, fr.from, fr.to, t.id) : { error: 'the take was made without sound' };
+    fr.mp3 = null;
+    await db.prepare("UPDATE take_reviews SET status = 'ready', error = NULL, span = ?, transcript = ?, updated_at = NOW() WHERE id = ? AND status = 'preparing'")
+      .run(JSON.stringify({ from: fr.from, to: fr.to, dur: fr.dur, frames: fr.frames.map(function (f) { return f.t; }) }), JSON.stringify(tr), rvId);
+    vlDebug(rv.user_id, 'info', FN, fr.frames.length + ' frames' + (tr && tr.error ? '; sound: ' + tr.error : '; ' + ((tr && tr.phrases) || []).length + ' phrase(s) heard'), { take: t.id });
+  } catch (e) {
+    console.error('[video] ' + FN + ' failed:', e && e.message);
+    await fail('The take could not be watched (' + String((e && e.message) || 'no reason').slice(0, 200) + ').');
+  }
+}
+async function runReview(rvId, key) {
+  const db = await getDb();
+  const FN = 'Take review ' + rvId;
+  let rv = await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(rvId);
+  if (!rv) return;
+  const q = rv.pending ? String(rv.pending) : '';   // v3.6.51: the user's own question, or '' for the whole review
+  const fail = async function (why) { await db.prepare("UPDATE take_reviews SET status = 'ready', pending = NULL, error = ?, updated_at = NOW() WHERE id = ? AND status = 'running'").run(String(why).slice(0, 400) + ' Nothing was charged.', rvId); vlDebug(rv.user_id, 'warn', FN, why); };
+  try {
+    const x = await takeAndEpisode(db, rv.take_id);
+    if (!x.t || !x.ep || x.t.status !== 'done' || !x.t.video_url) return fail('The take is not there any more.');
+    const t = x.t, ep = x.ep;
+    const fr = await rvGetFrames(db, rv, t);
+    const tr = parseJson(rv.transcript, null);
+    const asked = await rvAsked(db, ep, t);
+    const content = rvFirstContent(rv, asked, fr, tr, ep, t);
+    content.push({ type: 'text', text: q ? rvQuestionFirst(q) : RV_FIRST });
+    const ans = await rvCall(key, [{ role: 'user', content: content }]);
+    const usd = rvUsd(ans.usage || {});
+    if (ans.error) return fail('The reviewer could not answer: ' + ans.error + '.');
+    const j = readJson(ans.text);
+    if (!j) return fail('The reviewer\'s answer could not be read.');
+    const findings = await rvFindings(db, ep, asked.shot, j.findings, 1);
+    const summary = String(j.summary || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    const now = new Date().toISOString();
+    const turns = q ? [{ role: 'user', first: true, at: now, text: q }, { role: 'review', at: now, text: summary, answer: String(j.text || '').trim().slice(0, 3000), raw: String(ans.text).slice(0, 12000) }]
+                    : [{ role: 'review', at: now, text: summary, raw: String(ans.text).slice(0, 12000) }];
+    const ok = await db.prepare("UPDATE take_reviews SET status = 'done', pending = NULL, error = NULL, summary = ?, findings = ?, turns = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, updated_at = NOW() WHERE id = ? AND status = 'running'")
+      .run(summary, JSON.stringify(findings), JSON.stringify(turns), Number(ans.usage.input_tokens || 0) + Number(ans.usage.cache_creation_input_tokens || 0) + Number(ans.usage.cache_read_input_tokens || 0), Number(ans.usage.output_tokens || 0), Math.round(usd * 10000) / 10000, rvId);
+    if (!ok.changes) return;
+    const charged = await rvCharge(db, rv.user_id, await rvSetting(db, 'video_review_tokens', 1), ep.campaign_id, 'review');
+    await db.prepare('UPDATE take_reviews SET tokens_charged = ? WHERE id = ?').run(charged, rvId);
+    vlDebug(rv.user_id, 'info', FN, (q ? 'question first; ' : '') + findings.length + ' finding(s), ' + fr.frames.length + ' frames, ' + charged + ' token(s)', { take: t.id, cost_usd: usd, findings: findings.map(function (f) { return f.kind + (f.fix ? '+' + f.fix.type : '') + (f.ours ? ' ours' : ''); }) });
+  } catch (e) {
+    console.error('[video] ' + FN + ' failed:', e && e.message);
+    await fail('The review failed (' + String((e && e.message) || 'no reason').slice(0, 200) + ').');
+  }
+}
+async function runAsk(rvId, key) {
+  const db = await getDb();
+  const FN = 'Take review ' + rvId + ' question';
+  const rv = await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(rvId);
+  if (!rv || !rv.pending) return;
+  const turns = parseJson(rv.turns, []) || [];
+  const fail = async function (why) {
+    turns.push({ role: 'error', at: new Date().toISOString(), text: String(why).slice(0, 300) + ' Nothing was charged.' });
+    await db.prepare('UPDATE take_reviews SET pending = NULL, busy_since = NULL, turns = ?, updated_at = NOW() WHERE id = ?').run(JSON.stringify(turns), rvId);
+    vlDebug(rv.user_id, 'warn', FN, why);
+  };
+  try {
+    const x = await takeAndEpisode(db, rv.take_id);
+    if (!x.t || !x.ep || !x.t.video_url) return fail('The take is not there any more.');
+    const fr = await rvGetFrames(db, rv, x.t);
+    const asked = await rvAsked(db, x.ep, x.t);
+    const first = rvFirstContent(rv, asked, fr, parseJson(rv.transcript, null), x.ep, x.t);
+    const qFirst = turns[0] && turns[0].first ? turns[0].text : '';   // v3.6.51: the review began with the user's question
+    first.push({ type: 'text', text: qFirst ? rvQuestionFirst(qFirst) : RV_FIRST });
+    const msgs = [{ role: 'user', content: first }];
+    turns.forEach(function (tu) {
+      if (tu.first) return;
+      if (tu.role === 'review') msgs.push({ role: 'assistant', content: tu.raw || JSON.stringify({ summary: tu.text }) });
+      else if (tu.role === 'user') msgs.push({ role: 'user', content: tu.text });
+      else if (tu.role === 'answer') msgs.push({ role: 'assistant', content: tu.raw || tu.text });
+    });
+    const full = String(rv.pending) === RV_FULL_Q;   // v3.6.51: "Full thoughts too?"
+    msgs.push({ role: 'user', content: String(rv.pending) + '\n\n(' + (full ? RV_FULL : RV_FOLLOW) + ')' });
+    const ans = await rvCall(key, msgs);
+    if (ans.error) return fail('The reviewer could not answer: ' + ans.error + '.');
+    const j = readJson(ans.text) || { text: ans.text };
+    const had = parseJson(rv.findings, []) || [];
+    const nf = await rvFindings(db, x.ep, asked.shot, j.findings, had.reduce(function (m, f) { return Math.max(m, Number(f.id) || 0); }, 0) + 1);
+    turns.push({ role: 'user', at: new Date().toISOString(), text: String(rv.pending) });
+    turns.push({ role: 'answer', at: new Date().toISOString(), text: String(j.text || '').trim().slice(0, 3000), raw: String(ans.text).slice(0, 8000), findings: nf.map(function (f) { return f.id; }), full: full || undefined });
+    const used = (Number(rv.asks_used) || 0) + 1, free = await rvSetting(db, 'video_review_free_asks', RV_FREE_ASKS);
+    const usd = rvUsd(ans.usage || {});
+    const ok = await db.prepare('UPDATE take_reviews SET pending = NULL, busy_since = NULL, turns = ?, findings = ?, asks_used = ?, input_tokens = input_tokens + ?, output_tokens = output_tokens + ?, cost_usd = cost_usd + ?, updated_at = NOW() WHERE id = ? AND pending IS NOT NULL')
+      .run(JSON.stringify(turns), JSON.stringify(had.concat(nf)), used, Number(ans.usage.input_tokens || 0) + Number(ans.usage.cache_creation_input_tokens || 0) + Number(ans.usage.cache_read_input_tokens || 0), Number(ans.usage.output_tokens || 0), Math.round(usd * 10000) / 10000, rvId);
+    if (!ok.changes) return;
+    if (rvAskCharges(used, free)) {
+      const c = await rvCharge(db, rv.user_id, 1, x.ep.campaign_id, 'questions');
+      await db.prepare('UPDATE take_reviews SET tokens_charged = tokens_charged + ? WHERE id = ?').run(c, rvId);
+    }
+    vlDebug(rv.user_id, 'info', FN, 'answered (question ' + used + ')', { cost_usd: usd, new_findings: nf.length });
+  } catch (e) {
+    console.error('[video] ' + FN + ' failed:', e && e.message);
+    await fail('The question could not be answered (' + String((e && e.message) || 'no reason').slice(0, 200) + ').');
+  }
+}
+// The review's token covers the first `free` questions; then 1 token at question free+1, 2*free+1, ...
+function rvAskCharges(used, free) { return free > 0 ? (used > free && (used - free - 1) % free === 0) : true; }
+async function rvRetire(db, takeId) {
+  await db.prepare("UPDATE take_reviews SET status = 'error', error = 'Interrupted (the server restarted while it was being made). Nothing was charged; try again.', updated_at = NOW() WHERE take_id = ? AND status IN ('running', 'preparing') AND updated_at < NOW() - INTERVAL '6 minutes' AND span IS NULL").run(takeId);
+  await db.prepare("UPDATE take_reviews SET status = 'ready', pending = NULL, error = 'Interrupted (the server restarted). Nothing was charged; choose again.', updated_at = NOW() WHERE take_id = ? AND status = 'running' AND updated_at < NOW() - INTERVAL '6 minutes' AND span IS NOT NULL").run(takeId);   // v3.6.51: it had watched; only the answer was lost
+  await db.prepare("UPDATE take_reviews SET pending = NULL, busy_since = NULL WHERE take_id = ? AND pending IS NOT NULL AND busy_since < NOW() - INTERVAL '6 minutes'").run(takeId);
+}
+router.get('/takes/:id/review', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    await rvTables(db);
+    const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
+    if (!x.t || !x.ep || !(await canSee(req, x.ep))) return res.status(404).json({ error: 'That take is not there any more.' });
+    await rvRetire(db, x.t.id);
+    const r = await db.prepare('SELECT * FROM take_reviews WHERE take_id = ? ORDER BY id DESC LIMIT 1').get(x.t.id);
+    res.json({ review: rvPublic(r), price: await rvSetting(db, 'video_review_tokens', 1), free_asks: await rvSetting(db, 'video_review_free_asks', RV_FREE_ASKS) });
+  } catch (e) {
+    console.error('[video] review read error:', e && e.message);
+    res.status(500).json({ error: 'Could not read the review.' });
+  }
+});
+router.post('/takes/:id/review', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/takes/' + req.params.id + '/review';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    await rvTables(db);
+    const x = await takeAndEpisode(db, parseInt(req.params.id, 10));
+    if (!x.ep || !(await canSee(req, x.ep))) return vlRefuse(req, res, FN, 404, 'That take is not there any more.');
+    if (x.t.status !== 'done' || !x.t.video_url) return vlRefuse(req, res, FN, 409, 'Only a finished take can be reviewed.');
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return vlRefuse(req, res, FN, 500, 'The reviewer is not set up on this server (ANTHROPIC_API_KEY).');
+    await rvRetire(db, x.t.id);
+    const busy = await db.prepare("SELECT id FROM take_reviews WHERE take_id = ? AND status IN ('running', 'preparing', 'ready') ORDER BY id DESC LIMIT 1").get(x.t.id);   // v3.6.51 preparing, ready
+    if (busy) return res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(busy.id)) });   // one at a time: the page follows the one already running
+    const price = await rvSetting(db, 'video_review_tokens', 1);
+    const bal = await require('./tokens').getBalance(req.session.userId);
+    if (price > 0 && !(bal.total >= price)) return vlRefuse(req, res, FN, 402, 'A review costs ' + price + ' token' + (price === 1 ? '' : 's') + ', and there are none left.');
+    const ins = await db.prepare("INSERT INTO take_reviews (take_id, episode_id, user_id, status, turns, findings) VALUES (?, ?, ?, 'preparing', '[]', '[]')").run(x.t.id, x.ep.id, req.session.userId);
+    const rid = ins.lastInsertRowid;
+    vlDebug(req.session.userId, 'info', FN, 'Review ' + rid + ' started (watching first; charged only when the user chooses)');
+    rvPrepare(rid).catch(function (e) { console.error('[video] review watch error:', e && e.message); });   // v3.6.51
+    res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(rid)) });
+  } catch (e) {
+    console.error('[video] review start error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not start the review.' });
+  }
+});
+async function rvMine(req, db, id) {
+  const rv = await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(id);
+  if (!rv) return null;
+  const x = await takeAndEpisode(db, rv.take_id);
+  if (!x.ep || !(await canSee(req, x.ep))) return null;
+  return { rv: rv, t: x.t, ep: x.ep };
+}
+router.get('/reviews/:id', requireAuth, requireVideo, async function (req, res) {
+  try {
+    await ensureTables();
+    const db = await getDb();
+    await rvTables(db);
+    const m = await rvMine(req, db, parseInt(req.params.id, 10));
+    if (!m) return res.status(404).json({ error: 'That review is not there any more.' });
+    await rvRetire(db, m.rv.take_id);
+    res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(m.rv.id)) });
+  } catch (e) {
+    console.error('[video] review poll error:', e && e.message);
+    res.status(500).json({ error: 'Could not read the review.' });
+  }
+});
+router.post('/reviews/:id/ask', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/reviews/' + req.params.id + '/ask';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    await rvTables(db);
+    const m = await rvMine(req, db, parseInt(req.params.id, 10));
+    if (!m) return vlRefuse(req, res, FN, 404, 'That review is not there any more.');
+    if (m.rv.status !== 'done') return vlRefuse(req, res, FN, 409, m.rv.status === 'running' ? 'The review is not finished yet.' : 'That review did not finish; start a new one.');
+    const q = String((req.body && req.body.text) || '').replace(/\s+$/g, '').trim().slice(0, 1500);
+    if (!q) return vlRefuse(req, res, FN, 400, 'Type a question first.');
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return vlRefuse(req, res, FN, 500, 'The reviewer is not set up on this server (ANTHROPIC_API_KEY).');
+    const free = await rvSetting(db, 'video_review_free_asks', RV_FREE_ASKS);
+    if (rvAskCharges((Number(m.rv.asks_used) || 0) + 1, free)) {
+      const bal = await require('./tokens').getBalance(req.session.userId);
+      if (!(bal.total >= 1)) return vlRefuse(req, res, FN, 402, 'The next ' + free + ' questions cost 1 token, and there are none left.');
+    }
+    const claim = await db.prepare('UPDATE take_reviews SET pending = ?, busy_since = NOW() WHERE id = ? AND pending IS NULL').run(q, m.rv.id);
+    if (!claim.changes) return vlRefuse(req, res, FN, 409, 'The last question is still being answered.');
+    runAsk(m.rv.id, key).catch(function (e) { console.error('[video] review ask error:', e && e.message); });
+    res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(m.rv.id)) });
+  } catch (e) {
+    console.error('[video] review ask start error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not send the question.' });
+  }
+});
+// v3.6.51 -- the user's choice after the take is watched: { text: '' } the whole review, { text: '...' } their own question.
+// Charged (as a review) only when the answer comes.
+router.post('/reviews/:id/begin', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/reviews/' + req.params.id + '/begin';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    await rvTables(db);
+    const m = await rvMine(req, db, parseInt(req.params.id, 10));
+    if (!m) return vlRefuse(req, res, FN, 404, 'That review is not there any more.');
+    if (m.rv.status !== 'ready') return vlRefuse(req, res, FN, 409, m.rv.status === 'preparing' ? 'The take is still being watched.' : m.rv.status === 'running' ? 'The answer is on its way.' : 'Start a new review.');
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) return vlRefuse(req, res, FN, 500, 'The reviewer is not set up on this server (ANTHROPIC_API_KEY).');
+    const q = String((req.body && req.body.text) || '').trim().slice(0, 1500);
+    const price = await rvSetting(db, 'video_review_tokens', 1);
+    const bal = await require('./tokens').getBalance(req.session.userId);
+    if (price > 0 && !(bal.total >= price)) return vlRefuse(req, res, FN, 402, 'A review costs ' + price + ' token' + (price === 1 ? '' : 's') + ', and there are none left.');
+    const claim = await db.prepare("UPDATE take_reviews SET status = 'running', pending = ?, error = NULL, updated_at = NOW() WHERE id = ? AND status = 'ready'").run(q || null, m.rv.id);
+    if (!claim.changes) return vlRefuse(req, res, FN, 409, 'The answer is on its way.');
+    vlDebug(req.session.userId, 'info', FN, q ? 'their own question first' : 'the whole review');
+    runReview(m.rv.id, key).catch(function (e) { console.error('[video] review run error:', e && e.message); });
+    res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(m.rv.id)) });
+  } catch (e) {
+    console.error('[video] review begin error:', e && e.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Could not start the review.' });
+  }
+});
+// One finding marked done (its fix was applied on the page) or open again. Only that finding changes.
+router.post('/reviews/:id/done', requireAuth, requireVideo, async function (req, res) {
+  const FN = 'POST /api/video-lab/reviews/' + req.params.id + '/done';
+  try {
+    await ensureTables();
+    const db = await getDb();
+    await rvTables(db);
+    const m = await rvMine(req, db, parseInt(req.params.id, 10));
+    if (!m) return vlRefuse(req, res, FN, 404, 'That review is not there any more.');
+    if (!(await canChange(req, m.ep))) return vlRefuse(req, res, FN, 404, 'Not found.');
+    const fid = parseInt(req.body && req.body.finding, 10), done = !(req.body && req.body.done === false);
+    const fs0 = parseJson(m.rv.findings, []) || [];
+    const f = fs0.filter(function (z) { return Number(z.id) === fid; })[0];
+    if (!f) return vlRefuse(req, res, FN, 404, 'That finding is not there.');
+    f.done = done;
+    await db.prepare('UPDATE take_reviews SET findings = ?, updated_at = NOW() WHERE id = ?').run(JSON.stringify(fs0), m.rv.id);
+    res.json({ review: rvPublic(await db.prepare('SELECT * FROM take_reviews WHERE id = ?').get(m.rv.id)) });
+  } catch (e) {
+    console.error('[video] review done error:', e && e.message);
+    res.status(500).json({ error: 'Could not save that.' });
+  }
+});
 module.exports = router;
 module.exports.MODELS = MODELS;
+module.exports._review = { rvTimes: rvTimes, rvPhrases: rvPhrases, rvAskCharges: rvAskCharges, rvWordsText: rvWordsText, rvHeard: rvHeard, rvTables: rvTables, runReview: runReview, runAsk: runAsk, rvFindings: rvFindings, rvPrepare: rvPrepare, rvTranscript: rvTranscript, rvQuestionFirst: rvQuestionFirst, RV_FULL_Q: RV_FULL_Q };   // v3.6.45: for tests; v3.6.51 rvPrepare
 module.exports.VIDEO_ASPECT = VIDEO_ASPECT;
 module.exports.VIDEO_STYLES = VIDEO_STYLES;
 module.exports.estCost = estCost;
