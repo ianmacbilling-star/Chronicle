@@ -46976,6 +46976,12 @@ function frozenShowRefusal(msg) {
   };
   setInterval(frozenBannerTick, 700);
 })();
+// v3.6.61 -- TD-1155. On the Image Builder the campaign is the Builder's own (IB.cid), not the one last opened: a frozen
+// campaign's gallery can be looked at (Ian, 2026-11-16) and Generate and Regen there say so at once. APPENDED (TD-853).
+function frozenOnIb() {
+  var v = document.getElementById('view-image-builder');
+  return !!(v && typeof IB !== 'undefined' && IB && IB.cid && getComputedStyle(v).display !== 'none');
+}
 
 // =====================================================================================
 // v3.6.60 -- TD-1155, the testers' findings of 16 Nov on v3.6.55 (Ian: "build 1,2,4 ... account for the Brand").
@@ -46992,6 +46998,7 @@ function frozenHereText() {
   var u = (typeof state !== 'undefined' && state) ? state.user : null;
   if (!u) return '';
   if (u.loneCopper) return FROZEN_ACCOUNT_TEXT;
+  if (frozenOnIb()) { var ic = ibCampaign(IB.cid); return (ic && ic.frozen === true) ? FROZEN_CAMPAIGN_TEXT : ''; }   // v3.6.61 -- the Builder's own campaign
   var c = state.currentCampaign;
   return (c && c.frozen === true) ? FROZEN_CAMPAIGN_TEXT : '';
 }
@@ -47008,7 +47015,7 @@ function frozenEchoed(msg) {
     window[n] = w;
   });
   ['extractMoments', 'generateAllImages', 'generateNarrativeAndImages', 'generateNarrativeOnly', 'restyleAllReferences',
-   'rebuildCharPrompt', 'submitRetouch', 'titleBuildGenerate', 'runLayoutAiDryRun', 'npSend'].forEach(function (n) {
+   'rebuildCharPrompt', 'submitRetouch', 'titleBuildGenerate', 'runLayoutAiDryRun', 'npSend', 'ibGenerate', 'ibRegen'].forEach(function (n) {   // v3.6.61 -- the Builder's two
     var f = window[n];
     if (typeof f !== 'function' || f._frozenWrapped) return;
     var w = function () { var t = frozenHereText(); if (t) { frozenShowRefusal(t); return; } return f.apply(this, arguments); };

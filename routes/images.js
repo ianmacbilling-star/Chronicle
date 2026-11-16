@@ -3472,6 +3472,21 @@ async function ibAllowed(userId, campaignId) {
     return (await getEffectiveTier(userId, campaignId)) === 'platinum';
   } catch (e) { return false; }   // never fail OPEN on an entitlement question
 }
+// v3.6.61 -- TD-1155 (Ian, 2026-11-16: "Allow them access to the Gallery even for frozen campaigns ... Refuse on the
+// button generate"). A campaign that is frozen for this person (no keys of their own, no paid Story Master) is
+// listed and its pictures, characters and assets can be looked at. Every route that makes or changes anything
+// keeps ibGate / ibAllowed, and frozenGate refuses the spending ones first, with the frozen window.
+async function ibViewAllowed(userId, campaignId) {
+  if (await ibAllowed(userId, campaignId)) return true;
+  try {
+    if (!(await getCampaignRole(userId, campaignId))) return false;
+    return await require('../middleware/tiers').frozenIn(userId, campaignId);
+  } catch (e) { return false; }   // never fail OPEN on an entitlement question
+}
+async function ibGateView(req, res) {
+  if (await ibViewAllowed(req.session.userId, req.params.cid)) return true;
+  return ibGate(req, res);
+}
 async function ibGate(req, res) {
   if (await ibAllowed(req.session.userId, req.params.cid)) return true;
   res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature. It is open in your own Platinum campaigns, and in campaigns whose Story Master is on Platinum.' });
@@ -3517,7 +3532,8 @@ router.get('/builder/campaigns', requireAuth, async function (req, res) {
     const out = [];
     for (const r of (rows || [])) {
       // v3.4.03 -- image: the picture its My Campaigns card shows (campaign picture, else the book cover)
-      if (await ibAllowed(req.session.userId, r.id)) out.push({ id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '', pinned: !!r.pinned_at && rows.length > 4 });   // v3.4.17 -- pinned; v3.4.18 -- marked only with more than 4 campaigns (all of them, before the Platinum filter)
+      const _ibOk = await ibAllowed(req.session.userId, r.id), _ibFz = !_ibOk && (await ibViewAllowed(req.session.userId, r.id));   // v3.6.61 -- TD-1155: a frozen campaign is listed, to look at
+      if (_ibOk || _ibFz) out.push({ frozen: _ibFz, id: r.id, name: r.name, role: r.role, character_count: Number(r.character_count) || 0, image: r.campaign_image_url || r.cover_image_url || '', pinned: !!r.pinned_at && rows.length > 4 });   // v3.4.17 -- pinned; v3.4.18 -- marked only with more than 4 campaigns (all of them, before the Platinum filter)
     }
     let cost = 1; try { cost = await getTokenCost(await getSelectedModel(db)); } catch (_ce) { cost = 1; }
     const _ibAdm = await ibIsAdmin(req);   // v3.4.13
@@ -3532,7 +3548,7 @@ router.get('/builder/campaigns', requireAuth, async function (req, res) {
 // /characters/import (routes/characters.js), which is Story Master only and reads another campaign.
 router.get('/builder/campaigns/:cid/characters', requireAuth, async function (req, res) {
   try {
-    if (!(await ibGate(req, res))) return;
+    if (!(await ibGateView(req, res))) return;
     const db = await getDb();
     const rows = await db.prepare('SELECT id, name, cls, is_npc, canonical_reference_url, image_portrait, image FROM characters WHERE campaign_id = ? ORDER BY created_at ASC, id ASC').all(req.params.cid);
     res.json({ characters: (rows || []).map(function (c) {
@@ -3542,7 +3558,7 @@ router.get('/builder/campaigns/:cid/characters', requireAuth, async function (re
 });
 router.get('/builder/campaigns/:cid/characters/:charId/looks', requireAuth, async function (req, res) {
   try {
-    if (!(await ibGate(req, res))) return;
+    if (!(await ibGateView(req, res))) return;
     const db = await getDb();
     const { versionsForCampaign } = require('../database/db');
     const { importLooksForVersion } = require('./characters');
@@ -3565,7 +3581,7 @@ router.get('/builder/campaigns/:cid/characters/:charId/looks', requireAuth, asyn
 // Generate makes: in the campaign, a look the viewer may use) or an asset's picture (ASSET_REF_SQL: a rejected one has none).
 router.get('/builder/campaigns/:cid/ref-picture', requireAuth, async function (req, res) {
   try {
-    if (!(await ibGate(req, res))) return;
+    if (!(await ibGateView(req, res))) return;
     const db = await getDb(), cid = parseInt(req.params.cid, 10), uid = req.session.userId;
     if (req.query.char) {
       const rc = await ibResolveCharacters(db, cid, uid, [{ id: req.query.char, look: String(req.query.look || 'original') }]);
@@ -3593,7 +3609,7 @@ router.get('/builder/campaigns/:cid/ref-picture', requireAuth, async function (r
 // whatever the Archive's size: ibSceneIndex loads what ibScenePeople would ask per picture, ibScenePeopleIn answers.
 router.get('/builder/campaigns/:cid/scenes', requireAuth, async function (req, res) {
   try {
-    if (!(await ibGate(req, res))) return;
+    if (!(await ibGateView(req, res))) return;
     const db = await getDb();
     const cid = parseInt(req.params.cid, 10);
     const rows = await db.prepare("SELECT a.id, a.title, a.image_url, a.source_url, a.moment_id, a.session_id, a.fork_id, a.archived_by, a.art_style, a.art_style_name, " +
@@ -3615,7 +3631,7 @@ router.get('/builder/campaigns/:cid/scenes', requireAuth, async function (req, r
 });
 router.get('/builder/campaigns/:cid/assets', requireAuth, async function (req, res) {
   try {
-    if (!(await ibGate(req, res))) return;
+    if (!(await ibGateView(req, res))) return;
     const db = await getDb();
     const rows = await db.prepare(ASSET_REF_SQL + ' ORDER BY LOWER(a.name) ASC').all(req.params.cid);
     res.json({ assets: (rows || []).filter(function (a) { return !!a.image_url; }).map(function (a) { return { id: a.id, name: a.name, category: a.category || 'location', image_url: a.image_url }; }) });
@@ -3624,7 +3640,7 @@ router.get('/builder/campaigns/:cid/assets', requireAuth, async function (req, r
 // The gallery: every image in the campaign, everyone's (Ian: visible to the whole campaign), newest first.
 router.get('/builder/campaigns/:cid/images', requireAuth, async function (req, res) {
   try {
-    if (!(await ibGate(req, res))) return;
+    if (!(await ibGateView(req, res))) return;
     const db = await getDb();
     // v3.3.73 -- a Draft is seen by its maker only (not the Story Master either); Ready pictures by the whole campaign.
     const rows = await db.prepare(IB_LIST_SQL + 'WHERE b.campaign_id = ? AND (b.is_ready IS NOT FALSE OR b.user_id = ?) ORDER BY b.id DESC LIMIT 200').all(req.params.cid, req.session.userId);

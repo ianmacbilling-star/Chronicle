@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.61",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3661-frozen-ib-gallery",
+        "kind": "change",
+        "public": false,
+        "summary": "The Image Builder lists a frozen campaign so its pictures can be looked at; making there is refused.",
+        "detail": "TD-1155. A campaign frozen for you (no plan of your own and no paid Story Master) now appears in the Image Builder's campaign list, so the pictures already made there can be browsed. Generate and Regen there say at once that nothing new can be made.",
+        "td": [
+          "TD-1155"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.60",
     "staged_on": "2026-11-16",
     "entries": [
