@@ -2646,18 +2646,19 @@
            gated, self only). REMOVE when checkout goes live. -->
       <div class="settings-section" id="dev-add-tokens-section" style="border:1px dashed rgba(var(--accent-rgb),0.5);">
         <div class="settings-section-title" style="color:var(--accent);">&#9672; Add Tokens (Testing)</div>
-        <div class="settings-section-desc">Temporary: top up your own token balance while we&rsquo;re testing, before payments are set up. This will be removed once checkout goes live.</div>
+        <div class="settings-section-desc">Tester tools: set your own token balance to try things out. Nothing here is charged.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-          <input class="form-input" id="dev-add-tokens-input" type="number" min="1" step="1" value="100" style="max-width:140px;" />
-          <button class="btn btn-primary btn-sm" onclick="devAddTokens()">Add tokens</button>
-          <button class="btn btn-sm" onclick="devGrantMonthly()">Grant monthly (reset to fresh)</button>
+          <input class="form-input" id="dev-add-tokens-input" type="number" min="1" step="1" value="100" style="max-width:140px;" title="How many tokens to add with Add tokens. Whole numbers only. Testers can hold up to 1,000 in total." />
+          <button class="btn btn-primary" onclick="devAddTokens()" title="Adds this many tokens to your balance, on top of what you have, as tokens that never expire. Stops at your 1,000 tester limit." style="font-size:16px;font-weight:700;padding:11px 30px;letter-spacing:0.5px;box-shadow:0 2px 10px rgba(var(--accent-rgb),0.35);">Add tokens</button>
+          <button class="btn btn-sm" onclick="devGrantMonthly()" title="Wipes your token history and gives you exactly what a brand-new account on your plan gets each month: Use-them-or-lose-them tokens plus your Never Expire (Carry Over) tokens. Use it to start testing from a clean balance. This goes by the plan you&#x27;re set to, not a pass.">Grant monthly (reset to fresh)</button>
         </div>
-        <div class="settings-section-desc" style="margin-top:12px;">Or set exact balances (wipes your ledger first). Reserve writes the session reserve on your <em>current</em> tier. Testers: up to 1000 tokens in total, and the reserve is for admins only.</div>
+        <div class="settings-section-desc" style="margin-top:12px;">Or set exact balances (this wipes your token history first). Testers can hold up to 1,000 tokens in total.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
-          <div><label class="form-label" style="font-size:12px;">CO tokens</label><input class="form-input" id="dev-set-cot" type="number" min="0" step="1" value="20" style="max-width:110px;" /></div>
-          <div><label class="form-label" style="font-size:12px;">UTOLT tokens</label><input class="form-input" id="dev-set-utlt" type="number" min="0" step="1" value="35" style="max-width:110px;" /></div>
-          <div><label class="form-label" style="font-size:12px;">Reserve (current tier)</label><input class="form-input" id="dev-set-reserve" type="number" min="0" step="1" placeholder="(unchanged)" style="max-width:130px;" /></div>
-          <button class="btn btn-primary btn-sm" onclick="devSetBalance()">Set exact</button>
+          <div title="Carry-over tokens. They never expire, and they&#x27;re what token packs and passes give. Used after the monthly tokens run out."><label class="form-label" style="font-size:12px;">CO tokens</label><input class="form-input" id="dev-set-cot" type="number" min="0" step="1" value="20" style="max-width:110px;" /></div>
+          <div title="Use-them-or-lose-them tokens: the monthly allowance a plan gives. Spent first, and gone at the end of the month."><label class="form-label" style="font-size:12px;">UTOLT tokens</label><input class="form-input" id="dev-set-utlt" type="number" min="0" step="1" value="35" style="max-width:110px;" /></div>
+          <!-- v3.6.62 -- hidden unless an admin (renderPassOverride): testers are refused it anyway, it is every account's setting on the tier. -->
+          <div id="dev-set-reserve-wrap" style="display:none;" title="Admins only. Tokens held in reserve on a free trial to prevent a new user from using up all their tokens on character building, guaranteeing there are always enough to try out the session building. It&#x27;s a setting for every account on that plan, not just yours. Leave it blank to keep it as it is."><label class="form-label" style="font-size:12px;">Reserve (current tier)</label><input class="form-input" id="dev-set-reserve" type="number" min="0" step="1" placeholder="(unchanged)" style="max-width:130px;" /></div>
+          <button class="btn btn-primary btn-sm" onclick="devSetBalance()" title="Wipes your token history and sets your balance to exactly these CO and UTOLT amounts, so you can test a precise situation (for example, nearly out of tokens). The total must be 1,000 or less.">Set exact</button>
         </div>
         <div id="dev-add-tokens-msg" style="display:none;margin-top:10px;padding:8px 12px;border-radius:6px;font-size:13px;"></div>
       </div>
@@ -2686,21 +2687,21 @@
            the trial is the third mode. -->
       <div class="settings-section" id="account-tier-override-section" style="border:1px dashed rgba(var(--accent-rgb),0.5);">
         <div class="settings-section-title">Testing &mdash; Account State</div>
-        <div class="settings-section-desc">Temporary: put this account into one of the three states below, to test tier-gated features. Not a real upgrade &mdash; will be removed later.</div>
+        <div class="settings-section-desc">Put your account on a plan, a pass or the Free Trial to see what each one can do. Not a real purchase. Nothing is charged.</div>
 
         <div class="settings-section-desc" id="pass-override-state" style="margin:10px 0;padding:8px 10px;border-radius:6px;background:rgba(var(--panel-rgb),0.5);">Loading...</div>
 
-        <label class="form-label">This account is on</label>
+        <label class="form-label">Set your account to&hellip;</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-          <button class="btn btn-sm" id="asm-btn-subscription" onclick="acctStateMode('subscription')">Subscription</button>
-          <button class="btn btn-sm" id="asm-btn-pass" onclick="acctStateMode('pass')">Pass</button>
-          <button class="btn btn-sm" id="asm-btn-trial" onclick="acctStateMode('trial')">Free Trial</button>
+          <button class="btn btn-sm" id="asm-btn-subscription" onclick="acctStateMode('subscription')" title="Test a monthly plan: Copper, Silver, Gold or Platinum.">Subscription</button>
+          <button class="btn btn-sm" id="asm-btn-pass" onclick="acctStateMode('pass')" title="Test a Platinum Pass: Platinum for a set time, then back to Copper.">Pass</button>
+          <button class="btn btn-sm" id="asm-btn-trial" onclick="acctStateMode('trial')" title="Test the 30-day Free Trial, with its watermark and limits.">Free Trial</button>
         </div>
 
         <!-- SUBSCRIPTION -->
         <div id="asm-pane-subscription" style="display:none;">
           <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;flex-wrap:wrap;">
-            <div style="flex:0 0 170px;">
+            <div style="flex:0 0 170px;" title="The plan to test. Copper is the free floor: it can only work inside a paid Story Master&#x27;s campaign.">
               <label class="form-label">Tier</label>
               <select class="form-input" id="account-tier-override">
                 <option value="copper">Copper</option>
@@ -2712,18 +2713,22 @@
             <!-- v3.0.944 -- Ian: "can you give me a billing date so I can set that too. Like the
                  free trial." OPTIONAL, and the pane says what leaving it blank does, because
                  blank is not 'unset' here -- it actively removes the stand-in subscription. -->
-            <div style="flex:0 0 180px;">
+            <div style="flex:0 1 auto;">
+              <label class="form-label">Quick dates</label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-sm" onclick="subDatePreset(-1)" title="Fills Next billing date with yesterday, so the subscription has already ended: the account drops to Copper, as a real subscriber does when a plan ends. Press Apply after.">Yesterday (ended)</button>
+                <button class="btn btn-sm" onclick="subDatePreset(1)" title="Fills Next billing date with tomorrow. Press Apply after.">Tomorrow</button>
+                <button class="btn btn-sm" onclick="subDatePreset(14)" title="Fills Next billing date with two weeks from today. Press Apply after.">+14 days</button>
+                <button class="btn btn-sm" onclick="subDatePreset(30)" title="Fills Next billing date with a month from today. Press Apply after.">+1 month</button>
+              </div>
+            </div>
+            <div style="flex:0 0 180px;" title="Optional. With a date, the account looks like a real subscriber on My Account. Leave it blank for a plan with no subscription behind it. A date in the past means the subscription has ended.">
               <label class="form-label">Next billing date</label>
               <input class="form-input" id="asm-sub-period-end" type="date" />
             </div>
-            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()" title="Puts your account into the state chosen above. Reload the page to see it everywhere.">Apply</button>
           </div>
-          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-            <button class="btn btn-sm" onclick="subDatePreset(1)">Tomorrow</button>
-            <button class="btn btn-sm" onclick="subDatePreset(14)">+14 days</button>
-            <button class="btn btn-sm" onclick="subDatePreset(30)">+1 month</button>
-          </div>
-          <div class="settings-section-desc" style="margin-top:6px;">Clears any pass, so the tier you pick is the tier you get. <strong>Next billing date</strong> is optional: set one and the account is given a stand-in subscription id (sub_TESTING_&lt;your id&gt;) so My Account treats it as a real subscriber, and a pass bought here will defer its clock to that date. Leave it blank and the stand-in is taken away again. A genuine Stripe subscription is never touched either way.</div>
+          <div class="settings-section-desc" style="margin-top:6px;">Clears any pass, so the tier you pick is the tier you get. <strong>Yesterday (ended)</strong> makes a subscription that has already ended, so the account is on Copper. <strong>Next billing date</strong> is optional: set one and the account is given a stand-in subscription id (sub_TESTING_&lt;your id&gt;) so My Account treats it as a real subscriber, and a pass bought here will defer its clock to that date. Leave it blank and the stand-in is taken away again. A genuine Stripe subscription is never touched either way.</div>
         </div>
 
         <!-- PASS -->
@@ -2735,17 +2740,20 @@
                 <option value="platinum">Platinum pass</option>
               </select>
             </div>
-            <div style="flex:0 0 180px;">
+            <div style="flex:0 1 auto;">
+              <label class="form-label">Quick dates</label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-sm" onclick="passDatePreset(-1)" title="Fills Expires with yesterday, so the pass has already run out. Use it to test what happens when a pass ends.">Yesterday</button>
+                <button class="btn btn-sm" onclick="passDatePreset(90)" title="Fills Expires with 3 months from today. Press Apply after.">+3 months</button>
+                <button class="btn btn-sm" onclick="passDatePreset(180)" title="Fills Expires with 6 months from today. Press Apply after.">+6 months</button>
+                <button class="btn btn-sm" onclick="passDatePreset(365)" title="Fills Expires with 12 months from today. Press Apply after.">+12 months</button>
+              </div>
+            </div>
+            <div style="flex:0 0 180px;" title="The day the pass ends.">
               <label class="form-label">Expires</label>
               <input class="form-input" id="account-pass-expires" type="date" />
             </div>
-            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
-          </div>
-          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
-            <button class="btn btn-sm" onclick="passDatePreset(-1)">Yesterday</button>
-            <button class="btn btn-sm" onclick="passDatePreset(90)">+3 months</button>
-            <button class="btn btn-sm" onclick="passDatePreset(180)">+6 months</button>
-            <button class="btn btn-sm" onclick="passDatePreset(365)">+12 months</button>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()" title="Puts your account into the state chosen above. Reload the page to see it everywhere.">Apply</button>
           </div>
           <div class="settings-section-desc" style="margin-top:6px;">Sets the account tier to Copper underneath, which is what a real pass holder looks like. <strong>Yesterday</strong> makes the pass already expired, for testing the lapse.</div>
         </div>
@@ -2753,11 +2761,11 @@
         <!-- FREE TRIAL -->
         <div id="asm-pane-trial" style="display:none;">
           <div class="form-group" style="display:flex;gap:8px;align-items:flex-end;margin:0;">
-            <div style="flex:1;max-width:260px;">
+            <div style="flex:1;max-width:260px;" title="The day the trial began. Blank starts it today. About 31 days ago shows what happens when a trial ends.">
               <label class="form-label">Trial start date</label>
               <input class="form-input" id="dev-trial-date" type="date" />
             </div>
-            <button class="btn btn-primary btn-sm" onclick="applyAccountState()">Apply</button>
+            <button class="btn btn-primary btn-sm" onclick="applyAccountState()" title="Puts your account into the state chosen above. Reload the page to see it everywhere.">Apply</button>
           </div>
           <div class="settings-section-desc" style="margin-top:6px;">Clears any pass. Leave the date blank to start the trial today; set it ~31 days ago to confirm the watermark switches off past the window.</div>
         </div>

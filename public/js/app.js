@@ -23853,6 +23853,7 @@ function initUserTestingTab() {
 // a pass, Gold with a pass, Gold with an EXPIRED pass, and so on).
 // ============================================================
 function renderPassOverride(me) {
+  var _rw = document.getElementById('dev-set-reserve-wrap'); if (_rw) _rw.style.display = me.is_admin ? '' : 'none';   // v3.6.62 -- the reserve is admins' only
   var box = document.getElementById('pass-override-state');
   var sel = document.getElementById('account-pass-override');
   var dt = document.getElementById('account-pass-expires');
@@ -23962,6 +23963,9 @@ function applyAccountState() {
     var sbody = { tier: tier };
     var sdt = document.getElementById('asm-sub-period-end');
     if (sdt && sdt.value) sbody.period_end = sdt.value;
+    // v3.6.62 -- a billing date before today is a subscription that has ENDED (Yesterday (ended)): the server makes it
+    // Copper with a cancelled test subscription, as a real one looks once it runs out. Today, by this computer's clock.
+    if (sbody.period_end && sbody.period_end < new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)) sbody.ended = true;
     chain = clearPass().then(function () { return post('/api/auth/set-tier', sbody); });
   }
   chain.then(function () { window.location.reload(); })
@@ -23978,7 +23982,9 @@ function applyAccountState() {
 function _asmDatePreset(id, days) {
   var el = document.getElementById(id);
   if (!el) return;
-  el.value = new Date(Date.now() + (days * 86400000)).toISOString().slice(0, 10);
+  // v3.6.62 -- counted from today on this computer's clock, not UTC's (in the evening UTC is already tomorrow,
+  // so 'Yesterday' landed on today and the pass or plan had not run out yet).
+  el.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000 + (days * 86400000)).toISOString().slice(0, 10);
 }
 function passDatePreset(days) { _asmDatePreset('account-pass-expires', days); }
 function subDatePreset(days) { _asmDatePreset('asm-sub-period-end', days); }

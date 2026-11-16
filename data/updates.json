@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.62",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3662-testing-tab-help",
+        "kind": "improvement",
+        "public": false,
+        "summary": "User Testing tab: every control explains itself, and a subscription can be set to ended.",
+        "detail": "Hovering a control on Add Tokens and Account State says what it does. The reserve box shows for admins only. Quick dates sit between the plan and the date, and Yesterday (ended) makes a subscription that has already run out (the account is on Copper, as a real lapsed subscriber is). Quick dates count from today on your own clock.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.61",
     "staged_on": "2026-11-16",
     "entries": [
