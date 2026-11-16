@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.60",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3660-frozen-windows",
+        "kind": "fix",
+        "public": false,
+        "summary": "A frozen account gets one clear window when it presses a create button, and the Copper plan no longer promises token purchases.",
+        "detail": "TD-1155. Generate Story, Generate Images, Generate Narrative and the other create buttons now say at once that nothing new can be made (Generate Images and Generate Story used to do nothing visible), and Generate Narrative no longer shows a second 'Something went wrong' box. The Copper plan reads: Free, play in a paid Story Master's campaign, no monthly subscription.",
+        "td": [
+          "TD-1155"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.59",
     "staged_on": "2026-11-16",
     "entries": [

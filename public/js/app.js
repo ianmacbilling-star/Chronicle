@@ -46976,3 +46976,43 @@ function frozenShowRefusal(msg) {
   };
   setInterval(frozenBannerTick, 700);
 })();
+
+// =====================================================================================
+// v3.6.60 -- TD-1155, the testers' findings of 16 Nov on v3.6.55 (Ian: "build 1,2,4 ... account for the Brand").
+// (1) ONE WINDOW PER PRESS. Generate Narrative showed the frozen window AND its own "Something went wrong" box
+//     with the same sentence. For a few seconds after a frozen window, an error box whose words carry a
+//     frozen sentence is not opened (the frozen window already said it).
+// (2) SAY IT BEFORE IT STARTS. Generate Images and Generate Story were refused with no window at all. The main
+//     create buttons now check the frozen state first and show the window without asking the server; the
+//     server still refuses on its own (frozenGate). The words are swapped for the brand on screen by
+//     brand-words.js like every other window ("campaign" -> "story" on Story), so no second copy is kept here.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+function frozenHereText() {
+  var u = (typeof state !== 'undefined' && state) ? state.user : null;
+  if (!u) return '';
+  if (u.loneCopper) return FROZEN_ACCOUNT_TEXT;
+  var c = state.currentCampaign;
+  return (c && c.frozen === true) ? FROZEN_CAMPAIGN_TEXT : '';
+}
+function frozenEchoed(msg) {
+  var s = String(msg == null ? '' : msg);
+  return (Date.now() - _frozenUi.refusedAt < 5000) && (s.indexOf(FROZEN_ACCOUNT_TEXT) >= 0 || s.indexOf(FROZEN_CAMPAIGN_TEXT) >= 0);
+}
+(function () {
+  ['showErrorDialog', 'showError', 'showAlert'].forEach(function (n) {
+    var f = window[n];
+    if (typeof f !== 'function' || f._frozenWrapped) return;
+    var w = function (msg) { if (frozenEchoed(msg)) return; return f.apply(this, arguments); };
+    w._frozenWrapped = true;
+    window[n] = w;
+  });
+  ['extractMoments', 'generateAllImages', 'generateNarrativeAndImages', 'generateNarrativeOnly', 'restyleAllReferences',
+   'rebuildCharPrompt', 'submitRetouch', 'titleBuildGenerate', 'runLayoutAiDryRun', 'npSend'].forEach(function (n) {
+    var f = window[n];
+    if (typeof f !== 'function' || f._frozenWrapped) return;
+    var w = function () { var t = frozenHereText(); if (t) { frozenShowRefusal(t); return; } return f.apply(this, arguments); };
+    w._frozenWrapped = true;
+    window[n] = w;
+  });
+})();

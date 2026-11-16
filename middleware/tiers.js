@@ -81,7 +81,8 @@ const TIERS = {
     // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
     // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
     max_free_members: 0,   // a Copper Story Master is a lapsed one: no new members until they subscribe
-    description: 'Get your own version of the story · no monthly subscription · token purchases only'
+    // v3.6.60 -- TD-1155: a lone Copper cannot buy tokens, so the card no longer promises that a Copper can buy them.
+    description: 'Free · play in a paid Story Master\'s campaign · no monthly subscription'
   },
   silver: {
     name: 'Silver',
