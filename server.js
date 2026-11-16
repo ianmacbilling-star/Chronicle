@@ -383,6 +383,14 @@ app.get('/example-books', function (req, res) {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'views', 'example-books.html'));
 });
+// v3.6.64 -- THE NEW STORY LANDING PAGE, IN PROGRESS (Ian, 2026-11-16; TD-1158). Riley's plan in a light bookstore look; it
+// replaces /story when done, and until then /story is untouched. Same reasons as the pages above: served only from views/,
+// no-store, one URL. It carries a noindex and is not in sitemap-pages.xml yet. It is a Story (brand2) landing page in
+// services/brands.js, so whoever signs up from it lands on the Story side.
+app.get('/memories', function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'views', 'memories.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Stripe webhook -- mounted BEFORE the rate limiter and the session-gated
