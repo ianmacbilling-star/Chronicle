@@ -377,6 +377,12 @@ app.get('/game-masters', function (req, res) {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'views', 'game-masters.html'));
 });
+// v3.6.57 -- EXAMPLE BOOKS (Ian, 2026-11-16): the book photos as a page of their own, for marketing links. Same
+// reasons as /story and /game-masters: served only from views/, no-store, one URL. In sitemap-pages.xml.
+app.get('/example-books', function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'views', 'example-books.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Stripe webhook -- mounted BEFORE the rate limiter and the session-gated

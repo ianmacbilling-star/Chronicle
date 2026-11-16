@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.57",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3657-example-books",
+        "kind": "feature",
+        "public": true,
+        "summary": "A page of photos of real printed Campaignia books.",
+        "detail": "campaignia.com/example-books shows photographs of books made with Campaignia and printed for their owners. Click a photo to see it full size.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.56",
     "staged_on": "2026-11-16",
     "entries": [
