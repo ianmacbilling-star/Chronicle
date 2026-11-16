@@ -696,9 +696,21 @@ router.post('/set-tier', requireAdminOrTester, async function(req, res) {
   // underscores as wildcards, and a pattern that matches more than it was written for is how a
   // testing control ends up deleting a real customer's subscription id.
   const testSubId = 'sub_TESTING_' + req.session.userId;
+  // v3.6.62 -- ENDED (the Yesterday (ended) quick date, Ian 2026-11-16): a subscription that has run out, as a real one
+  // looks after Stripe's subscription.deleted: Copper, status canceled, the past date kept, the id kept. Only ever on the
+  // stand-in id: an account holding a real Stripe subscription is refused, so this cannot mark a real one cancelled.
+  const ended = !!(req.body && req.body.ended === true && periodEnd);
 
   try {
     const db = await getDb();
+    if (ended) {
+      const cur = await db.prepare('SELECT stripe_subscription_id FROM users WHERE id = ?').get(req.session.userId);
+      const sid = (cur && cur.stripe_subscription_id) || '';
+      if (sid && sid !== testSubId) return res.status(400).json({ error: 'This account has a real subscription, so it cannot be set to ended here.' });
+      await db.prepare("UPDATE users SET tier = 'copper', subscription_status = 'canceled', current_period_end = ?, cancel_at_period_end = FALSE, stripe_subscription_id = ? WHERE id = ?")
+        .run(periodEnd, testSubId, req.session.userId);
+      return res.json({ success: true, tier: 'copper', ended: true, currentPeriodEnd: periodEnd });
+    }
     // Flipping TO the trial tier starts a fresh 30-day window so it won't lapse
     // straight back to copper on the next request (use the Free Trial date control
     // to backdate the start when testing expiry/lapse).

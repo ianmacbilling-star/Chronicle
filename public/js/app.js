@@ -23853,6 +23853,7 @@ function initUserTestingTab() {
 // a pass, Gold with a pass, Gold with an EXPIRED pass, and so on).
 // ============================================================
 function renderPassOverride(me) {
+  var _rw = document.getElementById('dev-set-reserve-wrap'); if (_rw) _rw.style.display = me.is_admin ? '' : 'none';   // v3.6.62 -- the reserve is admins' only
   var box = document.getElementById('pass-override-state');
   var sel = document.getElementById('account-pass-override');
   var dt = document.getElementById('account-pass-expires');
@@ -23864,17 +23865,25 @@ function renderPassOverride(me) {
   // THE FLAG. Says what they are in one line, and says the resolved answer too, because the
   // whole point of the pass design is that the account tier and what they actually HAVE differ.
   var effective = me.tier || acct;
-  var who = pass ? 'PASS HOLDER' : 'SUBSCRIBER';
-  var line = '<strong style="color:var(--accent-bright);">' + who + '</strong>' +
-    ' &mdash; account tier <strong>' + aimpEsc(acct) + '</strong>';
+  // v3.6.63 -- the current plan in plain words, readable (Ian, 2026-11-16: "make this more readable... The current
+  // plan"). Same facts as before: what the account is, any pass, and what the app treats it as.
+  var _nm = function (t) { var n = { copper: 'Copper (free)', silver: 'Silver', gold: 'Gold', platinum: 'Platinum', trial: 'Free Trial' }; return n[t] || aimpEsc(t || '?'); };
+  var _dt = function (s) { if (!s) return ''; var d = new Date(s); return isNaN(d.getTime()) ? aimpEsc(String(s).slice(0, 10)) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); };
+  var plan, note = '';
   if (pass) {
-    line += ', pass <strong>' + aimpEsc(pass.tier || '?') + '</strong> until <strong>' +
-      aimpEsc(String(pass.expiresAt || '').slice(0, 10)) + '</strong>';
+    plan = _nm(pass.tier || 'platinum') + ' Pass, until ' + _dt(pass.expiresAt);
+    note = ' Underneath, the account is ' + _nm(acct) + ', which it goes back to when the pass ends.';
+  } else if (acct === 'trial') {
+    plan = 'Free Trial' + (me.trialEndsAt ? ', until ' + _dt(me.trialEndsAt) : '');
+  } else if (me.hasSubscription && me.subscriptionStatus === 'canceled') {
+    plan = _nm(acct) + ' (the subscription ended ' + _dt(me.currentPeriodEnd) + ')';
+  } else if (me.hasSubscription && me.currentPeriodEnd) {
+    plan = _nm(acct) + ' subscription, next billing ' + _dt(me.currentPeriodEnd);
   } else {
-    line += ', no live pass';
+    plan = _nm(acct) + (acct === 'copper' ? '' : ', with no subscription behind it');
   }
-  line += '<br />Resolves to <strong>' + aimpEsc(effective) + '</strong> everywhere in the app.';
-  box.innerHTML = line;
+  box.innerHTML = '<div style="font-size:16px;margin-bottom:4px;">Current plan: <strong>' + plan + '</strong></div>' +
+    '<div>The app treats you as <strong>' + _nm(effective) + '</strong> everywhere.' + note + '</div>';
 
   // v3.0.943 -- AND THE PANEL OPENS ON WHATEVER THE ACCOUNT IS. Ian: "it should load up with
   // whatever the user currently is." Read in the order the modes outrank each other: a live pass
@@ -23962,6 +23971,9 @@ function applyAccountState() {
     var sbody = { tier: tier };
     var sdt = document.getElementById('asm-sub-period-end');
     if (sdt && sdt.value) sbody.period_end = sdt.value;
+    // v3.6.62 -- a billing date before today is a subscription that has ENDED (Yesterday (ended)): the server makes it
+    // Copper with a cancelled test subscription, as a real one looks once it runs out. Today, by this computer's clock.
+    if (sbody.period_end && sbody.period_end < new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)) sbody.ended = true;
     chain = clearPass().then(function () { return post('/api/auth/set-tier', sbody); });
   }
   chain.then(function () { window.location.reload(); })
@@ -23978,7 +23990,9 @@ function applyAccountState() {
 function _asmDatePreset(id, days) {
   var el = document.getElementById(id);
   if (!el) return;
-  el.value = new Date(Date.now() + (days * 86400000)).toISOString().slice(0, 10);
+  // v3.6.62 -- counted from today on this computer's clock, not UTC's (in the evening UTC is already tomorrow,
+  // so 'Yesterday' landed on today and the pass or plan had not run out yet).
+  el.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000 + (days * 86400000)).toISOString().slice(0, 10);
 }
 function passDatePreset(days) { _asmDatePreset('account-pass-expires', days); }
 function subDatePreset(days) { _asmDatePreset('asm-sub-period-end', days); }
@@ -46976,6 +46990,12 @@ function frozenShowRefusal(msg) {
   };
   setInterval(frozenBannerTick, 700);
 })();
+// v3.6.61 -- TD-1155. On the Image Builder the campaign is the Builder's own (IB.cid), not the one last opened: a frozen
+// campaign's gallery can be looked at (Ian, 2026-11-16) and Generate and Regen there say so at once. APPENDED (TD-853).
+function frozenOnIb() {
+  var v = document.getElementById('view-image-builder');
+  return !!(v && typeof IB !== 'undefined' && IB && IB.cid && getComputedStyle(v).display !== 'none');
+}
 
 // =====================================================================================
 // v3.6.60 -- TD-1155, the testers' findings of 16 Nov on v3.6.55 (Ian: "build 1,2,4 ... account for the Brand").
@@ -46992,6 +47012,7 @@ function frozenHereText() {
   var u = (typeof state !== 'undefined' && state) ? state.user : null;
   if (!u) return '';
   if (u.loneCopper) return FROZEN_ACCOUNT_TEXT;
+  if (frozenOnIb()) { var ic = ibCampaign(IB.cid); return (ic && ic.frozen === true) ? FROZEN_CAMPAIGN_TEXT : ''; }   // v3.6.61 -- the Builder's own campaign
   var c = state.currentCampaign;
   return (c && c.frozen === true) ? FROZEN_CAMPAIGN_TEXT : '';
 }
@@ -47008,7 +47029,7 @@ function frozenEchoed(msg) {
     window[n] = w;
   });
   ['extractMoments', 'generateAllImages', 'generateNarrativeAndImages', 'generateNarrativeOnly', 'restyleAllReferences',
-   'rebuildCharPrompt', 'submitRetouch', 'titleBuildGenerate', 'runLayoutAiDryRun', 'npSend'].forEach(function (n) {
+   'rebuildCharPrompt', 'submitRetouch', 'titleBuildGenerate', 'runLayoutAiDryRun', 'npSend', 'ibGenerate', 'ibRegen'].forEach(function (n) {   // v3.6.61 -- the Builder's two
     var f = window[n];
     if (typeof f !== 'function' || f._frozenWrapped) return;
     var w = function () { var t = frozenHereText(); if (t) { frozenShowRefusal(t); return; } return f.apply(this, arguments); };
