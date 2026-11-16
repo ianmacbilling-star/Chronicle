@@ -23865,17 +23865,25 @@ function renderPassOverride(me) {
   // THE FLAG. Says what they are in one line, and says the resolved answer too, because the
   // whole point of the pass design is that the account tier and what they actually HAVE differ.
   var effective = me.tier || acct;
-  var who = pass ? 'PASS HOLDER' : 'SUBSCRIBER';
-  var line = '<strong style="color:var(--accent-bright);">' + who + '</strong>' +
-    ' &mdash; account tier <strong>' + aimpEsc(acct) + '</strong>';
+  // v3.6.63 -- the current plan in plain words, readable (Ian, 2026-11-16: "make this more readable... The current
+  // plan"). Same facts as before: what the account is, any pass, and what the app treats it as.
+  var _nm = function (t) { var n = { copper: 'Copper (free)', silver: 'Silver', gold: 'Gold', platinum: 'Platinum', trial: 'Free Trial' }; return n[t] || aimpEsc(t || '?'); };
+  var _dt = function (s) { if (!s) return ''; var d = new Date(s); return isNaN(d.getTime()) ? aimpEsc(String(s).slice(0, 10)) : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); };
+  var plan, note = '';
   if (pass) {
-    line += ', pass <strong>' + aimpEsc(pass.tier || '?') + '</strong> until <strong>' +
-      aimpEsc(String(pass.expiresAt || '').slice(0, 10)) + '</strong>';
+    plan = _nm(pass.tier || 'platinum') + ' Pass, until ' + _dt(pass.expiresAt);
+    note = ' Underneath, the account is ' + _nm(acct) + ', which it goes back to when the pass ends.';
+  } else if (acct === 'trial') {
+    plan = 'Free Trial' + (me.trialEndsAt ? ', until ' + _dt(me.trialEndsAt) : '');
+  } else if (me.hasSubscription && me.subscriptionStatus === 'canceled') {
+    plan = _nm(acct) + ' (the subscription ended ' + _dt(me.currentPeriodEnd) + ')';
+  } else if (me.hasSubscription && me.currentPeriodEnd) {
+    plan = _nm(acct) + ' subscription, next billing ' + _dt(me.currentPeriodEnd);
   } else {
-    line += ', no live pass';
+    plan = _nm(acct) + (acct === 'copper' ? '' : ', with no subscription behind it');
   }
-  line += '<br />Resolves to <strong>' + aimpEsc(effective) + '</strong> everywhere in the app.';
-  box.innerHTML = line;
+  box.innerHTML = '<div style="font-size:16px;margin-bottom:4px;">Current plan: <strong>' + plan + '</strong></div>' +
+    '<div>The app treats you as <strong>' + _nm(effective) + '</strong> everywhere.' + note + '</div>';
 
   // v3.0.943 -- AND THE PANEL OPENS ON WHATEVER THE ACCOUNT IS. Ian: "it should load up with
   // whatever the user currently is." Read in the order the modes outrank each other: a live pass

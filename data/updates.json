@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.63",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3663-testing-current-plan",
+        "kind": "improvement",
+        "public": false,
+        "summary": "User Testing tab: the current plan is shown in plain, readable words.",
+        "detail": "The box at the top of Account State now reads like 'Current plan: Gold subscription, next billing Dec 12, 2026' and says what the app treats you as, in larger dark text on a light gold panel.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.62",
     "staged_on": "2026-11-16",
     "entries": [
