@@ -3212,7 +3212,7 @@ function renderAccountTier(me) {
   var loneBanner = document.getElementById('account-lone-banner');
   if (loneBanner) {
     if (me.loneCopper) {
-      loneBanner.textContent = 'You are on Copper with no active Story Master coverage. You can keep creating and buying tokens, but consider Silver to unlock more.';
+      loneBanner.textContent = FROZEN_ACCOUNT_TEXT + ' Everything you have made is kept: you can still view it and download your books.';   // v3.6.55 -- TD-1155
       loneBanner.style.display = 'block';
     } else {
       loneBanner.style.display = 'none';
@@ -46907,4 +46907,72 @@ function _sbStill(w) { return !!(w && state.currentSession && String(state.curre
   window.addEventListener('scroll', hide, true);
   window.addEventListener('blur', hide);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); }, true);
+})();
+
+// =====================================================================================
+// v3.6.55 -- TD-1155 stage 2. FROZEN ACCOUNTS ON SCREEN (spec claude/FROZEN_ACCOUNT_SPEC.md).
+// Ian, 2026-11-16: the frozen message "on the top banner too. Along with a modal at sign in and on the
+// My Account page". The bar under the header says it for a lone Copper (frozen everywhere) or, inside
+// a campaign with no active Story Master, for that campaign only (campaign.frozen, from GET /api/campaigns).
+// Polled, because a dozen paths set state.currentCampaign. A refused spend (403, error FROZEN, from
+// frozenGate) is shown once as a window, and its body is rewritten so any page that prints data.error
+// prints the sentence rather than the word FROZEN.
+// APPENDED, NOT INSERTED (TD-853); declared nowhere else.
+// =====================================================================================
+var FROZEN_ACCOUNT_TEXT = "Your account is currently frozen and you won't be allowed to make new content without an active pass or subscription. Please upgrade to continue.";
+var FROZEN_CAMPAIGN_TEXT = 'This campaign has no active Story Master, so nothing new can be made in it. You can still view, download and print what is already here.';
+var _frozenUi = { shown: null, noticed: false, refusedAt: 0 };
+function frozenBannerText() {
+  var u = (typeof state !== 'undefined' && state) ? state.user : null;
+  if (!u) return '';
+  if (u.loneCopper) return FROZEN_ACCOUNT_TEXT;
+  var c = state.currentCampaign;
+  if (c && c.frozen === true) return FROZEN_CAMPAIGN_TEXT;
+  return '';
+}
+function frozenBannerTick() {
+  var bar = document.getElementById('frozen-banner');
+  if (!bar) return;
+  var t = frozenBannerText();
+  if (t === _frozenUi.shown) return;
+  _frozenUi.shown = t;
+  var tx = document.getElementById('frozen-banner-text');
+  if (tx) tx.textContent = t;
+  bar.style.display = t ? 'block' : 'none';
+  if (t === FROZEN_ACCOUNT_TEXT) frozenSignInNotice();
+}
+function frozenSignInNotice() {
+  if (_frozenUi.noticed) return;
+  _frozenUi.noticed = true;
+  var k = 'campaigniaFrozenNotice:' + String((state.user && (state.user.id || state.user.email)) || '');
+  try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); } catch (e) {}
+  uiConfirm(FROZEN_ACCOUNT_TEXT + '\n\nEverything you have made is kept: you can still view it and download your books.',
+    { title: 'Your account is frozen', okText: 'See plans', cancelText: 'Not now', preserveLines: true })
+    .then(function (ok) { if (ok === true) goToPlans(); });
+}
+function frozenShowRefusal(msg) {
+  var now = Date.now();
+  if (now - _frozenUi.refusedAt < 3000) return;
+  _frozenUi.refusedAt = now;
+  uiConfirm(String(msg || FROZEN_ACCOUNT_TEXT), { title: 'Nothing new can be made here', okText: 'See plans', cancelText: 'Close' })
+    .then(function (ok) { if (ok === true) goToPlans(); });
+}
+(function () {
+  if (window._frozenFetchWrapped || typeof window.fetch !== 'function') return;
+  window._frozenFetchWrapped = true;
+  var _fetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    return _fetch(input, init).then(function (r) {
+      if (!r || r.status !== 403) return r;
+      var ct = (r.headers && r.headers.get('content-type')) || '';
+      if (ct.indexOf('application/json') < 0) return r;
+      return r.clone().json().then(function (j) {
+        if (!j || j.error !== 'FROZEN') return r;
+        var m = String(j.message || FROZEN_ACCOUNT_TEXT);
+        frozenShowRefusal(m);
+        return new Response(JSON.stringify({ error: m, message: m, frozen: true }), { status: 403, statusText: 'Forbidden', headers: { 'Content-Type': 'application/json' } });
+      }, function () { return r; });
+    });
+  };
+  setInterval(frozenBannerTick, 700);
 })();

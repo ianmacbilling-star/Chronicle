@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.55",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3655-frozen-screens",
+        "kind": "change",
+        "public": false,
+        "summary": "A frozen account is told so: a bar under the header, a window at sign-in, and on My Account.",
+        "detail": "TD-1155 stage 2. A lone Copper sees the frozen message under the header, once in a window when they sign in, and on My Account. Inside a campaign with no active Story Master the bar says so for that campaign. A refused action shows the message in a window.",
+        "td": [
+          "TD-1155"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.54",
     "staged_on": "2026-11-16",
     "entries": [

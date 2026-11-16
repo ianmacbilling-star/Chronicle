@@ -132,6 +132,12 @@ router.get('/', requireAuth, async function(req, res) {
   // for every campaign, not almost none of them.
   // v3.2.08 -- the default book picture, for the books with no chosen one (campaignTilePicture above).
   const _rows = (campaigns || []).map(decorateCampaign);
+  // v3.6.55 -- TD-1155. Is this campaign frozen for me (no keys of my own and no paid Story Master)? The page
+  // shows the campaign's frozen bar from it. Shown only; the server refuses spending on its own (frozenGate).
+  try {
+    const { frozenIn } = require('../middleware/tiers');
+    await Promise.all(_rows.map(async function (c) { c.frozen = await frozenIn(req.session.userId, c.id, req.user); }));
+  } catch (e) { _rows.forEach(function (c) { c.frozen = false; }); }
   await Promise.all(_rows.map(async function (c) {
     var tp = await campaignTilePicture(db, c, req.session.userId);
     c.tile_image_url = tp ? tp.url : null;
