@@ -31,6 +31,9 @@
   <style>
     .exb-head { margin-bottom: var(--gutter); }
     .exb-head h1 { margin: 0; font-weight: normal; }
+    /* v3.6.59 -- no halftone dots on this page (Ian, 2026-11-16: "Get rid of the dots"): landing.css lays them over
+       the whole page, photos included. The landing pages keep theirs. */
+    body::before { display: none; }
     .exb-intro { border: var(--border); background: var(--panel); padding: 18px 24px; margin-bottom: var(--gutter); font-family: var(--font-body); font-size: 17px; font-style: italic; line-height: 1.55; color: rgba(var(--on-panel-rgb),0.8); }
     /* v3.6.58 -- laid out like the Library gallery (Ian: "the images are cropped. Make it more like the Gallery"):
        every photo whole, at its own shape, in columns. The script below deals the tiles into columns left to

@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.59",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3659-example-books-dots",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Example books: the photos are shown without the dotted overlay.",
+        "detail": "The halftone dots the landing pages lay over everything are gone from campaignia.com/example-books, so the photos show cleanly.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.58",
     "staged_on": "2026-11-16",
     "entries": [
