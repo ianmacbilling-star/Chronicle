@@ -1,5 +1,22 @@
 [
   {
+    "version": "3.6.56",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3656-frozen-export",
+        "kind": "change",
+        "public": false,
+        "summary": "Copper can export and print; the help knows about frozen accounts.",
+        "detail": "TD-1155 stage 3 (closes TD-781). A Copper account keeps Export to PDF and printing of what it has made. The help assistant explains frozen accounts: what stops, what stays open, and how to unfreeze.",
+        "td": [
+          "TD-1155",
+          "TD-781"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.55",
     "staged_on": "2026-11-16",
     "entries": [

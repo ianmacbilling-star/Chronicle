@@ -161,6 +161,16 @@ Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Plat
   to and reuse the Archive (their own and other members' images), and update the look of
   a character they play before sessions are readied. Copper can buy token packs to spend
   in a paid Story Master's campaign.
+- **Frozen account.** A Copper account with no paid Story Master over a campaign is **frozen**
+  there: nothing new can be made and no tokens can be spent or bought — no story, narrative,
+  pictures, references, assets, Optimize or transcription, and no publishing. Everything already
+  made is kept and stays open: view it, export and download it, print it at home, and order a
+  print of a finished book. Tokens already held are kept for when they upgrade. A Copper with no
+  paid Story Master anywhere is frozen everywhere (they see a bar under the header and a note when
+  they sign in); one who is a player under a paid Story Master works normally in that campaign
+  and is frozen only in campaigns with no active Story Master (a bar in that campaign says so).
+  A Story Master on the Free Trial does not count as active for Copper members. To unfreeze:
+  a paid plan or a Platinum Pass, or play in a paid Story Master's campaign.
 - **Silver** — 1 campaign, unlimited sessions, unlimited characters, monthly free
   tokens, a capped number of moments per session, and more art styles than the floor.
 - **Gold** — 3 campaigns, unlimited sessions and characters, more free tokens than
@@ -280,13 +290,14 @@ actually cost.
   it cancels your subscription, drops you to the free tier, and **keeps all your data**.
   Reactivate any time by simply logging back in. Canceling through the billing portal
   just ends the subscription (you stay on Copper, active).
-- **Downgrading or lapsing to Copper doesn't lock or delete your campaigns.** You keep
-  full editing of campaigns and sessions you own, and can keep generating while you have
-  tokens. What changes: you can't create *new* campaigns or sessions, advanced styles
-  revert to the base options.
-- **Copper is the floor.** No monthly charge — you only pay when buying tokens. Follow
-  along with your Story Master for free; to create your own images/version, buy tokens.
-  Any Copper account can buy token packs at any time to spend on its own images.
+- **Downgrading or lapsing to Copper doesn't delete your campaigns.** Everything you made is
+  kept: you can view it, export and download it, print at home, and order prints of finished
+  books. What changes: your account is **frozen** in any campaign without a paid Story Master —
+  you can't make anything new, spend or buy tokens, Optimize, or publish; you can't create new
+  campaigns or sessions; advanced styles revert to the base options. Tokens you hold are kept.
+- **Copper is the floor.** No monthly charge. Follow along with your Story Master for free;
+  to create your own images/version in a paid Story Master's campaign, buy tokens. A Copper with
+  no paid Story Master is frozen and can't buy or spend tokens (see Frozen account).
 - **Refunds:** all sales are final — no refunds, including on purchased tokens. If you
   think you were charged in error, contact support.
 
@@ -540,9 +551,10 @@ distinct:
 session or the whole novel: the preview panel shows it as you work, and the Optimize tab shows
 it as it will print. **Export and home
 Print** are open to anyone who can view the story (the browser's PDF viewer does the
-save/print). The two things that require an **effective paid tier** (your own
-subscription, or a Copper seat under a paid Story Master) are **Publishing to the
-Library** and **Ordering a POD book** (the clean, bound version).
+save/print). **Publishing to the Library** requires an **effective paid tier** (your own
+subscription, or a Copper seat under a paid Story Master). **Ordering a POD book** (the clean,
+bound version) is open to anyone whose book is not watermarked — a frozen Copper can still
+order a print of a book already finished, but can't Optimize a new layout.
 
 **Watermark:** only **Free Trial** images carry a Campaignia watermark — nobody paid for
 those. Copper and all paid tiers get clean, unwatermarked output. (Because the trial
@@ -2485,8 +2497,11 @@ Friction points and what's actually going on.
 - **"Why can't I delete my campaign?"** Delete only works when the campaign is completely
   **empty** — no sessions, characters, assets, archived images, or other members.
 - **"Why did my styles change after downgrading?"** Advanced styles revert to the base
-  options on lower tiers. Your existing content isn't locked or deleted — you keep
-  editing what you own as long as you have tokens.
+  options on lower tiers. Your existing content isn't locked or deleted.
+- **"Why does it say my account is frozen?"** You're on Copper with no paid Story Master over
+  that campaign (or anywhere). Nothing new can be made and tokens can't be spent or bought, but
+  everything you made is kept: view, export, download, home print, and order prints of
+  finished books. Choose a plan or a Platinum Pass (See plans) to make things again.
 - **"Why can't I buy tokens?"** Copper can buy tokens only while part of a **paid Story
   Master's** campaign. Otherwise, subscribe to a paid tier.
 - **"Why can't I build a custom art style?"** It requires a **true Platinum
@@ -2506,9 +2521,10 @@ Friction points and what's actually going on.
 - **"Why is the wrong character (or no character) in a panel?"** Casting is **auto-matched
   by name**. Fix it via the panel's **⋯** menu (add/remove characters) or **Reset to
   auto**, and check the character's name and slash-separated alternates.
-- **"Why can't I publish or order?"** Those require an **effective paid tier** (your own
-  subscription, or a Copper seat under a paid Story Master). **Previewing**, **Export** and
-  home **Print** are open to anyone who can view the story.
+- **"Why can't I publish or order?"** Publishing requires an **effective paid tier** (your own
+  subscription, or a Copper seat under a paid Story Master). Ordering is refused only for a
+  watermarked (Free Trial) book. **Previewing**, **Export** and home **Print** are open to
+  anyone who can view the story.
 - **"Why is my book showing the Story Master's version instead of mine?"** For sessions
   you haven't made your **own version** of, Publish falls back to the SM's canonical
   version. Make your own version of those sessions to use yours.

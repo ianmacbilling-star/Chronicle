@@ -62,8 +62,10 @@ const TIERS = {
     max_moments_long: 5,     // 5000-10000
     max_moments_epic: 6,     // 10000+
     watermark: false,
-    can_export: false,
-    can_print: false,
+    // v3.6.56 -- TD-1155 (closes TD-781, the Copper export cliff). Ian, 2026-11-16: a frozen account "could still
+    // download all their made content" and order a print of a book already made. Copper exports and prints.
+    can_export: true,
+    can_print: true,
     can_edit_prompts: true,
     // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
     // Copper cannot: it is invite-only and makes its own version of somebody else's
