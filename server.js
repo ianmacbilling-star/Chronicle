@@ -397,6 +397,9 @@ app.use('/api', apiLimiter);
 // (floods are rejected before the DB read) and AFTER the Stripe webhook above
 // (which has no session and must never be gated).
 app.use('/api', require('./middleware/tiers').attachTier);
+// v3.6.54 -- TD-1155. Frozen accounts: a spending route is refused before any work for a user with no keys
+// in that campaign. After attachTier, which loads req.user; no session (webhooks) passes straight through.
+app.use('/api', require('./middleware/tiers').frozenGate);
 app.use('/api', require('./routes/debug').captureMiddleware);
 // v3.0.589 -- TD-179 STAGE 3. THE IMPERSONATION DENY LIST.
 // Mounted HIGH and ONCE, above every protected route group, so a route added later is covered

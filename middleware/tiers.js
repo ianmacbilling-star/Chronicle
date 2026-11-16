@@ -614,9 +614,11 @@ async function canPurchaseTokens(userId) {
     const me = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(userId);
     const myTier = ownTier(me);   // v3.0.918 -- a live pass buys tokens like any paid plan
     if (isPaidTier(myTier)) return true;
-    // Account-lifecycle decision: ANY copper (lone OR covered) may buy tokens.
-    // Only the Free Trial (and any non-paid, non-copper) must subscribe first.
-    return myTier === 'copper';
+    // v3.6.54 -- TD-1155 (Ian, 2026-11-16: "Block token purchases"). A Copper buys only while a member of
+    // a campaign whose Story Master has a paid plan or live pass; a lone Copper is frozen and may not.
+    // This reverses the account-lifecycle decision that let any Copper buy. The Free Trial still may not.
+    if (myTier !== 'copper') return false;
+    return !(await isLoneCopper(userId));
   } catch (e) {
     return false;
   }
@@ -841,4 +843,113 @@ function memberCapMessage(st) {
     'Revoke an invite you no longer need' + (st.higherPlanAllowsMore ? ', or move to a higher plan for more' : '') + '.';
 }
 
-module.exports = { memberCapState, memberCapMessage, rowIsPaid, TIERS, getTier, canCreate, isTruePlatinum, ownTier, passIsLive, sqlLivePass, isOnFreeTrial, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+// ============================================================
+// v3.6.54 -- TD-1155. FROZEN ACCOUNTS. Ian, 2026-11-16: "even if there is gas in the tank (tokens),
+// we've taken their keys. They should only be able to download and access what is already there."
+//
+// Frozen IN A CAMPAIGN: neither the user nor the campaign's Story Master has keys. The user has keys
+// with a paid plan, a live pass or a live Free Trial (ownTier; an expired trial is already Copper by
+// lapseTrialIfExpired). The Story Master has keys with a paid plan or a live pass -- the same test
+// isLoneCopper and getEffectiveTier use, so a trial Story Master does not cover Copper members.
+// Ian: "The Frozen rules should apply on any campaign that doesn't have someone as an Active Story
+// master" -- so Erin can spend in a paid Story Master's campaign and is frozen in her own lapsed one.
+// Without a campaign, frozen means a lone Copper (no paid Story Master anywhere).
+//
+// Frozen means no spending (every route in FROZEN_SPEND_ROUTES is refused before any work is done,
+// and spendTokens refuses as a backstop) and no buying (canPurchaseTokens). Viewing, downloading and
+// printing what is already there stay open. Publishing was already refused (isPaidTier of the
+// effective tier, routes/pdf.js publish-story). Tokens already held are never taken away.
+// ============================================================
+const FROZEN_ACCOUNT_MSG = "Your account is currently frozen and you won't be allowed to make new content without an active pass or subscription. Please upgrade to continue.";
+const FROZEN_CAMPAIGN_MSG = 'This campaign has no active Story Master, so nothing new can be made in it. You can still view, download and print what is already here.';
+function hasOwnKeys(t) { return isPaidTier(t) || t === 'trial'; }
+
+async function frozenIn(userId, campaignId, me) {
+  const { getDb } = require('../database/db');
+  const db = await getDb();
+  if (!me) me = await db.prepare('SELECT tier, pass_tier, pass_expires_at FROM users WHERE id = ?').get(userId);
+  if (!me) return true;
+  if (hasOwnKeys(ownTier(me))) return false;
+  if (!campaignId) return await isLoneCopper(userId);
+  const sm = await db.prepare(
+    "SELECT u.tier AS tier, u.pass_tier AS pass_tier, u.pass_expires_at AS pass_expires_at " +
+    "FROM campaign_members cm JOIN users u ON u.id = cm.user_id " +
+    "WHERE cm.campaign_id = ? AND cm.role = 'dm' LIMIT 1"
+  ).get(campaignId);
+  return !(sm && isPaidTier(ownTier(sm)));
+}
+
+// Every route that spends tokens, refused for a frozen user BEFORE any work is done.
+// [method, path (no query), where the campaign comes from, 'compose' = only when ?compose=1].
+// 'url' = the first number captured; 'body' = campaign_id or campaignId in the body;
+// 'moment' = the body's moment_id; 'builder' = the Image Builder picture in the url; 'none' = no campaign.
+// A NEW ROUTE THAT SPENDS GOES HERE. spendTokens refuses a frozen user too, as a backstop, and logs it.
+const FROZEN_SPEND_ROUTES = [
+  ['POST', /^\/api\/extract\/ocr-pages\/(\d+)$/, 'url'],
+  ['POST', /^\/api\/extract\/(\d+)\/\d+$/, 'url'],
+  ['POST', /^\/api\/narrative\/generate\/(\d+)\/\d+$/, 'url'],
+  ['POST', /^\/api\/narrative\/writing\/[^/]+\/(\d+)\/\d+$/, 'url'],
+  ['POST', /^\/api\/campaigns\/(\d+)\/sessions\/\d+\/moments\/insert$/, 'url'],
+  ['POST', /^\/api\/campaigns\/(\d+)\/characters\/(?:parse-sheet|\d+\/(?:rebuild-prompt|regenerate-reference|retouch-reference))$/, 'url'],
+  ['POST', /^\/api\/campaigns\/(\d+)\/sessions\/\d+\/characters\/\d+\/(?:regenerate|retouch|restyle)-reference$/, 'url'],
+  ['POST', /^\/api\/campaigns\/(\d+)\/assets\/(?:generate|suggestions\/\d+\/accept|\d+\/(?:retouch|regenerate))$/, 'url'],
+  ['POST', /^\/api\/images\/(?:generate-moment|retouch-moment)$/, 'moment'],
+  ['POST', /^\/api\/images\/(?:generate-all|title-build|title-retouch)$/, 'body'],
+  ['POST', /^\/api\/images\/custom-style-preview$/, 'none'],
+  ['POST', /^\/api\/images\/builder\/campaigns\/(\d+)\/generate$/, 'url'],
+  ['POST', /^\/api\/images\/builder\/images\/(\d+)\/(?:regen|retouch)$/, 'builder'],
+  ['POST', /^\/api\/art-styles\/custom\/analyze$/, 'none'],
+  ['GET', /^\/api\/pdf\/layout-review\/(\d+)$/, 'url'],
+  ['GET', /^\/api\/pdf\/pack-render\/(\d+)$/, 'url', 'compose'],
+  ['POST', /^\/api\/audio\/start$/, 'body']
+];
+function frozenRouteOf(method, p, query) {
+  for (let i = 0; i < FROZEN_SPEND_ROUTES.length; i++) {
+    const r = FROZEN_SPEND_ROUTES[i];
+    if (r[0] !== method) continue;
+    const m = p.match(r[1]);
+    if (!m) continue;
+    if (r[3] === 'compose' && !(query && (query.compose === '1' || query.compose === 'true'))) return null;
+    return { from: r[2], m: m };
+  }
+  return null;
+}
+async function frozenCampaignOf(req, hit) {
+  const b = req.body || {};
+  const num = function (v) { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : null; };
+  if (hit.from === 'url') return num(hit.m[1]);
+  if (hit.from === 'body') return num(b.campaign_id) || num(b.campaignId);
+  if (hit.from === 'none') return null;
+  const { getDb } = require('../database/db');
+  const db = await getDb();
+  if (hit.from === 'moment') {
+    const id = num(b.moment_id); if (!id) return null;
+    const r = await db.prepare('SELECT s.campaign_id AS campaign_id FROM moments m JOIN sessions s ON s.id = m.session_id WHERE m.id = ?').get(id);
+    return r ? num(r.campaign_id) : null;
+  }
+  if (hit.from === 'builder') {
+    const r = await db.prepare('SELECT campaign_id FROM builder_images WHERE id = ?').get(num(hit.m[1]));
+    return r ? num(r.campaign_id) : null;
+  }
+  return null;
+}
+// Mounted in server.js straight after attachTier, which loads req.user. Anyone with keys of their own
+// passes at once with no further reads; only a Copper on a spending route is looked at. A failed
+// lookup refuses (it is a spending route, and only a Copper reaches it), and says so.
+async function frozenGate(req, res, next) {
+  if (!req.session || !req.session.userId || !req.user) return next();
+  if (hasOwnKeys(ownTier(req.user))) return next();
+  const hit = frozenRouteOf(req.method, String(req.originalUrl || '').split('?')[0], req.query);
+  if (!hit) return next();
+  try {
+    const campaignId = await frozenCampaignOf(req, hit);
+    if (!(await frozenIn(req.session.userId, campaignId, req.user))) return next();
+    const lone = await isLoneCopper(req.session.userId);
+    return res.status(403).json({ error: 'FROZEN', message: lone ? FROZEN_ACCOUNT_MSG : FROZEN_CAMPAIGN_MSG });
+  } catch (e) {
+    console.error('[frozen] check failed: ' + (e && e.message));
+    return res.status(503).json({ error: 'FROZEN_CHECK', message: 'We could not check your plan just now. Nothing was charged. Please try again.' });
+  }
+}
+
+module.exports = { memberCapState, memberCapMessage, rowIsPaid, TIERS, getTier, canCreate, isTruePlatinum, ownTier, passIsLive, sqlLivePass, isOnFreeTrial, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, frozenIn, frozenGate, frozenRouteOf, FROZEN_SPEND_ROUTES, FROZEN_ACCOUNT_MSG, FROZEN_CAMPAIGN_MSG, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

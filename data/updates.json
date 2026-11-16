@@ -1,5 +1,21 @@
 [
   {
+    "version": "3.6.54",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3654-frozen",
+        "kind": "change",
+        "public": false,
+        "summary": "A frozen account can no longer spend or buy tokens.",
+        "detail": "TD-1155 stage 1. With no paid plan, pass or Free Trial of your own, and no paid Story Master over the campaign, every spending action is refused before any work is done, with a message; a frozen account cannot buy tokens. Viewing, downloading and printing stay open.",
+        "td": [
+          "TD-1155"
+        ]
+      }
+    ]
+  },
+  {
     "version": "3.6.53",
     "staged_on": "2026-11-14",
     "entries": [
