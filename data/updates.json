@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.66",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3666-story-darker-text",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: page titles without the dark shadow, and darker titles, path, tabs and row labels (TD-1158).",
+        "detail": "On the light Story page the shadow behind headlines only blurred them. Titles are now near-black; subtitles, the path at the top, the tabs and the Bridge/Panel labels are a darker grey; small faded text everywhere is a little darker. Campaignia is untouched.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.65",
     "staged_on": "2026-11-16",
     "entries": [

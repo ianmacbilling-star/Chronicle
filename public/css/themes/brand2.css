@@ -217,8 +217,8 @@
   --glass-rgb:255,255,255;   /* v3.4.73 -- white: on a light page the glass is light (every plain rgba(0,0,0,x) background in style.css, app.html, app.js, marketplace.css; not shadows, not gradients over pictures) */
   --ink-bg:#ecede8;   /* v3.4.73 -- pale lavender: on a light page those menus and the header are light, so their periwinkle text reads */
   --on-book-rgb:240,232,208;   /* v3.4.73 -- parchment text on the dark leather books (campaign and session cards); the books stay dark on every brand */
-  --accent-text:#222222;   /* v3.4.74 -- small text in the accent color (tabs, filter buttons, nav links, footers, placeholders); on Campaignia the same gold as --accent */
-  --accent-text-rgb:34,34,34;   /* v3.4.74 -- the same, for see-through text */
+  --accent-text:#000000;   /* v3.4.74 -- small text in the accent color (tabs, filter buttons, nav links, footers, placeholders); on Campaignia the same gold as --accent */
+  --accent-text-rgb:0,0,0;   /* v3.4.74 -- the same, for see-through text */
 }
 :root{
   --ink:#2c1810;
@@ -238,6 +238,23 @@
 }
 :root{--warn-text:#7a5200;}
 :root{--warn-orange:#fb923c;--warn-orange-bg:rgba(194,65,12,0.12);--warn-orange-line:rgba(251,146,60,0.55);}
+
+/* v3.6.66 -- TD-1158 (Ian, 2026-11-16: "get rid of the shadow ... behind the headlines (we don't have a dark background)" and
+   "darken up these letters just a little bit ... the grey on grey is just a little difficult to read"). Story only: this sheet
+   loads only on Story, and html[data-brand] outranks style.css's #view rules. Small faded text everywhere darkens a little
+   through --accent-text (now black); the titles, subtitles, path, tabs and Bridge/Panel row labels are set here. */
+html[data-brand="brand2"] .page-title, html[data-brand="brand2"] #view-campaigns .page-title, html[data-brand="brand2"] #view-sessions .page-title, html[data-brand="brand2"] #view-characters .page-title, html[data-brand="brand2"] #view-novel .page-title, html[data-brand="brand2"] #view-session-detail .page-title, html[data-brand="brand2"] #view-settings .page-title, html[data-brand="brand2"] #view-assets .page-title{color:var(--page-title);text-shadow:none;}
+html[data-brand="brand2"] .page-subtitle, html[data-brand="brand2"] #view-campaigns .page-subtitle, html[data-brand="brand2"] #view-sessions .page-subtitle, html[data-brand="brand2"] #view-characters .page-subtitle, html[data-brand="brand2"] #view-novel .page-subtitle, html[data-brand="brand2"] #view-session-detail .page-subtitle, html[data-brand="brand2"] #view-settings .page-subtitle, html[data-brand="brand2"] #view-assets .page-subtitle{color:#4a4b45;text-shadow:none;}
+html[data-brand="brand2"] .sdh-date-display{color:#55564f;text-shadow:none;}
+html[data-brand="brand2"] .breadcrumb{color:#5a5b55;}
+html[data-brand="brand2"] .breadcrumb-link{color:#333333;}
+html[data-brand="brand2"] .breadcrumb-sep{color:#9a9b95;}
+html[data-brand="brand2"] .breadcrumb-current{color:#111111;}
+html[data-brand="brand2"] .sess-tab{color:#55564f;text-shadow:none;}
+html[data-brand="brand2"] .sess-tab:hover{color:#111111;}
+html[data-brand="brand2"] .sess-tab.active{color:#111111;border-bottom-color:#111111;}
+html[data-brand="brand2"] .narrative-block-header{color:#55564f;}
+html[data-brand="brand2"] .narr-block-style{color:#333333;}
 
 /* Brand 2's page (v3.6.65, TD-1158): plain, no wash, in the /memories font. */
 body{background-image:none;font-family:'Manrope','Helvetica Neue',Arial,sans-serif;}
