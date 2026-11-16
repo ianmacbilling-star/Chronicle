@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.65",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3665-story-look",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story takes the new /memories look: warm white and sage, dark text, Manrope (TD-1158).",
+        "detail": "The Story brand's colors and fonts only; its wording is unchanged. Periwinkle and pink become warm greys of the same brightness, so text stays as readable as before; the watercolor wash is gone. Campaignia is untouched.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.64",
     "staged_on": "2026-11-16",
     "entries": [
