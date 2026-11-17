@@ -91,7 +91,7 @@ const MODELS = {
   kling3std: {
     label: 'Kling 3.0 Standard', group: 'keyframes', endpoint: 'fal-ai/kling-video/v3/standard/image-to-video',
     start: 'start_image_url', end: 'end_image_url', durations: ['3', '5', '8', '10', '12', '15'], defDuration: '5',
-    durationValue: function (d) { return String(d); }, price: 0.084, priceSound: 0.126,
+    durationValue: function (d) { return String(d); }, price: 0.094, priceSound: 0.14,   // v3.6.84: fal billed $0.14/s with sound (was 0.084/0.126); silent scaled the same
     extra: {}, promptRequired: false
   },
   veo31fast: {
@@ -126,7 +126,7 @@ const MODELS = {
   klingo3ref: {
     label: 'Kling O3 Standard', group: 'reference', endpoint: 'fal-ai/kling-video/o3/standard/reference-to-video', reference: true,
     durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
-    durationValue: function (d) { return String(d); }, price: 0.084, priceSound: 0.112,
+    durationValue: function (d) { return String(d); }, price: 0.105, priceSound: 0.14,   // v3.6.84: fal billed $0.14/s with sound (was 0.084/0.112); silent scaled the same
     extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4,
     maxPrompt: 2500   // v3.5.44: fal refuses a Kling O3 prompt over 2500 characters (Ian's first take failed)
   },
@@ -144,7 +144,7 @@ const MODELS = {
   klingo3proref: {
     label: 'Kling O3 Pro', group: 'reference', test: true, pair: 'klingo3pro', endpoint: 'fal-ai/kling-video/o3/pro/reference-to-video', reference: true,
     durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
-    durationValue: function (d) { return String(d); }, price: 0.224, priceSound: 0.28,   // fal's playground; other listings say half
+    durationValue: function (d) { return String(d); }, price: 0.112, priceSound: 0.14,   // v3.6.84: fal billed $0.14/s with sound (was 0.224/0.28 from fal's playground)
     extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4, maxPrompt: 2500
   },
   viduq3: {
@@ -163,13 +163,13 @@ const MODELS = {
   h3max: {
     label: 'MiniMax H3 Max', group: 'keyframes', test: true, pair: 'h3maxref', endpoint: 'minimax/h3-max/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
-    durationValue: function (d) { return Number(d); }, price: 0.08, priceSound: 0.08,
+    durationValue: function (d) { return Number(d); }, price: 0.056, priceSound: 0.056,   // v3.6.84: fal billed $0.056 per second we made at 768P (was 0.08)
     extra: { resolution: '768P', prompt_expansion_mode: 'disabled' }, promptRequired: true, audioField: null   // v3.5.91: our words as written, no MiniMax rewrite (was 'balanced')
   },
   h3maxref: {
     label: 'MiniMax H3 Max', group: 'reference', test: true, pair: 'h3max', endpoint: 'minimax/h3-max/reference-to-video', reference: true,
     durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
-    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,   // $0.08 at 768p, plus a little for pictures past the fourth
+    durationValue: function (d) { return Number(d); }, price: 0.086, priceSound: 0.086,   // v3.6.84: fal billed $0.086 per second we made at 768P (was 0.10)
     extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'disabled' }, promptRequired: true, maxRefs: 9, maxScene: 5,   // v3.5.91: no rewrite (was 'balanced')
     audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
   },

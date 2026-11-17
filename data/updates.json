@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.84",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3684-video-prices",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video prices match fal's bill: Kling Standard up, Kling O3 Pro reference and MiniMax H3 Max (768P) down (TD-1148).",
+        "detail": "Checked against fal's 30-day usage and our seconds. Kling 3.0 Standard and Kling O3 Standard $0.14/s with sound; Kling O3 Pro reference $0.14 (was $0.28); H3 Max 768P keyframes $0.056, reference $0.086. Wan 3.0, Seedance, Veo, Vidu, Omni, Wan 2.7 already matched.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.83",
     "staged_on": "2026-11-17",
     "entries": [
