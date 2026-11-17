@@ -151,6 +151,10 @@
     .examples-head p{font-size:20px;color:var(--m-muted);margin-top:18px;}
     .ex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;}
     .ex-card .pic{aspect-ratio:3/4;}
+    a.ex-card{text-decoration:none;color:inherit;display:block;}
+    a.ex-card:hover h3{text-decoration:underline;text-underline-offset:4px;}
+    .ex-card .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
+    .ex-card .pic.has-img img{width:100%;height:100%;object-fit:cover;display:block;}
     .ex-card h3{margin-top:18px;font-size:20px;}
     .ex-card p{color:var(--m-muted);font-size:15px;}
     .center{text-align:center;margin-top:56px;}
@@ -359,7 +363,7 @@
   <div class="wrap">
     <h2>Form a Style that Resonates with Your Memory</h2>
     <div class="style-row">
-      <h3>11 Artistic Forms</h3>
+      <h3>11+ Artistic Forms</h3>
       <div class="scroller" id="artForms"></div>
     </div>
     <div class="style-row">
@@ -377,8 +381,8 @@
       <p>See What Others Have Already Made for Friends and Family</p>
     </div>
     <div class="ex-grid">
-      <div class="ex-card"><div class="pic"><b>Example story 1</b>A real story from the Library</div><h3>Story title</h3><p>One line about who made it, and for whom.</p></div>
-      <div class="ex-card"><div class="pic"><b>Example story 2</b>A real story from the Library</div><h3>Story title</h3><p>One line about who made it, and for whom.</p></div>
+      <a class="ex-card" href="https://campaignia.com/library/story/s/Cd5QrSXdAQBjT0Iavgfewf/our-family-stories"><div class="pic has-img"><img loading="lazy" decoding="async" src="https://images.campaignia.com/archives/arch-1789070599296-8595fc29ead2e3e9.png" alt="Our Family Stories, front cover"></div><h3>Our Family Stories</h3><p>A Horse Named Asterisk: a 17-year-old in Front Royal, Virginia bets his paycheck on a tip from a stranger. By BjornT.</p></a>
+      <a class="ex-card" href="https://campaignia.com/library/story/s/UFGrimQPpG41E0rA9Wckmf/the-dojo-of-the-dragon-spirits"><div class="pic has-img"><img loading="lazy" decoding="async" src="https://images.campaignia.com/archives/arch-1786022327079-6c958cc39c077ef7.png" alt="The Dojo of the Dragon Spirits, front cover"></div><h3>The Dojo of the Dragon Spirits</h3><p>Lessons, bells and dragon spirits, chapter by chapter. By Ember Quill.</p></a>
       <div class="ex-card"><div class="pic"><b>Example story 3</b>A real story from the Library</div><h3>Story title</h3><p>One line about who made it, and for whom.</p></div>
     </div>
     <div class="center cta-row" style="justify-content:center;">
@@ -516,7 +520,7 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
 
 // the two style rows: a picture tile for each, until the pictures arrive
 (function(){
-  var art=['High Fantasy','Everyday Life','Anime/Manga','Dark and Gritty','Pen and Ink','Oil Painting','Soft Pastels','Watercolor','Charcoal','Cel-Shaded','Dark Fantasy'];
+  var art=['High Fantasy','Everyday Life','Anime/Manga','Dark and Gritty','Pen and Ink','Oil Painting','Soft Pastels','Watercolor','Charcoal','Cel-Shaded','Dark Fantasy','Your Custom Style'];
   var narr=['Classic','Calm and Literal','Comic Dialogue','High-Drama Anime','Epic Saga','Adventurer\u2019s Journey','Cinematic Script','Lorekeeper/Historian','Noir','Dark/Grim','Children\u2019s Storybook'];
   // v3.6.67 (Ian, 2026-11-16): a picture from the Library for each art style, linked from images.campaignia.com. A box
   // whose picture fails to load shows its note again.
@@ -531,7 +535,8 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
     'Watercolor':'https://images.campaignia.com/uploads/gen-1794874101511-8465796ab98a5aed.png',
     'Charcoal':'https://images.campaignia.com/uploads/flip-1794874587617-8tq3ee.png',
     'Cel-Shaded':'https://images.campaignia.com/archives/arch-1794874749566-0e8907c4fa04f594.png',
-    'Dark Fantasy':'https://images.campaignia.com/archives/arch-1793642396765-746a0995b6b85f21.png'
+    'Dark Fantasy':'https://images.campaignia.com/archives/arch-1793642396765-746a0995b6b85f21.png',
+    'Your Custom Style':'https://images.campaignia.com/archives/arch-1786991804309-cac0b1660fc500fd.png'
   };
   function fill(id,list,kind,pics){var el=document.getElementById(id);list.forEach(function(n){var t=document.createElement('div');t.className='tile';t.innerHTML='<div class="pic"><b>Picture</b></div><span></span>';var box=t.querySelector('.pic');box.appendChild(document.createTextNode(kind+' in '+n));t.querySelector('span').textContent=n;if(pics&&pics[n]){var im=document.createElement('img');im.loading='lazy';im.decoding='async';im.alt=n+' example';im.src=pics[n];im.onerror=function(){box.classList.remove('has-img');if(im.parentNode)im.parentNode.removeChild(im);};box.classList.add('has-img');box.insertBefore(im,box.firstChild);}el.appendChild(t);});}
   fill('artForms',art,'A page',artPics);fill('narrFormats',narr,'A passage');
