@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.87",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3687-transcribe-5min",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Audio Transcription is priced per started 5 minutes: 1 token each (was 2 per 15 minutes) (TD-1148).",
+        "detail": "The tokens per 5 minutes come from the minute cost at our cost per token ($0.04 a block: 1 token at 8 and at 5 cents). The window works the price out and states it; the Free Trial's 20 minutes is still 4 tokens at most. Financial tab and the Brain updated. Ian: ships now, before the 5-cent switch.",
+        "td": ["TD-1148", "TD-1046"]
+      }
+    ]
+  },
+  {
     "version": "3.6.86",
     "staged_on": "2026-11-17",
     "entries": [

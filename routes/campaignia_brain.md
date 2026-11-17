@@ -1055,7 +1055,7 @@ before you generate.
 **Import from a file** and turns a recording of your {session}, an interview or a narrated story into
 text in the box, one paragraph per turn as "Name: what they said". Drop or choose an audio or video
 file (mp3, m4a, wav, ogg, aac, flac, webm and the like), **up to 6 hours** and 1.5 GB. Before anything
-is spent it shows the cost: **2 tokens for each started 15 minutes** (so 2 at the least; 8 an hour),
+is spent it shows the cost: **1 token for each started 5 minutes** (so 1 at the least; 12 an hour),
 charged only when the words come back; if it fails, nothing is charged. You tick that everyone recorded agreed to it.
 A long recording takes a few minutes; you can close the window and press the button again to come
 back to it. When the words are back you name each speaker (the window shows a few of their lines so

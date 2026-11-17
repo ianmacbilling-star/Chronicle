@@ -594,8 +594,9 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     // the model in use is marked, and a pinned picture price (token_cost:nano2) is named.
     const picNow = await tk.getTokenCost('nano2'), picPin = await tk.getTokenCostPin('nano2'), inUse = ac.imageKey('nano2');
     Object.keys(s.images).forEach(function (k) { const live = k === inUse; rows.push({ group: 'Pictures', what: 'Picture: ' + k + (live ? ' (in use' + (picPin != null ? ', pinned at ' + picPin : '') + ')' : ''), usd: s.images[k], now: live ? picNow : null, at: ac.tokensFor(s.images[k], cents), proj: proj ? ac.tokensFor(s.images[k], proj) : null }); });
-    let qNow = null; try { qNow = await require('./audio').quarterTokens(); } catch (e) {}
-    rows.push({ group: 'Transcription', what: 'Transcription, 15 minutes', usd: s.audioMinute * 15, now: qNow, at: ac.tokensFor(s.audioMinute * 15, cents), proj: proj ? ac.tokensFor(s.audioMinute * 15, proj) : null });
+    // v3.6.87 (Ian, 2026-11-17): transcription is priced per started 5 minutes
+    let qNow = null; try { qNow = await require('./audio').blockTokens(); } catch (e) {}
+    rows.push({ group: 'Transcription', what: 'Transcription, 5 minutes', usd: s.audioMinute * 5, now: qNow, at: ac.tokensFor(s.audioMinute * 5, cents), proj: proj ? ac.tokensFor(s.audioMinute * 5, proj) : null });
     // video: every model at its default length, no sound; its "now" already follows the basis (it is priced from cost)
     const video = [];
     try {

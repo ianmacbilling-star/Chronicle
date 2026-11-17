@@ -26414,7 +26414,11 @@ function audTInit() {
     if (b) b.style.display = j && j.enabled ? '' : 'none';
   }).catch(function () {});
 }
-function audTTokens(secs) { var per = (AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2; return per * Math.max(1, Math.ceil(secs / 900 - 1e-9)); }   // v3.6.18: per started 15 minutes (Ian)
+// v3.6.87 (Ian, 2026-11-17: "every 5 minutes should = 1 token"): per started block (5 minutes), the tokens per block from
+// the server (worked out from our cost per token); was 2 per started 15 minutes (v3.6.18)
+function audTBlockMins() { return (AUD_T_CFG && Number(AUD_T_CFG.block_mins) > 0) ? Number(AUD_T_CFG.block_mins) : 5; }
+function audTPerBlock() { return (AUD_T_CFG && Number(AUD_T_CFG.tokens_per_block) > 0) ? Number(AUD_T_CFG.tokens_per_block) : 1; }
+function audTTokens(secs) { return audTPerBlock() * Math.max(1, Math.ceil(secs / (audTBlockMins() * 60) - 1e-9)); }
 function audTLen(secs) { secs = Math.ceil(secs - 1e-9); var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return h ? h + ' h ' + m + ' m ' + s + ' s' : (m ? m + ' m ' + s + ' s' : s + ' s'); }   // v3.6.21 (tester): seconds always shown, rounded up like the price
 function audTClose() {
   var o = document.getElementById('aud-t-modal'); if (o && o.parentNode) o.parentNode.removeChild(o);
@@ -26481,10 +26485,10 @@ function audTQuoteView() {
   audTBody('<div style="font-size:14px;line-height:1.6;"><b>' + escapeHtml(f.name) + '</b><br>' + (Math.round(f.size / 104857.6) / 10) + ' MB &middot; ' + (AUD_T.exact ? '' : 'about ') + audTLen(secs) + '</div>' +
     (tooLong ? '<div style="color:#e8a85a;margin-top:8px;">That is longer than 6 hours. Split it and transcribe each part.</div>' :
     (cap && secs > cap ? '<div style="margin-top:10px;font-size:13px;padding:8px 10px;border-radius:6px;background:rgba(var(--accent-rgb, 201,168,76),0.12);">On the Free Trial we transcribe just the first 20 minutes, as a quick proof it works. It is an expensive feature, so save your tokens for the rest of Campaignia. Gold and Platinum transcribe the whole recording, up to 6 hours.</div>' : '') +
-    '<div style="margin-top:10px;font-size:14px;">This will cost <b>' + (AUD_T.exact ? '' : 'about ') + tok + ' tokens</b> (' + ((AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2) + ' for each started 15 minutes), taken when the words come back. If it fails, it costs nothing.</div>' +
+    '<div style="margin-top:10px;font-size:14px;">This will cost <b>' + (AUD_T.exact ? '' : 'about ') + tok + ' token' + (tok === 1 ? '' : 's') + '</b> (' + audTPerBlock() + ' token' + (audTPerBlock() === 1 ? '' : 's') + ' for each started ' + audTBlockMins() + ' minutes), taken when the words come back. If it fails, it costs nothing.</div>' +
     '<label style="display:block;margin-top:10px;font-size:13px;">How many people are speaking? <input id="aud-t-spk" type="number" min="1" max="32" placeholder="not sure" style="width:90px;margin-left:6px;"></label>' +
     '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="aud-t-ok" style="margin-top:3px;"> Everyone in this recording agreed to be recorded and transcribed.</label>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-sm" onclick="audTPickView()">Choose another</button><button class="btn btn-sm btn-primary" id="aud-t-go" onclick="audTStart()">Transcribe (' + tok + ' tokens)</button></div>'));
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-sm" onclick="audTPickView()">Choose another</button><button class="btn btn-sm btn-primary" id="aud-t-go" onclick="audTStart()">Transcribe (' + tok + ' token' + (tok === 1 ? '' : 's') + ')</button></div>'));
 }
 function audTStart() {
   var A = AUD_T; if (!A || !A.file) return;
@@ -47131,7 +47135,7 @@ function loadCostBasis() {
 function cbAudio15() {
   var i = document.getElementById('cb-audio'), o = document.getElementById('cb-audio15'); if (!i || !o) return;
   var v = parseFloat(i.value);
-  o.textContent = isFinite(v) && v >= 0 ? '= $' + (v * 15).toFixed(3) + ' per 15 minutes' : '';
+  o.textContent = isFinite(v) && v >= 0 ? '= $' + (v * 5).toFixed(3) + ' per 5 minutes' : '';   // v3.6.87: transcription is priced per 5 minutes
 }
 // v3.6.78 (Ian, 2026-11-17): an example call beside each Claude line, 6,000 words in and 2,000 out. A word is about
 // 4/3 of an Anthropic token, so 8,000 tokens in and about 2,667 out; in our tokens at the basis on the page.
