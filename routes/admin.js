@@ -577,7 +577,8 @@ const COST_LABELS = { video_take: 'Video take', video_shot_list: 'Video shot lis
   layout_review: 'Optimize (layout pass)', layout_apply: 'Optimize (apply)', new_panel: 'New panel', story_page_ocr: 'Story from photos (OCR)',
   character_sheet_import: 'Character sheet import', custom_style_analyze: 'Custom style analyze', custom_style_preview: 'Custom style preview',
   panel_retouch: 'Picture retouch', character_reference: 'Character picture', amendment_reference: 'Chapter reference picture', asset_reference: 'Asset picture',
-  asset_retouch: 'Asset retouch', upload_rights_check: 'Upload rights check (free)', asset_suggestions_accept: 'Suggested assets (free)', asset_classify_names: 'Asset names (free)' };
+  asset_retouch: 'Asset retouch', title_build: 'Title Builder', title_retouch: 'Title retouch', generation: 'Picture (panel)', panel_regen: 'Picture regenerate',   // v3.6.83 (Ian, 2026-11-17)
+  upload_rights_check: 'Upload rights check (free)', asset_suggestions_accept: 'Suggested assets (free)', asset_classify_names: 'Asset names (free)' };
 router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
   try {
     const ac = require('../services/aiCost');

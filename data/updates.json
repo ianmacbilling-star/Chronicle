@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.83",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3683-cost-labels",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: Title Builder and title retouch rows named (TD-1148).",
+        "detail": "The last-30-days grid names title_build, title_retouch and panel picture rows in words.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.82",
     "staged_on": "2026-11-17",
     "entries": [
