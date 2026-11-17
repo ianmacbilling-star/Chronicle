@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.75",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3675-memories-narrative-clip",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a looping clip of choosing a narrative style (TD-1158).",
+        "detail": "Ian's recording of the narrative style cards, cut before a browser tab preview appeared at the end; a silent looping video.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.74",
     "staged_on": "2026-11-16",
     "entries": [
