@@ -47088,28 +47088,42 @@ function loadCostBasis() {
     document.getElementById('cb-costs').innerHTML = c;
     cbAudio15(); cbClaudeEx();
     // what each action costs
-    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2 (live)</th>' + (P ? '<th ' + th + '>At ' + cbEsc(P) + '\u00a2 (projected)</th><th ' + th + '>Change</th>' : '') + '</tr>';
-    var last = '', cols = P ? 6 : 4;
+    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2 (live)</th>' + (P ? '<th ' + thB + '>At ' + cbEsc(P) + '\u00a2 (projected)</th><th ' + thB + '>Change</th><th ' + thB + '>Revenue change</th>' : '') + '</tr>';
+    var last = '', cols = P ? 7 : 4;
+    // v3.6.86 (Ian, 2026-11-17: "make the projected and change columns blue so they are easy to spot")
+    var thB = 'style="text-align:left;padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;color:#3b82f6;background:rgba(59,130,246,0.10);"';
+    var tdB = 'style="padding:4px 10px;font-size:13px;color:#3b82f6;background:rgba(59,130,246,0.10);"';
+    var boldB = ' style="padding:4px 10px;font-size:13px;font-weight:700;color:#3b82f6;background:rgba(59,130,246,0.10);"';
     var bold = ' style="padding:4px 10px;font-size:13px;font-weight:700;"';
     d.rows.forEach(function (r) {
       if (r.group !== last) { t += '<tr><td colspan="' + cols + '" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
       var diff = (r.now != null && r.at !== r.now) ? bold : ' ' + td;
       t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td>';
       // v3.6.85 (Ian, 2026-11-17: "a column ... that compares the current settings to the proposed setting")
-      if (P) t += '<td' + (r.proj != null && r.proj !== r.at ? bold : ' ' + td) + '>' + (r.proj == null ? '\u2014' : cbEsc(r.proj)) + '</td><td ' + td + '>' + cbChange(r.at, r.proj) + '</td>';
+      if (P) t += '<td' + (r.proj != null && r.proj !== r.at ? boldB : ' ' + tdB) + '>' + (r.proj == null ? '\u2014' : cbEsc(r.proj)) + '</td><td ' + tdB + '>' + cbChange(r.at, r.proj) + '</td><td ' + tdB + '>' + cbRevCents(r.at, d.cents, r.proj, P) + '</td>';   // v3.6.86
       t += '</tr>';
     });
     t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Tokens today is what we charge now. Pictures (the model in use), transcription and video are worked out from their cost at our cost per token, so the columns match unless a picture price is pinned. Writing tools: 1 token for 2 uses. Take review, custom style analyze and the book PDF: fixed prices. Bold: the basis would charge differently. Video a second is shown to two places, and Claude as the words one token covers; a real take or call is priced as a whole and rounded once.<br>Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
     box.innerHTML = t;
     // the last 30 days
-    var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2 (live)</th>' + (P ? '<th ' + th + '>Tokens each at ' + cbEsc(P) + '\u00a2 (projected)</th><th ' + th + '>Change</th>' : '') + '</tr>';
-    if (!d.real.length) R += '<tr><td colspan="' + (P ? 10 : 8) + '" ' + td + '>Nothing yet.</td></tr>';
+    var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2 (live)</th>' + (P ? '<th ' + thB + '>Tokens each at ' + cbEsc(P) + '\u00a2 (projected)</th><th ' + thB + '>Change</th><th ' + thB + '>Revenue change, 30 days</th>' : '') + '</tr>';
+    if (!d.real.length) R += '<tr><td colspan="' + (P ? 11 : 8) + '" ' + td + '>Nothing yet.</td></tr>';
+    var revTotal = 0, revAny = false;
     d.real.forEach(function (r) {
       R += '<tr><td ' + td + '>' + cbEsc(r.label) + '</td><td ' + td + '>' + r.events + '</td><td ' + td + '>' + r.priced + '</td><td ' + td + '>' + cbUsd(r.usd, 2) + '</td><td ' + td + '>' + cbUsd(r.avgUsd) + '</td><td ' + td + '>' + r.tokens + '</td><td ' + td + '>' + (r.centsPerToken == null ? '\u2014' : r.centsPerToken.toFixed(1)) + '</td><td ' + td + '>' + (r.atPerEvent == null ? '\u2014' : r.atPerEvent) + '</td>';
-      if (P) R += '<td' + (r.atProjected != null && r.atProjected !== r.atPerEvent ? bold : ' ' + td) + '>' + (r.atProjected == null ? '\u2014' : r.atProjected) + '</td><td ' + td + '>' + cbChange(r.atPerEvent, r.atProjected) + '</td>';   // v3.6.85
+      if (P) {
+        R += '<td' + (r.atProjected != null && r.atProjected !== r.atPerEvent ? boldB : ' ' + tdB) + '>' + (r.atProjected == null ? '\u2014' : r.atProjected) + '</td><td ' + tdB + '>' + cbChange(r.atPerEvent, r.atProjected) + '</td>';   // v3.6.85
+        // v3.6.86 (Ian, 2026-11-17: "one more column that does the expected change in revenue"): per event, (projected tokens
+        // x projected cents) - (live tokens x live cents), times the events with a cost, in dollars
+        var rv = cbRevUsd(r.atPerEvent, d.cents, r.atProjected, P, r.priced);
+        if (rv != null) { revTotal += rv; revAny = true; }
+        R += '<td ' + tdB + '>' + cbSigned(rv) + '</td>';
+      }
       R += '</tr>';
     });
+    if (P && revAny) R += '<tr><td colspan="10" style="padding:6px 10px;font-size:13px;font-weight:700;text-align:right;">Total revenue change, 30 days</td><td style="padding:6px 10px;font-size:13px;font-weight:700;color:#3b82f6;background:rgba(59,130,246,0.10);">' + cbSigned(revTotal) + '</td></tr>';
     R += '</table>';
+    if (P) R += '<div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Revenue change: what the tokens are worth at our cost per token (tokens x cents a token), projected less live, for the same work; our cost is the same both ways, so this is also the change in margin. The real sale price per token comes from the plans and packs.</div>';
     if (d.claudeCalls) R += '<div style="font-size:12px;margin-top:6px;opacity:0.8;">All Claude calls in 30 days (charged or not): ' + d.claudeCalls.n + ', ' + cbUsd(d.claudeCalls.usd, 2) + '.</div>';
     document.getElementById('cb-real').innerHTML = R;
   }).catch(function () { box.textContent = 'Could not load.'; });
@@ -47151,6 +47165,22 @@ function saveCostBasis() {
 }
 // v3.6.85: the projected basis; only adds the compare columns, never charged
 function saveProjected() { var v = document.getElementById('cb-proj').value.trim(); cbPut({ projected: v === '' ? '' : v }, 'cb-msg3'); }
+// v3.6.86: revenue change for one action, in cents: (projected tokens x projected cents) - (live tokens x live cents)
+function cbRevCents(at, cents, proj, P) {
+  if (at == null || proj == null || !isFinite(at) || !isFinite(proj)) return '\u2014';
+  var d = Math.round((Number(proj) * Number(P) - Number(at) * Number(cents)) * 100) / 100;
+  return d === 0 ? 'same' : (d > 0 ? '+' : '') + d + '\u00a2';
+}
+// v3.6.86: the same over n events, in dollars (null when it cannot be worked out)
+function cbRevUsd(at, cents, proj, P, n) {
+  if (at == null || proj == null || !isFinite(at) || !isFinite(proj) || !(n > 0)) return null;
+  return (Number(proj) * Number(P) - Number(at) * Number(cents)) * Number(n) / 100;
+}
+function cbSigned(usd) {
+  if (usd == null || !isFinite(usd)) return '\u2014';
+  var r = Math.round(usd * 100) / 100;
+  return r === 0 ? 'same' : (r > 0 ? '+$' : '-$') + Math.abs(r).toFixed(2);
+}
 // the change from live to projected, as +n / -n tokens (two places for the per-second and per-word rows)
 function cbChange(a, b) {
   if (a == null || b == null || !isFinite(a) || !isFinite(b)) return '\u2014';

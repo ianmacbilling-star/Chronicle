@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.86",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3686-revenue-change",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: a Revenue change column beside Projected in both grids, with a 30-day total (TD-1148).",
+        "detail": "Per action in cents, and over the last 30 days in dollars: projected tokens x projected cents less live tokens x live cents. Example: a 4-cent picture at 1 token goes from 8 to 5 cents, -3 cents.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.85",
     "staged_on": "2026-11-17",
     "entries": [
