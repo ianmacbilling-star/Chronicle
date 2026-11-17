@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.90",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3690-words-in-characters",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story and Narrative words in now count the character descriptions sent to Claude (TD-1148).",
+        "detail": "Ian: the customer's words all count. Story: Story box, instructions, lore and every character description; Narrative: Story box, instructions and every character description (Narrative is never sent the lore).",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.89",
     "staged_on": "2026-11-17",
     "entries": [

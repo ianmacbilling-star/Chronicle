@@ -287,7 +287,8 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // Charge meters on total USER-authored words (transcript + notes + lore),
   // never our behind-the-scenes prompt scaffolding.
   var _wc = function (t) { var v = (t == null ? '' : String(t)).trim(); return v ? v.split(/\s+/).length : 0; };
-  var _userWords = _wc(session.transcript) + _wc(session.session_notes) + _wc(session.campaign_lore);
+  var _userWords = _wc(session.transcript) + _wc(session.session_notes) + _wc(session.campaign_lore)
+    + characters.reduce(function (t, c) { return t + _wc(c && c.description); }, 0);   // v3.6.90 (Ian, 2026-11-17: "IF they are the users words... then yes they go and get counted"): every character's description is sent (charList)
   // v3.6.89 -- TD-1148 stage 3 (Ian): words in (these) and words out (what Claude writes), each per token with a floor of
   // 1, added and rounded once (routes/tokens.js inOutTokens). Checked now on an estimate; the exact charge is made below.
   var _storyRates = null, _storyCharge = 0, _storyOut0 = 0;

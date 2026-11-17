@@ -618,6 +618,9 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   // exact charge when the narrative comes back.
   var _narrWc = function (t) { var v = (t == null ? '' : String(t)).trim(); return v ? v.split(/\s+/).length : 0; };
   var _narrWordsIn = _narrWc(session.transcript) + _narrWc(directorNotes);
+  // v3.6.90 (Ian, 2026-11-17: "IF they are the users words... then yes they go and get counted"): every character's
+  // description is sent to Claude (charList below), so it counts as words in. Narrative is never sent the lore.
+  try { const _nc = await db.prepare('SELECT description FROM characters WHERE campaign_id = ?').all(session.campaign_id); _narrWordsIn += (_nc || []).reduce(function (t, c) { return t + _narrWc(c && c.description); }, 0); } catch (e) {}
   var _narrRates = null, _narrCharge = 0, _narrOut0 = 0;
   try { const _tk = require('./tokens'); _narrRates = await _tk.inOutRates('narrative'); _narrCharge = _tk.inOutTokens(_narrRates, _narrWordsIn, _narrRates.estOut); } catch (e) { _narrRates = null; _narrCharge = 0; }
   try { _narrOut0 = require('../services/aiCost').claudeOutSoFar(); } catch (e) {}
