@@ -11321,6 +11321,13 @@ function loadNovelPeople() {
       var _shelfV = rows.filter(function(v) { return String(v.version_id) === String(_shelfT.versionId); })[0];
       if (_shelfV) pick = _shelfV;
     }
+    // v3.6.98: arrived by "All publishing options" on a session: open the version that session was showing
+    var _po = state._pubOpenVersion; state._pubOpenVersion = null;
+    if (_po && state.currentCampaign && _po.campaignId === String(state.currentCampaign.id)) {
+      var _pv = _po.versionId ? rows.filter(function (v) { return String(v.version_id) === _po.versionId; })[0] : null;
+      if (!_pv && _po.canonical) _pv = rows.filter(function (v) { return v.is_canonical; })[0];
+      if (_pv) pick = _pv;
+    }
     // v3.0.464 -- and RELOAD if the default the server gave us is not what the page already
     // drew. Compared on the wire query rather than on the id, because that is the thing the
     // tiles were actually fetched with -- an id that changes without changing the query needs
@@ -32638,6 +32645,15 @@ function optimizeLockStop() {
 function goToPublishOptions() {
   if (!canOpenPublishPage()) return;   // v3.1.41 -- the button is hidden then; this only guards a stale page
   if (optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
+  // v3.6.98 (testers, via Ian, 2026-11-17: "Should take you to publishing for the version you are looking at"): the
+  // version of the session on screen travels to the Publish page, as Open on a Publish card carries it the other way
+  // (goToSessionPage). loadNovelPeople picks it ahead of the star and the default; the Canonical (role 'dm') opens the
+  // Canonical. A version the Publish list does not hold falls back to the usual default.
+  try {
+    var _pf = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
+    state._pubOpenVersion = state.currentCampaign ? { campaignId: String(state.currentCampaign.id),
+      versionId: (_pf && _pf.version_id) ? String(_pf.version_id) : null, canonical: !_pf || _pf.role === 'dm' || !!_pf.is_canonical } : null;
+  } catch (e) { state._pubOpenVersion = null; }
   showCampaignSection('novel');
   switchNovelTab('sessions');
 }

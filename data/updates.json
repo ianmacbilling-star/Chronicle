@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.98",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3698-publish-options-version",
+        "kind": "fix",
+        "public": true,
+        "summary": "All publishing options on a session opens the Publish page on the version you were looking at.",
+        "detail": "From the testers. It used to open on your starred or default version. The Canonical opens the Canonical; a version the Publish list does not hold falls back to the usual default.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.97",
     "staged_on": "2026-11-17",
     "entries": [
