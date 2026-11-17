@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.82",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3682-cost-grid-words",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: Claude shown as the words one token covers (TD-1148).",
+        "detail": "Sonnet and Haiku, words read and words written for 1 token at our cost per token (Sonnet at 8 cents: 20,000 read, 4,000 written), to the nearest 100 words.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.81",
     "staged_on": "2026-11-17",
     "entries": [

@@ -611,9 +611,14 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     const KW = 1000 * 4 / 3;
     ['sonnet', 'haiku'].forEach(function (f) { const r = s.claude[f]; if (!r) return;
       const nm = f === 'sonnet' ? 'Claude Sonnet' : 'Claude Haiku';
-      const rIn = KW * r[0] / 1e6, rOut = KW * r[1] / 1e6;
-      rows.push({ group: 'Claude (1,000 words)', what: nm + ', 1,000 words read', usd: rIn, now: null, at: frac(rIn, cents), exact: true });
-      rows.push({ group: 'Claude (1,000 words)', what: nm + ', 1,000 words written', usd: rOut, now: null, at: frac(rOut, cents), exact: true });
+      // v3.6.82 (Ian, 2026-11-17: "put the number of words so the right hand column comes out to 1 token"): how many words
+      // read, and written, one token covers at the basis, to the nearest 100 words (Sonnet at 8 cents: 20,000 read, 4,000 written).
+      [[r[0], 'read'], [r[1], 'written']].forEach(function (p) {
+        if (!(p[0] > 0)) return;
+        const words = Math.max(100, Math.round((cents / 100) / (KW * p[0] / 1e6) * 1000 / 100) * 100);
+        const usd = words / 1000 * KW * p[0] / 1e6;
+        rows.push({ group: 'Claude (words for 1 token)', what: nm + ', ' + words.toLocaleString('en-US') + ' words ' + p[1], usd: usd, now: null, at: frac(usd, cents), exact: true });
+      });
     });
     // the last 30 days, real: what each kind of generation cost us beside what it charged
     const db = await getDb();
