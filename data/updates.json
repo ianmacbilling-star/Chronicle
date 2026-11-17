@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.77",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3677-cost-basis-labels",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: what each Claude model is used for, what Tokens today means, and Claude per million tokens in the table (TD-1148).",
+        "detail": "The Sonnet and Haiku cost lines name the features that run on them; the action table explains its Tokens today column and adds Claude Sonnet and Haiku per million tokens read and written, at the basis.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.76",
     "staged_on": "2026-11-17",
     "entries": [

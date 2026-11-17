@@ -47059,7 +47059,10 @@ function loadCostBasis() {
     c += '<label style="font-size:13px;">Transcription, a minute ($)</label><input class="form-input" id="cb-audio" type="number" min="0" step="0.001" value="' + cbEsc(d.audioMinute) + '" style="width:120px;" />';
     ['sonnet', 'haiku'].forEach(function (f) {
       var r = d.claude[f] || [0, 0];
-      c += '<label style="font-size:13px;">Claude ' + f + ', $ per million tokens (in / out)</label><span><input class="form-input cb-cl" data-f="' + f + '" data-i="0" type="number" min="0" step="0.01" value="' + cbEsc(r[0]) + '" style="width:80px;" /> / <input class="form-input cb-cl" data-f="' + f + '" data-i="1" type="number" min="0" step="0.01" value="' + cbEsc(r[1]) + '" style="width:80px;" /></span>';
+      // v3.6.77 (Ian, 2026-11-17: "put what they are for"): which features run on each model (config/models.js defaults)
+      var uses = f === 'sonnet' ? 'Story, Narrative, Writing Coach feedback / Regenerate / Show me, New panel, Optimize, video shot list / notes / Pre-production check / take review, custom style analyze, story from photos, character sheet import'
+        : 'Help assistant, quick writing tools (Tighten, Word, Describe, Rewrite), picture retouch prompts, upload rights checks, asset names';
+      c += '<label style="font-size:13px;">Claude ' + f + ', $ per million tokens (in / out)<div style="font-size:11px;opacity:0.75;max-width:340px;line-height:1.35;margin-top:2px;">' + uses + '</div></label><span><input class="form-input cb-cl" data-f="' + f + '" data-i="0" type="number" min="0" step="0.01" value="' + cbEsc(r[0]) + '" style="width:80px;" /> / <input class="form-input cb-cl" data-f="' + f + '" data-i="1" type="number" min="0" step="0.01" value="' + cbEsc(r[1]) + '" style="width:80px;" /></span>';
     });
     c += '</div><div style="margin-top:8px;"><button class="btn btn-secondary" onclick="saveProviderCosts()">Save costs</button> <span id="cb-msg2" style="font-size:13px;"></span></div>';
     document.getElementById('cb-costs').innerHTML = c;
@@ -47068,10 +47071,10 @@ function loadCostBasis() {
     var last = '';
     d.rows.forEach(function (r) {
       if (r.group !== last) { t += '<tr><td colspan="4" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
-      var diff = r.at !== r.now ? ' style="padding:4px 10px;font-size:13px;font-weight:700;"' : ' ' + td;
-      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + cbEsc(r.now) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td></tr>';
+      var diff = (r.now != null && r.at !== r.now) ? ' style="padding:4px 10px;font-size:13px;font-weight:700;"' : ' ' + td;
+      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td></tr>';
     });
-    t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;">Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
+    t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Tokens today is what we charge now: a picture is a fixed 1 token (its model\'s price setting), transcription a fixed 2 per 15 minutes, and a video take is worked out from its cost at the video basis (the old 8\u00a2 setting, or this basis once set, so the two columns match). Bold: the basis would charge differently.<br>Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
     box.innerHTML = t;
     // the last 30 days
     var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2</th></tr>';

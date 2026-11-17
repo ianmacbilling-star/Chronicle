@@ -598,6 +598,13 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
         rows.push({ group: 'Video', what: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : '') + ', ' + d + ' s', usd: usd, now: ac.tokensFor(usd, vc), at: ac.tokensFor(usd, cents) });
       });
     } catch (e) {}
+    // v3.6.77 (Ian, 2026-11-17: "add the Claude calls at ... Per million"): what a million tokens read and written cost
+    // us, and what that is in our tokens at the basis. No "today": Claude is charged by feature, not by call.
+    ['sonnet', 'haiku'].forEach(function (f) { const r = s.claude[f]; if (!r) return;
+      const nm = f === 'sonnet' ? 'Claude Sonnet' : 'Claude Haiku';
+      rows.push({ group: 'Claude (per million tokens)', what: nm + ', 1 million read', usd: r[0], now: null, at: ac.tokensFor(r[0], cents) });
+      rows.push({ group: 'Claude (per million tokens)', what: nm + ', 1 million written', usd: r[1], now: null, at: ac.tokensFor(r[1], cents) });
+    });
     // the last 30 days, real: what each kind of generation cost us beside what it charged
     const db = await getDb();
     const real = await db.prepare("SELECT event_type, COUNT(*) AS n, COUNT(cost_usd) AS priced, SUM(cost_usd) AS usd, SUM(tokens_redeemed) AS tokens, SUM(CASE WHEN cost_usd IS NOT NULL THEN tokens_redeemed ELSE 0 END) AS tokens_priced, SUM(quantity) AS qty, MAX(unit) AS unit FROM generation_events WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY event_type ORDER BY SUM(cost_usd) DESC NULLS LAST, COUNT(*) DESC").all();
