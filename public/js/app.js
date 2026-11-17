@@ -47092,19 +47092,24 @@ function loadCostBasis() {
     document.getElementById('cb-costs').innerHTML = c;
     cbAudio15(); cbClaudeEx();
     // what each action costs
-    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2 (live)</th>' + (P ? '<th ' + thB + '>At ' + cbEsc(P) + '\u00a2 (projected)</th><th ' + thB + '>Change</th><th ' + thB + '>Revenue change</th>' : '') + '</tr>';
-    var last = '', cols = P ? 7 : 4;
-    // v3.6.86 (Ian, 2026-11-17: "make the projected and change columns blue so they are easy to spot")
+    // v3.6.86 (Ian, 2026-11-17: "make the projected and change columns blue so they are easy to spot"); v3.6.88: set
+    // before the header line uses them (the header was not blue)
     var thB = 'style="text-align:left;padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;color:#3b82f6;background:rgba(59,130,246,0.10);"';
     var tdB = 'style="padding:4px 10px;font-size:13px;color:#3b82f6;background:rgba(59,130,246,0.10);"';
     var boldB = ' style="padding:4px 10px;font-size:13px;font-weight:700;color:#3b82f6;background:rgba(59,130,246,0.10);"';
     var bold = ' style="padding:4px 10px;font-size:13px;font-weight:700;"';
+    // v3.6.88 (Ian, 2026-11-17: "We don't charge partial tokens anywhere so that's how we need to do the math"): the live and
+    // projected columns are whole tokens (nearest, at least 1), and Change and Revenue change are worked out from them.
+    // Tokens today is left as it was (Ian).
+    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2 Rnd (live)</th>' + (P ? '<th ' + thB + '>At ' + cbEsc(P) + '\u00a2 Rnd (proj)</th><th ' + thB + '>Change</th><th ' + thB + '>Revenue change</th>' : '') + '</tr>';
+    var last = '', cols = P ? 7 : 4;
     d.rows.forEach(function (r) {
       if (r.group !== last) { t += '<tr><td colspan="' + cols + '" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
-      var diff = (r.now != null && r.at !== r.now) ? bold : ' ' + td;
-      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td>';
+      var atR = cbRnd(r.at), prR = cbRnd(r.proj);
+      var diff = (r.now != null && atR !== cbRnd(r.now)) ? bold : ' ' + td;
+      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + (atR == null ? '\u2014' : atR) + '</td>';
       // v3.6.85 (Ian, 2026-11-17: "a column ... that compares the current settings to the proposed setting")
-      if (P) t += '<td' + (r.proj != null && r.proj !== r.at ? boldB : ' ' + tdB) + '>' + (r.proj == null ? '\u2014' : cbEsc(r.proj)) + '</td><td ' + tdB + '>' + cbChange(r.at, r.proj) + '</td><td ' + tdB + '>' + cbRevCents(r.at, d.cents, r.proj, P) + '</td>';   // v3.6.86
+      if (P) t += '<td' + (prR != null && prR !== atR ? boldB : ' ' + tdB) + '>' + (prR == null ? '\u2014' : prR) + '</td><td ' + tdB + '>' + cbChange(atR, prR) + '</td><td ' + tdB + '>' + cbRevCents(atR, d.cents, prR, P) + '</td>';   // v3.6.86; v3.6.88 rounded
       t += '</tr>';
     });
     t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Tokens today is what we charge now. Pictures (the model in use), transcription and video are worked out from their cost at our cost per token, so the columns match unless a picture price is pinned. Writing tools: 1 token for 2 uses. Take review, custom style analyze and the book PDF: fixed prices. Bold: the basis would charge differently. Video a second is shown to two places, and Claude as the words one token covers; a real take or call is priced as a whole and rounded once.<br>Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
@@ -47169,6 +47174,11 @@ function saveCostBasis() {
 }
 // v3.6.85: the projected basis; only adds the compare columns, never charged
 function saveProjected() { var v = document.getElementById('cb-proj').value.trim(); cbPut({ projected: v === '' ? '' : v }, 'cb-msg3'); }
+// v3.6.88: whole tokens as we charge them: nearest, half up, at least 1 (as services/aiCost.js tokensFor)
+function cbRnd(x) {
+  if (x == null || x === '' || !isFinite(x)) return null;
+  return Math.max(1, Math.floor(Number(x) + 0.5 + 1e-9));
+}
 // v3.6.86: revenue change for one action, in cents: (projected tokens x projected cents) - (live tokens x live cents)
 function cbRevCents(at, cents, proj, P) {
   if (at == null || proj == null || !isFinite(at) || !isFinite(proj)) return '\u2014';

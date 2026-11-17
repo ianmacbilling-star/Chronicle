@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.88",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3688-rounded-columns",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: the live and projected columns are whole tokens (At 8c Rnd (live), At 5c Rnd (proj)); Change and Revenue change use them (TD-1148).",
+        "detail": "Ian: we never charge partial tokens. Nearest, at least 1. Video rows are rounded per second. The blue header now shows (its style was set after the header line).",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.87",
     "staged_on": "2026-11-17",
     "entries": [
