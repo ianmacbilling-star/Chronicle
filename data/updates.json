@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.6.81",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3681-rights-warn-quiet",
+        "kind": "fix",
+        "public": true,
+        "summary": "A signed picture is marked on the picture instead of popping up a message every time.",
+        "detail": "Pictures that may need permission (signed, or with a creator named) keep their amber outline and note; the pop-up only appears for a picture that can't be used.",
+        "td": []
+      },
+      {
+        "id": "3681-new-session-direct",
+        "kind": "fix",
+        "public": true,
+        "summary": "New session goes straight to the New Session form.",
+        "detail": "The question about making your pinned version the Canonical first is gone; a new session starts on the Canonical as before.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.6.80",
     "staged_on": "2026-11-17",
     "entries": [

@@ -38847,6 +38847,10 @@ function promoteVersionFlow(versionId) {
 // is remembered for the campaign until the page is reloaded.
 var _promoteNudgeSkip = {};
 function _promoteNudge() {
+  // v3.6.81 (Ian, 2026-11-17: "When creating a new session... Just put a new session on the canonical. There is big modal
+  // that pops up that is confusing and needs to go away"). The question is no longer asked: + New session goes straight to
+  // the New Session form, and the session goes on the Canonical as before. (Make it the Canonical stays in the version menu.)
+  return false;
   var c = state.currentCampaign;
   if (!c || c.my_role !== 'dm') return false;
   if (state._promoteNudgeBypass) { state._promoteNudgeBypass = false; return false; }
@@ -39044,6 +39048,10 @@ function _cmpRightsAnnounce(items, opts) {
     var rej = (items || []).filter(function (i) { return i && i.verdict === 'reject'; });
     var warn = (items || []).filter(function (i) { return i && i.verdict === 'warn'; });
     if (!rej.length && !warn.length && !opts.text) return;
+    // v3.6.81 (Ian, 2026-11-17: "If there is a warning but we are going to let it go through... then put it on the picture
+    // but don't keep popping up this message"). A signed picture (a warning only) is marked on the picture, amber outline
+    // and note, and nothing pops up. A refusal, or a picture left out of a build, still says so in the box.
+    if (!rej.length && !opts.text && !opts.red) { _cmpRightsScan(document.body); return; }
     _cmpRightsCloseBox();
     var box = document.createElement('div');
     box.id = 'cmp-rights-box';
