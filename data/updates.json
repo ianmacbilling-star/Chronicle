@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.85",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3685-financial-projected",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: Save Live with a warning, a Projected cost per token with compare columns, and video prices editable (TD-1148).",
+        "detail": "The basis text is Ian's wording. Projected is saved apart (cost_cents_per_token_projected), never charged, and adds a projected column and the change to the action table and the 30-day grid. Video prices per model, without and with sound, are settings (unit_cost:video:<model>) over the code's prices. Fixed: the video rows of the action table had not shown since v3.6.79.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.84",
     "staged_on": "2026-11-17",
     "entries": [

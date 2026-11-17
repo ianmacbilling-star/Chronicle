@@ -584,6 +584,7 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     const ac = require('../services/aiCost');
     const s = await ac.loadSettings(true);
     const cents = await ac.centsPerToken('');
+    const proj = s.projected;   // v3.6.85 (Ian, 2026-11-17): "review the numbers before pushing it live"; null when not set
     const tk = require('./tokens');
     const rows = [];
     // v3.6.79: tokens to two places, for the per-second and per-1,000-word rows (no rounding, no floor)
@@ -592,18 +593,23 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     // v3.6.80 -- TD-1148 stage 2: pictures and transcription are worked out from cost now, so "today" is what they charge;
     // the model in use is marked, and a pinned picture price (token_cost:nano2) is named.
     const picNow = await tk.getTokenCost('nano2'), picPin = await tk.getTokenCostPin('nano2'), inUse = ac.imageKey('nano2');
-    Object.keys(s.images).forEach(function (k) { const live = k === inUse; rows.push({ group: 'Pictures', what: 'Picture: ' + k + (live ? ' (in use' + (picPin != null ? ', pinned at ' + picPin : '') + ')' : ''), usd: s.images[k], now: live ? picNow : null, at: ac.tokensFor(s.images[k], cents) }); });
+    Object.keys(s.images).forEach(function (k) { const live = k === inUse; rows.push({ group: 'Pictures', what: 'Picture: ' + k + (live ? ' (in use' + (picPin != null ? ', pinned at ' + picPin : '') + ')' : ''), usd: s.images[k], now: live ? picNow : null, at: ac.tokensFor(s.images[k], cents), proj: proj ? ac.tokensFor(s.images[k], proj) : null }); });
     let qNow = null; try { qNow = await require('./audio').quarterTokens(); } catch (e) {}
-    rows.push({ group: 'Transcription', what: 'Transcription, 15 minutes', usd: s.audioMinute * 15, now: qNow, at: ac.tokensFor(s.audioMinute * 15, cents) });
+    rows.push({ group: 'Transcription', what: 'Transcription, 15 minutes', usd: s.audioMinute * 15, now: qNow, at: ac.tokensFor(s.audioMinute * 15, cents), proj: proj ? ac.tokensFor(s.audioMinute * 15, proj) : null });
     // video: every model at its default length, no sound; its "now" already follows the basis (it is priced from cost)
+    const video = [];
     try {
       const M = require('./videoLab').MODELS, vc = await ac.centsPerToken('video');
       Object.keys(M).forEach(function (k) {
+        const m = M[k];   // v3.6.85: this line was lost in v3.6.79, so no video row showed
+        // v3.6.85 (Ian, 2026-11-17: "make the video prices editable"): every model, its price and the code's default
+        video.push({ key: k, label: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : ''), price: Number(m.price) || 0,
+          priceSound: Number(m.priceSound) || 0, def: [m._price0 !== undefined ? m._price0 : m.price, m._priceSound0 !== undefined ? m._priceSound0 : m.priceSound], set: !!s.video[k] });
         // v3.6.79 (Ian, 2026-11-17: "do it by 1 second not 5"): per second, in tokens to two places; a take is still
         // priced as a whole (its seconds x this) and rounded once.
         const usd = Number(m.price) || 0;
         if (!usd) return;
-        rows.push({ group: 'Video (a second)', what: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : ''), usd: usd, now: frac(usd, vc), at: frac(usd, cents), exact: true });
+        rows.push({ group: 'Video (a second)', what: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : ''), usd: usd, now: frac(usd, vc), at: frac(usd, cents), proj: proj ? frac(usd, proj) : null, exact: true });
       });
     } catch (e) {}
     // v3.6.77 (Ian): Claude in the table. v3.6.79 (Ian, 2026-11-17: "per 1000 word instead of per million tokens... my
@@ -618,7 +624,7 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
         if (!(p[0] > 0)) return;
         const words = Math.max(100, Math.round((cents / 100) / (KW * p[0] / 1e6) * 1000 / 100) * 100);
         const usd = words / 1000 * KW * p[0] / 1e6;
-        rows.push({ group: 'Claude (words for 1 token)', what: nm + ', ' + words.toLocaleString('en-US') + ' words ' + p[1], usd: usd, now: null, at: frac(usd, cents), exact: true });
+        rows.push({ group: 'Claude (words for 1 token)', what: nm + ', ' + words.toLocaleString('en-US') + ' words ' + p[1], usd: usd, now: null, at: frac(usd, cents), proj: proj ? frac(usd, proj) : null, exact: true });
       });
     });
     // the last 30 days, real: what each kind of generation cost us beside what it charged
@@ -630,11 +636,12 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
         tokens: Number(r.tokens) || 0, qty: r.qty == null ? null : Number(r.qty), unit: r.unit || '',
         avgUsd: (usd != null && priced) ? usd / priced : null,
         centsPerToken: (usd != null && pricedTok) ? usd * 100 / pricedTok : null,
-        atPerEvent: (usd != null && priced) ? ac.tokensFor(usd / priced, cents, 0) : null };
+        atPerEvent: (usd != null && priced) ? ac.tokensFor(usd / priced, cents, 0) : null,
+        atProjected: (proj && usd != null && priced) ? ac.tokensFor(usd / priced, proj, 0) : null };   // v3.6.85
     });
     let claude = null;
     try { claude = await db.prepare("SELECT COUNT(*) AS n, SUM(cost_usd) AS usd FROM ai_calls WHERE created_at >= NOW() - INTERVAL '30 days'").get(); } catch (e) {}
-    res.json({ cents: cents, centsSet: !!s.cents, oldVideo: s.oldShot, oldLayout: s.oldLayout, audioMinute: s.audioMinute, images: s.images, claude: s.claude,
+    res.json({ cents: cents, centsSet: !!s.cents, projected: proj, video: video, oldVideo: s.oldShot, oldLayout: s.oldLayout, audioMinute: s.audioMinute, images: s.images, claude: s.claude,
       defaults: ac.DEFAULTS, rows: rows, real: realRows, claudeCalls: claude ? { n: Number(claude.n) || 0, usd: claude.usd == null ? 0 : Number(claude.usd) } : null,
       since: 'v3.6.76' });
   } catch (e) { console.error('[cost-basis] GET', e && e.message); res.status(500).json({ error: 'Server error' }); }
@@ -647,6 +654,23 @@ router.put('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     if (b.cents !== undefined) {
       if (b.cents === '' || b.cents === null) pairs.push(['cost_cents_per_token', null]);
       else { const c = num(b.cents, 1, 100); if (c == null) return res.status(400).json({ error: 'Cost per token must be between 1 and 100 cents.' }); pairs.push(['cost_cents_per_token', String(c)]); }
+    }
+    // v3.6.85: the projected basis (shown beside the live one, never charged); empty clears it
+    if (b.projected !== undefined) {
+      if (b.projected === '' || b.projected === null) pairs.push(['cost_cents_per_token_projected', null]);
+      else { const c = num(b.projected, 1, 100); if (c == null) return res.status(400).json({ error: 'The projected cost per token must be between 1 and 100 cents.' }); pairs.push(['cost_cents_per_token_projected', String(c)]); }
+    }
+    // v3.6.85: video prices, dollars a second without and with sound; the code's price is the default, so a price set
+    // back to it removes the setting
+    if (b.video && typeof b.video === 'object') {
+      let M = {}; try { M = require('./videoLab').MODELS; } catch (e) {}
+      for (const k of Object.keys(b.video)) {
+        const m = M[k]; if (!m) return res.status(400).json({ error: 'There is no video model ' + k + '.' });
+        const p = num(b.video[k] && b.video[k][0], 0, 5), ps = num(b.video[k] && b.video[k][1], 0, 5);
+        if (p == null || ps == null) return res.status(400).json({ error: 'Video prices for ' + (m.label || k) + ' must be 0 to 5 dollars a second.' });
+        const d0 = m._price0 !== undefined ? m._price0 : m.price, d1 = m._priceSound0 !== undefined ? m._priceSound0 : m.priceSound;
+        pairs.push(['unit_cost:video:' + k, (Math.abs(p - d0) < 1e-9 && Math.abs(ps - d1) < 1e-9) ? null : p + '/' + ps]);
+      }
     }
     if (b.audioMinute !== undefined) { const a = num(b.audioMinute, 0, 10); if (a == null) return res.status(400).json({ error: 'Transcription cost must be 0 to 10 dollars a minute.' }); pairs.push(['unit_cost:audio_minute', String(a)]); }
     if (b.images && typeof b.images === 'object') {
@@ -672,6 +696,7 @@ router.put('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
       else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run(p[0], p[1]);
     }
     require('../services/aiCost').forget();
+    try { await require('../services/aiCost').loadSettings(true); } catch (e) {}   // v3.6.85: video prices take effect now
     res.json({ ok: true, saved: pairs.length });
   } catch (e) { console.error('[cost-basis] PUT', e && e.message); res.status(500).json({ error: 'Server error' }); }
 });

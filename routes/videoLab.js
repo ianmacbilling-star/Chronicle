@@ -830,6 +830,7 @@ function vlSaveSummary(b) {
 
 // ---- the list, new, save ---------------------------------------------------------------------
 router.get('/models', requireAuth, requireVideo, async function (req, res) {
+  try { await require('../services/aiCost').loadSettings(); } catch (e) {}   // v3.6.85: the Financial tab's video prices
   const out = Object.keys(MODELS).map(function (k) {
     const m = MODELS[k];
     if (m.test && !req.vlAdmin) return null;   // v3.5.82: the test models are for admins
@@ -1565,6 +1566,7 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   const hook = webhookUrl();
   if (!hook) return { status: 500, error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' };
   const sound = !!ep.sound;
+  try { await require('../services/aiCost').loadSettings(); } catch (e) {}   // v3.6.85: the Financial tab's video prices
   const cost = Math.round(plan.moves.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
   const tokens = await takeTokens(db, cost);   // v3.5.46
   const tf = await tokensFree(db, req.session.userId);
@@ -1638,6 +1640,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
     // Check every shot first, so a missing word in shot 5 does not leave shots 1 to 4 made and the rest not.
     const full = {};   // v3.5.15: shots that already have MAX_TAKES takes are skipped, and named
     let need = 0;
+    try { await require('../services/aiCost').loadSettings(); } catch (e) {}   // v3.6.85: the Financial tab's video prices
     for (let i = 0; i < shots.length; i++) {
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id, maxTakes(req))) { full[i] = true; continue; }

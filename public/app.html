@@ -2227,13 +2227,24 @@
              at that basis, and the last 30 days of real costs. Filled by loadCostBasis() in app.js. -->
         <div class="settings-section">
           <div class="settings-section-title">Our cost per token</div>
-          <div class="settings-section-desc">How many cents of our provider cost (fal, Anthropic) one token covers. Video takes, video planning, Optimize, pictures and transcription follow it (v3.6.80); story, narrative and writing join in the next stage. Empty: video and Optimize keep their old settings (8).</div>
+          <div class="settings-section-desc">How many cents of our provider cost (fal, Anthropic) one token covers. What 1 token costs us in cents. This is our baseline for all the cost math to follow.</div>
+          <!-- v3.6.85 (Ian, 2026-11-17): Live and Projected. Projected is shown beside the live numbers below and never
+               charged; Save Live warns that it takes effect at once. -->
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+            <span style="font-size:13px;width:70px;font-weight:600;">Live</span>
             <input class="form-input" id="cb-cents" type="number" min="1" max="100" step="0.5" placeholder="8" style="width:110px;" />
             <span style="font-size:13px;">cents a token</span>
-            <button class="btn btn-primary" onclick="saveCostBasis()">Save</button>
+            <button class="btn btn-primary" onclick="saveCostBasis()">Save Live</button>
             <span id="cb-msg" style="font-size:13px;"></span>
           </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+            <span style="font-size:13px;width:70px;font-weight:600;">Projected</span>
+            <input class="form-input" id="cb-proj" type="number" min="1" max="100" step="0.5" placeholder="not set" style="width:110px;" />
+            <span style="font-size:13px;">cents a token</span>
+            <button class="btn btn-secondary" onclick="saveProjected()">Projected</button>
+            <span id="cb-msg3" style="font-size:13px;"></span>
+          </div>
+          <div style="font-size:12px;opacity:0.8;margin-top:4px;">Projected only adds a column to the tables below so you can compare; nothing is charged at it. Empty it to hide the column.</div>
         </div>
         <div class="settings-section">
           <div class="settings-section-title">Our provider costs</div>

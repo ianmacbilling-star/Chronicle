@@ -47057,6 +47057,8 @@ function loadCostBasis() {
     if (!d || d.error) { box.textContent = (d && d.error) || 'Could not load.'; return; }
     CB = d;
     var ci = document.getElementById('cb-cents'); if (ci) ci.value = d.centsSet ? d.cents : '';
+    var cp = document.getElementById('cb-proj'); if (cp) cp.value = d.projected ? d.projected : '';   // v3.6.85
+    var P = d.projected ? Number(d.projected) : null;
     var th = 'style="text-align:left;padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;"';
     var td = 'style="padding:4px 10px;font-size:13px;"';
     // provider costs
@@ -47073,24 +47075,39 @@ function loadCostBasis() {
         : 'Help assistant, quick writing tools (Tighten, Word, Describe, Rewrite), picture retouch prompts, upload rights checks, asset names';
       c += '<label style="font-size:13px;">Claude ' + f + ', $ per million Anthropic tokens (sent in / written out)<div style="font-size:11px;opacity:0.75;max-width:340px;line-height:1.35;margin-top:2px;">' + uses + '</div></label><span>$ <input class="form-input cb-cl" data-f="' + f + '" data-i="0" type="number" min="0" step="0.01" value="' + cbEsc(r[0]) + '" style="width:80px;" oninput="cbClaudeEx()" /> / $ <input class="form-input cb-cl" data-f="' + f + '" data-i="1" type="number" min="0" step="0.01" value="' + cbEsc(r[1]) + '" style="width:80px;" oninput="cbClaudeEx()" /> <span class="cb-clex" data-f="' + f + '" style="font-size:12px;margin-left:10px;white-space:nowrap;"></span></span>';
     });
+    // v3.6.85 (Ian, 2026-11-17: "under the claude lines... put the video models and their cost per second"; "make the video
+    // prices editable"): $ a second without and with sound; the code's price is the default, named when it differs.
+    if (d.video && d.video.length) {
+      c += '<div style="grid-column:1/-1;font-weight:600;font-size:13px;margin-top:10px;">Video, $ a second (without sound / with sound)</div>';
+      d.video.forEach(function (v) {
+        var dflt = (v.price !== v.def[0] || v.priceSound !== v.def[1]) ? '<span style="font-size:12px;margin-left:10px;opacity:0.8;">code default $' + cbEsc(v.def[0]) + ' / $' + cbEsc(v.def[1]) + '</span>' : '';
+        c += '<label style="font-size:13px;">' + cbEsc(v.label) + '</label><span>$ <input class="form-input cb-vid" data-k="' + cbEsc(v.key) + '" data-i="0" type="number" min="0" step="0.001" value="' + cbEsc(v.price) + '" style="width:90px;" /> / $ <input class="form-input cb-vid" data-k="' + cbEsc(v.key) + '" data-i="1" type="number" min="0" step="0.001" value="' + cbEsc(v.priceSound) + '" style="width:90px;" />' + dflt + '</span>';
+      });
+    }
     c += '</div><div style="margin-top:8px;"><button class="btn btn-secondary" onclick="saveProviderCosts()">Save costs</button> <span id="cb-msg2" style="font-size:13px;"></span></div>';
     document.getElementById('cb-costs').innerHTML = c;
     cbAudio15(); cbClaudeEx();
     // what each action costs
-    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2</th></tr>';
-    var last = '';
+    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2 (live)</th>' + (P ? '<th ' + th + '>At ' + cbEsc(P) + '\u00a2 (projected)</th><th ' + th + '>Change</th>' : '') + '</tr>';
+    var last = '', cols = P ? 6 : 4;
+    var bold = ' style="padding:4px 10px;font-size:13px;font-weight:700;"';
     d.rows.forEach(function (r) {
-      if (r.group !== last) { t += '<tr><td colspan="4" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
-      var diff = (r.now != null && r.at !== r.now) ? ' style="padding:4px 10px;font-size:13px;font-weight:700;"' : ' ' + td;
-      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td></tr>';
+      if (r.group !== last) { t += '<tr><td colspan="' + cols + '" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
+      var diff = (r.now != null && r.at !== r.now) ? bold : ' ' + td;
+      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td>';
+      // v3.6.85 (Ian, 2026-11-17: "a column ... that compares the current settings to the proposed setting")
+      if (P) t += '<td' + (r.proj != null && r.proj !== r.at ? bold : ' ' + td) + '>' + (r.proj == null ? '\u2014' : cbEsc(r.proj)) + '</td><td ' + td + '>' + cbChange(r.at, r.proj) + '</td>';
+      t += '</tr>';
     });
     t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Tokens today is what we charge now. Pictures (the model in use), transcription and video are worked out from their cost at our cost per token, so the columns match unless a picture price is pinned. Writing tools: 1 token for 2 uses. Take review, custom style analyze and the book PDF: fixed prices. Bold: the basis would charge differently. Video a second is shown to two places, and Claude as the words one token covers; a real take or call is priced as a whole and rounded once.<br>Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
     box.innerHTML = t;
     // the last 30 days
-    var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2</th></tr>';
-    if (!d.real.length) R += '<tr><td colspan="8" ' + td + '>Nothing yet.</td></tr>';
+    var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2 (live)</th>' + (P ? '<th ' + th + '>Tokens each at ' + cbEsc(P) + '\u00a2 (projected)</th><th ' + th + '>Change</th>' : '') + '</tr>';
+    if (!d.real.length) R += '<tr><td colspan="' + (P ? 10 : 8) + '" ' + td + '>Nothing yet.</td></tr>';
     d.real.forEach(function (r) {
-      R += '<tr><td ' + td + '>' + cbEsc(r.label) + '</td><td ' + td + '>' + r.events + '</td><td ' + td + '>' + r.priced + '</td><td ' + td + '>' + cbUsd(r.usd, 2) + '</td><td ' + td + '>' + cbUsd(r.avgUsd) + '</td><td ' + td + '>' + r.tokens + '</td><td ' + td + '>' + (r.centsPerToken == null ? '\u2014' : r.centsPerToken.toFixed(1)) + '</td><td ' + td + '>' + (r.atPerEvent == null ? '\u2014' : r.atPerEvent) + '</td></tr>';
+      R += '<tr><td ' + td + '>' + cbEsc(r.label) + '</td><td ' + td + '>' + r.events + '</td><td ' + td + '>' + r.priced + '</td><td ' + td + '>' + cbUsd(r.usd, 2) + '</td><td ' + td + '>' + cbUsd(r.avgUsd) + '</td><td ' + td + '>' + r.tokens + '</td><td ' + td + '>' + (r.centsPerToken == null ? '\u2014' : r.centsPerToken.toFixed(1)) + '</td><td ' + td + '>' + (r.atPerEvent == null ? '\u2014' : r.atPerEvent) + '</td>';
+      if (P) R += '<td' + (r.atProjected != null && r.atProjected !== r.atPerEvent ? bold : ' ' + td) + '>' + (r.atProjected == null ? '\u2014' : r.atProjected) + '</td><td ' + td + '>' + cbChange(r.atPerEvent, r.atProjected) + '</td>';   // v3.6.85
+      R += '</tr>';
     });
     R += '</table>';
     if (d.claudeCalls) R += '<div style="font-size:12px;margin-top:6px;opacity:0.8;">All Claude calls in 30 days (charged or not): ' + d.claudeCalls.n + ', ' + cbUsd(d.claudeCalls.usd, 2) + '.</div>';
@@ -47125,11 +47142,26 @@ function cbPut(body, msgId) {
       if (d && d.ok) loadCostBasis();
     }).catch(function () { if (m) m.textContent = 'Not saved.'; });
 }
-function saveCostBasis() { var v = document.getElementById('cb-cents').value.trim(); cbPut({ cents: v === '' ? '' : v }, 'cb-msg'); }
+// v3.6.85 (Ian, 2026-11-17: rename Save to "Save Live" with a warning that it goes live immediately)
+function saveCostBasis() {
+  var v = document.getElementById('cb-cents').value.trim();
+  var what = v === '' ? 'Clearing the live cost per token (back to 8 cents)' : 'Saving ' + v + ' cents a token as live';
+  if (!window.confirm(what + ' takes effect immediately: every charge from now on (video, pictures, transcription, Optimize, video planning) uses it. Go live?')) return;
+  cbPut({ cents: v === '' ? '' : v }, 'cb-msg');
+}
+// v3.6.85: the projected basis; only adds the compare columns, never charged
+function saveProjected() { var v = document.getElementById('cb-proj').value.trim(); cbPut({ projected: v === '' ? '' : v }, 'cb-msg3'); }
+// the change from live to projected, as +n / -n tokens (two places for the per-second and per-word rows)
+function cbChange(a, b) {
+  if (a == null || b == null || !isFinite(a) || !isFinite(b)) return '\u2014';
+  var d = Math.round((Number(b) - Number(a)) * 100) / 100;
+  return d === 0 ? 'same' : (d > 0 ? '+' : '') + d;
+}
 function saveProviderCosts() {
   var images = {}; [].slice.call(document.querySelectorAll('.cb-img')).forEach(function (i) { images[i.getAttribute('data-k')] = i.value; });
   var claude = {}; [].slice.call(document.querySelectorAll('.cb-cl')).forEach(function (i) { var f = i.getAttribute('data-f'); claude[f] = claude[f] || [0, 0]; claude[f][Number(i.getAttribute('data-i'))] = i.value; });
-  cbPut({ images: images, audioMinute: document.getElementById('cb-audio').value, claude: claude }, 'cb-msg2');
+  var video = {}; [].slice.call(document.querySelectorAll('.cb-vid')).forEach(function (i) { var k = i.getAttribute('data-k'); video[k] = video[k] || [0, 0]; video[k][Number(i.getAttribute('data-i'))] = i.value; });   // v3.6.85
+  cbPut({ images: images, audioMinute: document.getElementById('cb-audio').value, claude: claude, video: video }, 'cb-msg2');
 }
 (function () {
   var orig = window.switchSettingsTab;
