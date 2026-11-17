@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.71",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3671-memories-hero-before",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a grandfather with an old photograph in the first top slide (TD-1158).",
+        "detail": "The first slide (Turn Cherished Memories) now has its picture too: an older man at a table looking at an old photograph.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.70",
     "staged_on": "2026-11-16",
     "entries": [
