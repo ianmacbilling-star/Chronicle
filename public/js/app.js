@@ -47052,20 +47052,22 @@ function loadCostBasis() {
     var th = 'style="text-align:left;padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;"';
     var td = 'style="padding:4px 10px;font-size:13px;"';
     // provider costs
-    var c = '<div style="display:grid;grid-template-columns:auto auto;gap:8px 12px;align-items:center;max-width:620px;">';
+    var c = '<div style="display:grid;grid-template-columns:auto auto;gap:8px 12px;align-items:center;max-width:1100px;">';   // v3.6.78: room for the examples
     Object.keys(d.images).forEach(function (k) {
-      c += '<label style="font-size:13px;">Picture, ' + cbEsc(k) + ' ($)</label><input class="form-input cb-img" data-k="' + cbEsc(k) + '" type="number" min="0" step="0.001" value="' + cbEsc(d.images[k]) + '" style="width:120px;" />';
+      c += '<label style="font-size:13px;">Picture, ' + cbEsc(k) + ' ($)</label><span>$ <input class="form-input cb-img" data-k="' + cbEsc(k) + '" type="number" min="0" step="0.001" value="' + cbEsc(d.images[k]) + '" style="width:120px;" /></span>';   // v3.6.78: $ (Ian)
     });
-    c += '<label style="font-size:13px;">Transcription, a minute ($)</label><input class="form-input" id="cb-audio" type="number" min="0" step="0.001" value="' + cbEsc(d.audioMinute) + '" style="width:120px;" />';
+    // v3.6.78 (Ian, 2026-11-17: "We do the math per 15 minutes"): the 15-minute cost beside the minute, worked out as it is typed
+    c += '<label style="font-size:13px;">Transcription, a minute ($)</label><span>$ <input class="form-input" id="cb-audio" type="number" min="0" step="0.001" value="' + cbEsc(d.audioMinute) + '" style="width:120px;" oninput="cbAudio15()" /> <span id="cb-audio15" style="font-size:13px;margin-left:10px;white-space:nowrap;"></span></span>';
     ['sonnet', 'haiku'].forEach(function (f) {
       var r = d.claude[f] || [0, 0];
       // v3.6.77 (Ian, 2026-11-17: "put what they are for"): which features run on each model (config/models.js defaults)
       var uses = f === 'sonnet' ? 'Story, Narrative, Writing Coach feedback / Regenerate / Show me, New panel, Optimize, video shot list / notes / Pre-production check / take review, custom style analyze, story from photos, character sheet import'
         : 'Help assistant, quick writing tools (Tighten, Word, Describe, Rewrite), picture retouch prompts, upload rights checks, asset names';
-      c += '<label style="font-size:13px;">Claude ' + f + ', $ per million tokens (in / out)<div style="font-size:11px;opacity:0.75;max-width:340px;line-height:1.35;margin-top:2px;">' + uses + '</div></label><span><input class="form-input cb-cl" data-f="' + f + '" data-i="0" type="number" min="0" step="0.01" value="' + cbEsc(r[0]) + '" style="width:80px;" /> / <input class="form-input cb-cl" data-f="' + f + '" data-i="1" type="number" min="0" step="0.01" value="' + cbEsc(r[1]) + '" style="width:80px;" /></span>';
+      c += '<label style="font-size:13px;">Claude ' + f + ', $ per million Anthropic tokens (sent in / written out)<div style="font-size:11px;opacity:0.75;max-width:340px;line-height:1.35;margin-top:2px;">' + uses + '</div></label><span>$ <input class="form-input cb-cl" data-f="' + f + '" data-i="0" type="number" min="0" step="0.01" value="' + cbEsc(r[0]) + '" style="width:80px;" oninput="cbClaudeEx()" /> / $ <input class="form-input cb-cl" data-f="' + f + '" data-i="1" type="number" min="0" step="0.01" value="' + cbEsc(r[1]) + '" style="width:80px;" oninput="cbClaudeEx()" /> <span class="cb-clex" data-f="' + f + '" style="font-size:12px;margin-left:10px;white-space:nowrap;"></span></span>';
     });
     c += '</div><div style="margin-top:8px;"><button class="btn btn-secondary" onclick="saveProviderCosts()">Save costs</button> <span id="cb-msg2" style="font-size:13px;"></span></div>';
     document.getElementById('cb-costs').innerHTML = c;
+    cbAudio15(); cbClaudeEx();
     // what each action costs
     var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2</th></tr>';
     var last = '';
@@ -47086,6 +47088,26 @@ function loadCostBasis() {
     if (d.claudeCalls) R += '<div style="font-size:12px;margin-top:6px;opacity:0.8;">All Claude calls in 30 days (charged or not): ' + d.claudeCalls.n + ', ' + cbUsd(d.claudeCalls.usd, 2) + '.</div>';
     document.getElementById('cb-real').innerHTML = R;
   }).catch(function () { box.textContent = 'Could not load.'; });
+}
+function cbAudio15() {
+  var i = document.getElementById('cb-audio'), o = document.getElementById('cb-audio15'); if (!i || !o) return;
+  var v = parseFloat(i.value);
+  o.textContent = isFinite(v) && v >= 0 ? '= $' + (v * 15).toFixed(3) + ' per 15 minutes' : '';
+}
+// v3.6.78 (Ian, 2026-11-17): an example call beside each Claude line, 6,000 words in and 2,000 out. A word is about
+// 4/3 of an Anthropic token, so 8,000 tokens in and about 2,667 out; in our tokens at the basis on the page.
+var CB_EX_IN = 6000 * 4 / 3, CB_EX_OUT = 2000 * 4 / 3;
+function cbClaudeEx() {
+  var cents = (CB && Number(CB.cents) > 0) ? Number(CB.cents) : 8;
+  [].slice.call(document.querySelectorAll('.cb-clex')).forEach(function (o) {
+    var f = o.getAttribute('data-f');
+    var ins = document.querySelectorAll('.cb-cl[data-f="' + f + '"]');
+    var rin = parseFloat(ins[0] && ins[0].value), rout = parseFloat(ins[1] && ins[1].value);
+    if (!isFinite(rin) || !isFinite(rout)) { o.textContent = ''; return; }
+    var usd = (CB_EX_IN * rin + CB_EX_OUT * rout) / 1e6;
+    var tok = Math.max(1, Math.floor(usd * 100 / cents + 0.5 + 1e-9));
+    o.textContent = '6,000 words in + 2,000 out = $' + (CB_EX_IN * rin / 1e6).toFixed(3) + ' + $' + (CB_EX_OUT * rout / 1e6).toFixed(3) + ' = $' + usd.toFixed(3) + ' (' + tok + ' token' + (tok === 1 ? '' : 's') + ' at ' + cents + '\u00a2)';
+  });
 }
 function cbPut(body, msgId) {
   var m = document.getElementById(msgId); if (m) m.textContent = 'Saving...';
