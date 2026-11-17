@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.67",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3667-memories-style-pictures",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a real picture for each of the 11 art styles (TD-1158).",
+        "detail": "Pictures Ian chose from the Library, linked from images.campaignia.com and loaded as they scroll into view; a picture that fails to load shows its box again.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.66",
     "staged_on": "2026-11-16",
     "entries": [

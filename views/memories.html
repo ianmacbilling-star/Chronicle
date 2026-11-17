@@ -142,6 +142,9 @@
     .tile{flex:0 0 220px;scroll-snap-align:start;}
     .tile .pic{aspect-ratio:3/4;min-height:0;font-size:13px;background:#f4f4f0;}
     .tile span{display:block;font-weight:600;color:var(--m-ink);margin-top:10px;}
+    .tile .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;font-size:0;}
+    .tile .pic.has-img b{display:none;}
+    .tile .pic.has-img img{width:100%;height:100%;object-fit:cover;display:block;}
 
     /* 4. examples */
     .examples-head{text-align:center;max-width:820px;margin:0 auto 60px;}
@@ -515,8 +518,23 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
 (function(){
   var art=['High Fantasy','Everyday Life','Anime/Manga','Dark and Gritty','Pen and Ink','Oil Painting','Soft Pastels','Watercolor','Charcoal','Cel-Shaded','Dark Fantasy'];
   var narr=['Classic','Calm and Literal','Comic Dialogue','High-Drama Anime','Epic Saga','Adventurer\u2019s Journey','Cinematic Script','Lorekeeper/Historian','Noir','Dark/Grim','Children\u2019s Storybook'];
-  function fill(id,list,kind){var el=document.getElementById(id);list.forEach(function(n){var t=document.createElement('div');t.className='tile';t.innerHTML='<div class="pic"><b>Picture</b></div><span></span>';t.querySelector('.pic').appendChild(document.createTextNode(kind+' in '+n));t.querySelector('span').textContent=n;el.appendChild(t);});}
-  fill('artForms',art,'A page');fill('narrFormats',narr,'A passage');
+  // v3.6.67 (Ian, 2026-11-16): a picture from the Library for each art style, linked from images.campaignia.com. A box
+  // whose picture fails to load shows its note again.
+  var artPics={
+    'High Fantasy':'https://images.campaignia.com/archives/arch-1788758803260-77abf045a55e67c2.png',
+    'Everyday Life':'https://images.campaignia.com/archives/arch-1790174421973-d4f7efda13634da5.png',
+    'Anime/Manga':'https://images.campaignia.com/archives/arch-1794873477358-8d128d0e29dd9c56.png',
+    'Dark and Gritty':'https://images.campaignia.com/archives/arch-1783632461595-d8720a0d443dceba.png',
+    'Pen and Ink':'https://images.campaignia.com/archives/arch-1783690493283-ffce99549c9c1fee.png',
+    'Oil Painting':'https://images.campaignia.com/uploads/gen-1794873922750-355d74a8ca59020b.png',
+    'Soft Pastels':'https://images.campaignia.com/archives/arch-1792967014866-6e41081639198174.png',
+    'Watercolor':'https://images.campaignia.com/uploads/gen-1794874101511-8465796ab98a5aed.png',
+    'Charcoal':'https://images.campaignia.com/uploads/flip-1794874587617-8tq3ee.png',
+    'Cel-Shaded':'https://images.campaignia.com/archives/arch-1794874749566-0e8907c4fa04f594.png',
+    'Dark Fantasy':'https://images.campaignia.com/archives/arch-1793642396765-746a0995b6b85f21.png'
+  };
+  function fill(id,list,kind,pics){var el=document.getElementById(id);list.forEach(function(n){var t=document.createElement('div');t.className='tile';t.innerHTML='<div class="pic"><b>Picture</b></div><span></span>';var box=t.querySelector('.pic');box.appendChild(document.createTextNode(kind+' in '+n));t.querySelector('span').textContent=n;if(pics&&pics[n]){var im=document.createElement('img');im.loading='lazy';im.decoding='async';im.alt=n+' example';im.src=pics[n];im.onerror=function(){box.classList.remove('has-img');if(im.parentNode)im.parentNode.removeChild(im);};box.classList.add('has-img');box.insertBefore(im,box.firstChild);}el.appendChild(t);});}
+  fill('artForms',art,'A page',artPics);fill('narrFormats',narr,'A passage');
 })();
 
 // 1. scroll down and the slides move from right to left
