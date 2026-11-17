@@ -331,6 +331,29 @@ router.get('/balance', async function(req, res) {
   }
 });
 
+// v3.6.94 (Ian, 2026-11-17: prices in tooltips; "Yes build it next"): the "about N tokens" on Generate Story and
+// Generate Narrative. Read only, from what is saved, with the same counts the charge uses (routes/extract.js,
+// routes/narrative.js): words in, and the Already Written recommended words as the words out. Not under /api/extract
+// or /api/narrative, so the AI rate limit is not spent on it.
+router.get('/estimate/:campaignId/:sessionId', async function (req, res) {
+  if (!requireSession(req, res)) return;
+  try {
+    const db = await getDb();
+    const s = await db.prepare('SELECT s.transcript, s.session_notes, c.lore AS campaign_lore FROM sessions s JOIN campaigns c ON s.campaign_id = c.id JOIN campaign_members cm ON cm.campaign_id = c.id WHERE s.id = ? AND c.id = ? AND cm.user_id = ?').get(req.params.sessionId, req.params.campaignId, req.session.userId);
+    if (!s) return res.status(404).json({ error: 'Not found' });
+    const wc = function (t) { const v = (t == null ? '' : String(t)).trim(); return v ? v.split(/\s+/).length : 0; };
+    const chars = await db.prepare('SELECT description FROM characters WHERE campaign_id = ?').all(req.params.campaignId);
+    const chW = (chars || []).reduce(function (t, c) { return t + wc(c && c.description); }, 0);
+    // a version that is not the canonical one owns its own instructions (as routes/narrative.js reads them)
+    let notes = s.session_notes || '';
+    const fid = parseInt(req.query.fork_id, 10);
+    if (fid > 0) { const fk = await db.prepare('SELECT role, fork_notes FROM session_forks WHERE id = ? AND session_id = ?').get(fid, req.params.sessionId); if (fk && fk.role !== 'dm') notes = fk.fork_notes || ''; }
+    const rs = await inOutRates('story'), rn = await inOutRates('narrative');
+    res.json({ story: inOutTokens(rs, wc(s.transcript) + wc(s.session_notes) + wc(s.campaign_lore) + chW, rs.estOut),
+      narrative: inOutTokens(rn, wc(s.transcript) + wc(notes) + chW, rn.estOut), picture: await getTokenCost('nano2') });
+  } catch (e) { res.status(500).json({ error: 'Could not estimate' }); }
+});
+
 // GET /api/tokens/ledger — current user's recent transactions
 router.get('/ledger', async function(req, res) {
   if (!requireSession(req, res)) return;

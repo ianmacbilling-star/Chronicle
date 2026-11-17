@@ -23032,6 +23032,42 @@ function updateForkEditability() {
 function forkQ() {
   return state.currentForkId ? ('?fork_id=' + encodeURIComponent(state.currentForkId)) : '';
 }
+// v3.6.94 (Ian, 2026-11-17: prices in tooltips): Generate Story, Generate Narrative and Generate Narrative & Images say
+// "About N tokens" in their tooltips, from the server's estimate of what is saved. Asked while one of the buttons is on
+// screen (at most every 30 s, sooner when the pointer reaches one after 10 s), so the number is there before the
+// tooltip shows. The shared tooltip moves title into data-cg-title while it shows; both are kept up to date.
+var GEN_EST = { key: '', at: 0, d: null, busy: false };
+function genEstFetch(maxAge) {
+  if (!state || !state.currentCampaign || !state.currentSession || GEN_EST.busy) return;
+  var key = state.currentCampaign.id + '/' + state.currentSession.id + '/' + (state.currentForkId || '');
+  if (GEN_EST.key === key && Date.now() - GEN_EST.at < maxAge) return;
+  GEN_EST.key = key; GEN_EST.at = Date.now(); GEN_EST.busy = true;
+  fetch('/api/tokens/estimate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { GEN_EST.busy = false; if (d && GEN_EST.key === key) { GEN_EST.d = d; genEstPaint(); } })
+    .catch(function () { GEN_EST.busy = false; });
+}
+function genEstSet(id, extra) {
+  var b = document.getElementById(id); if (!b) return;
+  var t0 = b.getAttribute('data-tip0');
+  if (t0 == null) { t0 = b.getAttribute('title'); if (t0 == null) t0 = (b.dataset && b.dataset.cgTitle) || ''; b.setAttribute('data-tip0', t0); }
+  var t = (t0 ? t0 + ' ' : '') + extra;
+  if (!b.hasAttribute('title') && b.dataset && b.dataset.cgTitle != null) b.dataset.cgTitle = t; else b.setAttribute('title', t);
+}
+function genEstPaint() {
+  var d = GEN_EST.d; if (!d) return;
+  var tok = function (n) { return n + ' token' + (Number(n) === 1 ? '' : 's'); };
+  genEstSet('extract-btn', 'About ' + tok(d.story) + '.');
+  genEstSet('sb-generate-narr-btn', 'About ' + tok(d.narrative) + '.');
+  genEstSet('review-generate-btn', 'About ' + tok(d.narrative) + ' for the narrative, plus ' + tok(d.picture) + ' for each picture drawn.');
+}
+setInterval(function () {
+  var on = ['extract-btn', 'sb-generate-narr-btn', 'review-generate-btn'].some(function (id) { var b = document.getElementById(id); return b && b.offsetParent; });
+  if (on) genEstFetch(30000);
+}, 3000);
+document.addEventListener('mouseover', function (e) {
+  if (e.target && e.target.closest && e.target.closest('#extract-btn, #sb-generate-narr-btn, #review-generate-btn')) genEstFetch(10000);
+}, true);
 
 // =================================================================================================
 // PREVIOUS / NEXT SESSION -- v3.0.594. Ian, 2026-08-09.

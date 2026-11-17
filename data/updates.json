@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.94",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3694-story-narrative-estimate",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Generate Story and Generate Narrative show about how many tokens they will take, in their tooltips.",
+        "detail": "Worked out from your saved story, instructions, lore and characters, the same way the charge is; the exact amount is taken when the words come back. Narrative & Images adds the picture price for each picture drawn. New GET /api/tokens/estimate.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.93",
     "staged_on": "2026-11-17",
     "entries": [
