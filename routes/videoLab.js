@@ -2684,6 +2684,13 @@ async function shotListPrices(db) {
   }
   // v3.6.76 -- TD-1148: the one cost basis (Financial tab) wins when set; else shotlist_cents_per_token as before.
   try { out.shotlist_cents_per_token = await require('../services/aiCost').centsPerToken('video'); } catch (e) {}
+  // v3.6.92 (Ian, 2026-11-17: "point those at the financial tab as well"): the Claude rates are the Financial tab's, for
+  // the model the planner runs (TEXT_MODEL); shotlist_price_in/out_per_mtok are only the fallback now.
+  try {
+    const ac = require('../services/aiCost');
+    const r = (await ac.loadSettings()).claude[ac.family(require('../config/models').TEXT_MODEL)];
+    if (r && Number.isFinite(r[0]) && Number.isFinite(r[1])) { out.shotlist_price_in_per_mtok = r[0]; out.shotlist_price_out_per_mtok = r[1]; }
+  } catch (e) {}
   return out;
 }
 function usdFor(prices, inTok, outTok) {

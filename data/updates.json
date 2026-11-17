@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.92",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3692-planning-rates",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video planning (shot list, Director's Notes, Pre-production check) is priced at the Financial tab's Claude rates (TD-1148).",
+        "detail": "The rates for the model the planner runs (TEXT_MODEL); the old shotlist_price_in/out_per_mtok settings are only a fallback. Same $3/$15 today, so charges do not change.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.91",
     "staged_on": "2026-11-17",
     "entries": [
