@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.73",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3673-memories-character-clip",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a looping clip of the character creator (TD-1158).",
+        "detail": "Ian's 12-second recording of making KJ (a photo and a description become a full-body reference), as a silent looping video of 260 KB instead of a 2.6 MB GIF.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.72",
     "staged_on": "2026-11-16",
     "entries": [

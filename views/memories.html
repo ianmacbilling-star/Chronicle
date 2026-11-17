@@ -166,6 +166,8 @@
     .feat{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;margin-bottom:120px;opacity:0;transform:translateY(40px);transition:opacity .7s, transform .7s;}
     .feat.seen{opacity:1;transform:none;}
     .feat:nth-child(even) .pic{order:2;}
+    .feat .pic.has-vid{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
+    .feat .pic.has-vid video{width:100%;height:100%;object-fit:contain;display:block;}
     .feat p{font-size:21px;line-height:1.6;color:var(--m-text);}
     .shelf{max-width:960px;margin:0 auto;}
     @media (prefers-reduced-motion: reduce){ .feat{opacity:1;transform:none;} }
@@ -399,7 +401,7 @@
   <div class="wrap">
     <h2>Campaignia Gives You Complete Control</h2>
     <div id="featList">
-      <div class="feat"><div class="pic wide"><b>GIF</b>The character creator in action</div><p>Nail the character design with reference images and detailed descriptions. Once you get it right, Campaignia will make sure the character shows up the same in every scene.</p></div>
+      <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/character-creator.mp4" poster="/images/memories/character-creator.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The character creator: a photo and a description become a consistent character"></video></div><p>Nail the character design with reference images and detailed descriptions. Once you get it right, Campaignia will make sure the character shows up the same in every scene.</p></div>
       <div class="feat"><div class="pic wide"><b>Picture</b>Amateur photos, paintings and a child&rsquo;s drawings (they can&rsquo;t look too crisp)</div><p>Eager to keep it intimate and familiar? Use real family photos, a child&rsquo;s drawings, your own artwork. Upload them and place them right in the story, surrounded by AI-generated narrative.</p></div>
       <div class="feat"><div class="pic wide"><b>GIF or picture</b>Choosing a narrative style</div><p>Campaignia turns your bullet points into prose &ndash; opening scenes, smooth transitions, surprise twists &ndash; so it reads like a real novel. Tinker with multiple narrative styles, lengths, and points of view to hit that sweet spot.</p></div>
       <div class="feat"><div class="pic wide"><b>GIF</b>Editing a single scene (both the image and the text)</div><p>Reprompt with precision. Every sentence, character, background, and minute detail can be edited without destroying your hard work. Keep what you like and change what you need to match reality.</p></div>
