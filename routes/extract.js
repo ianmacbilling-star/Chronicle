@@ -288,12 +288,15 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   // never our behind-the-scenes prompt scaffolding.
   var _wc = function (t) { var v = (t == null ? '' : String(t)).trim(); return v ? v.split(/\s+/).length : 0; };
   var _userWords = _wc(session.transcript) + _wc(session.session_notes) + _wc(session.campaign_lore);
-  var _storyCharge = 0;
-  try { _storyCharge = await computeGenCharge(_userWords, 'gen_story_words_per_token', 'gen_story_floor'); } catch (e) { _storyCharge = 0; }
+  // v3.6.89 -- TD-1148 stage 3 (Ian): words in (these) and words out (what Claude writes), each per token with a floor of
+  // 1, added and rounded once (routes/tokens.js inOutTokens). Checked now on an estimate; the exact charge is made below.
+  var _storyRates = null, _storyCharge = 0, _storyOut0 = 0;
+  try { const _tk = require('./tokens'); _storyRates = await _tk.inOutRates('story'); _storyCharge = _tk.inOutTokens(_storyRates, _userWords, _storyRates.estOut); } catch (e) { _storyRates = null; _storyCharge = 0; }
+  try { _storyOut0 = require('../services/aiCost').claudeOutSoFar(); } catch (e) {}
   if (_storyCharge > 0) {
     const _bal = await getBalance(req.session.userId);
     if (_bal.total < _storyCharge) {
-      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'Generating this story costs ' + _storyCharge + ' token' + (_storyCharge === 1 ? '' : 's') + ', but you have ' + _bal.total + '. Add tokens and try again.' });
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'Generating this story costs about ' + _storyCharge + ' token' + (_storyCharge === 1 ? '' : 's') + ', but you have ' + _bal.total + '. Add tokens and try again.' });
     }
   }
 
@@ -640,6 +643,15 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
 
     delete parsed.recurring_elements;   // v3.1.9 -- stored on the fork; the job result need not carry it
     parsed.pendingChanges = pendingChanges;
+    // v3.6.89: the exact charge, from the words Claude wrote for this story (its output tokens x 3/4); never more than
+    // the balance (a story that wrote more than estimated takes what is there rather than failing to charge at all)
+    if (_storyRates) {
+      try {
+        const _o = require('../services/aiCost').claudeOutSoFar() - _storyOut0;
+        _storyCharge = require('./tokens').inOutTokens(_storyRates, _userWords, _o > 0 ? Math.round(_o * 3 / 4) : _storyRates.estOut);
+        const _b = await getBalance(req.session.userId); if (_b.total < _storyCharge) _storyCharge = Math.max(0, Number(_b.total) || 0);
+      } catch (e) {}
+    }
     if (_storyCharge > 0) {
       try { await spendTokens(req.session.userId, _storyCharge, { source: 'generate_story', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('generate_story spend failed:', e.message); }
     }

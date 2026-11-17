@@ -642,7 +642,8 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     });
     let claude = null;
     try { claude = await db.prepare("SELECT COUNT(*) AS n, SUM(cost_usd) AS usd FROM ai_calls WHERE created_at >= NOW() - INTERVAL '30 days'").get(); } catch (e) {}
-    res.json({ cents: cents, centsSet: !!s.cents, projected: proj, video: video, oldVideo: s.oldShot, oldLayout: s.oldLayout, audioMinute: s.audioMinute, images: s.images, claude: s.claude,
+    let gen = null; try { gen = { story: await tk.inOutRates('story'), narrative: await tk.inOutRates('narrative') }; } catch (e) {}   // v3.6.89
+    res.json({ cents: cents, centsSet: !!s.cents, projected: proj, video: video, gen: gen, oldVideo: s.oldShot, oldLayout: s.oldLayout, audioMinute: s.audioMinute, images: s.images, claude: s.claude,
       defaults: ac.DEFAULTS, rows: rows, real: realRows, claudeCalls: claude ? { n: Number(claude.n) || 0, usd: claude.usd == null ? 0 : Number(claude.usd) } : null,
       since: 'v3.6.76' });
   } catch (e) { console.error('[cost-basis] GET', e && e.message); res.status(500).json({ error: 'Server error' }); }
@@ -706,10 +707,9 @@ router.get('/generation-settings', requireAuth, requireAdmin, async function (re
     const db = await getDb();
     async function g(k){ const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(k); return r ? r.value : null; }
     res.json({
-      storyWordsPerToken: _giToInt(await g('gen_story_words_per_token')),
-      storyFloor: _giToInt(await g('gen_story_floor')),
-      narrativePanelsPerToken: _giToInt(await g('gen_narrative_panels_per_token')),
-      narrativeFloor: _giToInt(await g('gen_narrative_floor')),
+      // v3.6.89 -- TD-1148 stage 3: words in and words out per token, each with a floor (Story and Narrative)
+      story: await require('./tokens').inOutRates('story'),
+      narrative: await require('./tokens').inOutRates('narrative'),
       transcriptCacheTtl: ((await g('transcript_cache_ttl')) === '1h') ? '1h' : '5m',
       // v3.0.356 -- what ONE layout-loop token is worth to us, in cents. The layout charge divides
       // the real Anthropic cost of each AI pass by this, so raising it makes Optimize cheaper for
@@ -733,10 +733,16 @@ router.put('/generation-settings', requireAuth, requireAdmin, async function (re
     const b = req.body || {};
     const ttl = (b.transcriptCacheTtl === '1h') ? '1h' : '5m';
     const pairs = [
-      ['gen_story_words_per_token', String(_giToInt(b.storyWordsPerToken))],
-      ['gen_story_floor', String(_giToInt(b.storyFloor))],
-      ['gen_narrative_panels_per_token', String(_giToInt(b.narrativePanelsPerToken))],
-      ['gen_narrative_floor', String(_giToInt(b.narrativeFloor))],
+      // v3.6.89: the old words-per-token, panels-per-token and floor settings are no longer read (gen_story_words_per_token
+      // only as the default for Story's words in); these replace them
+      ['gen_story_words_in_per_token', String(_giToInt(b.story && b.story.in))],
+      ['gen_story_floor_in', String(_giToInt(b.story && b.story.floorIn))],
+      ['gen_story_words_out_per_token', String(_giToInt(b.story && b.story.out))],
+      ['gen_story_floor_out', String(_giToInt(b.story && b.story.floorOut))],
+      ['gen_narrative_words_in_per_token', String(_giToInt(b.narrative && b.narrative.in))],
+      ['gen_narrative_floor_in', String(_giToInt(b.narrative && b.narrative.floorIn))],
+      ['gen_narrative_words_out_per_token', String(_giToInt(b.narrative && b.narrative.out))],
+      ['gen_narrative_floor_out', String(_giToInt(b.narrative && b.narrative.floorOut))],
       ['transcript_cache_ttl', ttl],
       // v3.0.356 -- floor of 1 cent, default 8. Never allow 0: the charge site divides by it.
       ['layout_loop_cost_cents', String((function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 1) ? n : 8; })(b.layoutLoopCostCents))],

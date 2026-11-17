@@ -2064,16 +2064,25 @@
         <!-- v3.0.356: existing story/narrative charging, boxed as its own sub-section -->
         <div style="border:1px solid rgba(var(--amber-note-line-rgb),0.35);border-radius:6px;padding:12px 14px;margin-bottom:14px;">
         <div style="color:var(--accent-bright);font-size:13px;font-weight:600;margin-bottom:6px;">Story &amp; narrative generation</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Charge tokens for story/narrative generation, scaled by size. Tokens = max(floor, size &divide; rate) rounded down. Set a rate to 0 to charge only the floor; set both floor and rate to 0 to charge nothing.</div>
+                <!-- v3.6.89 -- TD-1148 stage 3 (Ian, 2026-11-17): words in and words out, each with its floor; rounded once -->
+        <div class="settings-section-desc" style="margin-bottom:10px;">Charged on words in (the customer's own words: Story box, instructions, lore) and words out (what Claude writes). Tokens = max(floor in, words in &divide; rate in) + max(floor out, words out &divide; rate out), the total rounded to the nearest token. Before a run the balance is checked using the Already Written recommended words as the words out; the exact amount is charged when the words come back. A rate of 0 charges only its floor.</div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;max-width:460px;">
-          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; words per token</label>
-          <input type="number" min="0" step="1" id="gen-story-wpt" style="width:110px;" />
-          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; floor (min tokens)</label>
-          <input type="number" min="0" step="1" id="gen-story-floor" style="width:110px;" />
-          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; panels per token</label>
-          <input type="number" min="0" step="1" id="gen-narr-ppt" style="width:110px;" />
-          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; floor (min tokens)</label>
-          <input type="number" min="0" step="1" id="gen-narr-floor" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; words in per token</label>
+          <input type="number" min="0" step="1" id="gen-story-in" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; floor in (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-story-floor-in" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; words out per token</label>
+          <input type="number" min="0" step="1" id="gen-story-out" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; floor out (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-story-floor-out" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; words in per token</label>
+          <input type="number" min="0" step="1" id="gen-narr-in" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; floor in (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-narr-floor-in" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; words out per token</label>
+          <input type="number" min="0" step="1" id="gen-narr-out" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; floor out (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-narr-floor-out" style="width:110px;" />
           <label style="color:var(--accent-bright);font-size:13px;">Transcript cache duration</label>
           <select id="transcript-cache-ttl" style="width:110px;">
             <option value="5m">5 minutes</option>

@@ -30839,17 +30839,17 @@ function sendEmailPreview() {
 }
 
 function loadGenerationSettings() {
-  var el = document.getElementById('gen-story-wpt');
+  var el = document.getElementById('gen-story-in');   // v3.6.89
   if (!el) return;
   fetch('/api/admin/generation-settings')
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) {
       if (!j) return;
       var g = function(id){ return document.getElementById(id); };
-      if (g('gen-story-wpt')) g('gen-story-wpt').value = j.storyWordsPerToken;
-      if (g('gen-story-floor')) g('gen-story-floor').value = j.storyFloor;
-      if (g('gen-narr-ppt')) g('gen-narr-ppt').value = j.narrativePanelsPerToken;
-      if (g('gen-narr-floor')) g('gen-narr-floor').value = j.narrativeFloor;
+      // v3.6.89 -- TD-1148 stage 3: words in and out, each with a floor
+      [['story', 'gen-story'], ['narrative', 'gen-narr']].forEach(function (p) { var r = j[p[0]] || {};
+        if (g(p[1] + '-in')) g(p[1] + '-in').value = r.in; if (g(p[1] + '-floor-in')) g(p[1] + '-floor-in').value = r.floorIn;
+        if (g(p[1] + '-out')) g(p[1] + '-out').value = r.out; if (g(p[1] + '-floor-out')) g(p[1] + '-floor-out').value = r.floorOut; });
       if (g('transcript-cache-ttl')) g('transcript-cache-ttl').value = (j.transcriptCacheTtl === '1h') ? '1h' : '5m';
       if (g('layout-loop-cost')) g('layout-loop-cost').value = (j.layoutLoopCostCents != null ? j.layoutLoopCostCents : 8);   // v3.0.356
       if (g('gen-summary-limit')) g('gen-summary-limit').value = (j.summaryCharLimit != null ? j.summaryCharLimit : 1500);   // v3.0.967 -- TD-852
@@ -30866,10 +30866,8 @@ function saveGenerationSettings() {
   fetch('/api/admin/generation-settings', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      storyWordsPerToken: iv('gen-story-wpt'),
-      storyFloor: iv('gen-story-floor'),
-      narrativePanelsPerToken: iv('gen-narr-ppt'),
-      narrativeFloor: iv('gen-narr-floor'),
+      story: { in: iv('gen-story-in'), floorIn: iv('gen-story-floor-in'), out: iv('gen-story-out'), floorOut: iv('gen-story-floor-out') },   // v3.6.89
+      narrative: { in: iv('gen-narr-in'), floorIn: iv('gen-narr-floor-in'), out: iv('gen-narr-out'), floorOut: iv('gen-narr-floor-out') },
       transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m',
       summaryCharLimit: (function () { var n = parseInt((g('gen-summary-limit') || {}).value, 10); return (isFinite(n) && n >= 200) ? n : 1500; })(),   // v3.0.967 -- TD-852
       writtenMaxWords: (function () { var n = parseInt((g('gen-written-max-words') || {}).value, 10); return (isFinite(n) && n >= 100) ? n : 3000; })(),   // v3.1.51 -- TD-941
@@ -47145,8 +47143,31 @@ function cbAudio15() {
 // v3.6.78 (Ian, 2026-11-17): an example call beside each Claude line, 6,000 words in and 2,000 out. A word is about
 // 4/3 of an Anthropic token, so 8,000 tokens in and about 2,667 out; in our tokens at the basis on the page.
 var CB_EX_IN = 6000 * 4 / 3, CB_EX_OUT = 2000 * 4 / 3;
+// v3.6.89 (Ian, 2026-11-17: "instead of 6000 it should be 4000 and say it comes from the ... setting"): the example is a
+// Generate Story run at its own settings: its words in and words out per token, and what Story charges for it.
+function cbStoryWords() {
+  var r = (CB && CB.gen && CB.gen.story) || null;
+  if (!r) return null;
+  return { win: Number(r.in) > 0 ? Number(r.in) : 4000, wout: Number(r.out) > 0 ? Number(r.out) : 2500, r: r };
+}
 function cbClaudeEx() {
   var cents = (CB && Number(CB.cents) > 0) ? Number(CB.cents) : 8;
+  var sw = cbStoryWords();
+  if (sw) {
+    var tin = sw.win * 4 / 3, tout = sw.wout * 4 / 3;
+    var part = function (w, rate, floor) { return Math.max(Number(floor) || 0, Number(rate) > 0 ? w / Number(rate) : 0); };
+    var charged = Math.max(0, Math.floor(part(sw.win, sw.r.in, sw.r.floorIn) + part(sw.wout, sw.r.out, sw.r.floorOut) + 0.5 + 1e-9));
+    [].slice.call(document.querySelectorAll('.cb-clex')).forEach(function (o) {
+      var f = o.getAttribute('data-f');
+      var ins = document.querySelectorAll('.cb-cl[data-f="' + f + '"]');
+      var rin = parseFloat(ins[0] && ins[0].value), rout = parseFloat(ins[1] && ins[1].value);
+      if (!isFinite(rin) || !isFinite(rout)) { o.textContent = ''; return; }
+      var a = tin * rin / 1e6, b = tout * rout / 1e6, usd = a + b;
+      var tok = Math.round(usd * 100 / cents * 100) / 100;
+      o.textContent = sw.win.toLocaleString('en-US') + ' words in + ' + sw.wout.toLocaleString('en-US') + ' out (Generate Story settings) = $' + a.toFixed(3) + ' + $' + b.toFixed(3) + ' = $' + usd.toFixed(3) + ' (' + tok + ' tokens of cost at ' + cents + '\u00a2; Story charges ' + charged + ')';
+    });
+    return;
+  }
   [].slice.call(document.querySelectorAll('.cb-clex')).forEach(function (o) {
     var f = o.getAttribute('data-f');
     var ins = document.querySelectorAll('.cb-cl[data-f="' + f + '"]');

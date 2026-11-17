@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.89",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3689-story-in-out",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Generate Story and Generate Narrative are charged on words in and words out: 1 token per 4,000 words in and per 2,500 words out, at least 1 each, the total rounded once (TD-1148 stage 3).",
+        "detail": "Words in are the customer's own words; words out are what Claude wrote (output tokens x 3/4). The balance is checked first on an estimate (the Already Written recommended words as the words out); the exact amount is charged when the words come back, never more than the balance. Narrative's per-panel charge is gone. Settings: eight new fields under Generation charging. The Financial tab's Claude example is a Story run at those settings.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.88",
     "staged_on": "2026-11-17",
     "entries": [

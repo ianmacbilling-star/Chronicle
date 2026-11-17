@@ -126,6 +126,9 @@ async function audioMinuteUsd() { return (await loadSettings()).audioMinute; }
 function middleware(req, res, next) { als.run({ req: req, calls: [] }, next); }
 function store() { return als.getStore() || null; }
 
+// v3.6.89: all the Anthropic tokens Claude has written on this request so far (takeClaude does not clear it). A charge
+// reads it before and after its calls; the difference x 3/4 is the words written.
+function claudeOutSoFar() { const st = store(); return st ? (st.outAll || 0) : 0; }
 // Take the Claude usage this request has run up since the last take. { calls, in, out, usd }
 function takeClaude() {
   const st = store();
@@ -143,7 +146,7 @@ async function noteClaude(json) {
     const usd = claudeUsd(s, json.model, u);
     const inAll = (Number(u.input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0);
     const st = store();
-    if (st) st.calls.push({ in: inAll, out: Number(u.output_tokens) || 0, usd: usd });
+    if (st) { st.calls.push({ in: inAll, out: Number(u.output_tokens) || 0, usd: usd }); st.outAll = (st.outAll || 0) + (Number(u.output_tokens) || 0); }   // v3.6.89: outAll for the words-out charge
     const req = st && st.req;
     const uid = req && req.session && req.session.userId ? req.session.userId : null;
     const where = req ? String((req.method || '') + ' ' + (req.baseUrl || '') + (req.path || '')).slice(0, 200) : 'background';
@@ -175,4 +178,4 @@ function hookFetch() {
 }
 
 module.exports = { DEFAULTS, loadSettings, forget, applyVideo, centsPerToken, tokensFor, claudeUsd, family, imageKey, imageUsd, imageUsdSync,
-  audioMinuteUsd, middleware, store, takeClaude, noteClaude, hookFetch };
+  audioMinuteUsd, middleware, store, takeClaude, claudeOutSoFar, noteClaude, hookFetch };

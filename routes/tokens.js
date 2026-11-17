@@ -1868,8 +1868,34 @@ async function computeGenCharge(size, rateKey, floorKey) {
   return charge > 0 ? charge : 0;
 }
 
+// v3.6.89 -- TD-1148 stage 3 (Ian, 2026-11-17: "1 token for every 4000 in and 1 token for every 2500 out ... even a tiny
+// story costs 2 tokens... 1 min in. 1 min out ... round the total... not each"). Generate Story and Generate Narrative.
+// Words in: the customer's own words (Ian: option 1), never our instructions. Words out: what Claude wrote (its output
+// tokens x 3/4). Each part at least its floor; the two added and rounded once to the nearest token. A rate of 0 charges
+// that part its floor only. Before the run we check the balance using the Already Written recommended words
+// (written_max_words, 3000) as the words out; the exact charge is made when the words come back.
+const INOUT_DEFAULTS = { in: 4000, out: 2500, floorIn: 1, floorOut: 1 };
+async function inOutRates(kind) {
+  const db = await getDb();
+  const g = async function (k, dflt) { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(k); const n = r ? parseInt(r.value, 10) : NaN; return (Number.isFinite(n) && n >= 0) ? n : dflt; };
+  const p = 'gen_' + (kind === 'narrative' ? 'narrative' : 'story') + '_';
+  let inDef = INOUT_DEFAULTS.in;
+  if (kind !== 'narrative') { const old = await g('gen_story_words_per_token', 0); if (old > 0) inDef = old; }   // the old Story rate becomes words in
+  const est = await g('written_max_words', 3000);
+  return { in: await g(p + 'words_in_per_token', inDef), out: await g(p + 'words_out_per_token', INOUT_DEFAULTS.out),
+    floorIn: await g(p + 'floor_in', INOUT_DEFAULTS.floorIn), floorOut: await g(p + 'floor_out', INOUT_DEFAULTS.floorOut), estOut: est >= 100 ? est : 3000 };
+}
+function inOutTokens(r, wordsIn, wordsOut) {
+  if (!r) return 0;
+  const part = function (w, rate, floor) { return Math.max(Number(floor) || 0, Number(rate) > 0 ? (Number(w) || 0) / Number(rate) : 0); };
+  const t = part(wordsIn, r.in, r.floorIn) + part(wordsOut, r.out, r.floorOut);
+  return Math.max(0, Math.floor(t + 0.5 + 1e-9));
+}
+
 module.exports = {
   computeGenCharge,
+  inOutRates,    // v3.6.89
+  inOutTokens,   // v3.6.89
   router,
   getTokenCost,
   getTokenCostPin,   // v3.6.80
