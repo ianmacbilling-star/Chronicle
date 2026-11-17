@@ -569,6 +569,89 @@ router.put('/help-email-settings', requireAuth, requireAdmin, async function (re
 // with a floor (minimum-that-scales, i.e. max(floor, size/N) rounded DOWN).
 // All default 0 (= no charge). transcript_cache_ttl is '5m' or '1h' (default 5m).
 function _giToInt(v){ var n=parseInt(v,10); return (Number.isFinite(n)&&n>=0)?n:0; }
+// v3.6.76 -- TD-1148 stage 1 (Ian, 2026-11-17: "set that as a dashboard variable... a running table on the dashboard.
+// Put the setting and the table on the financial tab"). Our cost per token, our provider costs, what each action costs
+// at that basis, and the last 30 days of real costs. Spec: claude/TOKEN_COST_BASIS_SPEC.md.
+const COST_LABELS = { video_take: 'Video take', video_shot_list: 'Video shot list', video_shot_plan: 'Video shot notes', video_precheck: 'Video Pre-production check',
+  video_review: 'Video take review', generate_story: 'Story', generate_narrative: 'Narrative', writing_tool: 'Writing tools', audio_transcript: 'Transcription',
+  layout_review: 'Optimize (layout pass)', layout_apply: 'Optimize (apply)', new_panel: 'New panel', story_page_ocr: 'Story from photos (OCR)',
+  character_sheet_import: 'Character sheet import', custom_style_analyze: 'Custom style analyze', custom_style_preview: 'Custom style preview',
+  panel_retouch: 'Picture retouch', character_reference: 'Character picture', amendment_reference: 'Chapter reference picture', asset_reference: 'Asset picture',
+  asset_retouch: 'Asset retouch', upload_rights_check: 'Upload rights check (free)', asset_suggestions_accept: 'Suggested assets (free)', asset_classify_names: 'Asset names (free)' };
+router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const ac = require('../services/aiCost');
+    const s = await ac.loadSettings(true);
+    const cents = await ac.centsPerToken('');
+    const tk = require('./tokens');
+    const rows = [];
+    // pictures: one row per priced model; "now" is today's fixed price (token_cost:nano2, 1 unless set)
+    const picNow = await tk.getTokenCost('nano2');
+    Object.keys(s.images).forEach(function (k) { rows.push({ group: 'Pictures', what: 'Picture: ' + k, usd: s.images[k], now: picNow, at: ac.tokensFor(s.images[k], cents) }); });
+    rows.push({ group: 'Transcription', what: 'Transcription, 15 minutes', usd: s.audioMinute * 15, now: 2, at: ac.tokensFor(s.audioMinute * 15, cents) });
+    // video: every model at its default length, no sound; its "now" already follows the basis (it is priced from cost)
+    try {
+      const M = require('./videoLab').MODELS, vc = await ac.centsPerToken('video');
+      Object.keys(M).forEach(function (k) {
+        const m = M[k]; const d = Number(m.defDuration) || 5; const usd = (Number(m.price) || 0) * d;
+        if (!usd) return;
+        rows.push({ group: 'Video', what: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : '') + ', ' + d + ' s', usd: usd, now: ac.tokensFor(usd, vc), at: ac.tokensFor(usd, cents) });
+      });
+    } catch (e) {}
+    // the last 30 days, real: what each kind of generation cost us beside what it charged
+    const db = await getDb();
+    const real = await db.prepare("SELECT event_type, COUNT(*) AS n, COUNT(cost_usd) AS priced, SUM(cost_usd) AS usd, SUM(tokens_redeemed) AS tokens, SUM(CASE WHEN cost_usd IS NOT NULL THEN tokens_redeemed ELSE 0 END) AS tokens_priced, SUM(quantity) AS qty, MAX(unit) AS unit FROM generation_events WHERE created_at >= NOW() - INTERVAL '30 days' GROUP BY event_type ORDER BY SUM(cost_usd) DESC NULLS LAST, COUNT(*) DESC").all();
+    const realRows = (real || []).map(function (r) {
+      const usd = r.usd == null ? null : Number(r.usd), pricedTok = Number(r.tokens_priced) || 0, priced = Number(r.priced) || 0;
+      return { kind: r.event_type, label: COST_LABELS[r.event_type] || r.event_type, events: Number(r.n) || 0, priced: priced, usd: usd,
+        tokens: Number(r.tokens) || 0, qty: r.qty == null ? null : Number(r.qty), unit: r.unit || '',
+        avgUsd: (usd != null && priced) ? usd / priced : null,
+        centsPerToken: (usd != null && pricedTok) ? usd * 100 / pricedTok : null,
+        atPerEvent: (usd != null && priced) ? ac.tokensFor(usd / priced, cents, 0) : null };
+    });
+    let claude = null;
+    try { claude = await db.prepare("SELECT COUNT(*) AS n, SUM(cost_usd) AS usd FROM ai_calls WHERE created_at >= NOW() - INTERVAL '30 days'").get(); } catch (e) {}
+    res.json({ cents: cents, centsSet: !!s.cents, oldVideo: s.oldShot, oldLayout: s.oldLayout, audioMinute: s.audioMinute, images: s.images, claude: s.claude,
+      defaults: ac.DEFAULTS, rows: rows, real: realRows, claudeCalls: claude ? { n: Number(claude.n) || 0, usd: claude.usd == null ? 0 : Number(claude.usd) } : null,
+      since: 'v3.6.76' });
+  } catch (e) { console.error('[cost-basis] GET', e && e.message); res.status(500).json({ error: 'Server error' }); }
+});
+router.put('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
+  try {
+    const b = req.body || {};
+    const pairs = [];
+    const num = function (v, lo, hi) { const n = parseFloat(v); return (Number.isFinite(n) && n >= lo && n <= hi) ? n : null; };
+    if (b.cents !== undefined) {
+      if (b.cents === '' || b.cents === null) pairs.push(['cost_cents_per_token', null]);
+      else { const c = num(b.cents, 1, 100); if (c == null) return res.status(400).json({ error: 'Cost per token must be between 1 and 100 cents.' }); pairs.push(['cost_cents_per_token', String(c)]); }
+    }
+    if (b.audioMinute !== undefined) { const a = num(b.audioMinute, 0, 10); if (a == null) return res.status(400).json({ error: 'Transcription cost must be 0 to 10 dollars a minute.' }); pairs.push(['unit_cost:audio_minute', String(a)]); }
+    if (b.images && typeof b.images === 'object') {
+      for (const k of Object.keys(b.images)) {
+        if (!/^[a-z0-9][a-z0-9._-]{0,60}$/i.test(k)) return res.status(400).json({ error: 'A picture model name is not valid: ' + k });
+        const v = num(b.images[k], 0, 10); if (v == null) return res.status(400).json({ error: 'The picture cost for ' + k + ' must be 0 to 10 dollars.' });
+        pairs.push(['unit_cost:image:' + k, String(v)]);
+      }
+    }
+    if (b.claude && typeof b.claude === 'object') {
+      for (const f of ['sonnet', 'haiku', 'opus']) {
+        if (!b.claude[f]) continue;
+        const i = num(b.claude[f][0], 0, 1000), o = num(b.claude[f][1], 0, 1000);
+        if (i == null || o == null) return res.status(400).json({ error: 'Claude ' + f + ' rates must be dollars per million tokens, in and out.' });
+        pairs.push(['claude_rate:' + f, i + '/' + o]);
+      }
+    }
+    const db = await getDb();
+    for (const p of pairs) {
+      if (p[1] === null) { await db.prepare('DELETE FROM app_settings WHERE setting_key = ?').run(p[0]); continue; }
+      const ex = await db.prepare('SELECT 1 AS x FROM app_settings WHERE setting_key = ?').get(p[0]);
+      if (ex) await db.prepare('UPDATE app_settings SET value = ? WHERE setting_key = ?').run(p[1], p[0]);
+      else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run(p[0], p[1]);
+    }
+    require('../services/aiCost').forget();
+    res.json({ ok: true, saved: pairs.length });
+  } catch (e) { console.error('[cost-basis] PUT', e && e.message); res.status(500).json({ error: 'Server error' }); }
+});
 router.get('/generation-settings', requireAuth, requireAdmin, async function (req, res) {
   try {
     const db = await getDb();

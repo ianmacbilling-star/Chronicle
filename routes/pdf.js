@@ -4709,6 +4709,8 @@ async function layoutLoopCostUsd() {
   // live-tunable setting uses, rather than a second hand-rolled query that could drift.
   var n = await getAppSettingInt('layout_loop_cost_cents', LAYOUT_LOOP_COST_CENTS_DEFAULT);
   if (!Number.isFinite(n) || n < 1) n = LAYOUT_LOOP_COST_CENTS_DEFAULT;   // never 0: we divide by this
+  // v3.6.76 -- TD-1148: the one cost basis (Financial tab) wins when set; else layout_loop_cost_cents as before.
+  try { var _c = await require('../services/aiCost').centsPerToken('layout'); if (Number.isFinite(_c) && _c >= 1) n = _c; } catch (e) {}
   return n / 100;
 }
 // Charge for ONE AI pass, metered on the usage the API actually reported. Returns a plain object

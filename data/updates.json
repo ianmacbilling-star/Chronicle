@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.76",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3676-cost-basis",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Our real cost is now recorded beside every token spend, and the cost per token is a Financial-tab setting (TD-1148, stage 1).",
+        "detail": "Every Claude call is priced and logged (ai_calls), and each generation stores what it really cost us: pictures by model, transcription by the minute, video takes from fal's price, Claude by what it used. The Financial tab has our cost per token (video and Optimize follow it so far), our provider costs, a table of what each action costs at that basis, and the last 30 days of real costs. At 8 cents nothing is priced differently.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.75",
     "staged_on": "2026-11-16",
     "entries": [

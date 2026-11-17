@@ -47037,3 +47037,71 @@ function frozenEchoed(msg) {
     window[n] = w;
   });
 })();
+
+// v3.6.76 -- TD-1148 stage 1 (Ian, 2026-11-17: "set that as a dashboard variable... a running table on the dashboard.
+// Put the setting and the table on the financial tab"). Spec: claude/TOKEN_COST_BASIS_SPEC.md.
+var CB = null;
+function cbEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function cbUsd(n, dp) { if (n == null || !isFinite(n)) return '\u2014'; return '$' + Number(n).toFixed(dp == null ? (n < 1 ? 4 : 2) : dp); }
+function loadCostBasis() {
+  var box = document.getElementById('cb-table'); if (!box) return;
+  fetch('/api/admin/cost-basis').then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { box.textContent = (d && d.error) || 'Could not load.'; return; }
+    CB = d;
+    var ci = document.getElementById('cb-cents'); if (ci) ci.value = d.centsSet ? d.cents : '';
+    var th = 'style="text-align:left;padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;"';
+    var td = 'style="padding:4px 10px;font-size:13px;"';
+    // provider costs
+    var c = '<div style="display:grid;grid-template-columns:auto auto;gap:8px 12px;align-items:center;max-width:620px;">';
+    Object.keys(d.images).forEach(function (k) {
+      c += '<label style="font-size:13px;">Picture, ' + cbEsc(k) + ' ($)</label><input class="form-input cb-img" data-k="' + cbEsc(k) + '" type="number" min="0" step="0.001" value="' + cbEsc(d.images[k]) + '" style="width:120px;" />';
+    });
+    c += '<label style="font-size:13px;">Transcription, a minute ($)</label><input class="form-input" id="cb-audio" type="number" min="0" step="0.001" value="' + cbEsc(d.audioMinute) + '" style="width:120px;" />';
+    ['sonnet', 'haiku'].forEach(function (f) {
+      var r = d.claude[f] || [0, 0];
+      c += '<label style="font-size:13px;">Claude ' + f + ', $ per million tokens (in / out)</label><span><input class="form-input cb-cl" data-f="' + f + '" data-i="0" type="number" min="0" step="0.01" value="' + cbEsc(r[0]) + '" style="width:80px;" /> / <input class="form-input cb-cl" data-f="' + f + '" data-i="1" type="number" min="0" step="0.01" value="' + cbEsc(r[1]) + '" style="width:80px;" /></span>';
+    });
+    c += '</div><div style="margin-top:8px;"><button class="btn btn-secondary" onclick="saveProviderCosts()">Save costs</button> <span id="cb-msg2" style="font-size:13px;"></span></div>';
+    document.getElementById('cb-costs').innerHTML = c;
+    // what each action costs
+    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2</th></tr>';
+    var last = '';
+    d.rows.forEach(function (r) {
+      if (r.group !== last) { t += '<tr><td colspan="4" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
+      var diff = r.at !== r.now ? ' style="padding:4px 10px;font-size:13px;font-weight:700;"' : ' ' + td;
+      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + cbEsc(r.now) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td></tr>';
+    });
+    t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;">Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
+    box.innerHTML = t;
+    // the last 30 days
+    var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2</th></tr>';
+    if (!d.real.length) R += '<tr><td colspan="8" ' + td + '>Nothing yet.</td></tr>';
+    d.real.forEach(function (r) {
+      R += '<tr><td ' + td + '>' + cbEsc(r.label) + '</td><td ' + td + '>' + r.events + '</td><td ' + td + '>' + r.priced + '</td><td ' + td + '>' + cbUsd(r.usd, 2) + '</td><td ' + td + '>' + cbUsd(r.avgUsd) + '</td><td ' + td + '>' + r.tokens + '</td><td ' + td + '>' + (r.centsPerToken == null ? '\u2014' : r.centsPerToken.toFixed(1)) + '</td><td ' + td + '>' + (r.atPerEvent == null ? '\u2014' : r.atPerEvent) + '</td></tr>';
+    });
+    R += '</table>';
+    if (d.claudeCalls) R += '<div style="font-size:12px;margin-top:6px;opacity:0.8;">All Claude calls in 30 days (charged or not): ' + d.claudeCalls.n + ', ' + cbUsd(d.claudeCalls.usd, 2) + '.</div>';
+    document.getElementById('cb-real').innerHTML = R;
+  }).catch(function () { box.textContent = 'Could not load.'; });
+}
+function cbPut(body, msgId) {
+  var m = document.getElementById(msgId); if (m) m.textContent = 'Saving...';
+  fetch('/api/admin/cost-basis', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (m) m.textContent = (d && d.ok) ? 'Saved.' : ((d && d.error) || 'Not saved.');
+      if (d && d.ok) loadCostBasis();
+    }).catch(function () { if (m) m.textContent = 'Not saved.'; });
+}
+function saveCostBasis() { var v = document.getElementById('cb-cents').value.trim(); cbPut({ cents: v === '' ? '' : v }, 'cb-msg'); }
+function saveProviderCosts() {
+  var images = {}; [].slice.call(document.querySelectorAll('.cb-img')).forEach(function (i) { images[i.getAttribute('data-k')] = i.value; });
+  var claude = {}; [].slice.call(document.querySelectorAll('.cb-cl')).forEach(function (i) { var f = i.getAttribute('data-f'); claude[f] = claude[f] || [0, 0]; claude[f][Number(i.getAttribute('data-i'))] = i.value; });
+  cbPut({ images: images, audioMinute: document.getElementById('cb-audio').value, claude: claude }, 'cb-msg2');
+}
+(function () {
+  var orig = window.switchSettingsTab;
+  if (typeof orig !== 'function' || orig._cbWrapped) return;
+  var w = function (tab) { var r = orig.apply(this, arguments); try { if (tab === 'financial' && settingsTabsAllowed().indexOf('financial') >= 0) loadCostBasis(); } catch (e) {} return r; };
+  w._cbWrapped = true;
+  window.switchSettingsTab = w;
+})();

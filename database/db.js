@@ -980,6 +980,28 @@ async function initPostgres() {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_genevents_type ON generation_events(event_type)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_genevents_created ON generation_events(created_at)');
+  // v3.6.76 -- TD-1148 stage 1 (Ian, 2026-11-17: "record the actual cost along with the token spend"). What each
+  // generation really cost us, in dollars, beside the tokens it charged; in/out are Claude's token counts when Claude ran.
+  // ai_calls: one row for every Claude call, priced, so calls nobody charges for are counted too (services/aiCost.js).
+  await pool.query('ALTER TABLE generation_events ADD COLUMN IF NOT EXISTS cost_usd NUMERIC');
+  await pool.query('ALTER TABLE generation_events ADD COLUMN IF NOT EXISTS in_tokens INTEGER');
+  await pool.query('ALTER TABLE generation_events ADD COLUMN IF NOT EXISTS out_tokens INTEGER');
+  await pool.query('ALTER TABLE generation_events ADD COLUMN IF NOT EXISTS cost_source TEXT');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ai_calls (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      route TEXT,
+      model TEXT,
+      in_tokens INTEGER,
+      out_tokens INTEGER,
+      cache_write_tokens INTEGER,
+      cache_read_tokens INTEGER,
+      cost_usd NUMERIC,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_ai_calls_created ON ai_calls(created_at)');
   // Promo codes (Stage 1): app-side catalog of promo/ad codes. Rides on top of
   // Stripe-native discounts (purchases) and ad-link ?promo capture (signups). The
   // action (token_grant / percent_off / amount_off + value) drives what happens;

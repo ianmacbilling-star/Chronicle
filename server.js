@@ -16,6 +16,11 @@ app.set('trust proxy', 1);
 
 app.use(express.json({ limit: '10mb', verify: function(req, res, buf) { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// v3.6.76 -- TD-1148 stage 1: every Claude call is priced and recorded, and each request carries what it used so
+// recordGeneration can store the real cost beside the tokens (services/aiCost.js). Never in the way of a request.
+const aiCost = require('./services/aiCost');
+aiCost.hookFetch();
+app.use(aiCost.middleware);
 
 // ------------------------------------------------------------
 // Health check — mounted BEFORE the session middleware so uptime

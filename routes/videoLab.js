@@ -319,7 +319,7 @@ function tokensShort(need, f, what) {
   return { status: 402, error: 'INSUFFICIENT_TOKENS', message: what + ' costs ' + need + ' token' + (need === 1 ? '' : 's') + ', but you have ' + f.free + (f.held ? ' free (' + f.held + ' are held for takes still being made)' : '') + '. Add tokens and try again.' };
 }
 async function chargeTake(db, takeId) {
-  const t = await db.prepare('SELECT t.id, t.user_id, t.tokens, t.episode_id, e.campaign_id, e.session_id FROM takes t JOIN episodes e ON e.id = t.episode_id WHERE t.id = ?').get(takeId);
+  const t = await db.prepare('SELECT t.id, t.user_id, t.tokens, t.episode_id, t.model, t.est_cost_usd, e.campaign_id, e.session_id FROM takes t JOIN episodes e ON e.id = t.episode_id WHERE t.id = ?').get(takeId);   // v3.6.76: model, cost
   if (!t || !t.tokens) return;
   const claim = await db.prepare('UPDATE takes SET tokens_charged = 0 WHERE id = ? AND tokens_charged IS NULL').run(takeId);
   if (!claim.changes) return;
@@ -329,7 +329,10 @@ async function chargeTake(db, takeId) {
     const bal = await tk.getBalance(t.user_id);
     charged = Math.min(Number(t.tokens), Math.max(0, Number(bal.total) || 0));
     if (charged > 0) await tk.spendTokens(t.user_id, charged, { source: 'video_take', event_type: 'generation_spend', related_campaign_id: t.campaign_id });
-    await tk.recordGeneration(t.user_id, { event_type: 'video_take', tokens_redeemed: charged, quantity: 1, unit: 'takes', model: 'video', related_campaign_id: t.campaign_id, related_session_id: t.session_id });
+    // v3.6.76 -- TD-1148: the take's real model and fal cost go on the record (they were 'video' and nothing). A cost
+    // that is not a number is left out rather than written as NaN.
+    const _usd = Number(t.est_cost_usd);
+    await tk.recordGeneration(t.user_id, { event_type: 'video_take', tokens_redeemed: charged, quantity: 1, unit: 'takes', model: t.model || 'video', cost_usd: Number.isFinite(_usd) ? _usd : undefined, related_campaign_id: t.campaign_id, related_session_id: t.session_id });
     await db.prepare('UPDATE takes SET tokens_charged = ? WHERE id = ?').run(charged, takeId);
     if (charged < Number(t.tokens)) console.warn('[video] take ' + takeId + ': balance covered ' + charged + ' of ' + t.tokens + ' token(s)');
   } catch (e) { console.error('[video] take ' + takeId + ' charge failed:', e && e.message); }
@@ -2676,6 +2679,8 @@ async function shotListPrices(db) {
     try { const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(k); v = r ? parseFloat(r.value) : null; } catch (e) { v = null; }
     out[k] = (Number.isFinite(v) && v > 0) ? v : SL_DEFAULTS[k];
   }
+  // v3.6.76 -- TD-1148: the one cost basis (Financial tab) wins when set; else shotlist_cents_per_token as before.
+  try { out.shotlist_cents_per_token = await require('../services/aiCost').centsPerToken('video'); } catch (e) {}
   return out;
 }
 function usdFor(prices, inTok, outTok) {
