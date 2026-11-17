@@ -20190,7 +20190,7 @@ function wtWatchStop() { if (WT_STATE.watch) { clearInterval(WT_STATE.watch); WT
 function wtUsesLine(d) {
   var el = document.getElementById('wc-uses-text');
   if (!el || !d || d.uses_left == null) return;
-  var per = d.uses_per_token || 4;
+  var per = d.uses_per_token || 2;   // v3.6.80: 2 uses a token (was 4)
   // v3.2.33 -- Ian, 2026-10-22: show the token being used up as a fraction ("1/4 used") rather than a sentence.
   var left = Math.max(0, Math.min(per, parseInt(d.uses_left, 10) || 0));
   el.textContent = (left > 0
@@ -47076,7 +47076,7 @@ function loadCostBasis() {
       var diff = (r.now != null && r.at !== r.now) ? ' style="padding:4px 10px;font-size:13px;font-weight:700;"' : ' ' + td;
       t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td></tr>';
     });
-    t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Tokens today is what we charge now: a picture is a fixed 1 token (its model\'s price setting), transcription a fixed 2 per 15 minutes, and a video take is worked out from its cost at the video basis (the old 8\u00a2 setting, or this basis once set, so the two columns match). Bold: the basis would charge differently. Video a second and Claude per 1,000 words are shown to two places; a real take or call is priced as a whole and rounded once.<br>Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
+    t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Tokens today is what we charge now. Pictures (the model in use), transcription and video are worked out from their cost at our cost per token, so the columns match unless a picture price is pinned. Writing tools: 1 token for 2 uses. Take review, custom style analyze and the book PDF: fixed prices. Bold: the basis would charge differently. Video a second and Claude per 1,000 words are shown to two places; a real take or call is priced as a whole and rounded once.<br>Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
     box.innerHTML = t;
     // the last 30 days
     var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2</th></tr>';

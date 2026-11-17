@@ -1672,7 +1672,7 @@ const WRITING_TOOLS = { feedback: { gold: true }, showme: { gold: true }, regen:
 const WT_REWRITE_HOWS = { clearer: 'clearer and easier to follow', vivid: 'more vivid', dramatic: 'more dramatic', simpler: 'simpler, in plainer words' };
 const WT_WORD_MAX = 60;           // characters a Word selection may have
 const WT_INSTRUCTION_MAX = 200;   // characters of the writer's own Rewrite instruction
-const WRITING_USES_PER_TOKEN = 4;
+const WRITING_USES_PER_TOKEN = 2;   // v3.6.80 -- TD-1148 (Ian, 2026-11-17: "Writing tools... 2 uses per token"; was 4)
 const WRITING_BOX_RE = /^(opening|closing|moment:\d{1,4}|between:\d{1,4}|bridge:b[0-9a-f]{7}|story)$/;   // v3.4.37 -- a bridge by its id;   // v3.2.36 -- 'story': the Story / Session Transcript box
 // v3.2.36 -- TD-999 stage 3. The coach on the Story box reads a WINDOW of a long story (the page sends about
 // 6,000 words around the selection or the cursor), so its cap is higher than a Narrative box's. The polishing
@@ -2248,7 +2248,7 @@ async function wtUsesLeft(db, userId) {
   return (r && Number.isFinite(parseInt(r.writing_uses_left, 10))) ? parseInt(r.writing_uses_left, 10) : 0;
 }
 
-// Take one use. Returns { ok, refilled } -- refilled when this use bought a new set of four with a token.
+// Take one use. Returns { ok, refilled } -- refilled when this use bought a new set (WRITING_USES_PER_TOKEN) with a token.
 // THE ORDER IS THE PROMISE: the caller only reaches this after the model answered and the answer read.
 async function wtTakeUse(db, userId, campaignId) {
   const took = await db.prepare('UPDATE users SET writing_uses_left = writing_uses_left - 1 WHERE id = ? AND writing_uses_left > 0').run(userId);

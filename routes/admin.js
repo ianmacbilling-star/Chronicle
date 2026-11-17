@@ -588,9 +588,12 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     // v3.6.79: tokens to two places, for the per-second and per-1,000-word rows (no rounding, no floor)
     const frac = function (usd, c) { return Math.round(Number(usd || 0) * 100 / (Number(c) > 0 ? Number(c) : 8) * 100) / 100; };
     // pictures: one row per priced model; "now" is today's fixed price (token_cost:nano2, 1 unless set)
-    const picNow = await tk.getTokenCost('nano2');
-    Object.keys(s.images).forEach(function (k) { rows.push({ group: 'Pictures', what: 'Picture: ' + k, usd: s.images[k], now: picNow, at: ac.tokensFor(s.images[k], cents) }); });
-    rows.push({ group: 'Transcription', what: 'Transcription, 15 minutes', usd: s.audioMinute * 15, now: 2, at: ac.tokensFor(s.audioMinute * 15, cents) });
+    // v3.6.80 -- TD-1148 stage 2: pictures and transcription are worked out from cost now, so "today" is what they charge;
+    // the model in use is marked, and a pinned picture price (token_cost:nano2) is named.
+    const picNow = await tk.getTokenCost('nano2'), picPin = await tk.getTokenCostPin('nano2'), inUse = ac.imageKey('nano2');
+    Object.keys(s.images).forEach(function (k) { const live = k === inUse; rows.push({ group: 'Pictures', what: 'Picture: ' + k + (live ? ' (in use' + (picPin != null ? ', pinned at ' + picPin : '') + ')' : ''), usd: s.images[k], now: live ? picNow : null, at: ac.tokensFor(s.images[k], cents) }); });
+    let qNow = null; try { qNow = await require('./audio').quarterTokens(); } catch (e) {}
+    rows.push({ group: 'Transcription', what: 'Transcription, 15 minutes', usd: s.audioMinute * 15, now: qNow, at: ac.tokensFor(s.audioMinute * 15, cents) });
     // video: every model at its default length, no sound; its "now" already follows the basis (it is priced from cost)
     try {
       const M = require('./videoLab').MODELS, vc = await ac.centsPerToken('video');

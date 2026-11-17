@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.80",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3680-prices-from-cost",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Pictures and transcription are priced from what they cost us; Writing tools are 1 token for 2 uses (TD-1148, stage 2).",
+        "detail": "A picture costs its model's cost at our cost per token (still 1 token at 8 cents; a dearer model can cost more), unless its price is pinned. Transcription is per started 15 minutes from the minute cost (still 2 at 8 cents). Writing tools: 1 token buys 2 uses (was 4). Optimize passes round to the nearest token instead of up.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.79",
     "staged_on": "2026-11-17",
     "entries": [

@@ -48,11 +48,29 @@ async function getTokenCost(model) {
     const db = await getDb();
     const key = 'token_cost:' + (model || 'nano2');
     const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get(key);
-    const cost = row && row.value != null ? parseInt(row.value, 10) : 1;
-    return Number.isFinite(cost) && cost >= 0 ? cost : 1;
+    // v3.6.80 -- TD-1148 stage 2 (Ian, 2026-11-17: pictures priced by the model their art style uses). A token_cost:<model>
+    // setting still pins the price; without one, the picture's model cost (Financial tab) at our cost per token, nearest
+    // token, never below 1. With no known cost for the model, 1 as before.
+    if (row && row.value != null && String(row.value).trim() !== '') {
+      const pinned = parseInt(row.value, 10);
+      if (Number.isFinite(pinned) && pinned >= 0) return pinned;
+    }
+    const ac = require('../services/aiCost');
+    const usd = await ac.imageUsd(model || 'nano2');
+    if (usd == null) return 1;
+    return ac.tokensFor(usd, await ac.centsPerToken('picture'));
   } catch (e) {
     return 1;
   }
+}
+// v3.6.80: the pin, if any (the Financial tab shows it)
+async function getTokenCostPin(model) {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('token_cost:' + (model || 'nano2'));
+    const n = row && row.value != null && String(row.value).trim() !== '' ? parseInt(row.value, 10) : NaN;
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch (e) { return null; }
 }
 
 // ------------------------------------------------------------
@@ -1854,6 +1872,7 @@ module.exports = {
   computeGenCharge,
   router,
   getTokenCost,
+  getTokenCostPin,   // v3.6.80
   getBalance,
   canAfford,
   characterReserveStatus,
