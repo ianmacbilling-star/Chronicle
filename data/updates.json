@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.72",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3672-memories-everyday",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a new Everyday Life picture (TD-1158).",
+        "detail": "Ian picked a better Everyday Life example from the Library.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.71",
     "staged_on": "2026-11-16",
     "entries": [
