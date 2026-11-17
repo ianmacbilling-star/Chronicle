@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.91",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3691-optimize-rates",
+        "kind": "fix",
+        "public": false,
+        "summary": "Optimize prices each pass at the Financial tab's Claude rates (was its own $3/$15 in code) (TD-1148).",
+        "detail": "Same model (TEXT_MODEL), cache reads and writes counted as everywhere else. Today's rates are the same, so charges do not change until the tab's rates do.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.90",
     "staged_on": "2026-11-17",
     "entries": [

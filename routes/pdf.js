@@ -4724,6 +4724,9 @@ async function chargeLayoutPass(userId, usage, campaignId) {
   var outTok = (usage && usage.output_tokens) || 0;
   var rateUsd = await layoutLoopCostUsd();
   var usd = ((inTok * LAYOUT_IN_RATE_USD_PER_MTOK) + (outTok * LAYOUT_OUT_RATE_USD_PER_MTOK)) / 1e6;
+  // v3.6.91 (Ian, 2026-11-17: "point it at the correct rates!"): the Financial tab's Claude rates for the model that ran
+  // (TEXT_MODEL), cache reads and writes included; the two constants above are only the fallback if that fails.
+  try { var _ac = require('../services/aiCost'); var _u = _ac.claudeUsd(await _ac.loadSettings(), TEXT_MODEL, usage || {}); if (Number.isFinite(_u)) usd = _u; } catch (e) {}
   var want = require('../services/aiCost').tokensFor(usd, rateUsd * 100);   // v3.6.80 -- TD-1148 (Ian, 2026-11-17): nearest token, half up (was rounded up); floor of 1: a pass always costs something
   var spent = want, shortfall = false;
   try {
