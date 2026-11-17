@@ -585,6 +585,8 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     const cents = await ac.centsPerToken('');
     const tk = require('./tokens');
     const rows = [];
+    // v3.6.79: tokens to two places, for the per-second and per-1,000-word rows (no rounding, no floor)
+    const frac = function (usd, c) { return Math.round(Number(usd || 0) * 100 / (Number(c) > 0 ? Number(c) : 8) * 100) / 100; };
     // pictures: one row per priced model; "now" is today's fixed price (token_cost:nano2, 1 unless set)
     const picNow = await tk.getTokenCost('nano2');
     Object.keys(s.images).forEach(function (k) { rows.push({ group: 'Pictures', what: 'Picture: ' + k, usd: s.images[k], now: picNow, at: ac.tokensFor(s.images[k], cents) }); });
@@ -593,17 +595,22 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     try {
       const M = require('./videoLab').MODELS, vc = await ac.centsPerToken('video');
       Object.keys(M).forEach(function (k) {
-        const m = M[k]; const d = Number(m.defDuration) || 5; const usd = (Number(m.price) || 0) * d;
+        // v3.6.79 (Ian, 2026-11-17: "do it by 1 second not 5"): per second, in tokens to two places; a take is still
+        // priced as a whole (its seconds x this) and rounded once.
+        const usd = Number(m.price) || 0;
         if (!usd) return;
-        rows.push({ group: 'Video', what: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : '') + ', ' + d + ' s', usd: usd, now: ac.tokensFor(usd, vc), at: ac.tokensFor(usd, cents) });
+        rows.push({ group: 'Video (a second)', what: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : ''), usd: usd, now: frac(usd, vc), at: frac(usd, cents), exact: true });
       });
     } catch (e) {}
-    // v3.6.77 (Ian, 2026-11-17: "add the Claude calls at ... Per million"): what a million tokens read and written cost
-    // us, and what that is in our tokens at the basis. No "today": Claude is charged by feature, not by call.
+    // v3.6.77 (Ian): Claude in the table. v3.6.79 (Ian, 2026-11-17: "per 1000 word instead of per million tokens... my
+    // brain needs it in our terms"): 1,000 words is about 1,333 Anthropic tokens (a token is about 3/4 of a word). In our
+    // tokens to two places. No "today": Claude is charged by feature, not by call.
+    const KW = 1000 * 4 / 3;
     ['sonnet', 'haiku'].forEach(function (f) { const r = s.claude[f]; if (!r) return;
       const nm = f === 'sonnet' ? 'Claude Sonnet' : 'Claude Haiku';
-      rows.push({ group: 'Claude (per million tokens)', what: nm + ', 1 million read', usd: r[0], now: null, at: ac.tokensFor(r[0], cents) });
-      rows.push({ group: 'Claude (per million tokens)', what: nm + ', 1 million written', usd: r[1], now: null, at: ac.tokensFor(r[1], cents) });
+      const rIn = KW * r[0] / 1e6, rOut = KW * r[1] / 1e6;
+      rows.push({ group: 'Claude (1,000 words)', what: nm + ', 1,000 words read', usd: rIn, now: null, at: frac(rIn, cents), exact: true });
+      rows.push({ group: 'Claude (1,000 words)', what: nm + ', 1,000 words written', usd: rOut, now: null, at: frac(rOut, cents), exact: true });
     });
     // the last 30 days, real: what each kind of generation cost us beside what it charged
     const db = await getDb();

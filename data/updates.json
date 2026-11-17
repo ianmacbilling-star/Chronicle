@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.79",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3679-cost-grid-units",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: video priced a second and Claude per 1,000 words in the action table (TD-1148).",
+        "detail": "The units we do the sums in: each video model a second, Claude Sonnet and Haiku per 1,000 words read and written, both in tokens to two places.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.78",
     "staged_on": "2026-11-17",
     "entries": [
