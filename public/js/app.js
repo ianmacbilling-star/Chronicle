@@ -20190,7 +20190,7 @@ function wtWatchStop() { if (WT_STATE.watch) { clearInterval(WT_STATE.watch); WT
 function wtUsesLine(d) {
   var el = document.getElementById('wc-uses-text');
   if (!el || !d || d.uses_left == null) return;
-  var per = d.uses_per_token || 4;
+  var per = d.uses_per_token || 2;   // v3.6.80: 2 uses a token (was 4)
   // v3.2.33 -- Ian, 2026-10-22: show the token being used up as a fraction ("1/4 used") rather than a sentence.
   var left = Math.max(0, Math.min(per, parseInt(d.uses_left, 10) || 0));
   el.textContent = (left > 0
@@ -38847,6 +38847,10 @@ function promoteVersionFlow(versionId) {
 // is remembered for the campaign until the page is reloaded.
 var _promoteNudgeSkip = {};
 function _promoteNudge() {
+  // v3.6.81 (Ian, 2026-11-17: "When creating a new session... Just put a new session on the canonical. There is big modal
+  // that pops up that is confusing and needs to go away"). The question is no longer asked: + New session goes straight to
+  // the New Session form, and the session goes on the Canonical as before. (Make it the Canonical stays in the version menu.)
+  return false;
   var c = state.currentCampaign;
   if (!c || c.my_role !== 'dm') return false;
   if (state._promoteNudgeBypass) { state._promoteNudgeBypass = false; return false; }
@@ -39044,6 +39048,10 @@ function _cmpRightsAnnounce(items, opts) {
     var rej = (items || []).filter(function (i) { return i && i.verdict === 'reject'; });
     var warn = (items || []).filter(function (i) { return i && i.verdict === 'warn'; });
     if (!rej.length && !warn.length && !opts.text) return;
+    // v3.6.81 (Ian, 2026-11-17: "If there is a warning but we are going to let it go through... then put it on the picture
+    // but don't keep popping up this message"). A signed picture (a warning only) is marked on the picture, amber outline
+    // and note, and nothing pops up. A refusal, or a picture left out of a build, still says so in the box.
+    if (!rej.length && !opts.text && !opts.red) { _cmpRightsScan(document.body); return; }
     _cmpRightsCloseBox();
     var box = document.createElement('div');
     box.id = 'cmp-rights-box';
@@ -47036,4 +47044,97 @@ function frozenEchoed(msg) {
     w._frozenWrapped = true;
     window[n] = w;
   });
+})();
+
+// v3.6.76 -- TD-1148 stage 1 (Ian, 2026-11-17: "set that as a dashboard variable... a running table on the dashboard.
+// Put the setting and the table on the financial tab"). Spec: claude/TOKEN_COST_BASIS_SPEC.md.
+var CB = null;
+function cbEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function cbUsd(n, dp) { if (n == null || !isFinite(n)) return '\u2014'; return '$' + Number(n).toFixed(dp == null ? (n < 1 ? 4 : 2) : dp); }
+function loadCostBasis() {
+  var box = document.getElementById('cb-table'); if (!box) return;
+  fetch('/api/admin/cost-basis').then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { box.textContent = (d && d.error) || 'Could not load.'; return; }
+    CB = d;
+    var ci = document.getElementById('cb-cents'); if (ci) ci.value = d.centsSet ? d.cents : '';
+    var th = 'style="text-align:left;padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;"';
+    var td = 'style="padding:4px 10px;font-size:13px;"';
+    // provider costs
+    var c = '<div style="display:grid;grid-template-columns:auto auto;gap:8px 12px;align-items:center;max-width:1100px;">';   // v3.6.78: room for the examples
+    Object.keys(d.images).forEach(function (k) {
+      c += '<label style="font-size:13px;">Picture, ' + cbEsc(k) + ' ($)</label><span>$ <input class="form-input cb-img" data-k="' + cbEsc(k) + '" type="number" min="0" step="0.001" value="' + cbEsc(d.images[k]) + '" style="width:120px;" /></span>';   // v3.6.78: $ (Ian)
+    });
+    // v3.6.78 (Ian, 2026-11-17: "We do the math per 15 minutes"): the 15-minute cost beside the minute, worked out as it is typed
+    c += '<label style="font-size:13px;">Transcription, a minute ($)</label><span>$ <input class="form-input" id="cb-audio" type="number" min="0" step="0.001" value="' + cbEsc(d.audioMinute) + '" style="width:120px;" oninput="cbAudio15()" /> <span id="cb-audio15" style="font-size:13px;margin-left:10px;white-space:nowrap;"></span></span>';
+    ['sonnet', 'haiku'].forEach(function (f) {
+      var r = d.claude[f] || [0, 0];
+      // v3.6.77 (Ian, 2026-11-17: "put what they are for"): which features run on each model (config/models.js defaults)
+      var uses = f === 'sonnet' ? 'Story, Narrative, Writing Coach feedback / Regenerate / Show me, New panel, Optimize, video shot list / notes / Pre-production check / take review, custom style analyze, story from photos, character sheet import'
+        : 'Help assistant, quick writing tools (Tighten, Word, Describe, Rewrite), picture retouch prompts, upload rights checks, asset names';
+      c += '<label style="font-size:13px;">Claude ' + f + ', $ per million Anthropic tokens (sent in / written out)<div style="font-size:11px;opacity:0.75;max-width:340px;line-height:1.35;margin-top:2px;">' + uses + '</div></label><span>$ <input class="form-input cb-cl" data-f="' + f + '" data-i="0" type="number" min="0" step="0.01" value="' + cbEsc(r[0]) + '" style="width:80px;" oninput="cbClaudeEx()" /> / $ <input class="form-input cb-cl" data-f="' + f + '" data-i="1" type="number" min="0" step="0.01" value="' + cbEsc(r[1]) + '" style="width:80px;" oninput="cbClaudeEx()" /> <span class="cb-clex" data-f="' + f + '" style="font-size:12px;margin-left:10px;white-space:nowrap;"></span></span>';
+    });
+    c += '</div><div style="margin-top:8px;"><button class="btn btn-secondary" onclick="saveProviderCosts()">Save costs</button> <span id="cb-msg2" style="font-size:13px;"></span></div>';
+    document.getElementById('cb-costs').innerHTML = c;
+    cbAudio15(); cbClaudeEx();
+    // what each action costs
+    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2</th></tr>';
+    var last = '';
+    d.rows.forEach(function (r) {
+      if (r.group !== last) { t += '<tr><td colspan="4" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
+      var diff = (r.now != null && r.at !== r.now) ? ' style="padding:4px 10px;font-size:13px;font-weight:700;"' : ' ' + td;
+      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td></tr>';
+    });
+    t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Tokens today is what we charge now. Pictures (the model in use), transcription and video are worked out from their cost at our cost per token, so the columns match unless a picture price is pinned. Writing tools: 1 token for 2 uses. Take review, custom style analyze and the book PDF: fixed prices. Bold: the basis would charge differently. Video a second is shown to two places, and Claude as the words one token covers; a real take or call is priced as a whole and rounded once.<br>Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
+    box.innerHTML = t;
+    // the last 30 days
+    var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2</th></tr>';
+    if (!d.real.length) R += '<tr><td colspan="8" ' + td + '>Nothing yet.</td></tr>';
+    d.real.forEach(function (r) {
+      R += '<tr><td ' + td + '>' + cbEsc(r.label) + '</td><td ' + td + '>' + r.events + '</td><td ' + td + '>' + r.priced + '</td><td ' + td + '>' + cbUsd(r.usd, 2) + '</td><td ' + td + '>' + cbUsd(r.avgUsd) + '</td><td ' + td + '>' + r.tokens + '</td><td ' + td + '>' + (r.centsPerToken == null ? '\u2014' : r.centsPerToken.toFixed(1)) + '</td><td ' + td + '>' + (r.atPerEvent == null ? '\u2014' : r.atPerEvent) + '</td></tr>';
+    });
+    R += '</table>';
+    if (d.claudeCalls) R += '<div style="font-size:12px;margin-top:6px;opacity:0.8;">All Claude calls in 30 days (charged or not): ' + d.claudeCalls.n + ', ' + cbUsd(d.claudeCalls.usd, 2) + '.</div>';
+    document.getElementById('cb-real').innerHTML = R;
+  }).catch(function () { box.textContent = 'Could not load.'; });
+}
+function cbAudio15() {
+  var i = document.getElementById('cb-audio'), o = document.getElementById('cb-audio15'); if (!i || !o) return;
+  var v = parseFloat(i.value);
+  o.textContent = isFinite(v) && v >= 0 ? '= $' + (v * 15).toFixed(3) + ' per 15 minutes' : '';
+}
+// v3.6.78 (Ian, 2026-11-17): an example call beside each Claude line, 6,000 words in and 2,000 out. A word is about
+// 4/3 of an Anthropic token, so 8,000 tokens in and about 2,667 out; in our tokens at the basis on the page.
+var CB_EX_IN = 6000 * 4 / 3, CB_EX_OUT = 2000 * 4 / 3;
+function cbClaudeEx() {
+  var cents = (CB && Number(CB.cents) > 0) ? Number(CB.cents) : 8;
+  [].slice.call(document.querySelectorAll('.cb-clex')).forEach(function (o) {
+    var f = o.getAttribute('data-f');
+    var ins = document.querySelectorAll('.cb-cl[data-f="' + f + '"]');
+    var rin = parseFloat(ins[0] && ins[0].value), rout = parseFloat(ins[1] && ins[1].value);
+    if (!isFinite(rin) || !isFinite(rout)) { o.textContent = ''; return; }
+    var usd = (CB_EX_IN * rin + CB_EX_OUT * rout) / 1e6;
+    var tok = Math.max(1, Math.floor(usd * 100 / cents + 0.5 + 1e-9));
+    o.textContent = '6,000 words in + 2,000 out = $' + (CB_EX_IN * rin / 1e6).toFixed(3) + ' + $' + (CB_EX_OUT * rout / 1e6).toFixed(3) + ' = $' + usd.toFixed(3) + ' (' + tok + ' token' + (tok === 1 ? '' : 's') + ' at ' + cents + '\u00a2)';
+  });
+}
+function cbPut(body, msgId) {
+  var m = document.getElementById(msgId); if (m) m.textContent = 'Saving...';
+  fetch('/api/admin/cost-basis', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); }).then(function (d) {
+      if (m) m.textContent = (d && d.ok) ? 'Saved.' : ((d && d.error) || 'Not saved.');
+      if (d && d.ok) loadCostBasis();
+    }).catch(function () { if (m) m.textContent = 'Not saved.'; });
+}
+function saveCostBasis() { var v = document.getElementById('cb-cents').value.trim(); cbPut({ cents: v === '' ? '' : v }, 'cb-msg'); }
+function saveProviderCosts() {
+  var images = {}; [].slice.call(document.querySelectorAll('.cb-img')).forEach(function (i) { images[i.getAttribute('data-k')] = i.value; });
+  var claude = {}; [].slice.call(document.querySelectorAll('.cb-cl')).forEach(function (i) { var f = i.getAttribute('data-f'); claude[f] = claude[f] || [0, 0]; claude[f][Number(i.getAttribute('data-i'))] = i.value; });
+  cbPut({ images: images, audioMinute: document.getElementById('cb-audio').value, claude: claude }, 'cb-msg2');
+}
+(function () {
+  var orig = window.switchSettingsTab;
+  if (typeof orig !== 'function' || orig._cbWrapped) return;
+  var w = function (tab) { var r = orig.apply(this, arguments); try { if (tab === 'financial' && settingsTabsAllowed().indexOf('financial') >= 0) loadCostBasis(); } catch (e) {} return r; };
+  w._cbWrapped = true;
+  window.switchSettingsTab = w;
 })();

@@ -48,11 +48,29 @@ async function getTokenCost(model) {
     const db = await getDb();
     const key = 'token_cost:' + (model || 'nano2');
     const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get(key);
-    const cost = row && row.value != null ? parseInt(row.value, 10) : 1;
-    return Number.isFinite(cost) && cost >= 0 ? cost : 1;
+    // v3.6.80 -- TD-1148 stage 2 (Ian, 2026-11-17: pictures priced by the model their art style uses). A token_cost:<model>
+    // setting still pins the price; without one, the picture's model cost (Financial tab) at our cost per token, nearest
+    // token, never below 1. With no known cost for the model, 1 as before.
+    if (row && row.value != null && String(row.value).trim() !== '') {
+      const pinned = parseInt(row.value, 10);
+      if (Number.isFinite(pinned) && pinned >= 0) return pinned;
+    }
+    const ac = require('../services/aiCost');
+    const usd = await ac.imageUsd(model || 'nano2');
+    if (usd == null) return 1;
+    return ac.tokensFor(usd, await ac.centsPerToken('picture'));
   } catch (e) {
     return 1;
   }
+}
+// v3.6.80: the pin, if any (the Financial tab shows it)
+async function getTokenCostPin(model) {
+  try {
+    const db = await getDb();
+    const row = await db.prepare("SELECT value FROM app_settings WHERE setting_key = ?").get('token_cost:' + (model || 'nano2'));
+    const n = row && row.value != null && String(row.value).trim() !== '' ? parseInt(row.value, 10) : NaN;
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch (e) { return null; }
 }
 
 // ------------------------------------------------------------
@@ -1750,8 +1768,11 @@ async function recordGeneration(userId, opts = {}) {
   try {
     if (!userId) return;
     const db = await getDb();
+    // v3.6.76 -- TD-1148 stage 1: what it really cost us. Given by the caller (a video take), else priced by its kind
+    // (pictures by model, transcription by the minute), plus whatever Claude this request has used since the last record.
+    const cost = await costOfGeneration(opts);
     await db.prepare(
-      'INSERT INTO generation_events (user_id, event_type, tokens_redeemed, quantity, unit, model, related_campaign_id, related_session_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO generation_events (user_id, event_type, tokens_redeemed, quantity, unit, model, related_campaign_id, related_session_id, cost_usd, in_tokens, out_tokens, cost_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(
       userId,
       String(opts.event_type || 'unknown'),
@@ -1760,9 +1781,29 @@ async function recordGeneration(userId, opts = {}) {
       (opts.unit || null),
       (opts.model || null),
       (opts.related_campaign_id || null),
-      (opts.related_session_id || null)
+      (opts.related_session_id || null),
+      cost.usd, cost.inTok, cost.outTok, cost.source
     );
   } catch (e) { try { console.warn('recordGeneration non-fatal:', e.message); } catch (_e) {} }
+}
+// v3.6.76 -- TD-1148 stage 1. { usd, inTok, outTok, source }; usd null when nothing about it is known.
+async function costOfGeneration(opts) {
+  const out = { usd: null, inTok: null, outTok: null, source: null };
+  try {
+    const ac = require('../services/aiCost');
+    const parts = [];
+    let usd = null;
+    const given = Number(opts.cost_usd);
+    const qty = (opts.quantity == null) ? 1 : (Number(opts.quantity) || 0);
+    if (opts.cost_usd != null && Number.isFinite(given) && given >= 0) { usd = given; parts.push('given'); }
+    else if (opts.unit === 'images') { const u = await ac.imageUsd(opts.model); if (u != null) { usd = u * Math.max(1, qty); parts.push('image'); } }
+    else if (opts.event_type === 'audio_transcript') { usd = (await ac.audioMinuteUsd()) * qty; parts.push('audio'); }
+    const c = ac.takeClaude();
+    if (c.calls) { usd = (usd || 0) + c.usd; out.inTok = c.in; out.outTok = c.out; parts.push('claude x' + c.calls); }
+    if (usd != null) out.usd = Math.round(usd * 1e6) / 1e6;
+    out.source = parts.length ? parts.join('+') : null;
+  } catch (e) { /* the cost is a record, never a blocker */ }
+  return out;
 }
 
 async function grantTierSignupBonus(userId, tierName) {
@@ -1831,6 +1872,7 @@ module.exports = {
   computeGenCharge,
   router,
   getTokenCost,
+  getTokenCostPin,   // v3.6.80
   getBalance,
   canAfford,
   characterReserveStatus,

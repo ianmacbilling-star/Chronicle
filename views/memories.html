@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>(function(){var P=['campaignia.com','www.campaignia.com'];if(P.indexOf(location.hostname)===-1){document.documentElement.classList.add('staging-env');}})();</script>
+  <title>Turn Cherished Memories Into Sharable Stories | Campaignia Story</title>
+  <meta name="description" content="Campaignia turns your notes, comments and photos into a real book: a punchy graphic novel or a leisurely hardback, printed and shipped to your door.">
+  <!-- v3.6.64 -- THE NEW STORY LANDING PAGE, IN PROGRESS (Ian, 2026-11-16; TD-1158). Built from Riley's plan
+       (General_landing_Page_Campaignia_.docx) in a light, airy bookstore look. It will replace /story when it is
+       done; until then it is not indexed and /story is untouched. Grey boxes are pictures still to come, with
+       Riley's note inside; yellow TBD marks are facts still to settle. Our own code and layout throughout. -->
+  <meta name="robots" content="noindex">
+  <link rel="canonical" href="https://campaignia.com/memories">
+  <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png">
+  <!-- The Story theme's names are loaded only so the Compare the Tiers grid has its colors; this page sets its own look below. -->
+  <link rel="stylesheet" href="/css/themes/campaignia.css">
+  <link rel="stylesheet" href="/css/themes/brand2.css">
+  <link rel="stylesheet" href="/css/tier-grid.css?v=3.4.61">
+  <script src="/js/tier-grid.js?v=3.4.02" defer></script>
+  <meta name="theme-color" content="#e5e6e1">
+  <script src="/analytics.js"></script>
+  <script src="/promo.js"></script>
+  <style>
+    @font-face{font-family:'Manrope';font-style:normal;font-weight:300;font-display:swap;src:url('/fonts/memories/manrope-latin-300-normal.woff2') format('woff2');}
+    @font-face{font-family:'Manrope';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/memories/manrope-latin-400-normal.woff2') format('woff2');}
+    @font-face{font-family:'Manrope';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/memories/manrope-latin-600-normal.woff2') format('woff2');}
+    @font-face{font-family:'Manrope';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/memories/manrope-latin-700-normal.woff2') format('woff2');}
+    :root{
+      --m-sage:#e5e6e1; --m-cream:#f8efe5; --m-white:#ffffff; --m-ink:#111111; --m-text:#333333; --m-muted:#6b6b66;
+      --m-line:#d6d7d0; --m-box:#eeeee9; --m-box-line:#b9bab2; --m-tbd:#ffe36e;
+      --m-font:'Manrope', 'Helvetica Neue', Arial, sans-serif;
+      /* the Compare the Tiers grid reads these */
+      --accent:#111111; --accent-rgb:17,17,17; --page-bg:#ffffff; --panel:#ffffff; --on-panel:#111111; --on-panel-rgb:17,17,17; --button-cta:#111111;
+    }
+    *{box-sizing:border-box;}
+    html{scroll-behavior:smooth;}
+    body{margin:0;background:var(--m-white);background-image:none;color:var(--m-text);font-family:var(--m-font);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;}
+    a{color:inherit;}
+    h1,h2,h3{color:var(--m-ink);font-weight:300;letter-spacing:-0.02em;line-height:1.08;margin:0;}
+    h2{font-size:clamp(34px,4.6vw,60px);}
+    h3{font-size:24px;font-weight:600;letter-spacing:-0.01em;line-height:1.25;}
+    p{margin:0 0 1em;}
+    .wrap{max-width:1240px;margin:0 auto;padding:0 32px;}
+    section{padding:120px 0;}
+    .eyebrow{font-size:13px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--m-muted);margin-bottom:18px;}
+    .tbd{background:var(--m-tbd);color:#111;font-weight:700;padding:0 6px;border-radius:4px;white-space:nowrap;}
+
+    /* buttons: black pills */
+    .btn{display:inline-flex;align-items:center;gap:10px;background:var(--m-ink);color:#fff;text-decoration:none;font-weight:600;font-size:17px;padding:16px 30px;border-radius:999px;border:1.5px solid var(--m-ink);transition:transform .15s, background .15s;cursor:pointer;white-space:nowrap;font-family:inherit;}
+    .btn:hover{transform:translateY(-2px);}
+    .btn .arr{font-size:20px;line-height:1;}
+    .btn-ghost{background:transparent;color:var(--m-ink);}
+    .btn-sm{font-size:15px;padding:11px 22px;}
+    .btn-lg{font-size:20px;padding:20px 40px;}
+    .cta-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center;}
+    .cta-note{font-size:14px;color:var(--m-muted);margin-top:12px;}
+
+    /* picture boxes: blank, with Riley's note in them */
+    .pic{background:var(--m-box);border:2px dashed var(--m-box-line);border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;color:#55564f;font-size:15px;line-height:1.45;min-height:220px;}
+    .pic b{display:block;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#7a7b73;margin-bottom:8px;}
+    .pic.tall{aspect-ratio:4/5;} .pic.wide{aspect-ratio:16/10;min-height:0;} .pic.sq{aspect-ratio:1/1;} .pic.icon{min-height:0;aspect-ratio:1/1;width:84px;padding:8px;font-size:11px;border-radius:50%;}
+
+    /* nav */
+    nav.top{position:sticky;top:0;z-index:50;background:rgba(255,255,255,0.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--m-line);}
+    nav.top .wrap{display:flex;align-items:center;justify-content:space-between;height:78px;}
+    .logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--m-ink);font-weight:700;font-size:20px;letter-spacing:0.02em;}
+    .logo img{height:30px;}
+    .logo small{font-weight:300;font-size:20px;}
+    .nav-links{display:flex;align-items:center;gap:30px;font-weight:600;font-size:15.5px;}
+    .nav-links a{text-decoration:none;}
+    .nav-links a.plain:hover{text-decoration:underline;text-underline-offset:5px;}
+    .nav-toggle{display:none;background:none;border:1.5px solid var(--m-ink);border-radius:999px;width:46px;height:46px;font-size:20px;cursor:pointer;}
+    .mobile-menu{display:none;}
+    @media (max-width:900px){
+      .nav-links .plain{display:none;}
+      .nav-toggle{display:inline-block;}
+      .nav-links{gap:12px;} .logo{font-size:17px;gap:6px;} .logo small{font-size:17px;} .logo img{height:24px;}
+      nav.top .btn-sm{padding:10px 16px;font-size:14px;}
+      .mobile-menu.open{display:flex;flex-direction:column;background:#fff;border-bottom:1px solid var(--m-line);padding:8px 32px 20px;}
+      .mobile-menu a{padding:12px 0;font-weight:600;text-decoration:none;border-bottom:1px solid var(--m-line);}
+    }
+
+    /* 1. above the fold: scroll down and the slides move from right to left */
+    .hero{background:var(--m-sage);padding:0;}
+    .hero-track-wrap{height:240vh;position:relative;}
+    .hero-sticky{position:sticky;top:78px;height:calc(100vh - 78px);overflow:hidden;}
+    .hero-track{display:flex;width:200%;height:100%;will-change:transform;}
+    .hero-slide{width:100%;height:100%;display:grid;grid-template-columns:1.1fr 0.9fr;gap:60px;align-items:center;max-width:1240px;margin:0 auto;padding:40px 32px;}
+    .hero-slide-outer{width:50%;display:flex;}
+    .hero-slide h2{font-size:clamp(52px,7.6vw,104px);line-height:1.0;}
+    .hero-slide .pic{height:min(62vh,560px);width:100%;aspect-ratio:auto;}
+    .hero-slide .pic.has-img{padding:0;border:0;overflow:hidden;}
+    .hero-slide .pic.has-img img{width:100%;height:100%;object-fit:cover;object-position:50% 40%;display:block;}
+    .hero-dots{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);display:flex;gap:10px;}
+    .hero-dots i{width:34px;height:4px;border-radius:2px;background:rgba(0,0,0,0.18);transition:background .2s;}
+    .hero-dots i.on{background:var(--m-ink);}
+    .hero-hint{position:absolute;bottom:48px;right:40px;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--m-muted);}
+    .hero-intro{background:var(--m-sage);padding:160px 0 150px;text-align:center;}
+    .hero-intro .brandline{font-size:clamp(30px,3.4vw,44px);font-weight:300;color:var(--m-ink);letter-spacing:-0.01em;}
+    .hero-intro h1{font-size:clamp(20px,2vw,26px);font-weight:600;letter-spacing:0;margin:14px 0 46px;color:var(--m-text);}
+    .benefits{display:flex;justify-content:center;gap:44px;flex-wrap:wrap;margin-bottom:54px;font-size:16px;font-weight:600;color:var(--m-ink);}
+    .benefits span::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--m-ink);margin-right:10px;vertical-align:middle;}
+    .hero-intro .cta-row{justify-content:center;}
+    @media (max-width:900px), (prefers-reduced-motion: reduce){
+      .hero-track-wrap{height:auto;}
+      .hero-sticky{position:static;height:auto;overflow:visible;}
+      .hero-track{flex-direction:column;width:100%;transform:none !important;}
+      .hero-slide-outer{width:100%;}
+      .hero-slide{width:100%;grid-template-columns:1fr;gap:30px;padding:60px 32px;}
+      .hero-slide .pic{height:auto;aspect-ratio:4/3;}
+      .hero-dots,.hero-hint{display:none;}
+    }
+
+    /* 2. who it's for */
+    .pair{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:70px;}
+    .story-copy{display:grid;grid-template-columns:0.9fr 1.1fr;gap:70px;align-items:start;}
+    .story-copy p{font-size:19px;}
+    .story-copy strong{color:var(--m-ink);font-weight:700;}
+
+    /* 3. how to use: the picture changes as you scroll, the step in view grows, the others fade */
+    .steps{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:70px;}
+    .steps-pic{position:sticky;top:130px;height:min(70vh,620px);}
+    .steps-pic .pic{position:absolute;inset:0;opacity:0;transition:opacity .45s;}
+    .steps-pic .pic.on{opacity:1;}
+    .steps .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
+    .steps .pic.has-img img{width:100%;height:100%;object-fit:contain;display:block;}
+    .step{padding:56px 40px;margin-bottom:28px;border-radius:22px;border:1px solid var(--m-line);background:#fff;opacity:0.45;transform:scale(0.96);transform-origin:left center;transition:opacity .4s, transform .4s, box-shadow .4s;min-height:42vh;display:flex;flex-direction:column;justify-content:center;}
+    .step.on{opacity:1;transform:scale(1);box-shadow:0 22px 60px rgba(0,0,0,0.08);}
+    .step h3{font-size:30px;font-weight:300;margin-bottom:16px;}
+    .step .pic{display:none;}
+    .steps-cta{text-align:center;margin-top:60px;}
+    @media (max-width:900px){
+      .steps{grid-template-columns:minmax(0,1fr);gap:0;}
+      .steps-pic{display:none;}
+      .step{opacity:1;transform:none;min-height:0;padding:34px 24px;}
+      .step .pic{display:flex;margin-bottom:24px;aspect-ratio:4/3;}
+    }
+
+    /* style rows: pictures in a sideways scroll */
+    .styles{background:var(--m-sage);}
+    .style-row{margin-top:56px;}
+    .style-row h3{margin-bottom:20px;}
+    .scroller{display:flex;gap:18px;overflow-x:auto;padding-bottom:18px;scroll-snap-type:x mandatory;}
+    .scroller::-webkit-scrollbar{height:8px;} .scroller::-webkit-scrollbar-thumb{background:#c3c4bc;border-radius:4px;}
+    .tile{flex:0 0 220px;scroll-snap-align:start;}
+    .tile .pic{aspect-ratio:3/4;min-height:0;font-size:13px;background:#f4f4f0;}
+    .tile span{display:block;font-weight:600;color:var(--m-ink);margin-top:10px;}
+    .tile .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;font-size:0;}
+    .tile .pic.has-img b{display:none;}
+    .tile .pic.has-img img{width:100%;height:100%;object-fit:cover;display:block;}
+
+    /* 4. examples */
+    .examples-head{text-align:center;max-width:820px;margin:0 auto 60px;}
+    .examples-head p{font-size:20px;color:var(--m-muted);margin-top:18px;}
+    .ex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;}
+    .ex-card .pic{aspect-ratio:3/4;}
+    a.ex-card{text-decoration:none;color:inherit;display:block;}
+    a.ex-card:hover h3{text-decoration:underline;text-underline-offset:4px;}
+    .ex-card .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
+    .ex-card .pic.has-img img{width:100%;height:100%;object-fit:cover;display:block;}
+    .ex-card h3{margin-top:18px;font-size:20px;}
+    .ex-card p{color:var(--m-muted);font-size:15px;}
+    .center{text-align:center;margin-top:56px;}
+
+    /* 5. features: alternating sides, each one arrives as you scroll */
+    .features h2{text-align:center;margin-bottom:90px;}
+    .feat{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;margin-bottom:120px;opacity:0;transform:translateY(40px);transition:opacity .7s, transform .7s;}
+    .feat.seen{opacity:1;transform:none;}
+    .feat:nth-child(even) .pic{order:2;}
+    .feat .pic.has-vid{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
+    .feat .pic.has-vid video{width:100%;height:100%;object-fit:contain;display:block;}
+    .feat p{font-size:21px;line-height:1.6;color:var(--m-text);}
+    .shelf{max-width:960px;margin:0 auto;}
+    @media (prefers-reduced-motion: reduce){ .feat{opacity:1;transform:none;} }
+
+    /* 6. pricing */
+    .pricing{background:var(--m-sage);}
+    .pricing h2{text-align:center;}
+    .pricing .sub{text-align:center;color:var(--m-muted);font-size:19px;margin:16px 0 60px;}
+    .p-group{margin:56px 0 22px;}
+    .p-group b{display:block;font-size:13px;letter-spacing:0.14em;color:var(--m-ink);}
+    .p-group span{color:var(--m-muted);}
+    .p-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;}
+    .p-card{background:#fff;border-radius:22px;padding:34px 30px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--m-line);}
+    .p-card .k{font-size:12px;font-weight:700;letter-spacing:0.14em;color:var(--m-muted);text-transform:uppercase;}
+    .p-card .t{font-size:30px;font-weight:300;color:var(--m-ink);line-height:1.15;}
+    .p-card .price{font-size:40px;font-weight:300;color:var(--m-ink);margin:10px 0 2px;}
+    .p-card .price small{font-size:15px;color:var(--m-muted);margin-left:6px;}
+    .p-card .perks{font-size:15px;color:var(--m-muted);flex:1;margin:8px 0 22px;}
+    .p-card .btn{justify-content:center;}
+    .p-card img{width:64px;height:64px;object-fit:contain;}
+    .p-trial{display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:center;background:var(--m-ink);color:#fff;border-radius:22px;padding:30px 36px;}
+    .p-trial .t{font-size:28px;font-weight:300;}
+    .p-trial .perks{color:#c9cac3;font-size:15px;}
+    .p-trial .btn{background:#fff;color:var(--m-ink);border-color:#fff;}
+    .p-extra{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:50px;}
+    .p-extra .tg-open{background:transparent;color:var(--m-ink);border:1.5px solid var(--m-ink);border-radius:999px;padding:14px 28px;font:600 15px var(--m-font);letter-spacing:0.04em;cursor:pointer;text-decoration:none;box-shadow:none;}
+    .p-extra .tg-root{display:block;padding:0;background:none;border:0;}
+    .p-extra .tg-open:hover{transform:translateY(-2px);box-shadow:none;}
+
+    /* 7. key details */
+    .details h2{text-align:center;margin-bottom:70px;}
+    .detail-row{display:grid;grid-template-columns:repeat(5,1fr);gap:22px;text-align:center;}
+    .detail-row .pic.icon{margin:0 auto 18px;}
+    .detail-row div.d{font-weight:600;color:var(--m-ink);font-size:18px;}
+    .more{max-width:820px;margin:70px auto 0;border-top:1px solid var(--m-line);border-bottom:1px solid var(--m-line);}
+    .more summary{cursor:pointer;list-style:none;padding:24px 0;font-size:22px;font-weight:600;color:var(--m-ink);display:flex;justify-content:space-between;}
+    .more summary::-webkit-details-marker{display:none;}
+    .more summary::after{content:'+';font-weight:300;font-size:30px;line-height:1;}
+    .more[open] summary::after{content:'\2212';}
+    .more ul{margin:0 0 26px;padding-left:22px;color:var(--m-text);}
+
+    /* 8. FAQ */
+    .faq{background:var(--m-sage);}
+    .faq .wrap{max-width:920px;}
+    .faq h2{text-align:center;margin-bottom:60px;}
+    .faq details{background:#fff;border-radius:16px;margin-bottom:14px;padding:0 28px;border:1px solid var(--m-line);}
+    .faq summary{cursor:pointer;list-style:none;padding:24px 0;font-size:19px;font-weight:600;color:var(--m-ink);display:flex;justify-content:space-between;gap:20px;}
+    .faq summary::-webkit-details-marker{display:none;}
+    .faq summary::after{content:'+';font-weight:300;font-size:28px;line-height:1;}
+    .faq details[open] summary::after{content:'\2212';}
+    .faq details p{padding-bottom:24px;margin:0;}
+
+    /* 9. final CTA: large, spacious, centered */
+    .final{background:var(--m-cream);text-align:center;padding:150px 0;}
+    .final .pic{min-height:0;max-width:760px;margin:0 auto 70px;aspect-ratio:16/9;background:rgba(255,255,255,0.6);}
+    .final h2{font-size:clamp(40px,6vw,80px);}
+    .final p.lead{font-size:22px;margin:24px auto 44px;max-width:640px;}
+    .final .cta-row{justify-content:center;}
+
+    footer{background:#000;color:#cfcfcf;padding:90px 0 40px;}
+    footer .ftop{display:flex;justify-content:space-between;gap:40px;flex-wrap:wrap;}
+    footer .fbig{font-size:clamp(28px,3.2vw,44px);font-weight:300;color:#fff;max-width:520px;line-height:1.15;}
+    footer .flinks{display:grid;grid-template-columns:repeat(2,auto);gap:12px 60px;font-size:16px;}
+    footer .flinks a{text-decoration:none;} footer .flinks a:hover{color:#fff;}
+    footer .fcopy{border-top:1px solid #2a2a2a;margin-top:70px;padding-top:28px;font-size:14px;color:#8a8a8a;}
+
+    @media (max-width:900px){
+      section{padding:80px 0;}
+      .wrap{padding:0 22px;}
+      .pair,.story-copy,.feat,.p-grid,.ex-grid{grid-template-columns:minmax(0,1fr);}
+      .story-copy{gap:24px;}
+      .feat{gap:28px;margin-bottom:80px;} .feat:nth-child(even) .pic{order:0;}
+      .detail-row{grid-template-columns:repeat(2,1fr);gap:36px 18px;}
+      .p-trial{grid-template-columns:1fr;text-align:center;justify-items:center;}
+      footer .flinks{grid-template-columns:1fr 1fr;gap:12px 30px;}
+    }
+  </style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a href="/memories" class="logo"><img src="/images/Campaignia_Logo.png" alt="">Campaignia <small>Story</small></a>
+    <div class="nav-links">
+      <a href="#how" class="plain">How it works</a>
+      <a href="/library" class="plain">Library</a>
+      <a href="#pricing" class="plain">Pricing</a>
+      <a href="#faq" class="plain">FAQ</a>
+      <a href="/login" class="plain">Sign in</a>
+      <a href="/login?signup" class="btn btn-sm">Try for Free</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" onclick="memToggleNav()">&#9776;</button>
+    </div>
+  </div>
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="#how" onclick="memCloseNav()">How it works</a>
+    <a href="/library">Library</a>
+    <a href="#pricing" onclick="memCloseNav()">Pricing</a>
+    <a href="#faq" onclick="memCloseNav()">FAQ</a>
+    <a href="/our-story">Our Story</a>
+    <a href="/login">Sign in</a>
+  </div>
+</nav>
+
+<!-- 1. ABOVE THE FOLD -->
+<section class="hero" aria-label="Turn cherished memories into sharable stories">
+  <div class="hero-track-wrap" id="heroWrap">
+    <div class="hero-sticky">
+      <div class="hero-track" id="heroTrack">
+        <div class="hero-slide-outer"><div class="hero-slide">
+          <h2>Turn Cherished Memories</h2>
+          <div class="pic tall has-img"><img src="/images/memories/hero-before.jpg" alt="A grandfather looking at an old photograph"></div>
+        </div></div>
+        <div class="hero-slide-outer"><div class="hero-slide">
+          <h2>Into Sharable Stories</h2>
+          <div class="pic tall has-img"><img src="/images/memories/hero-after.jpg" alt="A grandfather reading a printed storybook with his family"></div>
+        </div></div>
+      </div>
+      <div class="hero-dots"><i class="on" id="dot0"></i><i id="dot1"></i></div>
+      <div class="hero-hint">Scroll &darr;</div>
+    </div>
+  </div>
+</section>
+<section class="hero-intro">
+  <div class="wrap">
+    <div class="brandline">Campaignia Story</div>
+    <h1>AI Book Generator for Personal Use</h1>
+    <div class="benefits"><span>Friendly Design</span><span>Pre-Prompted</span><span>Digital or Print</span></div>
+    <div class="cta-row">
+      <a href="/login?signup" class="btn btn-lg">Try for Free! <span class="arr">&rarr;</span></a>
+      <a href="#pricing" class="btn btn-ghost">See Plans</a>
+    </div>
+  </div>
+</section>
+
+<!-- 2. WHO IT'S FOR -->
+<section id="who">
+  <div class="wrap">
+    <div class="pair">
+      <div class="pic wide"><b>Picture</b>A real iPhone photo of a kid on the swings (first-person view)</div>
+      <div class="pic wide"><b>Picture</b>Next to it, an AI-generated image and text of a mother pushing the kid on the swing (third-person view)</div>
+    </div>
+    <div class="story-copy">
+      <h2>You still talk about that day&hellip;</h2>
+      <div>
+        <p>&ldquo;The mishap.&rdquo; &ldquo;The find.&rdquo; &ldquo;The win.&rdquo; &ldquo;The first.&rdquo; There are moments in our life that change everything. <strong>They deserve to be remembered and shared.</strong> And &ldquo;you had to be there&rdquo; is so unsatisfying.</p>
+        <p>Campaignia doesn&rsquo;t reinvent your experience. <strong>It just gets it written down.</strong> It takes your notes, comments, and photos &ndash; the things that are scattered &ndash; and turns them into a book. Turn them into a punchy graphic novel, or maybe a leisurely hardback volume; whatever best captures those feelings that matter so much.</p>
+        <p><strong>Invite family and friends into the process</strong> and hold onto every detail. <strong>Or make it your own</strong> and pass it down to your kids. Whatever your story, print and ship something tangible you can see, share, and save as you retell the story again.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. HOW TO USE -->
+<section id="how" style="padding-top:40px;">
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2>4 Steps to Your Own Custom Books</h2>
+    <div class="steps">
+      <div class="steps-pic" aria-hidden="true">
+        <div class="pic on" data-pic="0"><b>Picture</b>A photograph of a guy rafting, and right next to it an AI-generated image of the same person at a different point of the trip</div>
+        <div class="pic" data-pic="1"><b>Picture</b>Notes in a Google Doc, and someone copying and pasting them into Campaignia</div>
+        <div class="pic" data-pic="2"><b>Picture</b>Two images and text, side by side, slightly different</div>
+        <div class="pic has-img" data-pic="3"><img src="https://images.campaignia.com/uploads/ibtitled-52-1793797841265.png" alt="A finished book cover"></div>
+      </div>
+      <div>
+        <div class="step on" data-step="0">
+          <div class="pic"><b>Picture</b>A photograph of a guy rafting, and right next to it an AI-generated image of the same person at a different point of the trip</div>
+          <h3>1. Characters</h3>
+          <p>Add reference pictures of your characters and describe their personalities, quirks, and look. Campaignia keeps everyone visually consistent across every chapter.</p>
+        </div>
+        <div class="step" data-step="1">
+          <div class="pic"><b>Picture</b>Notes in a Google Doc, and someone copying and pasting them into Campaignia</div>
+          <h3>2. Type or Paste</h3>
+          <p>Drop in the heart of the story &ndash; notes, voice-to-text, emails, whatever you&rsquo;ve got. Campaignia builds your storyboard, selecting the key moments and generating a stunning panel for each one, with narrative prose woven between.</p>
+        </div>
+        <div class="step" data-step="2">
+          <div class="pic"><b>Picture</b>Two images and text, side by side, slightly different</div>
+          <h3>3. Customize</h3>
+          <p>It&rsquo;s your memory, and you want Campaignia to get it right. Edit whole sections or minute details with the click of a button. All the tools are in one place to edit every part of your book.</p>
+        </div>
+        <div class="step" data-step="3">
+          <div class="pic has-img"><img src="https://images.campaignia.com/uploads/ibtitled-52-1793797841265.png" alt="A finished book cover"></div>
+          <h3>4. Print, Order, Ship</h3>
+          <p>Choose your layout, preview it in the app, and order your story as a bound book &ndash; comic, hardback, or softback, your call. Hand it to your family. Frame it. It&rsquo;s a real storybook.</p>
+        </div>
+      </div>
+    </div>
+    <div class="steps-cta">
+      <a href="/login?signup" class="btn btn-lg">Try for Free <span class="arr">&rarr;</span></a>
+      <div class="cta-note">No Credit Card Required</div>
+    </div>
+  </div>
+</section>
+
+<!-- STYLES -->
+<section class="styles" id="styles">
+  <div class="wrap">
+    <h2>Form a Style that Resonates with Your Memory</h2>
+    <div class="style-row">
+      <h3>11+ Artistic Forms</h3>
+      <div class="scroller" id="artForms"></div>
+    </div>
+    <div class="style-row">
+      <h3>11 Narrative Formats</h3>
+      <div class="scroller" id="narrFormats"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. EXAMPLES -->
+<section id="examples">
+  <div class="wrap">
+    <div class="examples-head">
+      <h2>Real Stories from Real People</h2>
+      <p>See What Others Have Already Made for Friends and Family</p>
+    </div>
+    <div class="ex-grid">
+      <a class="ex-card" href="https://campaignia.com/library/story/s/Cd5QrSXdAQBjT0Iavgfewf/our-family-stories"><div class="pic has-img"><img loading="lazy" decoding="async" src="https://images.campaignia.com/archives/arch-1789070599296-8595fc29ead2e3e9.png" alt="Our Family Stories, front cover"></div><h3>Our Family Stories</h3><p>A Horse Named Asterisk: a 17-year-old in Front Royal, Virginia bets his paycheck on a tip from a stranger. By BjornT.</p></a>
+      <a class="ex-card" href="https://campaignia.com/library/story/s/UFGrimQPpG41E0rA9Wckmf/the-dojo-of-the-dragon-spirits"><div class="pic has-img"><img loading="lazy" decoding="async" src="https://images.campaignia.com/archives/arch-1786022327079-6c958cc39c077ef7.png" alt="The Dojo of the Dragon Spirits, front cover"></div><h3>The Dojo of the Dragon Spirits</h3><p>Lessons, bells and dragon spirits, chapter by chapter. By Ember Quill.</p></a>
+      <div class="ex-card"><div class="pic"><b>Example story 3</b>A real story from the Library</div><h3>Story title</h3><p>One line about who made it, and for whom.</p></div>
+    </div>
+    <div class="center cta-row" style="justify-content:center;">
+      <a href="/login?signup" class="btn">Start Your Free Trial <span class="arr">&rarr;</span></a>
+      <a href="/library" class="btn btn-ghost">See more in the Library</a>
+    </div>
+  </div>
+</section>
+
+<!-- 5. FEATURES / BENEFITS -->
+<section class="features" id="features" style="padding-top:40px;">
+  <div class="wrap">
+    <h2>Campaignia Gives You Complete Control</h2>
+    <div id="featList">
+      <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/character-creator.mp4" poster="/images/memories/character-creator.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The character creator: a photo and a description become a consistent character"></video></div><p>Nail the character design with reference images and detailed descriptions. Once you get it right, Campaignia will make sure the character shows up the same in every scene.</p></div>
+      <div class="feat"><div class="pic wide"><b>Picture</b>Amateur photos, paintings and a child&rsquo;s drawings (they can&rsquo;t look too crisp)</div><p>Eager to keep it intimate and familiar? Use real family photos, a child&rsquo;s drawings, your own artwork. Upload them and place them right in the story, surrounded by AI-generated narrative.</p></div>
+      <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/narrative-styles.mp4" poster="/images/memories/narrative-styles.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Choosing a narrative style: each style with a sample line"></video></div><p>Campaignia turns your bullet points into prose &ndash; opening scenes, smooth transitions, surprise twists &ndash; so it reads like a real novel. Tinker with multiple narrative styles, lengths, and points of view to hit that sweet spot.</p></div>
+      <div class="feat"><div class="pic wide"><b>GIF</b>Editing a single scene (both the image and the text)</div><p>Reprompt with precision. Every sentence, character, background, and minute detail can be edited without destroying your hard work. Keep what you like and change what you need to match reality.</p></div>
+      <div class="feat"><div class="pic wide"><b>GIF</b>Scrolling through the editing tools for a single scene and image</div><p>Campaignia combines over a dozen AI and editing tools into a harmonious, intuitive platform. Our tutorial walks you through every step so you can rewrite, retouch, and rework with ease.</p></div>
+      <div class="feat"><div class="pic wide"><b>GIF</b>The writing coach in action</div><p>Want to keep the story in your own words? Our digital coach gives helpful and honest feedback on any passage. It edits, offers suggestions, and helps you communicate your vision.</p></div>
+    </div>
+    <div class="shelf">
+      <div class="pic wide"><b>Picture</b>Several family stories as books on a shelf, next to ordinary books or photo albums</div>
+    </div>
+    <div class="center"><a href="/login?signup" class="btn btn-lg">Start Your First Story Now <span class="arr">&rarr;</span></a></div>
+  </div>
+</section>
+
+<!-- 6. PRICING: the same plans as Choose Your Path on /story -->
+<section class="pricing" id="pricing">
+  <div class="wrap">
+    <h2>Pick Your Plan</h2>
+    <div class="sub">Every story starts somewhere. Your 30-day trial begins on your first story.</div>
+
+    <div class="p-trial">
+      <img src="/images/Free_Tier.png" alt="" style="width:72px;height:72px;object-fit:contain;">
+      <div><div class="t">Free Trial</div><div class="perks">Platinum-like access to explore every option &middot; 30 days free</div></div>
+      <a href="/login?signup" class="btn">Start Free</a>
+    </div>
+
+    <div class="p-group"><b>GOT A PROJECT? GET A PASS.</b><span>Months of Platinum access and a pile of tokens, paid once. Nothing to cancel.</span></div>
+    <div class="p-grid">
+      <div class="p-card"><div class="k">Platinum Pass</div><div class="t">3 months</div><div class="price" data-pass-price="p3">$79</div><div class="perks"><span data-pass-tokens="p3">200 tokens</span>, yours to spend whenever</div><a href="/login?signup&amp;pass=p3" class="btn">Get the 3-Month Pass</a></div>
+      <div class="p-card"><div class="k">Platinum Pass</div><div class="t">6 months</div><div class="price" data-pass-price="p6">$149</div><div class="perks"><span data-pass-tokens="p6">375 tokens</span>, yours to spend whenever</div><a href="/login?signup&amp;pass=p6" class="btn">Get the 6-Month Pass</a></div>
+      <div class="p-card"><div class="k">Platinum Pass</div><div class="t">12 months</div><div class="price" data-pass-price="p12">$279</div><div class="perks"><span data-pass-tokens="p12">700 tokens</span>, yours to spend whenever</div><a href="/login?signup&amp;pass=p12" class="btn">Get the 12-Month Pass</a></div>
+    </div>
+
+    <div class="p-group"><b>IN IT FOR THE LONG HAUL? SUBSCRIBE.</b><span>Tokens every month, at the best per-token price we offer.</span></div>
+    <div class="p-grid">
+      <div class="p-card"><img src="/images/Sliver_Pieces.png" alt=""><div class="t">Silver</div><div class="price" data-tier="silver">$10<small>per month</small></div><div class="perks">1 story &middot; unlimited chapters &middot; unlimited characters &middot; free tokens &middot; limited moments &middot; limited styling options</div><a href="/login?signup&amp;plan=silver" class="btn">Get Silver</a></div>
+      <div class="p-card"><img src="/images/Gold_Pieces.png" alt=""><div class="t">Gold</div><div class="price" data-tier="gold">$15<small>per month</small></div><div class="perks">3 stories &middot; unlimited chapters &middot; unlimited characters &middot; more free tokens &middot; more moments &middot; more styling options &middot; multiple versions &middot; writing coach</div><a href="/login?signup&amp;plan=gold" class="btn">Get Gold</a></div>
+      <div class="p-card"><img src="/images/Platinum_Pieces.png" alt=""><div class="t">Platinum</div><div class="price" data-tier="platinum">$22<small>per month</small></div><div class="perks">unlimited stories &middot; unlimited chapters &middot; unlimited characters &middot; even more free tokens &middot; even more moments &middot; all the styling options, including custom art styles &middot; multiple versions &middot; writing coach</div><a href="/login?signup&amp;plan=platinum" class="btn">Go Platinum</a></div>
+    </div>
+
+    <div class="p-extra">
+      <div class="tg-root tg-open-wrap"><button type="button" id="tg-open-btn" class="tg-open">Compare the Tiers</button></div>
+      <a href="/gift?from=/memories" class="tg-open" id="gift-open-wrap" style="display:none;">Give Campaignia as a Gift</a>
+    </div>
+  </div>
+</section>
+
+<!-- 7. KEY DETAILS -->
+<section class="details" id="details">
+  <div class="wrap">
+    <h2>Stress Free from Beginning to End</h2>
+    <div class="detail-row">
+      <div><div class="pic icon">Icon: book</div><div class="d">Built to Last</div></div>
+      <div><div class="pic icon">Icon: truck</div><div class="d">Receive Within <span class="tbd">TBD</span> Days</div></div>
+      <div><div class="pic icon">Icon: dollar sign</div><div class="d">Budget-Friendly Gift</div></div>
+      <div><div class="pic icon">Icon: calendar</div><div class="d">30 Day Free Trial</div></div>
+      <div><div class="pic icon">Icon: cancel</div><div class="d">Cancel Anytime</div></div>
+    </div>
+    <details class="more">
+      <summary>More Product Details</summary>
+      <ul>
+        <li><span class="tbd">TBD</span> Every physical detail of the book, like an Amazon listing: ink, types of photos, paper construction, book sizes, paper thickness, and so on.</li>
+      </ul>
+    </details>
+  </div>
+</section>
+
+<!-- 8. FAQ: Riley's three first, then the existing ones from /story -->
+<section class="faq" id="faq">
+  <div class="wrap">
+    <h2>Addressing Your Concerns</h2>
+    <details><summary>Are you saving photos of my kids?</summary><p><span class="tbd">TBD</span> Wording to settle. Photos you upload are kept in your account so your book can use them; they are never shared, distributed, or used for anything but your own stories.</p></details>
+    <details><summary>Are you using my photos to train your AI model?</summary><p>No. We use <span class="tbd">TBD</span> models from <span class="tbd">TBD</span>, which are already trained, coded, and prompted. The version you are using is not improved through your use. Neither Campaignia nor our AI providers ever train AI models on your stories or art.</p></details>
+    <details><summary>How long does it take to print and ship my story?</summary><p>Once you are happy with your story and submit it for printing, the file is sent to our printer in <span class="tbd">TBD</span>. Within 5&ndash;6 business days it will be fully printed, packaged, and shipped to your door.</p></details>
+    <details><summary>What do I need to paste in?</summary><p>Anything goes &ndash; your notes, a voice-to-text recording, emails, a chat thread, or what you typed up afterwards. The more detail, the richer the output.</p></details>
+    <details><summary>How does the AI know which moments matter?</summary><p>Campaignia finds the turning points, the surprises and the emotional beats automatically. You can also give it director&rsquo;s notes &ndash; tell it exactly which scenes you want included.</p></details>
+    <details><summary>Can I use Campaignia for any kind of story?</summary><p>Absolutely. A holiday, a birthday, a school year, a road trip, the bedtime saga you have been telling for years &ndash; anything with a story worth telling.</p></details>
+    <details><summary>What does the exported PDF look like?</summary><p>A print-ready storybook with a cover page, AI-illustrated panels, narrative prose, and your character cast. Four layout styles, and you preview before you print.</p></details>
+    <details><summary>Can I use my own photos, or my own writing?</summary><p>Yes. Family photos, children&rsquo;s drawings or your own art can go right into the story, and a story you&rsquo;ve already written stays word for word while Campaignia adds the pictures.</p></details>
+    <details><summary>Can I cancel anytime?</summary><p>Yes, always. Cancel anytime and keep access through your billing period. Your stories and chapters are always accessible &ndash; they don&rsquo;t disappear.</p></details>
+  </div>
+</section>
+
+<!-- 9. FINAL CTA -->
+<section class="final">
+  <div class="wrap">
+    <div class="pic"><b>Picture</b>The book open, next to photo albums</div>
+    <h2>Every Story Starts Somewhere</h2>
+    <p class="lead">If you&rsquo;ve got a story to tell, let Campaignia help you tell it.</p>
+    <div class="cta-row"><a href="/login?signup" class="btn btn-lg">Begin Your Story <span class="arr">&rarr;</span></a></div>
+    <div class="cta-note">30 day free trial</div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="ftop">
+      <div>
+        <div class="fbig">Turn the stories you tell into books you can hold.</div>
+        <div style="margin-top:30px;"><a href="/login?signup" class="btn" style="background:#fff;color:#000;border-color:#fff;">Try for Free</a></div>
+      </div>
+      <div class="flinks">
+        <a href="/login">Sign In</a>
+        <a href="/library">Public Library</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+        <a href="/our-story">Our Story</a>
+        <a href="mailto:info@campaignia.com">Contact</a>
+        <a href="/terms.html">Terms</a>
+        <a href="/privacy.html">Privacy</a>
+      </div>
+    </div>
+    <div class="fcopy">&copy; <span id="footer-year"></span> So It Begins, LLC &middot; Campaignia.</div>
+  </div>
+</footer>
+
+<script>
+document.getElementById('footer-year').textContent = new Date().getFullYear();
+function memToggleNav(){var m=document.getElementById('mobileMenu'),b=document.getElementById('navToggle');var o=m.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');}
+function memCloseNav(){document.getElementById('mobileMenu').classList.remove('open');document.getElementById('navToggle').setAttribute('aria-expanded','false');}
+
+// the two style rows: a picture tile for each, until the pictures arrive
+(function(){
+  var art=['Everyday Life','Watercolor','Soft Pastels','Oil Painting','Pen and Ink','Charcoal','Anime/Manga','Cel-Shaded','Dark and Gritty','High Fantasy','Dark Fantasy','Your Custom Style'];   // v3.6.69 (Ian): fantasy toward the end
+  var narr=['Classic','Calm and Literal','Comic Dialogue','High-Drama Anime','Epic Saga','Adventurer\u2019s Journey','Cinematic Script','Lorekeeper/Historian','Noir','Dark/Grim','Children\u2019s Storybook'];
+  // v3.6.67 (Ian, 2026-11-16): a picture from the Library for each art style, linked from images.campaignia.com. A box
+  // whose picture fails to load shows its note again.
+  var artPics={
+    'High Fantasy':'https://images.campaignia.com/archives/arch-1788758803260-77abf045a55e67c2.png',
+    'Everyday Life':'https://images.campaignia.com/archives/arch-1794882778880-4450f726bf7ed3c6.png',
+    'Anime/Manga':'https://images.campaignia.com/archives/arch-1794873477358-8d128d0e29dd9c56.png',
+    'Dark and Gritty':'https://images.campaignia.com/archives/arch-1783632461595-d8720a0d443dceba.png',
+    'Pen and Ink':'https://images.campaignia.com/archives/arch-1783690493283-ffce99549c9c1fee.png',
+    'Oil Painting':'https://images.campaignia.com/uploads/gen-1794873922750-355d74a8ca59020b.png',
+    'Soft Pastels':'https://images.campaignia.com/archives/arch-1792967014866-6e41081639198174.png',
+    'Watercolor':'https://images.campaignia.com/uploads/gen-1794874101511-8465796ab98a5aed.png',
+    'Charcoal':'https://images.campaignia.com/uploads/flip-1794874587617-8tq3ee.png',
+    'Cel-Shaded':'https://images.campaignia.com/archives/arch-1794874749566-0e8907c4fa04f594.png',
+    'Dark Fantasy':'https://images.campaignia.com/archives/arch-1793642396765-746a0995b6b85f21.png',
+    'Your Custom Style':'https://images.campaignia.com/archives/arch-1786991804309-cac0b1660fc500fd.png'
+  };
+  function fill(id,list,kind,pics){var el=document.getElementById(id);list.forEach(function(n){var t=document.createElement('div');t.className='tile';t.innerHTML='<div class="pic"><b>Picture</b></div><span></span>';var box=t.querySelector('.pic');box.appendChild(document.createTextNode(kind+' in '+n));t.querySelector('span').textContent=n;if(pics&&pics[n]){var im=document.createElement('img');im.loading='lazy';im.decoding='async';im.alt=n+' example';im.src=pics[n];im.onerror=function(){box.classList.remove('has-img');if(im.parentNode)im.parentNode.removeChild(im);};box.classList.add('has-img');box.insertBefore(im,box.firstChild);}el.appendChild(t);});}
+  fill('artForms',art,'A page',artPics);fill('narrFormats',narr,'A passage');
+})();
+
+// 1. scroll down and the slides move from right to left
+(function(){
+  var wrap=document.getElementById('heroWrap'),track=document.getElementById('heroTrack'),d0=document.getElementById('dot0'),d1=document.getElementById('dot1');
+  var mq=window.matchMedia('(max-width:900px), (prefers-reduced-motion: reduce)');
+  function tick(){
+    if(mq.matches){track.style.transform='';return;}
+    var r=wrap.getBoundingClientRect(),run=wrap.offsetHeight-window.innerHeight;
+    var p=run>0?Math.min(1,Math.max(0,-r.top/run)):0;
+    var e=Math.min(1,Math.max(0,(p-0.2)/0.6));   // hold slide 1, slide across, hold slide 2
+    e=e<0.5?2*e*e:1-Math.pow(-2*e+2,2)/2;
+    track.style.transform='translateX('+(-50*e)+'%)';
+    d0.classList.toggle('on',e<0.5);d1.classList.toggle('on',e>=0.5);
+  }
+  window.addEventListener('scroll',tick,{passive:true});window.addEventListener('resize',tick);tick();
+})();
+
+// 3. the step in view grows, the others fade, and the picture beside them follows
+(function(){
+  var steps=[].slice.call(document.querySelectorAll('.step')),pics=[].slice.call(document.querySelectorAll('.steps-pic .pic'));
+  function tick(){
+    var mid=window.innerHeight*0.5,best=0,bd=1e9;
+    steps.forEach(function(s,i){var r=s.getBoundingClientRect(),d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=i;}});
+    steps.forEach(function(s,i){s.classList.toggle('on',i===best);});
+    pics.forEach(function(p,i){p.classList.toggle('on',i===best);});
+  }
+  window.addEventListener('scroll',tick,{passive:true});tick();
+})();
+
+// 5. each feature arrives as it scrolls into view
+(function(){
+  var f=[].slice.call(document.querySelectorAll('.feat'));
+  if(!('IntersectionObserver' in window)){f.forEach(function(x){x.classList.add('seen');});return;}
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('seen');io.unobserve(e.target);}});},{threshold:0.2});
+  f.forEach(function(x){io.observe(x);});
+})();
+
+// 6. live prices, as on /story: money from cents, never rounded into a whole dollar
+(function(){
+  function dollars(c){var d=Number(c)/100;if(!isFinite(d))return null;return '$'+(d%1===0?String(d):d.toFixed(2));}
+  fetch('/api/public/pricing').then(function(r){return r.json();}).then(function(d){
+    if(!d)return;
+    if(d.pricing)Object.keys(d.pricing).forEach(function(t){var el=document.querySelector('.price[data-tier="'+t+'"]'),p=Number(d.pricing[t]);if(el&&p>0)el.innerHTML='$'+p+'<small>per month</small>';});
+    if(d.passes)d.passes.forEach(function(p){if(!p||!p.id)return;var pr=document.querySelector('[data-pass-price="'+p.id+'"]'),m=dollars(p.price_cents);if(pr&&m)pr.textContent=m;var tk=document.querySelector('[data-pass-tokens="'+p.id+'"]');if(tk&&Number(p.tokens)>0)tk.textContent=Number(p.tokens)+' tokens';});
+  }).catch(function(){});
+  fetch('/api/gifts/status').then(function(r){return r.json();}).then(function(d){if(d&&d.enabled)document.getElementById('gift-open-wrap').style.display='inline-block';}).catch(function(){});
+})();
+</script>
+</body>
+</html>

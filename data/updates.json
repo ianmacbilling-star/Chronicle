@@ -1,5 +1,279 @@
 [
   {
+    "version": "3.6.82",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3682-cost-grid-words",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: Claude shown as the words one token covers (TD-1148).",
+        "detail": "Sonnet and Haiku, words read and words written for 1 token at our cost per token (Sonnet at 8 cents: 20,000 read, 4,000 written), to the nearest 100 words.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.81",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3681-rights-warn-quiet",
+        "kind": "fix",
+        "public": true,
+        "summary": "A signed picture is marked on the picture instead of popping up a message every time.",
+        "detail": "Pictures that may need permission (signed, or with a creator named) keep their amber outline and note; the pop-up only appears for a picture that can't be used.",
+        "td": []
+      },
+      {
+        "id": "3681-new-session-direct",
+        "kind": "fix",
+        "public": true,
+        "summary": "New session goes straight to the New Session form.",
+        "detail": "The question about making your pinned version the Canonical first is gone; a new session starts on the Canonical as before.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.80",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3680-prices-from-cost",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Pictures and transcription are priced from what they cost us; Writing tools are 1 token for 2 uses (TD-1148, stage 2).",
+        "detail": "A picture costs its model's cost at our cost per token (still 1 token at 8 cents; a dearer model can cost more), unless its price is pinned. Transcription is per started 15 minutes from the minute cost (still 2 at 8 cents). Writing tools: 1 token buys 2 uses (was 4). Optimize passes round to the nearest token instead of up.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.79",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3679-cost-grid-units",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: video priced a second and Claude per 1,000 words in the action table (TD-1148).",
+        "detail": "The units we do the sums in: each video model a second, Claude Sonnet and Haiku per 1,000 words read and written, both in tokens to two places.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.78",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3678-cost-basis-examples",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: transcription per 15 minutes, and an example Claude call beside each Claude rate (TD-1148).",
+        "detail": "The 15-minute transcription cost sits beside the cost a minute. Each Claude line says its rates are per million Anthropic tokens sent in and written out, and shows what a call of 6,000 words in and 2,000 out costs, in dollars and in our tokens at the basis, as the rates are typed.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.77",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3677-cost-basis-labels",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: what each Claude model is used for, what Tokens today means, and Claude per million tokens in the table (TD-1148).",
+        "detail": "The Sonnet and Haiku cost lines name the features that run on them; the action table explains its Tokens today column and adds Claude Sonnet and Haiku per million tokens read and written, at the basis.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.76",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3676-cost-basis",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Our real cost is now recorded beside every token spend, and the cost per token is a Financial-tab setting (TD-1148, stage 1).",
+        "detail": "Every Claude call is priced and logged (ai_calls), and each generation stores what it really cost us: pictures by model, transcription by the minute, video takes from fal's price, Claude by what it used. The Financial tab has our cost per token (video and Optimize follow it so far), our provider costs, a table of what each action costs at that basis, and the last 30 days of real costs. At 8 cents nothing is priced differently.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.75",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3675-memories-narrative-clip",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a looping clip of choosing a narrative style (TD-1158).",
+        "detail": "Ian's recording of the narrative style cards, cut before a browser tab preview appeared at the end; a silent looping video.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.74",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3674-memories-book-cover",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a real book cover in How it works, step 4 (TD-1158).",
+        "detail": "Print, Order, Ship now shows a finished title page made in the Image Builder, linked from images.campaignia.com.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.73",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3673-memories-character-clip",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a looping clip of the character creator (TD-1158).",
+        "detail": "Ian's 12-second recording of making KJ (a photo and a description become a full-body reference), as a silent looping video of 260 KB instead of a 2.6 MB GIF.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.72",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3672-memories-everyday",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a new Everyday Life picture (TD-1158).",
+        "detail": "Ian picked a better Everyday Life example from the Library.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.71",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3671-memories-hero-before",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a grandfather with an old photograph in the first top slide (TD-1158).",
+        "detail": "The first slide (Turn Cherished Memories) now has its picture too: an older man at a table looking at an old photograph.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.70",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3670-memories-hero-after",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a family reading their printed storybook in the top slide (TD-1158).",
+        "detail": "The second slide (Into Sharable Stories) shows a grandfather reading a printed storybook with his family, a stand-in until the planned grandma picture.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.69",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3669-memories-style-order",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: the art styles run from everyday to fantasy (TD-1158).",
+        "detail": "Everyday Life, Watercolor, Soft Pastels, Oil Painting, Pen and Ink, Charcoal, Anime/Manga, Cel-Shaded, Dark and Gritty, High Fantasy, Dark Fantasy, then Your Custom Style.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.68",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3668-memories-examples",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: Your Custom Style joins the art styles (11+), and two real stories fill the examples (TD-1158).",
+        "detail": "Our Family Stories (BjornT) and The Dojo of the Dragon Spirits (Ember Quill), each with its front cover, open their Library page on campaignia.com. The third example is still a box.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.67",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3667-memories-style-pictures",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a real picture for each of the 11 art styles (TD-1158).",
+        "detail": "Pictures Ian chose from the Library, linked from images.campaignia.com and loaded as they scroll into view; a picture that fails to load shows its box again.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.66",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3666-story-darker-text",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story: page titles without the dark shadow, and darker titles, path, tabs and row labels (TD-1158).",
+        "detail": "On the light Story page the shadow behind headlines only blurred them. Titles are now near-black; subtitles, the path at the top, the tabs and the Bridge/Panel labels are a darker grey; small faded text everywhere is a little darker. Campaignia is untouched.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.65",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3665-story-look",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story takes the new /memories look: warm white and sage, dark text, Manrope (TD-1158).",
+        "detail": "The Story brand's colors and fonts only; its wording is unchanged. Periwinkle and pink become warm greys of the same brightness, so text stays as readable as before; the watercolor wash is gone. Campaignia is untouched.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.64",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3664-memories-page",
+        "kind": "improvement",
+        "public": false,
+        "summary": "A new Story landing page at /memories, in progress (TD-1158).",
+        "detail": "Riley's nine-section plan in a light, airy look: grey boxes where pictures will go, yellow TBD marks for facts still to settle, and every link going to the real Story pages. Not indexed yet; /story is unchanged until this one replaces it.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.63",
     "staged_on": "2026-11-16",
     "entries": [

@@ -27,7 +27,7 @@
 
 const BRANDS = {
   campaignia: { key: 'campaignia', name: 'Campaignia', live: true, hosts: ['campaignia.com', 'www.campaignia.com'], landing: ['/game-masters'], sheet: '/css/themes/campaignia.css' },
-  brand2:     { key: 'brand2',     name: 'Story',      live: false, hosts: [],                                       landing: ['/story'],        sheet: '/css/themes/brand2.css' }
+  brand2:     { key: 'brand2',     name: 'Story',      live: false, hosts: [],                                       landing: ['/story', '/memories'], sheet: '/css/themes/brand2.css' }   // v3.6.64: /memories, the new Story page (TD-1158)
 };
 const DEFAULT_BRAND = 'campaignia';
 const PROD_HOSTS = ['campaignia.com', 'www.campaignia.com'];   // the same list as server.js PROD_HOSTS

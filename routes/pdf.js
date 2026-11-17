@@ -4709,6 +4709,8 @@ async function layoutLoopCostUsd() {
   // live-tunable setting uses, rather than a second hand-rolled query that could drift.
   var n = await getAppSettingInt('layout_loop_cost_cents', LAYOUT_LOOP_COST_CENTS_DEFAULT);
   if (!Number.isFinite(n) || n < 1) n = LAYOUT_LOOP_COST_CENTS_DEFAULT;   // never 0: we divide by this
+  // v3.6.76 -- TD-1148: the one cost basis (Financial tab) wins when set; else layout_loop_cost_cents as before.
+  try { var _c = await require('../services/aiCost').centsPerToken('layout'); if (Number.isFinite(_c) && _c >= 1) n = _c; } catch (e) {}
   return n / 100;
 }
 // Charge for ONE AI pass, metered on the usage the API actually reported. Returns a plain object
@@ -4722,7 +4724,7 @@ async function chargeLayoutPass(userId, usage, campaignId) {
   var outTok = (usage && usage.output_tokens) || 0;
   var rateUsd = await layoutLoopCostUsd();
   var usd = ((inTok * LAYOUT_IN_RATE_USD_PER_MTOK) + (outTok * LAYOUT_OUT_RATE_USD_PER_MTOK)) / 1e6;
-  var want = Math.max(1, Math.ceil(usd / rateUsd));   // floor of 1: a pass always costs something
+  var want = require('../services/aiCost').tokensFor(usd, rateUsd * 100);   // v3.6.80 -- TD-1148 (Ian, 2026-11-17): nearest token, half up (was rounded up); floor of 1: a pass always costs something
   var spent = want, shortfall = false;
   try {
     await spendTokens(userId, want, { source: 'optimize_layout_pass', event_type: 'generation_spend', related_campaign_id: campaignId });

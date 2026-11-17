@@ -249,7 +249,7 @@ involved at all. Generation is **spend-on-success** — if an image fails, you a
 and a file the AI reads but finds nothing in is not charged either.
 
 **Writing is counted in uses, not tokens.** The **Writing Coach** and narrative **Regen** spend
-**writing uses**: **1 token buys 4 uses**, taken one at a time when an answer arrives. **Word** is free.
+**writing uses**: **1 token buys 2 uses**, taken one at a time when an answer arrives. **Word** is free.
 See **10.9**.
 
 **Anything that reads pictures asks first.** It tells you how many pages and what the total will be
@@ -2663,7 +2663,7 @@ Friction points and what's actually going on.
 - **What is the Writing Coach?** A panel that helps with the words in any narrative box, and with the
   whole story on the Story tab: **Feedback**, **Rewrite**, **Word** and **Regen**. Gold, Platinum and
   the Free Trial; Regen on every plan. See 10.9.
-- **What does the Writing Coach cost?** **1 token buys 4 uses.** Each Feedback, Show me, Rewrite and
+- **What does the Writing Coach cost?** **1 token buys 2 uses.** Each Feedback, Show me, Rewrite and
   Regen is one use; **Word is free**; a failed try costs nothing.
 - **Does the coach know Campaignia wrote the narrative?** No. It judges the text blind, so
   Campaignia's own writing gets no free pass.

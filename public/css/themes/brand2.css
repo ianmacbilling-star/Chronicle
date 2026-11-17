@@ -1,3 +1,9 @@
+/* v3.6.65 -- TD-1158 (Ian, 2026-11-16: "take these colors and fonts ... and put them in the Story brand. Leave our wording").
+   Story takes the /memories look. Hand-set: page #f4f4f0, panels white, sage #e5e6e1 for deep panels and hover, ink #111
+   for text and titles, cream #f8efe5 light panels, no watercolor wash, Manrope for everything but comic lettering. Every
+   other periwinkle shade from v3.4.72, the accent and the pink button too, keeps its luminance and turns a warm grey
+   (hue 70, almost no color), so every contrast stays as it was. NPC purple, player blue, status colors, the bookshelf
+   and the tier metals are unchanged. The old values are in git (v3.6.64). */
 /* BRAND 2 (name to come) -- the theme sheet for the storyteller brand (v3.4.63, Ian 2026-11-06: "Sky and Lavender").
    A copy of campaignia.css with the same names; only the values below differ, chosen from the pastel/watercolor trial.
    Light page: cool paper, slate-blue ink, periwinkle accent, pink button. Used by /story only for now.
@@ -11,20 +17,20 @@
 /* v3.4.58 -- near-duplicate names were folded into the name that does the same job (Ian, 2026-11-06).
    v3.4.62 -- the folded names, which only pointed at their replacements, are gone, with every other name nothing used. */
 :root{
-  --accent-rgb:125,142,212;   /* the Campaignia gold: borders, glows, faint fills, focus rings */
-  --accent-bright-rgb:128,144,216;   /* the bright gold, used in shimmer animations */
-  --accent-pale-rgb:79,90,148;   /* the pale gold: hints and soft labels on dark */
-  --on-panel-rgb:38,43,74;   /* parchment text on a dark panel */
-  --panel-rgb:253,252,255;   /* the main dark-brown panel: inputs, review panel, pickers */
-  --panel-deep-rgb:236,238,250;   /* a deeper panel: picture frames, input wells */
+  --accent-rgb:144,147,133;   /* the Campaignia gold: borders, glows, faint fills, focus rings */
+  --accent-bright-rgb:147,149,135;   /* the bright gold, used in shimmer animations */
+  --accent-pale-rgb:85,86,79;   /* the pale gold: hints and soft labels on dark */
+  --on-panel-rgb:17,17,17;   /* parchment text on a dark panel */
+  --panel-rgb:255,255,255;   /* the main dark-brown panel: inputs, review panel, pickers */
+  --panel-deep-rgb:229,230,225;   /* a deeper panel: picture frames, input wells */
   --scrim-rgb:8,5,2;   /* the dimmer behind windows */
   --danger-rgb:196,96,122;   /* the crimson: remove and delete */
-  --accent:#7d8ed4;   /* the Campaignia gold as a solid color (spinners, labels) */
-  --page-bg:#f6f6fc;   /* the page background */
-  --panel:#fdfcff;   /* the main dark-brown panel as a solid color */
-  --on-panel:#262b4a;   /* parchment text on a dark panel */
-  --accent-bright:#8090d8;   /* the bright gold */
-  --accent-pale:#4f5a94;   /* the pale gold */
+  --accent:#909385;   /* the Campaignia gold as a solid color (spinners, labels) */
+  --page-bg:#f4f4f0;   /* the page background */
+  --panel:#ffffff;   /* the main dark-brown panel as a solid color */
+  --on-panel:#111111;   /* parchment text on a dark panel */
+  --accent-bright:#939587;   /* the bright gold */
+  --accent-pale:#55564f;   /* the pale gold */
   /* v3.4.55 -- names the bookshelf look in app.html adds */
   --foil-rgb:232,207,122;   /* gold-foil lettering on the bookshelf books */
   --tooling-rgb:214,180,90;   /* the gold lines tooled on the bookshelf books */
@@ -34,29 +40,29 @@
   /* v3.4.57 -- every remaining color, named by its job (Ian, 2026-11-06). Near-identical shades were merged into one;
      the names say what the color is for, so a second brand gives each its own value. *-rgb hold three numbers. */
   /* brand golds, browns and creams */
-  --surface-ink-text:#333a5a;
-  --surface-ink-text-rgb:51,58,90;
-  --hover-fill:#ebeefc;
-  --hover-fill-rgb:235,238,252;
-  --hover-fill-text:#101222;
+  --surface-ink-text:#333333;
+  --surface-ink-text-rgb:51,51,51;
+  --hover-fill:#e5e6e1;
+  --hover-fill-rgb:229,230,225;
+  --hover-fill-text:#111111;
   --support-banner-text:#7c2d12;
-  --gold-dim-label:#262d57;
-  --gold-dim-label-fill:#d2d5eb;
-  --gold-dim-label-line:#b8bde0;
-  --gold-dim-label-line-rgb:184,189,224;
-  --gold-muted:#262e64;
-  --gold-muted-fill:#4e5cbc;
-  --gold-muted-line:#b5bbe3;
-  --gold-muted-line-rgb:181,187,227;
-  --quote-text:#7c7e8d;
-  --quote-text-rgb:124,126,141;
-  --hint-text:#4d516d;
+  --gold-dim-label:#30302c;
+  --gold-dim-label-fill:#d6d7d3;
+  --gold-dim-label-line:#bec0b9;
+  --gold-dim-label-line-rgb:190,192,185;
+  --gold-muted:#33332e;
+  --gold-muted-fill:#64665b;
+  --gold-muted-line:#bcbeb6;
+  --gold-muted-line-rgb:188,190,182;
+  --quote-text:#7e7f7d;
+  --quote-text-rgb:126,127,125;
+  --hint-text:#535350;
   --support-orange:#c2410c;
   --support-orange-rgb:194,65,12;
   --row-muted:#906354;
   --copper:#b87333;
   --copper-rgb:184,115,51;
-  --gold-faint:#62688e;
+  --gold-faint:#6a6b66;
   --print-note:#a55a32;
   --print-note-rgb:165,90,50;
   --muted-text:#7f7264;
@@ -65,29 +71,29 @@
   --warn-orange-rgb:180,83,4;
   --amber-note:#dd962c;
   --amber-note-line-rgb:224,160,64;
-  --soft-gold-note:#384076;
-  --soft-gold-note-rgb:56,64,118;
+  --soft-gold-note:#44453f;
+  --soft-gold-note-rgb:68,69,63;
   --peach-text:#752900;
   --peach-text-rgb:117,41,0;
-  --highlight:#343e7c;
-  --highlight-rgb:52,62,124;
-  --highlight-fill:#838dcb;
-  --label:#292e53;
-  --label-rgb:41,46,83;
-  --label-fill:#acb1d6;
-  --label-line:#9fa5d0;
-  --soft-line:#a6abc9;
-  --soft-line-rgb:166,171,201;
-  --soft-line-text:#2b2e46;
-  --soft-line-text-rgb:43,46,70;
+  --highlight:#42443d;
+  --highlight-rgb:66,68,61;
+  --highlight-fill:#909286;
+  --label:#31312e;
+  --label-rgb:49,49,46;
+  --label-fill:#b2b4ad;
+  --label-line:#a7a8a1;
+  --soft-line:#acaca8;
+  --soft-line-rgb:172,172,168;
+  --soft-line-text:#2f302d;
+  --soft-line-text-rgb:47,48,45;
   /* pale panels (older light-style windows) */
-  --light-highlight:#4e5cbc;
-  --light-highlight-rgb:78,92,188;
-  --light-panel:#f5f5f8;
-  --light-panel-rgb:245,245,248;
-  --light-panel-line:#a7acc8;
-  --light-panel-text:#fdfcff;
-  --light-panel-text-rgb:253,252,255;
+  --light-highlight:#64665b;
+  --light-highlight-rgb:100,102,91;
+  --light-panel:#f8efe5;
+  --light-panel-rgb:248,239,229;
+  --light-panel-line:#adaea9;
+  --light-panel-text:#ffffff;
+  --light-panel-text-rgb:255,255,255;
   /* the bookshelf and Library shelves */
   --shelf-deep:#0e0804;
   --shelf-deep-rgb:14,8,4;
@@ -113,7 +119,7 @@
   /* status colors: warnings, errors, success, notices */
   --error-deep:#ca3f3f;
   --error-deep-rgb:202,63,63;
-  --error-dialog-bg:#eae9ed;
+  --error-dialog-bg:#e9e9e9;
   --help-ink:#1f2430;
   --help-ink-rgb:31,36,48;
   --success-deep:#0d2a20;
@@ -169,22 +175,22 @@
   --danger:#c4607a;
   /* v3.4.59 -- forms the sign-in and gift pages needed */
   --amber-note-rgb:221,150,44;
-  --page-bg-rgb:246,246,252;
+  --page-bg-rgb:244,244,240;
   /* v3.4.60 -- the call-to-action button in emails */
-  --button-cta:#d8809f;
+  --button-cta:#999c8e;
   /* v3.4.61 -- names the public pages add: tier metals, the AI tag, the writer and editor labels, the added-to-shelf button */
-  --tier-silver:#8c909a;
-  --tier-platinum:#8a84b8;
+  --tier-silver:#90908f;
+  --tier-platinum:#898b83;
   --ai-tag-line:#5b7bc0;
   --ai-tag-text:#dbeafe;
   --writer-pill-fill:#2f4a5c;
   --editor-pill-fill:#3f5232;
   --editor-pill-line:#283821;
   --added-line:#1f3a1f;
-  --panel-deep:#eceefa;
+  --panel-deep:#e5e6e1;
   --tooling:#d6b45a;
   --added-fill-rgb:40,70,40;
-  --tier-platinum-rgb:138,132,184;
+  --tier-platinum-rgb:137,139,131;
   --change-pending:#d54a34;
   --rights-warn-line-rgb:217,119,6;
   --ai-tag-fill-rgb:59,90,160;
@@ -197,26 +203,26 @@
   --tier-platinum-fill:#3a3d6b;
   --tier-platinum-text:#e8e8f0;
   /* v3.4.64 -- the halftone dots laid over the landing pages (landing.css body::before) */
-  --halftone-dot:rgba(43,49,82,0.045);
+  --halftone-dot:rgba(0,0,0,0);
   /* v3.4.67 -- the landing page fonts (landing.css, landing-story.css, the tier grid). Brand 2: Storybook (Ian, 2026-11-06) -- Fraunces, Lora, Quicksand, Patrick Hand; faces at the end of this sheet. */
-  --font-heading:'Fraunces', Georgia, serif;
-  --font-body:'Lora', Georgia, serif;
-  --font-label:'Quicksand', sans-serif;
+  --font-heading:'Manrope', 'Helvetica Neue', Arial, sans-serif;
+  --font-body:'Manrope', 'Helvetica Neue', Arial, sans-serif;
+  --font-label:'Manrope', 'Helvetica Neue', Arial, sans-serif;
   --font-comic:'Patrick Hand', cursive;
   /* v3.4.71 -- the picture behind the app and the sign-in, gift and Library pages. Story has no picture yet: the same soft watercolor wash as its landing page. */
-  --page-picture:radial-gradient(ellipse 60% 40% at 80% 8%, rgba(190,200,245,.40), transparent 70%), radial-gradient(ellipse 55% 35% at 10% 40%, rgba(240,200,225,.32), transparent 70%), radial-gradient(ellipse 70% 40% at 60% 90%, rgba(200,230,240,.35), transparent 70%);
+  --page-picture:none;
   --picture-dim:0;   /* v3.4.71 -- no dark veil: the wash is light (multiplies each page's veil: login, redeem, gift, My Campaigns) */
-  --page-title:#2b3152;   /* v3.4.72 -- the big page titles over the picture (My Campaigns and the like); Campaignia's foil gold */
-  --page-title-rgb:43,49,82;
+  --page-title:#111111;   /* v3.4.72 -- the big page titles over the picture (My Campaigns and the like); Campaignia's foil gold */
+  --page-title-rgb:17,17,17;
   --glass-rgb:255,255,255;   /* v3.4.73 -- white: on a light page the glass is light (every plain rgba(0,0,0,x) background in style.css, app.html, app.js, marketplace.css; not shadows, not gradients over pictures) */
-  --ink-bg:#eef0fb;   /* v3.4.73 -- pale lavender: on a light page those menus and the header are light, so their periwinkle text reads */
+  --ink-bg:#ecede8;   /* v3.4.73 -- pale lavender: on a light page those menus and the header are light, so their periwinkle text reads */
   --on-book-rgb:240,232,208;   /* v3.4.73 -- parchment text on the dark leather books (campaign and session cards); the books stay dark on every brand */
-  --accent-text:#3d4785;   /* v3.4.74 -- small text in the accent color (tabs, filter buttons, nav links, footers, placeholders); on Campaignia the same gold as --accent */
-  --accent-text-rgb:43,49,92;   /* v3.4.74 -- the same, for see-through text */
+  --accent-text:#000000;   /* v3.4.74 -- small text in the accent color (tabs, filter buttons, nav links, footers, placeholders); on Campaignia the same gold as --accent */
+  --accent-text-rgb:0,0,0;   /* v3.4.74 -- the same, for see-through text */
 }
 :root{
   --ink:#2c1810;
-  --gold-dim:rgba(61,71,133,0.9);
+  --gold-dim:rgba(85,86,79,0.9);
   --crimson-light:#fcebeb;
   --bg:#f9f7f4;--surface:#ffffff;
   --border:#e2ddd5;--border-dark:#c4bfb5;
@@ -228,13 +234,38 @@
   --shadow:0 1px 3px rgba(0,0,0,0.08);
   --shadow-md:0 4px 16px rgba(0,0,0,0.12);
   --radius:8px;--radius-lg:12px;
-  --font-display:'Cinzel',Georgia,serif;
+  --font-display:'Manrope','Helvetica Neue',Arial,sans-serif;
 }
 :root{--warn-text:#7a5200;}
 :root{--warn-orange:#fb923c;--warn-orange-bg:rgba(194,65,12,0.12);--warn-orange-line:rgba(251,146,60,0.55);}
 
-/* Brand 2's background, in place of a picture: a soft watercolor wash over the page color. */
-body{background-image:radial-gradient(ellipse 60% 40% at 80% 8%, rgba(190,200,245,.40), transparent 70%), radial-gradient(ellipse 55% 35% at 10% 40%, rgba(240,200,225,.32), transparent 70%), radial-gradient(ellipse 70% 40% at 60% 90%, rgba(200,230,240,.35), transparent 70%);background-attachment:fixed;}
+/* v3.6.66 -- TD-1158 (Ian, 2026-11-16: "get rid of the shadow ... behind the headlines (we don't have a dark background)" and
+   "darken up these letters just a little bit ... the grey on grey is just a little difficult to read"). Story only: this sheet
+   loads only on Story, and html[data-brand] outranks style.css's #view rules. Small faded text everywhere darkens a little
+   through --accent-text (now black); the titles, subtitles, path, tabs and Bridge/Panel row labels are set here. */
+html[data-brand="brand2"] .page-title, html[data-brand="brand2"] #view-campaigns .page-title, html[data-brand="brand2"] #view-sessions .page-title, html[data-brand="brand2"] #view-characters .page-title, html[data-brand="brand2"] #view-novel .page-title, html[data-brand="brand2"] #view-session-detail .page-title, html[data-brand="brand2"] #view-settings .page-title, html[data-brand="brand2"] #view-assets .page-title{color:var(--page-title);text-shadow:none;}
+html[data-brand="brand2"] .page-subtitle, html[data-brand="brand2"] #view-campaigns .page-subtitle, html[data-brand="brand2"] #view-sessions .page-subtitle, html[data-brand="brand2"] #view-characters .page-subtitle, html[data-brand="brand2"] #view-novel .page-subtitle, html[data-brand="brand2"] #view-session-detail .page-subtitle, html[data-brand="brand2"] #view-settings .page-subtitle, html[data-brand="brand2"] #view-assets .page-subtitle{color:#4a4b45;text-shadow:none;}
+html[data-brand="brand2"] .sdh-date-display{color:#55564f;text-shadow:none;}
+html[data-brand="brand2"] .breadcrumb{color:#5a5b55;}
+html[data-brand="brand2"] .breadcrumb-link{color:#333333;}
+html[data-brand="brand2"] .breadcrumb-sep{color:#9a9b95;}
+html[data-brand="brand2"] .breadcrumb-current{color:#111111;}
+html[data-brand="brand2"] .sess-tab{color:#55564f;text-shadow:none;}
+html[data-brand="brand2"] .sess-tab:hover{color:#111111;}
+html[data-brand="brand2"] .sess-tab.active{color:#111111;border-bottom-color:#111111;}
+html[data-brand="brand2"] .narrative-block-header{color:#55564f;}
+html[data-brand="brand2"] .narr-block-style{color:#333333;}
+
+/* Brand 2's page (v3.6.65, TD-1158): plain, no wash, in the /memories font. */
+body{background-image:none;font-family:'Manrope','Helvetica Neue',Arial,sans-serif;}
+
+/* v3.6.65 (TD-1158): Manrope, the /memories font, now Story's heading, body and label font (SIL OFL, public/fonts/memories/). */
+@font-face{font-family:'Manrope';font-style:normal;font-weight:300;font-display:swap;src:url('/fonts/memories/manrope-latin-300-normal.woff2') format('woff2');}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/memories/manrope-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/memories/manrope-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/memories/manrope-latin-600-normal.woff2') format('woff2');}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/memories/manrope-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:800;font-display:swap;src:url('/fonts/memories/manrope-latin-700-normal.woff2') format('woff2');}
 
 /* Brand 2's fonts (v3.4.67, Storybook). Files in /fonts/brand2/, SIL Open Font License (the -OFL.txt beside them). Served as plain files;
    they are not in services/printing/fonts.js, so books, PDFs and print are untouched. Each weight the pages ask for maps to the nearest file. */

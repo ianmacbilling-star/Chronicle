@@ -40,7 +40,15 @@ const PART_SECS = 1140, OVERLAP_SECS = 90;   // v3.6.12: parts of 19 minutes ove
 const TRIAL_SECS = 1180;   // v3.6.22 (Ian, 2026-11-14: "Make it so the free trial only does the first 20 minutes ... this is an expensive feature ... here is the quick proof"); one part, under fal's 1200 s
 const PREP_STALE_MINS = 45;                  // a recording still being prepared after this long was lost (a restart): failed, nothing charged
 
-function audioTokens(secs) { return TOKENS_PER_QUARTER_HOUR * Math.max(1, Math.ceil((Number(secs) || 0) / 900 - 1e-9)); }
+function audioTokens(secs, perQuarter) { return (Number(perQuarter) > 0 ? Number(perQuarter) : TOKENS_PER_QUARTER_HOUR) * Math.max(1, Math.ceil((Number(secs) || 0) / 900 - 1e-9)); }
+// v3.6.80 -- TD-1148 stage 2: tokens for each started 15 minutes, from the minute cost (Financial tab) at our cost per
+// token, nearest, at least 1. At $0.008 a minute and 8 cents: 0.12 / 0.08 = 1.5, so 2, as before.
+async function quarterTokens() {
+  try {
+    const ac = require('../services/aiCost');
+    return ac.tokensFor((await ac.audioMinuteUsd()) * 15, await ac.centsPerToken('audio'));
+  } catch (e) { return TOKENS_PER_QUARTER_HOUR; }
+}
 function audioBucket() { return String(process.env.AUDIO_BUCKET || '').trim() || storage.holdingBucket(); }
 
 let tablesReady = null;
@@ -599,7 +607,7 @@ router.get('/config', requireAuth, async function (req, res) {
     await ensureTables();
     const db = await getDb();
     const cid = parseInt(req.query.campaign, 10);   // v3.6.13: whether this campaign's plan has it
-    res.json({ enabled: await audioOn(db, req), allowed: cid ? await planAllows(db, req, cid) : null, plan_message: PLAN_MSG, trial_secs: cid && (await isTrialPlan(db, req, cid)) ? TRIAL_SECS : null, tokens_per_quarter_hour: TOKENS_PER_QUARTER_HOUR, max_secs: MAX_SECS, max_bytes: MAX_BYTES });
+    res.json({ enabled: await audioOn(db, req), allowed: cid ? await planAllows(db, req, cid) : null, plan_message: PLAN_MSG, trial_secs: cid && (await isTrialPlan(db, req, cid)) ? TRIAL_SECS : null, tokens_per_quarter_hour: await quarterTokens(), max_secs: MAX_SECS, max_bytes: MAX_BYTES });
   } catch (e) { res.json({ enabled: false }); }
 });
 
@@ -628,7 +636,7 @@ router.post('/start', requireAuth, async function (req, res) {
     const busy = await db.prepare("SELECT id FROM audio_jobs WHERE user_id = ? AND status IN ('uploading', 'preparing', 'transcribing', 'saving') AND updated_at > NOW() - INTERVAL '2 hours'").get(req.session.userId);
     if (busy) return audRefuse(req, res, 'start', 409, 'You already have a recording being transcribed. Wait for it to finish.', { job: busy.id });
     const capSecs = (await isTrialPlan(db, req, campaignId)) ? TRIAL_SECS : null;   // v3.6.22
-    const tokens = audioTokens(capSecs ? Math.min(secs, capSecs) : secs);
+    const tokens = audioTokens(capSecs ? Math.min(secs, capSecs) : secs, await quarterTokens());   // v3.6.80: from cost
     const bal = await require('./tokens').getBalance(req.session.userId);
     if ((Number(bal.total) || 0) < tokens) { audLog(req.session.userId, 'warn', 'start', 'Refused (402): not enough tokens', { need: tokens, have: Number(bal.total) || 0 }); return res.status(402).json({ error: 'INSUFFICIENT_TOKENS', message: 'This recording costs ' + tokens + ' tokens, but you have ' + (Number(bal.total) || 0) + '. Add tokens and try again.' }); }
     const name = String(b.name || 'recording').slice(0, 200);
@@ -795,4 +803,5 @@ router.post('/fal-webhook', async function (req, res) {
 });
 
 module.exports = router;
-module.exports._test = { presign: presign, audioTokens: audioTokens, compactWords: compactWords, turnsOf: turnsOf, speakersOf: speakersOf, buildText: buildText, keytermsFor: keytermsFor, loreNames: loreNames, planParts: planParts, stitchParts: stitchParts, IO: IO, prepareJob: prepareJob, queuePrep: queuePrep, finishPart: finishPart, checkJob: checkJob, ensureTables: ensureTables };
+module.exports.quarterTokens = quarterTokens;   // v3.6.80: the Financial tab shows it
+module.exports._test = { presign: presign, audioTokens: audioTokens, quarterTokens: quarterTokens, compactWords: compactWords, turnsOf: turnsOf, speakersOf: speakersOf, buildText: buildText, keytermsFor: keytermsFor, loreNames: loreNames, planParts: planParts, stitchParts: stitchParts, IO: IO, prepareJob: prepareJob, queuePrep: queuePrep, finishPart: finishPart, checkJob: checkJob, ensureTables: ensureTables };
