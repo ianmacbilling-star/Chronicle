@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.74",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3674-memories-book-cover",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a real book cover in How it works, step 4 (TD-1158).",
+        "detail": "Print, Order, Ship now shows a finished title page made in the Image Builder, linked from images.campaignia.com.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.73",
     "staged_on": "2026-11-16",
     "entries": [
