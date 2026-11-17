@@ -90,6 +90,8 @@
     .hero-slide-outer{width:50%;display:flex;}
     .hero-slide h2{font-size:clamp(52px,7.6vw,104px);line-height:1.0;}
     .hero-slide .pic{height:min(62vh,560px);width:100%;aspect-ratio:auto;}
+    .hero-slide .pic.has-img{padding:0;border:0;overflow:hidden;}
+    .hero-slide .pic.has-img img{width:100%;height:100%;object-fit:cover;object-position:50% 40%;display:block;}
     .hero-dots{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);display:flex;gap:10px;}
     .hero-dots i{width:34px;height:4px;border-radius:2px;background:rgba(0,0,0,0.18);transition:background .2s;}
     .hero-dots i.on{background:var(--m-ink);}
@@ -278,7 +280,7 @@
         </div></div>
         <div class="hero-slide-outer"><div class="hero-slide">
           <h2>Into Sharable Stories</h2>
-          <div class="pic tall"><b>Picture</b>Grandma sitting with her grandkids, reading them the same story with a big smile on her face; the photo is now in the book, printed with Campaignia</div>
+          <div class="pic tall has-img"><img src="/images/memories/hero-after.jpg" alt="A grandfather reading a printed storybook with his family"></div>
         </div></div>
       </div>
       <div class="hero-dots"><i class="on" id="dot0"></i><i id="dot1"></i></div>

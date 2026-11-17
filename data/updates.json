@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.70",
+    "staged_on": "2026-11-16",
+    "entries": [
+      {
+        "id": "3670-memories-hero-after",
+        "kind": "improvement",
+        "public": false,
+        "summary": "/memories: a family reading their printed storybook in the top slide (TD-1158).",
+        "detail": "The second slide (Into Sharable Stories) shows a grandfather reading a printed storybook with his family, a stand-in until the planned grandma picture.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.69",
     "staged_on": "2026-11-16",
     "entries": [
