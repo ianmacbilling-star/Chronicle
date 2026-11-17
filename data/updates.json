@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.93",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3693-prices-in-tooltips",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Token prices moved off buttons and screens into tooltips: hover a button to see what it costs.",
+        "detail": "Ian (2026-11-17): no prices on buttons; estimates in tooltips only. Covers Title Builder, Image Builder, custom style, New panel, Transcribe, Optimize, the Director's buttons and Notes, Check this shot, take review, retouch take, the episode estimate and the video model menu. Confirmation boxes, receipts and error messages keep their numbers.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.92",
     "staged_on": "2026-11-17",
     "entries": [
