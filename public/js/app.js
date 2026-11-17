@@ -9036,8 +9036,8 @@ function renderAssetModalImage(asset) {
   var hasDesc = !!(asset.description && asset.description.trim());
   if (hasImg) {
     var pills = '';
-    if (hasDesc) pills += '<button class="panel-pill" onclick="regenerateAsset(' + aid + ')" title="Re-roll the image from its description">&#8635; Regen</button>';
-    pills += '<button class="panel-pill" onclick="openRetouchAsset(' + aid + ')" title="Keep this image and change just one thing">Retouch</button>';
+    if (hasDesc) pills += '<button class="panel-pill" onclick="regenerateAsset(' + aid + ')" title="Re-roll the image from its description. ' + picTip() + '">&#8635; Regen</button>';
+    pills += '<button class="panel-pill" onclick="openRetouchAsset(' + aid + ')" title="Keep this image and change just one thing. ' + picTip() + '">Retouch</button>';
     if (asset.revert_image_url) pills += '<button class="panel-pill" onclick="revertAsset(' + aid + ')" title="Undo the last retouch or regenerate">Revert</button>';
     pills += '<button class="panel-pill" onclick="openReplacePicker(\'asset\', ' + aid + ')" title="Replace with an image from the Archive">Replace</button>';
     body.innerHTML =
@@ -9390,8 +9390,8 @@ function renderCharModalPrompt(char) {
           '<img src="' + char.canonical_reference_url + '" alt="' + char.name + ' reference" ' +
           'onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
           '<div class="panel-img-actions">' +
-            '<button class="panel-pill char-regen-pill' + (charPromptIsStale(char.id) ? ' is-stale' : '') + '" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">&#8635; Regen</button>' +
-            '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing">Retouch</button>' +
+            '<button class="panel-pill char-regen-pill' + (charPromptIsStale(char.id) ? ' is-stale' : '') + '" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt. ' + picTip() + '">&#8635; Regen</button>' +
+            '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing. ' + picTip() + '">Retouch</button>' +
             (char.revert_reference_url ? '<button class="panel-pill" onclick="revertCharRef(' + char.id + ')" title="Undo the last retouch or regenerate - restore the previous reference">Revert</button>' : '') +
             '<button class="panel-pill" onclick="openReplacePicker(\'canonical\', ' + char.id + ')" title="Replace with an image from the Archive">Replace</button>' +
             '<button class="panel-pill' + (_carched ? ' is-on' : '') + '" id="char-archive-' + char.id + '" onclick="toggleArchiveCharCanonical(' + char.id + ')" title="' + (_carched ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + (_carched ? 'Archived' : 'Archive') + '</button>' +
@@ -18609,7 +18609,7 @@ function renderStoryboard() {
     }
     var regenBtn = state.selfIllustrated ? '' : m.locked   // v3.1.30 -- TD-921: nothing to regenerate
       ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">&#8635; Regen</button>'
-      : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">&#8635; Regen</button>';
+      : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch. ' + picTip() + '">&#8635; Regen</button>';
     // v3.0.641 -- the Title Builder pill, FIRST in the row, and only on the opening image. Ian
     // marked it there on a screenshot. Hidden while locked for the same reason the others are
     // disabled: a locked panel is one the reader has decided is finished.
@@ -18632,7 +18632,7 @@ function renderStoryboard() {
     } catch (e) { _isDrawnTitle = false; }
     var retouchBtn = _isDrawnTitle ? '' : (m.locked
       ? '<button class="panel-pill pp-retouch dm-only" disabled title="Unlock to retouch">Retouch</button>'
-      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>');
+      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing. ' + picTip() + '">Retouch</button>');
     var revertBtn = (m.revert_image && !m.locked)
       ? '<button class="panel-pill dm-only" onclick="revertMoment(' + m.id + ')" title="Undo the last retouch or regenerate - restore the previous image">Revert</button>'
       : '';
@@ -20114,7 +20114,7 @@ function wtGoldOk() { return !!(state.tierInfo && state.tierInfo.effective_rank 
 // The row under each box. regenCall is the box's own Regen (which opens the coach on the Regen tab and runs it).
 function wtPillsHtml(box, ta, label, regenCall) {
   return '<span class="wt-pills" id="wt-row-' + ta + '" data-box="' + box + '" data-ta="' + ta + '" data-label="' + escapeHtml(label || '') + '">' +
-    (regenCall ? '<button type="button" class="wt-pill wt-regen" onclick="' + regenCall + '" title="Write a fresh version of this box only">&#8635; Regen</button>' : '') +
+    (regenCall ? '<button type="button" class="wt-pill wt-regen" onclick="' + regenCall + '" title="Write a fresh version of this box only. Uses 1 writing use (1 token buys 2).">&#8635; Regen</button>' : '') +
     '<button type="button" class="wt-pill wt-coach" onclick="wtCoach(\'' + box + '\',\'' + ta + '\')" title="Open the writing coach on this box">Writing Coach</button>' +
     '<button type="button" class="wt-pill wt-undo" id="wt-undo-' + ta + '" style="display:none;" onclick="wtUndo(\'' + ta + '\')" title="Put back the text this box had before Use this">Revert</button>' +
   '</span>';
@@ -23046,6 +23046,13 @@ function genEstFetch(maxAge) {
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) { GEN_EST.busy = false; if (d && GEN_EST.key === key) { GEN_EST.d = d; genEstPaint(); } })
     .catch(function () { GEN_EST.busy = false; });
+}
+// v3.6.95 (Ian, 2026-11-17: the Regen and Retouch buttons everywhere): a picture's price for tooltips, from what the
+// page has been told (the Image Builder, or the Story estimate); 1 until then (pictures are 1 token at 8 and 5 cents)
+function picTip() {
+  var c = (typeof IB !== 'undefined' && IB && IB.cost != null) ? Number(IB.cost) : ((typeof GEN_EST !== 'undefined' && GEN_EST.d && GEN_EST.d.picture != null) ? Number(GEN_EST.d.picture) : 1);
+  if (!(c >= 0)) c = 1;
+  return 'Costs ' + c + ' token' + (c === 1 ? '' : 's') + '.';
 }
 function genEstSet(id, extra) {
   var b = document.getElementById(id); if (!b) return;
@@ -42774,7 +42781,7 @@ function vlKfCardHTML(d, si, ki, n) {
         '<div class="moment-title" style="color:var(--accent-pale);">Retouching...</div></div>' : '') +
       (busy ? '' : vlShapeTagHTML(k.url, si, ki)) +   // v3.5.14
       '<div class="panel-img-actions"' + (busy ? ' style="display:none;"' : '') + '>' +
-        '<button type="button" class="panel-pill" onclick="vlRetouch(' + si + ',' + ki + ')" title="Change this keyframe with the Retouch window. Only this episode\'s copy changes; the storyboard is not touched.">Retouch</button>' +
+        '<button type="button" class="panel-pill" onclick="vlRetouch(' + si + ',' + ki + ')" title="Change this keyframe with the Retouch window. Only this episode\'s copy changes; the storyboard is not touched. ' + picTip() + '">Retouch</button>' +
         (k.prev ? '<button type="button" class="panel-pill" onclick="vlRevertKf(' + si + ',' + ki + ')" title="Back to the picture before the last retouch (free)">Revert</button>' : '') +
         '<button type="button" class="panel-pill" onclick="vlChoose(\'' + si + ':' + ki + '\')" title="Put a different picture from the Archive here">Replace</button>' +
         '<button type="button" class="panel-pill" onclick="vlRemove(' + si + ',' + ki + ')" title="Take this keyframe out of the episode (the storyboard is not changed)">Remove</button>' +

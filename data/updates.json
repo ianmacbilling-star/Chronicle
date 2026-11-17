@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.95",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3695-regen-retouch-tips",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Every Regen and Retouch button says what it costs in its tooltip.",
+        "detail": "Story panels, character references, assets, video keyframes, the Retouch window, Regenerate in Art Style and the writing tools' Regen (one writing use). Picture prices follow the picture price the page knows (1 token).",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.94",
     "staged_on": "2026-11-17",
     "entries": [
