@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.97",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3697-tester-fixes-pricing",
+        "kind": "fix",
+        "public": true,
+        "summary": "Writing Coach buttons say their uses in their tooltips, not their labels; Rebuild prompt says its price; the transcription receipt says 1 token.",
+        "detail": "From the 17 Nov tester run (v3.6.96). Get feedback, Get new feedback, Write a fresh version, Try again and Show me: 'Uses 1 writing use (1 token buys 2).' Story feedback names its uses (one for every 10,000 words). Find words says Free in its tooltip. Generate Story's tooltip estimate is one token higher (Ian).",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.96",
     "staged_on": "2026-11-17",
     "entries": [

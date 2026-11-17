@@ -9359,7 +9359,7 @@ function renderCharModalPrompt(char) {
   // THE BUTTON COMES FIRST NOW. No Edit button -- the field is the field.
   var buttons = '<div class="char-prompt-actions" style="margin-bottom:8px;">' +
     '<button class="btn btn-sm" id="char-prompt-rebuild-' + char.id + '" ' +
-    'onclick="rebuildCharPrompt(' + char.id + ')">&#10227; ' +
+    'onclick="rebuildCharPrompt(' + char.id + ')" title="Writes this character\'s prompt and draws a new reference picture. Costs 1 token.">&#10227; ' +
     (hasPrompt ? 'Rebuild prompt' : 'Build character prompt') + '</button></div>';
 
   // Editable for anyone who may edit; a read-only block for anyone who may not,
@@ -20082,7 +20082,8 @@ function wtStoryFbUses() {
   var w = t ? t.split(/\s+/).length : 0;
   return Math.max(1, Math.ceil(w / 10000));
 }
-function wtStoryFbLabel(verb) { var n = wtStoryFbUses(); return verb + ' (' + n + ' use' + (n === 1 ? '' : 's') + ')'; }
+function wtStoryFbLabel(verb) { var n = wtStoryFbUses(); return verb; }   // v3.6.97 (Ian, 2026-11-17): the uses are in the tooltip (wtStoryFbTip)
+function wtStoryFbTip() { var n = wtStoryFbUses(); return 'Uses ' + n + ' writing use' + (n === 1 ? '' : 's') + ' (1 token buys 2). It reads the whole box: one use for every 10,000 words.'; }
 function wtIsStory() { return WT_STATE.box === 'story'; }
 function wtTabsHere() { return wtIsStory() ? WT_TABS.filter(function (t) { return t.id !== 'regen'; }) : WT_TABS; }
 // A piece of a long text around a point, cut at spaces, and where it starts.
@@ -20285,15 +20286,15 @@ function wtStalePaint() {
 function wtStartHtml(id) {
   if (id !== 'regen' && !wtGoldOk()) return wtLockedHtml();
   if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction. <b>Use this</b> replaces all of this box\u2019s text, including anything you added.</p>' +   // v3.4.41 -- TD-1107
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')">Write a fresh version (1 use)</button>';
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')" title="Uses 1 writing use (1 token buys 2).">Write a fresh version</button>';
   if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">Big-picture feedback on your whole story: what it reads as (notes, a game transcript or a written story; one chapter or the whole thing), ' +
     'then its shape, pacing, clarity and gaps. The final narrative gets polished box by box on the Storyboard; here we look at the big picture.</p>' +
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">' + wtStoryFbLabel('Get feedback') + '</button>' +
-    '<p class="wc-note">It reads the whole box: one use for every 10,000 words.</p>';
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')" title="' + wtStoryFbTip() + '">' + wtStoryFbLabel('Get feedback') + '</button>';
+    // v3.6.97: 'It reads the whole box: one use for every 10,000 words.' moved into the button's tooltip
   if (id === 'feedback') return '<p class="wc-text">Get honest feedback \u2014 hit the button below.</p>' +   // v3.2.95 -- TD-1028, Ian's wording
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')" title="Uses 1 writing use (1 token buys 2).">Get feedback</button>';
   if (id === 'word') return '<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press the button for better choices.</p>' +
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')">Find words for your selection (free)</button><div class="wc-note" id="wc-word-msg"></div>';
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')" title="Free.">Find words for your selection</button><div class="wc-note" id="wc-word-msg"></div>';
   return wtRewriteChoicesHtml();
 }
 function wtRewriteChoicesHtml() {
@@ -20540,7 +20541,7 @@ function wtRun(tool, extra, sel) {
       WT_STATE.opts.push({ tab: tab, before: null, after: t });
       put(wtOptionCard(k, t) +
         '<p class="wc-note">Nothing changes until you press Use this.</p>' +
-        '<button type="button" class="wc-btn" onclick="wtAgain(\'regen\')">Try again (1 use)</button>');
+        '<button type="button" class="wc-btn" onclick="wtAgain(\'regen\')" title="Uses 1 writing use (1 token buys 2).">Try again</button>');
     } else {
       // Rewrite and its choices: 3 versions of the selected words (or the whole box). The text is at the top of
       // the coach, so the results do not repeat it (Ian).
@@ -20553,7 +20554,7 @@ function wtRun(tool, extra, sel) {
         html += wtOptionCard(kk, o);
       });
       put(html + '<p class="wc-note">Nothing changes until you press Use this. ' + (sel ? 'Use this replaces only the words you selected.' : 'Use this replaces the whole box.') + '</p>' +
-        '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtAgain(\'rewrite\')">Try again (1 use)</button> ' +
+        '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtAgain(\'rewrite\')" title="Uses 1 writing use (1 token buys 2).">Try again</button> ' +
         '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtTabHtml(\'rewrite\', wtRewriteChoicesHtml())">Other choices</button>');
     }
     wtStalePaint();
@@ -20581,11 +20582,11 @@ function wtRenderPoints(points, d) {
   var head = wtVerdictHtml(d);
   // v3.2.40 -- the Story box: what it reads as, big-picture points, no Show me, and the cost on the button.
   var story = wtIsStory();
-  var again = story ? wtStoryFbLabel('Get new feedback') : 'Get new feedback (1 use)';
+  var again = 'Get new feedback', againTip = story ? wtStoryFbTip() : 'Uses 1 writing use (1 token buys 2).';   // v3.6.97: the uses in the tooltip
   if (story && d && d.reads_as) head = '<div class="wc-reads-as" style="font-size:11px;color:var(--gold-muted);letter-spacing:0.03em;margin:0 0 8px;">Reads as: ' + escapeHtml(d.reads_as) + '</div>' + head;
   if (!points.length && d && d.verdict === 'great') {
     s.pending = false;   // nothing to use, so nothing to warn about when moving on
-    wtTabHtml('feedback', head + (story ? '<p class="wc-note">The final narrative gets polished box by box on the Storyboard.</p>' : '') + '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">' + again + '</button>');
+    wtTabHtml('feedback', head + (story ? '<p class="wc-note">The final narrative gets polished box by box on the Storyboard.</p>' : '') + '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')" title="' + againTip + '">' + again + '</button>');
     return;
   }
   if (story && points.length) {
@@ -20593,7 +20594,7 @@ function wtRenderPoints(points, d) {
     wtTabHtml('feedback', head + '<ol class="wc-points">' + points.map(function (pt) {
       return '<li class="wc-point"><div class="wc-issue">' + escapeHtml(pt.issue) + '</div>' + (pt.why ? ('<div class="wc-why">' + escapeHtml(pt.why) + '</div>') : '') + '</li>';
     }).join('') + '</ol><p class="wc-note">Big picture only: the final narrative gets polished box by box on the Storyboard. Rewrite and Word are here if you want to work on the words.</p>' +
-    '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">' + again + '</button>');
+    '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')" title="' + againTip + '">' + again + '</button>');
     return;
   }
   if (!points.length) { s.pending = false; wtTabHtml('feedback', '<p class="wc-text">No suggestions came back. Try again in a moment.</p>' + wtStartHtml('feedback')); return; }
@@ -20602,11 +20603,11 @@ function wtRenderPoints(points, d) {
       (pt.quote ? ('<div class="wc-quote">“' + escapeHtml(pt.quote) + '”</div>') : '') +
       '<div class="wc-issue">' + escapeHtml(pt.issue) + '</div>' +
       (pt.why ? ('<div class="wc-why">' + escapeHtml(pt.why) + '</div>') : '') +
-      '<button type="button" class="wc-btn" onclick="wtShowMe(' + i + ')" title="Rewrites just this part (1 use)">Show me</button>' +
+      '<button type="button" class="wc-btn" onclick="wtShowMe(' + i + ')" title="Rewrites just this part. Uses 1 writing use (1 token buys 2).">Show me</button>' +
       '<div class="wc-show" id="wc-show-' + i + '"></div>' +
     '</li>';
   }).join('') + '</ol><p class="wc-note">Show me rewrites just that part, and costs one use.</p>' +
-  '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">Get new feedback (1 use)</button>');
+  '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')" title="Uses 1 writing use (1 token buys 2).">Get new feedback</button>');
 }
 
 function wtRenderWords(words, sel) {
@@ -26608,7 +26609,7 @@ function audTShowJob(job) {
   if (job.status !== 'ready') { audTPickView(); return; }
   var sp = job.speakers || [];
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.6.18: the top bar shows the charge at once
-  audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
+  audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' token' + (Number(job.tokens_charged) === 1 ? '' : 's') + ')' : '') + '. Name each speaker, or leave them out:</div>' +
     (job.cap_secs && Number(job.secs_est) > Number(job.cap_secs) ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Gold and Platinum transcribe the whole recording.</div>' : '') +   // v3.6.22
     (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
     '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14

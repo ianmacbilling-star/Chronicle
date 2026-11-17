@@ -349,7 +349,7 @@ router.get('/estimate/:campaignId/:sessionId', async function (req, res) {
     const fid = parseInt(req.query.fork_id, 10);
     if (fid > 0) { const fk = await db.prepare('SELECT role, fork_notes FROM session_forks WHERE id = ? AND session_id = ?').get(fid, req.params.sessionId); if (fk && fk.role !== 'dm') notes = fk.fork_notes || ''; }
     const rs = await inOutRates('story'), rn = await inOutRates('narrative');
-    res.json({ story: inOutTokens(rs, wc(s.transcript) + wc(s.session_notes) + wc(s.campaign_lore) + chW, rs.estOut),
+    res.json({ story: inOutTokens(rs, wc(s.transcript) + wc(s.session_notes) + wc(s.campaign_lore) + chW, rs.estOut) + 1,   // v3.6.97 (Ian, 2026-11-17: "just add a token to the estimate. They will be happy when it's 2")
       narrative: inOutTokens(rn, wc(s.transcript) + wc(notes) + chW, rn.estOut), picture: await getTokenCost('nano2') });
   } catch (e) { res.status(500).json({ error: 'Could not estimate' }); }
 });
