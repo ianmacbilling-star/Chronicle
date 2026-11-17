@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.96",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3696-generate-images-tip",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Generate Images says its price in its tooltip: 1 token per picture.",
+        "detail": "Ian, 2026-11-17.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.95",
     "staged_on": "2026-11-17",
     "entries": [
