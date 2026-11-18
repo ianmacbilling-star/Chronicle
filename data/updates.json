@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.15",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3715-memories-bill-fade",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 1 fades between a real photograph and the same man drawn in a scene.",
+        "detail": "Bill in uniform (the top of Ian's photograph) and Bill at Elsenborn Ridge, about 3.5 seconds each with a quick fade; a click opens the one on show. Also: hidden step pictures no longer catch clicks meant for the one on show.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.14",
     "staged_on": "2026-11-18",
     "entries": [

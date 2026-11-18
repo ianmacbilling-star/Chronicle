@@ -122,10 +122,16 @@
     /* 3. how to use: the picture changes as you scroll, the step in view grows, the others fade */
     .steps{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:70px;}
     .steps-pic{position:sticky;top:130px;height:min(70vh,620px);}
-    .steps-pic .pic{position:absolute;inset:0;opacity:0;transition:opacity .45s;}
-    .steps-pic .pic.on{opacity:1;}
+    .steps-pic .pic{position:absolute;inset:0;opacity:0;transition:opacity .45s;pointer-events:none;}
+    .steps-pic .pic.on{opacity:1;pointer-events:auto;}
     .steps .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
     .steps .pic.has-img img{width:100%;height:100%;object-fit:contain;display:block;}
+    /* v3.7.15 (Ian, 2026-11-18): step 1 fades between the real photograph and the AI scene of the same man */
+    .steps .pic.has-img.xfade{position:relative;}
+    .steps .pic.has-img.xfade img{position:absolute;inset:0;}
+    .steps .pic.has-img.xfade img+img{animation:xfade 8s ease-in-out infinite;}
+    @keyframes xfade{0%,42%{opacity:0;}50%,92%{opacity:1;}100%{opacity:0;}}
+    @media (prefers-reduced-motion: reduce){.steps .pic.has-img.xfade img+img{animation:none;opacity:1;}}
     .steps .pic.has-vid{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
     .steps .pic.has-vid video{width:100%;height:100%;object-fit:contain;display:block;}
     .step{padding:56px 40px;margin-bottom:28px;border-radius:22px;border:1px solid var(--m-line);background:#fff;opacity:0.45;transform:scale(0.96);transform-origin:left center;transition:opacity .4s, transform .4s, box-shadow .4s;min-height:42vh;display:flex;flex-direction:column;justify-content:center;}
@@ -346,14 +352,14 @@
     <h2>4 Steps to Your Own Custom Books</h2>
     <div class="steps">
       <div class="steps-pic" aria-hidden="true">
-        <div class="pic on" data-pic="0"><b>Picture</b>A photograph of a guy rafting, and right next to it an AI-generated image of the same person at a different point of the trip</div>
+        <div class="pic on has-img xfade" data-pic="0"><img src="/images/memories/bill-photo.jpg" alt="Bill, a real photograph from the 1940s"><img src="/images/memories/bill-scene.jpg" alt="The same Bill drawn by Campaignia in a snowy foxhole at Elsenborn Ridge"></div>
         <div class="pic has-vid" data-pic="1"><video src="/images/memories/from-to.mp4" poster="/images/memories/from-to.jpg" autoplay muted loop playsinline preload="metadata" aria-label="From this: an old typed page, hard to read. To this: the same story, clean, in Campaignia."></video></div>
         <div class="pic" data-pic="2"><b>Picture</b>Two images and text, side by side, slightly different</div>
         <div class="pic has-vid" data-pic="3"><video src="/images/memories/full-book.mp4" poster="/images/memories/full-book.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The finished book, page by page, in the Optimize view" width="1000" height="550"></video></div>
       </div>
       <div>
         <div class="step on" data-step="0">
-          <div class="pic"><b>Picture</b>A photograph of a guy rafting, and right next to it an AI-generated image of the same person at a different point of the trip</div>
+          <div class="pic has-img xfade"><img src="/images/memories/bill-photo.jpg" alt="Bill, a real photograph from the 1940s"><img src="/images/memories/bill-scene.jpg" alt="The same Bill drawn by Campaignia in a snowy foxhole at Elsenborn Ridge"></div>
           <h3>1. Characters</h3>
           <p>Add reference pictures of your characters and describe their personalities, quirks, and look. Campaignia keeps everyone visually consistent across every chapter.</p>
         </div>
@@ -621,7 +627,7 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
   box.innerHTML='<button type="button" id="zoom-x" aria-label="Close">&times;</button>';document.body.appendChild(box);
   var last=null;
   function mark(){document.querySelectorAll(SEL).forEach(function(el){if(el.closest('a')||el.getAttribute('data-zoom'))return;el.setAttribute('data-zoom','1');el.classList.add('zoomable');if(!el.closest('[aria-hidden="true"]')){el.setAttribute('tabindex','0');el.setAttribute('role','button');}});}
-  function open(el){var m;if(el.tagName==='VIDEO'){m=document.createElement('video');m.src=el.currentSrc||el.src;m.muted=true;m.loop=true;m.autoplay=true;m.setAttribute('playsinline','');if(el.poster)m.poster=el.poster;try{m.currentTime=el.currentTime||0;}catch(e){}}
+  function open(el){if(el.parentNode&&el.parentNode.classList&&el.parentNode.classList.contains('xfade')){var ims=el.parentNode.querySelectorAll('img');for(var i=0;i<ims.length;i++)if(parseFloat(getComputedStyle(ims[i]).opacity)>0.5)el=ims[i];}var m;if(el.tagName==='VIDEO'){m=document.createElement('video');m.src=el.currentSrc||el.src;m.muted=true;m.loop=true;m.autoplay=true;m.setAttribute('playsinline','');if(el.poster)m.poster=el.poster;try{m.currentTime=el.currentTime||0;}catch(e){}}
     else{m=document.createElement('img');m.src=el.currentSrc||el.src;m.alt=el.alt||'';}
     var old=box.querySelector('img,video');if(old)box.removeChild(old);box.appendChild(m);last=el;box.classList.add('open');document.body.style.overflow='hidden';var p=m.play&&m.play();if(p&&p.catch)p.catch(function(){});document.getElementById('zoom-x').focus();}
   function close(){if(!box.classList.contains('open'))return;var m=box.querySelector('img,video');if(m)box.removeChild(m);box.classList.remove('open');document.body.style.overflow='';if(last&&last.focus)last.focus();last=null;}
