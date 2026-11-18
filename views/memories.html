@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/css/themes/campaignia.css">
   <link rel="stylesheet" href="/css/themes/brand2.css">
   <link rel="stylesheet" href="/css/tier-grid.css?v=3.4.61">
+  <link rel="stylesheet" href="/css/fonts.css">
   <script src="/js/tier-grid.js?v=3.4.02" defer></script>
   <meta name="theme-color" content="#e5e6e1">
   <script src="/analytics.js"></script>
@@ -149,6 +150,10 @@
     .tile .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;font-size:0;}
     .tile .pic.has-img b{display:none;}
     .tile .pic.has-img img{width:100%;height:100%;object-fit:cover;display:block;}
+    .moment{max-width:860px;margin:0 0 22px;padding:16px 22px;background:var(--m-cream);border-radius:14px;font-size:17px;line-height:1.55;color:var(--m-ink);}
+    .moment b{display:block;font-size:12px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#55564f;margin-bottom:4px;}
+    .ntile{flex:0 0 290px;}
+    .npass{background:var(--m-white);border:1px solid var(--m-line);border-radius:18px;padding:22px;min-height:320px;box-sizing:border-box;color:var(--m-ink);line-height:1.5;white-space:pre-line;}
 
     /* 4. examples */
     .examples-head{text-align:center;max-width:820px;margin:0 auto 60px;}
@@ -373,7 +378,8 @@
       <div class="scroller" id="artForms"></div>
     </div>
     <div class="style-row">
-      <h3>11 Narrative Formats</h3>
+      <h3>11 Narrative Formats, or write it in your own words</h3>
+      <div class="moment"><b>The moment</b>At dusk, Sam walks up the path to a house with one lit window. Before Sam can knock, the door flies open, and Grandma stands there, flour on her hands. &ldquo;You came back,&rdquo; she says, and pulls Sam inside.</div>
       <div class="scroller" id="narrFormats"></div>
     </div>
   </div>
@@ -527,7 +533,9 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
 // the two style rows: a picture tile for each, until the pictures arrive
 (function(){
   var art=['Everyday Life','Watercolor','Soft Pastels','Oil Painting','Pen and Ink','Charcoal','Anime/Manga','Cel-Shaded','Dark and Gritty','High Fantasy','Dark Fantasy','Your Custom Style'];   // v3.6.69 (Ian): fantasy toward the end
-  var narr=['Classic','Calm and Literal','Comic Dialogue','High-Drama Anime','Epic Saga','Adventurer\u2019s Journey','Cinematic Script','Lorekeeper/Historian','Noir','Dark/Grim','Children\u2019s Storybook'];
+  // v3.7.03 (Ian, 2026-11-18): the narrative row shows one moment told in each style, in a book font; his order
+  var NARR=[["Classic","'Crimson Text', Georgia, serif",17,400,"Dusk settles over the lane as Sam climbs the path toward the single lit window. Before a knuckle touches wood, the door swings wide: Grandma, flour dusting her hands, eyes already shining. \u201cYou came back,\u201d she breathes, and pulls Sam into the warmth."],["Epic Saga","'EB Garamond', Georgia, serif",17,400,"Thus did Sam return at the dying of the day, to the house where one lamp yet burned against the dark. Ere the threshold was crossed, the door was flung wide, and there stood the elder of the hearth, flour upon her hands. \u201cYou came back,\u201d she spoke, and the long road ended in her embrace."],["Children\u2019s Storybook","'Lora', Georgia, serif",16,400,"When the sky turned the color of peaches, Sam skipped up the little path to the house with the one glowy window. Before Sam could even knock-knock, the door popped open! There was Grandma, with flour on her hands like snow. \u201cYou came back!\u201d she laughed, and scooped Sam inside."],["Noir","'Courier New', Courier, monospace",15,400,"The light in the window was the only thing in that town still waiting for me. I never got to knock. She was there before my knuckles were, flour on her hands and forty years in her eyes. \u201cYou came back,\u201d she said, like it was the last good news she\u2019d ever get."],["Adventurer\u2019s Journal","'Caveat', 'Bradley Hand', cursive",21,400,"Evening. Made it to the house just as the light went orange. One window lit, of course the kitchen. Didn\u2019t even get to knock; Grandma had the door open before I hit the step, flour everywhere, as usual. \u201cYou came back,\u201d she said. Like there was ever a question."],["Lorekeeper/Historian","'Dancing Script', 'Segoe Script', cursive",19,400,"It is recorded that the wanderer Sam returned to the old house at dusk, when but a single window was lit. Accounts agree the door opened before any knock was given, and that the matron of that house, her hands yet floured from the evening\u2019s bread, spoke only four words: \u201cYou came back.\u201d"],["Cinematic Script","'Helvetica Neue', Arial, sans-serif",15,400,"EXT. FARMHOUSE \u2013 DUSK. One window glows. SAM walks the path, bag over one shoulder. The door BANGS open before Sam can knock. GRANDMA. Flour on her hands. A beat. \u201cYou came back.\u201d She pulls Sam inside. The door closes on the light."],["Comic Dialogue","'Comic Neue', Georgia, serif",16,400,"Dusk. Sam trudges toward the only lit window.\nSAM: Okay. Just knock. Easy.\nThe door flies open first.\nGRANDMA: You came back!\nSAM: Grandma, your hands, the flour\u2026\nGRANDMA: Hush. Get inside."],["High-Drama Anime","'Helvetica Neue', Arial, sans-serif",15,700,"The sun burned its last red light across the sky as Sam\u2019s feet hit the path, heart pounding louder with every step. That window. Still lit. Still waiting. The door BURST open before Sam could knock: Grandma, flour on her trembling hands, tears already falling. \u201cYou\u2026 came back!\u201d"],["Dark/Grim","'Merriweather', Georgia, serif",14,400,"Night was falling hard when Sam reached the house, and only one window held out against it. The door opened before the knock. Grandma, thinner than memory allowed, flour pale on her hands. \u201cYou came back,\u201d she whispered, as though she had stopped believing anyone did."],["Calm and Literal","'Lora', Georgia, serif",16,400,"It was evening when Sam got to the house. The kitchen light was on. Before Sam knocked, Grandma opened the door. She had flour on her hands from baking. She said, \u201cYou came back.\u201d Then she gave Sam a hug, and they went inside together."]];
+  function fillNarr(){var el=document.getElementById('narrFormats');NARR.forEach(function(n){var t=document.createElement('div');t.className='tile ntile';var p=document.createElement('div');p.className='npass';p.style.fontFamily=n[1];p.style.fontSize=n[2]+'px';p.style.fontWeight=String(n[3]);p.textContent=n[4];var s=document.createElement('span');s.textContent=n[0];t.appendChild(p);t.appendChild(s);el.appendChild(t);});}
   // v3.6.67 (Ian, 2026-11-16): a picture from the Library for each art style, linked from images.campaignia.com. A box
   // whose picture fails to load shows its note again.
   var artPics={
@@ -545,7 +553,7 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
     'Your Custom Style':'https://images.campaignia.com/archives/arch-1786991804309-cac0b1660fc500fd.png'
   };
   function fill(id,list,kind,pics){var el=document.getElementById(id);list.forEach(function(n){var t=document.createElement('div');t.className='tile';t.innerHTML='<div class="pic"><b>Picture</b></div><span></span>';var box=t.querySelector('.pic');box.appendChild(document.createTextNode(kind+' in '+n));t.querySelector('span').textContent=n;if(pics&&pics[n]){var im=document.createElement('img');im.loading='lazy';im.decoding='async';im.alt=n+' example';im.src=pics[n];im.onerror=function(){box.classList.remove('has-img');if(im.parentNode)im.parentNode.removeChild(im);};box.classList.add('has-img');box.insertBefore(im,box.firstChild);}el.appendChild(t);});}
-  fill('artForms',art,'A page',artPics);fill('narrFormats',narr,'A passage');
+  fill('artForms',art,'A page',artPics);fillNarr();
 })();
 
 // 1. scroll down and the slides move from right to left
