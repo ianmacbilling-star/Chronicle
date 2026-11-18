@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.01",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3701-book-pen-names",
+        "kind": "fix",
+        "public": true,
+        "summary": "Books now show pen names, not account names.",
+        "detail": "The Story Master line, the copyright line and the players beside their characters use each person's pen name in the preview, the PDF and the printed book, as the Library copy already did. Someone with no pen name still shows as before.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.00",
     "staged_on": "2026-11-18",
     "entries": [
