@@ -114,7 +114,12 @@
     }
 
     /* 2. who it's for */
-    .pair{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:70px;}
+    .pair{display:grid;grid-template-columns:1fr 2fr;gap:22px;margin-bottom:70px;}
+    /* v3.7.19 (Ian, 2026-11-18): Bill's photograph (head and shoulders) a third, the Elsenborn Ridge scene two thirds, same height */
+    .pair .pic.has-img{padding:0;border:0;overflow:hidden;min-height:0;background:#e5e6e1;}
+    .pair .pic.has-img img{width:100%;height:100%;object-fit:cover;object-position:50% 20%;display:block;}
+    .pair .pic.torso{aspect-ratio:auto;}
+    .pair .pic.ridge{aspect-ratio:1584/672;}
     .story-copy{display:grid;grid-template-columns:0.9fr 1.1fr;gap:70px;align-items:start;}
     .story-copy p{font-size:19px;}
     .story-copy strong{color:var(--m-ink);font-weight:700;}
@@ -259,6 +264,7 @@
       section{padding:80px 0;}
       .wrap{padding:0 22px;}
       .pair,.story-copy,.feat,.p-grid,.ex-grid{grid-template-columns:minmax(0,1fr);}
+      .pair .pic.torso{aspect-ratio:6/5;}
       .story-copy{gap:24px;}
       .feat{gap:28px;margin-bottom:80px;} .feat:nth-child(even) .pic{order:0;}
       .detail-row{grid-template-columns:repeat(2,1fr);gap:36px 18px;}
@@ -333,8 +339,8 @@
 <section id="who">
   <div class="wrap">
     <div class="pair">
-      <div class="pic wide"><b>Picture</b>A real iPhone photo of a kid on the swings (first-person view)</div>
-      <div class="pic wide"><b>Picture</b>Next to it, an AI-generated image and text of a mother pushing the kid on the swing (third-person view)</div>
+      <div class="pic wide has-img torso"><img loading="lazy" decoding="async" src="/images/memories/bill-torso.jpg" alt="Bill, a real photograph from the 1940s"></div>
+      <div class="pic wide has-img ridge"><img loading="lazy" decoding="async" src="/images/memories/bill-ridge.jpg" alt="The same Bill drawn by Campaignia in a snowy foxhole at Elsenborn Ridge"></div>
     </div>
     <div class="story-copy">
       <h2>You still talk about that day&hellip;</h2>
