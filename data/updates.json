@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.02",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3702-story-optimize-colours",
+        "kind": "fix",
+        "public": true,
+        "summary": "Story: the Optimize and Order & Publish tabs are easier to read.",
+        "detail": "Page breaks show between book pages, the current page and the Edit buttons stand out in the page strip, and headings, buttons and links in both tabs are darker. Campaignia is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.01",
     "staged_on": "2026-11-18",
     "entries": [
