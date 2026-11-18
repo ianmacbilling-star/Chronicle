@@ -181,6 +181,8 @@
     .feat .pic.has-vid video{width:100%;height:auto;max-height:min(560px,75vh);object-fit:contain;display:block;}
     .feat p{font-size:21px;line-height:1.6;color:var(--m-text);}
     .shelf{max-width:960px;margin:0 auto;}
+    .shelf .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
+    .shelf .pic.has-img img{width:100%;height:100%;object-fit:cover;object-position:50% 60%;display:block;}
     @media (prefers-reduced-motion: reduce){ .feat{opacity:1;transform:none;} }
 
     /* 6. pricing */
@@ -427,7 +429,7 @@
       <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/writing-coach.mp4" poster="/images/memories/writing-coach.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The writing coach giving feedback on a passage" width="720" height="900"></video></div><p>Want to keep the story in your own words? Our digital coach gives helpful and honest feedback on any passage. It edits, offers suggestions, and helps you communicate your vision.</p></div>
     </div>
     <div class="shelf">
-      <div class="pic wide"><b>Picture</b>Several family stories as books on a shelf, next to ordinary books or photo albums</div>
+      <div class="pic wide has-img"><img loading="lazy" decoding="async" src="/images/story-books.jpg" alt="Finished picture books lying open on a table"></div>
     </div>
     <div class="center"><a href="/login?signup" class="btn btn-lg">Start Your First Story Now <span class="arr">&rarr;</span></a></div>
   </div>
