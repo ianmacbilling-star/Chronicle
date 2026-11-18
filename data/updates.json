@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.04",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3704-memories-salmon-river",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: a third example story and a less fantasy Epic Saga.",
+        "detail": "Salmon River Trip by Beth Knapp is the third example, linked to the Library; the Epic Saga passage keeps its sweep without the fantasy words.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.03",
     "staged_on": "2026-11-18",
     "entries": [
