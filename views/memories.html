@@ -365,7 +365,7 @@
       <div class="steps-pic" aria-hidden="true">
         <div class="pic on has-img xfade" data-pic="0"><img src="/images/memories/steve-refs.jpg" alt="Old photographs of Steve added as his reference pictures"><img src="/images/memories/steve-sheet.jpg" alt="The character picture Campaignia drew of Steve from those photographs"></div>
         <div class="pic has-vid" data-pic="1"><video src="/images/memories/from-to.mp4" poster="/images/memories/from-to.jpg" autoplay muted loop playsinline preload="metadata" aria-label="From this: an old typed page, hard to read. To this: the same story, clean, in Campaignia."></video></div>
-        <div class="pic" data-pic="2"><b>Picture</b>Two images and text, side by side, slightly different</div>
+        <div class="pic has-img xfade" data-pic="2"><img src="/images/memories/shoes-before.jpg" alt="A storyboard panel: two boys in a motel room, one wearing shoes"><img src="/images/memories/shoes-after.jpg" alt="The same panel after a quick retouch: both boys barefoot, one pair of shoes on the floor"></div>
         <div class="pic has-vid" data-pic="3"><video src="/images/memories/full-book.mp4" poster="/images/memories/full-book.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The finished book, page by page, in the Optimize view" width="1000" height="550"></video></div>
       </div>
       <div>
@@ -380,7 +380,7 @@
           <p>Drop in the heart of the story &ndash; notes, emails, typed pages, even old documents that are faded and hard to read, or audio files of interviews and narration. Whatever you&rsquo;ve got, Campaignia builds your storyboard, selecting the key moments and generating a stunning panel for each one, with narrative prose woven between.</p>
         </div>
         <div class="step" data-step="2">
-          <div class="pic"><b>Picture</b>Two images and text, side by side, slightly different</div>
+          <div class="pic has-img xfade"><img src="/images/memories/shoes-before.jpg" alt="A storyboard panel: two boys in a motel room, one wearing shoes"><img src="/images/memories/shoes-after.jpg" alt="The same panel after a quick retouch: both boys barefoot, one pair of shoes on the floor"></div>
           <h3>3. Customize</h3>
           <p>It&rsquo;s your memory, and you want Campaignia to get it right. Edit whole sections or minute details with the click of a button. All the tools are in one place to edit every part of your book.</p>
         </div>
@@ -613,7 +613,8 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
     else{var mid=window.innerHeight*0.5,bd=1e9;steps.forEach(function(s,i){var r=s.getBoundingClientRect(),d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=i;}});}
     steps.forEach(function(s,i){s.classList.toggle('on',i===best);});
     pics.forEach(function(p,i){p.classList.toggle('on',i===best);});
-    if(pics[0]&&steps[1]){var s2=false;if(box&&box.offsetParent!==null){var t0=steps[0].getBoundingClientRect().top,t1=steps[1].getBoundingClientRect().top,bt=box.getBoundingClientRect().top;s2=t1-bt<=(t1-t0)/2;}pics[0].classList.toggle('second',s2);}
+    // v3.7.21: every two-picture step (step 1, step 3) shows its second picture once the next step is halfway to the box
+    pics.forEach(function(p,i){if(!steps[i+1])return;var s2=false;if(box&&box.offsetParent!==null){var t0=steps[i].getBoundingClientRect().top,t1=steps[i+1].getBoundingClientRect().top,bt=box.getBoundingClientRect().top;s2=t1-bt<=(t1-t0)/2;}p.classList.toggle('second',s2);});
     if(best!==cur){cur=best;if(pics[best])pics[best].querySelectorAll('video').forEach(function(v){try{v.currentTime=0;var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}});}
   }
   window.addEventListener('scroll',tick,{passive:true});tick();
