@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.09",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3709-memories-zoom",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: click any picture or clip to see it bigger.",
+        "detail": "It opens over a dark screen and closes with a click, the close button or Escape; clips keep playing. The example covers still open their Library page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.08",
     "staged_on": "2026-11-18",
     "entries": [
