@@ -129,7 +129,7 @@
     /* v3.7.15 (Ian, 2026-11-18): step 1 fades between the real photograph and the AI scene of the same man */
     .step .pic.has-img.xfade{position:relative;}   /* v3.7.16: the phone copy only; beside the steps the box stays full height */
     .steps .pic.has-img.xfade img{position:absolute;inset:0;}
-    .steps .pic.has-img.xfade img+img{animation:xfade 8s ease-in-out infinite;}
+    .steps .pic.has-img.xfade img+img{animation:xfade 6.2s ease-in-out infinite;}
     @keyframes xfade{0%,42%{opacity:0;}50%,92%{opacity:1;}100%{opacity:0;}}
     @media (prefers-reduced-motion: reduce){.steps .pic.has-img.xfade img+img{animation:none;opacity:1;}}
     .steps .pic.has-vid{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
@@ -139,10 +139,12 @@
     .step h3{font-size:30px;font-weight:300;margin-bottom:16px;}
     .step .pic{display:none;}
     .steps-cta{text-align:center;margin-top:60px;}
+    .steps > div:last-child{padding-bottom:calc(min(70vh,620px) - 42vh);}   /* v3.7.18: room for step 4 to reach the top of the picture box */
     @media (max-width:900px){
       .steps{grid-template-columns:minmax(0,1fr);gap:0;}
       .steps-pic{display:none;}
       .step{opacity:1;transform:none;min-height:0;padding:34px 24px;}
+      .steps > div:last-child{padding-bottom:0;}
       .step .pic{display:flex;margin-bottom:24px;aspect-ratio:4/3;}
     }
 
@@ -593,11 +595,16 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
 // 3. the step in view grows, the others fade, and the picture beside them follows
 (function(){
   var steps=[].slice.call(document.querySelectorAll('.step')),pics=[].slice.call(document.querySelectorAll('.steps-pic .pic'));
+  // v3.7.18 (Ian, 2026-11-18): beside the steps, the picture changes only when the next step's panel reaches the top of the picture box;
+  // the step that comes up starts its clip from the beginning. Phones (no picture box) keep the middle-of-screen rule.
+  var box=document.querySelector('.steps-pic'),cur=-1;
   function tick(){
-    var mid=window.innerHeight*0.5,best=0,bd=1e9;
-    steps.forEach(function(s,i){var r=s.getBoundingClientRect(),d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=i;}});
+    var best=0;
+    if(box&&box.offsetParent!==null){var top=box.getBoundingClientRect().top+4;steps.forEach(function(s,i){if(s.getBoundingClientRect().top<=top)best=i;});}
+    else{var mid=window.innerHeight*0.5,bd=1e9;steps.forEach(function(s,i){var r=s.getBoundingClientRect(),d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=i;}});}
     steps.forEach(function(s,i){s.classList.toggle('on',i===best);});
     pics.forEach(function(p,i){p.classList.toggle('on',i===best);});
+    if(best!==cur){cur=best;if(pics[best])pics[best].querySelectorAll('video').forEach(function(v){try{v.currentTime=0;var p=v.play();if(p&&p.catch)p.catch(function(){});}catch(e){}});}
   }
   window.addEventListener('scroll',tick,{passive:true});tick();
 })();
