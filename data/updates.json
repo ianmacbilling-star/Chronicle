@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.6.99",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3699-memories-two-characters",
+        "kind": "feature",
+        "public": false,
+        "summary": "The /memories character builder clip now shows two characters back to back.",
+        "detail": "The carpenter and Bizz play one after the other in one looping clip (characters.mp4), beside Nail the character design.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.98",
     "staged_on": "2026-11-17",
     "entries": [
