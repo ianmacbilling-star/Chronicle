@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.20",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3720-memories-step1-steve",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 1 shows Steve's photos then his character as you scroll; step 2 ends on the storyboard.",
+        "detail": "Beside the steps the second picture comes in halfway through step 1 and goes back on scrolling up; phones keep the timed fade. Step 2 is now From this, the old PDF, To this, then the Savannah River storyboard (12 s).",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.19",
     "staged_on": "2026-11-18",
     "entries": [
