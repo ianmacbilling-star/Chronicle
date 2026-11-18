@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.12",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3712-memories-melvin-v2",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: new editing tools clip; the tallest clip panels are shorter.",
+        "detail": "Ian's new Melvin to the Rescue recording; clip panels stop at 560 px (or three quarters of the screen) tall.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.11",
     "staged_on": "2026-11-18",
     "entries": [
