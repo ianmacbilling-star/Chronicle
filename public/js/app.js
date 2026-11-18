@@ -6755,7 +6755,7 @@ function analyzeCustomStyle() {
         saveCustomStyle({ keepOpen: true });
       })
       .catch(function(e){ cstyleErr('Could not analyze the style: ' + e.message); })
-      .then(function(){ csBusyEnd('analyze'); csFixedBars(); if (btn) { btn.disabled = false; btn.innerHTML = 'Analyze style <span class="btn-cost">(1 token)</span>'; } });
+      .then(function(){ csBusyEnd('analyze'); csFixedBars(); if (btn) { btn.disabled = false; btn.innerHTML = 'Analyze style'; } });
   }
   csCurrentAnswers();   // v3.2.51 -- answers typed by hand are work too (TD-1000): Analyze replaces them, so it asks
   var hasWork = csHasAnswers() || CS.options.some(function (o) { return o && (o.edited || Object.keys(o.previews || {}).length); }) || (CS.winner !== null && CS.winner !== undefined);
@@ -6941,7 +6941,7 @@ function csRender() {
         '<div class="cs-shot-img' + (busy ? ' cs-busy' : '') + '" id="cs-shot-' + i + '-' + sc[0] + '">' +
           (url ? '<img src="' + escapeHtml(url) + '" alt="' + sc[1] + ' preview" onclick="openLightbox(this.src, this.alt)" />' : '<span class="cs-shot-empty">No preview yet</span>') +
         '</div>' + csBarHtml(key) +
-        (fr ? '' : '<button class="btn btn-sm cs-gen" id="cs-gen-' + i + '-' + sc[0] + '" onclick="csGenerate(' + i + ',\'' + sc[0] + '\')"' + (o.text && !busy ? '' : ' disabled') + '>' + (busy ? 'Generating\u2026' : (url ? 'Generate again' : 'Generate')) + ' (1 token)</button>') +
+        (fr ? '' : '<button class="btn btn-sm cs-gen" id="cs-gen-' + i + '-' + sc[0] + '" onclick="csGenerate(' + i + ',\'' + sc[0] + '\')"' + (o.text && !busy ? '' : ' disabled') + ' title="Draw a preview picture from this description. 1 token.">' + (busy ? 'Generating\u2026' : (url ? 'Generate again' : 'Generate')) + '</button>') +
       '</div>';
     }).join('');
     return '<div class="cs-opt' + (win ? ' cs-win' : '') + (fr ? ' cs-frozen' : '') + '" id="cs-opt-' + i + '">' + head +
@@ -9036,8 +9036,8 @@ function renderAssetModalImage(asset) {
   var hasDesc = !!(asset.description && asset.description.trim());
   if (hasImg) {
     var pills = '';
-    if (hasDesc) pills += '<button class="panel-pill" onclick="regenerateAsset(' + aid + ')" title="Re-roll the image from its description">&#8635; Regen</button>';
-    pills += '<button class="panel-pill" onclick="openRetouchAsset(' + aid + ')" title="Keep this image and change just one thing">Retouch</button>';
+    if (hasDesc) pills += '<button class="panel-pill" onclick="regenerateAsset(' + aid + ')" title="Re-roll the image from its description. ' + picTip() + '">&#8635; Regen</button>';
+    pills += '<button class="panel-pill" onclick="openRetouchAsset(' + aid + ')" title="Keep this image and change just one thing. ' + picTip() + '">Retouch</button>';
     if (asset.revert_image_url) pills += '<button class="panel-pill" onclick="revertAsset(' + aid + ')" title="Undo the last retouch or regenerate">Revert</button>';
     pills += '<button class="panel-pill" onclick="openReplacePicker(\'asset\', ' + aid + ')" title="Replace with an image from the Archive">Replace</button>';
     body.innerHTML =
@@ -9049,7 +9049,7 @@ function renderAssetModalImage(asset) {
       '</div>';
   } else {
     var genBtn = hasDesc
-      ? '<button class="btn btn-sm btn-primary" onclick="assetGenerateFromModal()">Generate from description</button>'
+      ? '<button class="btn btn-sm btn-primary" onclick="assetGenerateFromModal()" title="Draw a picture from the description. 1 token.">Generate from description</button>'
       : '<button class="btn btn-sm" onclick="assetGenerateFromModal()" title="Add a description above first">Generate from description</button>';
     body.innerHTML =
       '<div id="asset-modal-imgwrap" style="display:flex;gap:8px;flex-wrap:wrap;">' +
@@ -9359,7 +9359,7 @@ function renderCharModalPrompt(char) {
   // THE BUTTON COMES FIRST NOW. No Edit button -- the field is the field.
   var buttons = '<div class="char-prompt-actions" style="margin-bottom:8px;">' +
     '<button class="btn btn-sm" id="char-prompt-rebuild-' + char.id + '" ' +
-    'onclick="rebuildCharPrompt(' + char.id + ')">&#10227; ' +
+    'onclick="rebuildCharPrompt(' + char.id + ')" title="Writes this character\'s prompt and draws a new reference picture. Costs 1 token.">&#10227; ' +
     (hasPrompt ? 'Rebuild prompt' : 'Build character prompt') + '</button></div>';
 
   // Editable for anyone who may edit; a read-only block for anyone who may not,
@@ -9390,8 +9390,8 @@ function renderCharModalPrompt(char) {
           '<img src="' + char.canonical_reference_url + '" alt="' + char.name + ' reference" ' +
           'onclick="openLightbox(this.src,this.alt)" title="Click to enlarge" />' +
           '<div class="panel-img-actions">' +
-            '<button class="panel-pill char-regen-pill' + (charPromptIsStale(char.id) ? ' is-stale' : '') + '" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt">&#8635; Regen</button>' +
-            '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing">Retouch</button>' +
+            '<button class="panel-pill char-regen-pill' + (charPromptIsStale(char.id) ? ' is-stale' : '') + '" onclick="regenCharRef(' + char.id + ')" title="Re-roll the reference image from the current prompt. ' + picTip() + '">&#8635; Regen</button>' +
+            '<button class="panel-pill" onclick="openRetouchChar(' + char.id + ')" title="Keep this image and change just one thing. ' + picTip() + '">Retouch</button>' +
             (char.revert_reference_url ? '<button class="panel-pill" onclick="revertCharRef(' + char.id + ')" title="Undo the last retouch or regenerate - restore the previous reference">Revert</button>' : '') +
             '<button class="panel-pill" onclick="openReplacePicker(\'canonical\', ' + char.id + ')" title="Replace with an image from the Archive">Replace</button>' +
             '<button class="panel-pill' + (_carched ? ' is-on' : '') + '" id="char-archive-' + char.id + '" onclick="toggleArchiveCharCanonical(' + char.id + ')" title="' + (_carched ? 'In your Archive — click to remove' : 'Save this reference image to your Archive') + '">' + (_carched ? 'Archived' : 'Archive') + '</button>' +
@@ -11321,6 +11321,13 @@ function loadNovelPeople() {
       var _shelfV = rows.filter(function(v) { return String(v.version_id) === String(_shelfT.versionId); })[0];
       if (_shelfV) pick = _shelfV;
     }
+    // v3.6.98: arrived by "All publishing options" on a session: open the version that session was showing
+    var _po = state._pubOpenVersion; state._pubOpenVersion = null;
+    if (_po && state.currentCampaign && _po.campaignId === String(state.currentCampaign.id)) {
+      var _pv = _po.versionId ? rows.filter(function (v) { return String(v.version_id) === _po.versionId; })[0] : null;
+      if (!_pv && _po.canonical) _pv = rows.filter(function (v) { return v.is_canonical; })[0];
+      if (_pv) pick = _pv;
+    }
     // v3.0.464 -- and RELOAD if the default the server gave us is not what the page already
     // drew. Compared on the wire query rather than on the id, because that is the thing the
     // tiles were actually fetched with -- an id that changes without changing the query needs
@@ -12316,7 +12323,8 @@ function _tbIsSession() { return _tbTarget().kind === 'session'; }
 function _tbIsIb() { return _tbTarget().kind === 'ib'; }
 // v3.4.01 -- the Generate button says what it costs, and opened from the Image Builder the tooltips talk about the
 // picture, not a book or a cover (testers 2026-11-01).
-function _tbGoLabel() { var c = (typeof IB !== 'undefined' && IB && IB.cost != null) ? IB.cost : 1; return 'Generate (' + c + ' token' + (c === 1 ? '' : 's') + ')'; }
+function _tbGoLabel() { var c = (typeof IB !== 'undefined' && IB && IB.cost != null) ? IB.cost : 1; return 'Generate'; }   // v3.6.93 (Ian, 2026-11-17): prices in tooltips only
+function _tbGoTip() { var c = (typeof IB !== 'undefined' && IB && IB.cost != null) ? IB.cost : 1; return 'Draw the title as artwork. ' + c + ' token' + (c === 1 ? '' : 's') + '.'; }
 var _TB_TIPS = { book: { stash: 'Keep this drawing but take it off the cover, and go back to the title styles', replace: 'Put an archived title on the book without generating', replace2: 'Put an archived title on the book instead' },
   ib: { stash: 'Keep this drawing in the Title Builder but take it out of the Title section', replace: 'Use a title from this campaign\u2019s Archive without generating', replace2: 'Use a title from this campaign\u2019s Archive instead' } };
 function _tbIbWording() {
@@ -12324,7 +12332,7 @@ function _tbIbWording() {
   var s = document.getElementById('title-build-stash'); if (s) s.title = t.stash;
   var r = document.getElementById('title-build-empty-replace'); if (r) r.title = t.replace;
   var r2 = document.getElementById('title-build-replace'); if (r2) r2.title = t.replace2;
-  var g = document.getElementById('title-build-go'); if (g && !g.disabled) g.textContent = _tbGoLabel();
+  var g = document.getElementById('title-build-go'); if (g) { g.title = _tbGoTip(); if (!g.disabled) g.textContent = _tbGoLabel(); }
 }
 
 // _tbBody: the target, in the shape every title route reads it. One builder, so a route that gains
@@ -18608,7 +18616,7 @@ function renderStoryboard() {
     }
     var regenBtn = state.selfIllustrated ? '' : m.locked   // v3.1.30 -- TD-921: nothing to regenerate
       ? '<button class="panel-pill pp-regen dm-only" disabled title="Unlock to regenerate">&#8635; Regen</button>'
-      : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch">&#8635; Regen</button>';
+      : '<button class="panel-pill pp-regen dm-only" onclick="regenImage(' + m.id + ', ' + i + ')" title="Regenerate this image from scratch. ' + picTip() + '">&#8635; Regen</button>';
     // v3.0.641 -- the Title Builder pill, FIRST in the row, and only on the opening image. Ian
     // marked it there on a screenshot. Hidden while locked for the same reason the others are
     // disabled: a locked panel is one the reader has decided is finished.
@@ -18631,7 +18639,7 @@ function renderStoryboard() {
     } catch (e) { _isDrawnTitle = false; }
     var retouchBtn = _isDrawnTitle ? '' : (m.locked
       ? '<button class="panel-pill pp-retouch dm-only" disabled title="Unlock to retouch">Retouch</button>'
-      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing">Retouch</button>');
+      : '<button class="panel-pill pp-retouch dm-only" onclick="openRetouch(' + m.id + ')" title="Keep this image and change just one thing. ' + picTip() + '">Retouch</button>');
     var revertBtn = (m.revert_image && !m.locked)
       ? '<button class="panel-pill dm-only" onclick="revertMoment(' + m.id + ')" title="Undo the last retouch or regenerate - restore the previous image">Revert</button>'
       : '';
@@ -20081,7 +20089,8 @@ function wtStoryFbUses() {
   var w = t ? t.split(/\s+/).length : 0;
   return Math.max(1, Math.ceil(w / 10000));
 }
-function wtStoryFbLabel(verb) { var n = wtStoryFbUses(); return verb + ' (' + n + ' use' + (n === 1 ? '' : 's') + ')'; }
+function wtStoryFbLabel(verb) { var n = wtStoryFbUses(); return verb; }   // v3.6.97 (Ian, 2026-11-17): the uses are in the tooltip (wtStoryFbTip)
+function wtStoryFbTip() { var n = wtStoryFbUses(); return 'Uses ' + n + ' writing use' + (n === 1 ? '' : 's') + ' (1 token buys 2). It reads the whole box: one use for every 10,000 words.'; }
 function wtIsStory() { return WT_STATE.box === 'story'; }
 function wtTabsHere() { return wtIsStory() ? WT_TABS.filter(function (t) { return t.id !== 'regen'; }) : WT_TABS; }
 // A piece of a long text around a point, cut at spaces, and where it starts.
@@ -20113,7 +20122,7 @@ function wtGoldOk() { return !!(state.tierInfo && state.tierInfo.effective_rank 
 // The row under each box. regenCall is the box's own Regen (which opens the coach on the Regen tab and runs it).
 function wtPillsHtml(box, ta, label, regenCall) {
   return '<span class="wt-pills" id="wt-row-' + ta + '" data-box="' + box + '" data-ta="' + ta + '" data-label="' + escapeHtml(label || '') + '">' +
-    (regenCall ? '<button type="button" class="wt-pill wt-regen" onclick="' + regenCall + '" title="Write a fresh version of this box only">&#8635; Regen</button>' : '') +
+    (regenCall ? '<button type="button" class="wt-pill wt-regen" onclick="' + regenCall + '" title="Write a fresh version of this box only. Uses 1 writing use (1 token buys 2).">&#8635; Regen</button>' : '') +
     '<button type="button" class="wt-pill wt-coach" onclick="wtCoach(\'' + box + '\',\'' + ta + '\')" title="Open the writing coach on this box">Writing Coach</button>' +
     '<button type="button" class="wt-pill wt-undo" id="wt-undo-' + ta + '" style="display:none;" onclick="wtUndo(\'' + ta + '\')" title="Put back the text this box had before Use this">Revert</button>' +
   '</span>';
@@ -20284,15 +20293,15 @@ function wtStalePaint() {
 function wtStartHtml(id) {
   if (id !== 'regen' && !wtGoldOk()) return wtLockedHtml();
   if (id === 'regen') return '<p class="wc-text">A fresh version of this whole box, written from the story: its picture, the transcript, the boxes either side, your lore and your direction. <b>Use this</b> replaces all of this box\u2019s text, including anything you added.</p>' +   // v3.4.41 -- TD-1107
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')">Write a fresh version (1 use)</button>';
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'regen\')" title="Uses 1 writing use (1 token buys 2).">Write a fresh version</button>';
   if (id === 'feedback' && wtIsStory()) return '<p class="wc-text">Big-picture feedback on your whole story: what it reads as (notes, a game transcript or a written story; one chapter or the whole thing), ' +
     'then its shape, pacing, clarity and gaps. The final narrative gets polished box by box on the Storyboard; here we look at the big picture.</p>' +
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">' + wtStoryFbLabel('Get feedback') + '</button>' +
-    '<p class="wc-note">It reads the whole box: one use for every 10,000 words.</p>';
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')" title="' + wtStoryFbTip() + '">' + wtStoryFbLabel('Get feedback') + '</button>';
+    // v3.6.97: 'It reads the whole box: one use for every 10,000 words.' moved into the button's tooltip
   if (id === 'feedback') return '<p class="wc-text">Get honest feedback \u2014 hit the button below.</p>' +   // v3.2.95 -- TD-1028, Ian's wording
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')">Get feedback (1 use)</button>';
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'feedback\')" title="Uses 1 writing use (1 token buys 2).">Get feedback</button>';
   if (id === 'word') return '<p class="wc-text">Select a word or a short phrase in the text above (up to 6 words), then press the button for better choices.</p>' +
-    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')">Find words for your selection (free)</button><div class="wc-note" id="wc-word-msg"></div>';
+    '<button type="button" class="wc-btn wc-btn-main" onmousedown="event.preventDefault()" onclick="wtGo(\'word\')" title="Free.">Find words for your selection</button><div class="wc-note" id="wc-word-msg"></div>';
   return wtRewriteChoicesHtml();
 }
 function wtRewriteChoicesHtml() {
@@ -20539,7 +20548,7 @@ function wtRun(tool, extra, sel) {
       WT_STATE.opts.push({ tab: tab, before: null, after: t });
       put(wtOptionCard(k, t) +
         '<p class="wc-note">Nothing changes until you press Use this.</p>' +
-        '<button type="button" class="wc-btn" onclick="wtAgain(\'regen\')">Try again (1 use)</button>');
+        '<button type="button" class="wc-btn" onclick="wtAgain(\'regen\')" title="Uses 1 writing use (1 token buys 2).">Try again</button>');
     } else {
       // Rewrite and its choices: 3 versions of the selected words (or the whole box). The text is at the top of
       // the coach, so the results do not repeat it (Ian).
@@ -20552,7 +20561,7 @@ function wtRun(tool, extra, sel) {
         html += wtOptionCard(kk, o);
       });
       put(html + '<p class="wc-note">Nothing changes until you press Use this. ' + (sel ? 'Use this replaces only the words you selected.' : 'Use this replaces the whole box.') + '</p>' +
-        '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtAgain(\'rewrite\')">Try again (1 use)</button> ' +
+        '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtAgain(\'rewrite\')" title="Uses 1 writing use (1 token buys 2).">Try again</button> ' +
         '<button type="button" class="wc-btn" onmousedown="event.preventDefault()" onclick="wtTabHtml(\'rewrite\', wtRewriteChoicesHtml())">Other choices</button>');
     }
     wtStalePaint();
@@ -20580,11 +20589,11 @@ function wtRenderPoints(points, d) {
   var head = wtVerdictHtml(d);
   // v3.2.40 -- the Story box: what it reads as, big-picture points, no Show me, and the cost on the button.
   var story = wtIsStory();
-  var again = story ? wtStoryFbLabel('Get new feedback') : 'Get new feedback (1 use)';
+  var again = 'Get new feedback', againTip = story ? wtStoryFbTip() : 'Uses 1 writing use (1 token buys 2).';   // v3.6.97: the uses in the tooltip
   if (story && d && d.reads_as) head = '<div class="wc-reads-as" style="font-size:11px;color:var(--gold-muted);letter-spacing:0.03em;margin:0 0 8px;">Reads as: ' + escapeHtml(d.reads_as) + '</div>' + head;
   if (!points.length && d && d.verdict === 'great') {
     s.pending = false;   // nothing to use, so nothing to warn about when moving on
-    wtTabHtml('feedback', head + (story ? '<p class="wc-note">The final narrative gets polished box by box on the Storyboard.</p>' : '') + '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">' + again + '</button>');
+    wtTabHtml('feedback', head + (story ? '<p class="wc-note">The final narrative gets polished box by box on the Storyboard.</p>' : '') + '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')" title="' + againTip + '">' + again + '</button>');
     return;
   }
   if (story && points.length) {
@@ -20592,7 +20601,7 @@ function wtRenderPoints(points, d) {
     wtTabHtml('feedback', head + '<ol class="wc-points">' + points.map(function (pt) {
       return '<li class="wc-point"><div class="wc-issue">' + escapeHtml(pt.issue) + '</div>' + (pt.why ? ('<div class="wc-why">' + escapeHtml(pt.why) + '</div>') : '') + '</li>';
     }).join('') + '</ol><p class="wc-note">Big picture only: the final narrative gets polished box by box on the Storyboard. Rewrite and Word are here if you want to work on the words.</p>' +
-    '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">' + again + '</button>');
+    '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')" title="' + againTip + '">' + again + '</button>');
     return;
   }
   if (!points.length) { s.pending = false; wtTabHtml('feedback', '<p class="wc-text">No suggestions came back. Try again in a moment.</p>' + wtStartHtml('feedback')); return; }
@@ -20601,11 +20610,11 @@ function wtRenderPoints(points, d) {
       (pt.quote ? ('<div class="wc-quote">“' + escapeHtml(pt.quote) + '”</div>') : '') +
       '<div class="wc-issue">' + escapeHtml(pt.issue) + '</div>' +
       (pt.why ? ('<div class="wc-why">' + escapeHtml(pt.why) + '</div>') : '') +
-      '<button type="button" class="wc-btn" onclick="wtShowMe(' + i + ')" title="Rewrites just this part (1 use)">Show me</button>' +
+      '<button type="button" class="wc-btn" onclick="wtShowMe(' + i + ')" title="Rewrites just this part. Uses 1 writing use (1 token buys 2).">Show me</button>' +
       '<div class="wc-show" id="wc-show-' + i + '"></div>' +
     '</li>';
   }).join('') + '</ol><p class="wc-note">Show me rewrites just that part, and costs one use.</p>' +
-  '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')">Get new feedback (1 use)</button>');
+  '<button type="button" class="wc-btn" onclick="wtAgain(\'feedback\')" title="Uses 1 writing use (1 token buys 2).">Get new feedback</button>');
 }
 
 function wtRenderWords(words, sel) {
@@ -23031,6 +23040,49 @@ function updateForkEditability() {
 function forkQ() {
   return state.currentForkId ? ('?fork_id=' + encodeURIComponent(state.currentForkId)) : '';
 }
+// v3.6.94 (Ian, 2026-11-17: prices in tooltips): Generate Story, Generate Narrative and Generate Narrative & Images say
+// "About N tokens" in their tooltips, from the server's estimate of what is saved. Asked while one of the buttons is on
+// screen (at most every 30 s, sooner when the pointer reaches one after 10 s), so the number is there before the
+// tooltip shows. The shared tooltip moves title into data-cg-title while it shows; both are kept up to date.
+var GEN_EST = { key: '', at: 0, d: null, busy: false };
+function genEstFetch(maxAge) {
+  if (!state || !state.currentCampaign || !state.currentSession || GEN_EST.busy) return;
+  var key = state.currentCampaign.id + '/' + state.currentSession.id + '/' + (state.currentForkId || '');
+  if (GEN_EST.key === key && Date.now() - GEN_EST.at < maxAge) return;
+  GEN_EST.key = key; GEN_EST.at = Date.now(); GEN_EST.busy = true;
+  fetch('/api/tokens/estimate/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { GEN_EST.busy = false; if (d && GEN_EST.key === key) { GEN_EST.d = d; genEstPaint(); } })
+    .catch(function () { GEN_EST.busy = false; });
+}
+// v3.6.95 (Ian, 2026-11-17: the Regen and Retouch buttons everywhere): a picture's price for tooltips, from what the
+// page has been told (the Image Builder, or the Story estimate); 1 until then (pictures are 1 token at 8 and 5 cents)
+function picTip() {
+  var c = (typeof IB !== 'undefined' && IB && IB.cost != null) ? Number(IB.cost) : ((typeof GEN_EST !== 'undefined' && GEN_EST.d && GEN_EST.d.picture != null) ? Number(GEN_EST.d.picture) : 1);
+  if (!(c >= 0)) c = 1;
+  return 'Costs ' + c + ' token' + (c === 1 ? '' : 's') + '.';
+}
+function genEstSet(id, extra) {
+  var b = document.getElementById(id); if (!b) return;
+  var t0 = b.getAttribute('data-tip0');
+  if (t0 == null) { t0 = b.getAttribute('title'); if (t0 == null) t0 = (b.dataset && b.dataset.cgTitle) || ''; b.setAttribute('data-tip0', t0); }
+  var t = (t0 ? t0 + ' ' : '') + extra;
+  if (!b.hasAttribute('title') && b.dataset && b.dataset.cgTitle != null) b.dataset.cgTitle = t; else b.setAttribute('title', t);
+}
+function genEstPaint() {
+  var d = GEN_EST.d; if (!d) return;
+  var tok = function (n) { return n + ' token' + (Number(n) === 1 ? '' : 's'); };
+  genEstSet('extract-btn', 'About ' + tok(d.story) + '.');
+  genEstSet('sb-generate-narr-btn', 'About ' + tok(d.narrative) + '.');
+  genEstSet('review-generate-btn', 'About ' + tok(d.narrative) + ' for the narrative, plus ' + tok(d.picture) + ' for each picture drawn.');
+}
+setInterval(function () {
+  var on = ['extract-btn', 'sb-generate-narr-btn', 'review-generate-btn'].some(function (id) { var b = document.getElementById(id); return b && b.offsetParent; });
+  if (on) genEstFetch(30000);
+}, 3000);
+document.addEventListener('mouseover', function (e) {
+  if (e.target && e.target.closest && e.target.closest('#extract-btn, #sb-generate-narr-btn, #review-generate-btn')) genEstFetch(10000);
+}, true);
 
 // =================================================================================================
 // PREVIOUS / NEXT SESSION -- v3.0.594. Ian, 2026-08-09.
@@ -26414,7 +26466,15 @@ function audTInit() {
     if (b) b.style.display = j && j.enabled ? '' : 'none';
   }).catch(function () {});
 }
-function audTTokens(secs) { var per = (AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2; return per * Math.max(1, Math.ceil(secs / 900 - 1e-9)); }   // v3.6.18: per started 15 minutes (Ian)
+// v3.6.87 (Ian, 2026-11-17: "every 5 minutes should = 1 token"): per started block (5 minutes), the tokens per block from
+// the server (worked out from our cost per token); was 2 per started 15 minutes (v3.6.18)
+function audTBlockMins() { return (AUD_T_CFG && Number(AUD_T_CFG.block_mins) > 0) ? Number(AUD_T_CFG.block_mins) : 5; }
+function audTPerBlock() { return (AUD_T_CFG && Number(AUD_T_CFG.tokens_per_block) > 0) ? Number(AUD_T_CFG.tokens_per_block) : 1; }
+function audTTokens(secs) { return audTPerBlock() * Math.max(1, Math.ceil(secs / (audTBlockMins() * 60) - 1e-9)); }
+// v3.6.93 (Ian, 2026-11-17: prices in tooltips only): the Transcribe button's tooltip
+function audTCostTip(tok) {
+  return 'This will cost ' + (AUD_T && AUD_T.exact ? '' : 'about ') + tok + ' token' + (tok === 1 ? '' : 's') + ' (' + audTPerBlock() + ' token' + (audTPerBlock() === 1 ? '' : 's') + ' for each started ' + audTBlockMins() + ' minutes), taken when the words come back. If it fails, it costs nothing.';
+}
 function audTLen(secs) { secs = Math.ceil(secs - 1e-9); var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60; return h ? h + ' h ' + m + ' m ' + s + ' s' : (m ? m + ' m ' + s + ' s' : s + ' s'); }   // v3.6.21 (tester): seconds always shown, rounded up like the price
 function audTClose() {
   var o = document.getElementById('aud-t-modal'); if (o && o.parentNode) o.parentNode.removeChild(o);
@@ -26481,10 +26541,10 @@ function audTQuoteView() {
   audTBody('<div style="font-size:14px;line-height:1.6;"><b>' + escapeHtml(f.name) + '</b><br>' + (Math.round(f.size / 104857.6) / 10) + ' MB &middot; ' + (AUD_T.exact ? '' : 'about ') + audTLen(secs) + '</div>' +
     (tooLong ? '<div style="color:#e8a85a;margin-top:8px;">That is longer than 6 hours. Split it and transcribe each part.</div>' :
     (cap && secs > cap ? '<div style="margin-top:10px;font-size:13px;padding:8px 10px;border-radius:6px;background:rgba(var(--accent-rgb, 201,168,76),0.12);">On the Free Trial we transcribe just the first 20 minutes, as a quick proof it works. It is an expensive feature, so save your tokens for the rest of Campaignia. Gold and Platinum transcribe the whole recording, up to 6 hours.</div>' : '') +
-    '<div style="margin-top:10px;font-size:14px;">This will cost <b>' + (AUD_T.exact ? '' : 'about ') + tok + ' tokens</b> (' + ((AUD_T_CFG && AUD_T_CFG.tokens_per_quarter_hour) || 2) + ' for each started 15 minutes), taken when the words come back. If it fails, it costs nothing.</div>' +
+    '' +   // v3.6.93 (Ian, 2026-11-17): the cost is in the Transcribe button's tooltip (audTCostTip)
     '<label style="display:block;margin-top:10px;font-size:13px;">How many people are speaking? <input id="aud-t-spk" type="number" min="1" max="32" placeholder="not sure" style="width:90px;margin-left:6px;"></label>' +
     '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="aud-t-ok" style="margin-top:3px;"> Everyone in this recording agreed to be recorded and transcribed.</label>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-sm" onclick="audTPickView()">Choose another</button><button class="btn btn-sm btn-primary" id="aud-t-go" onclick="audTStart()">Transcribe (' + tok + ' tokens)</button></div>'));
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;"><button class="btn btn-sm" onclick="audTPickView()">Choose another</button><button class="btn btn-sm btn-primary" id="aud-t-go" onclick="audTStart()" title="' + audTCostTip(tok) + '">Transcribe</button></div>'));
 }
 function audTStart() {
   var A = AUD_T; if (!A || !A.file) return;
@@ -26556,7 +26616,7 @@ function audTShowJob(job) {
   if (job.status !== 'ready') { audTPickView(); return; }
   var sp = job.speakers || [];
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.6.18: the top bar shows the charge at once
-  audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' tokens)' : '') + '. Name each speaker, or leave them out:</div>' +
+  audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' token' + (Number(job.tokens_charged) === 1 ? '' : 's') + ')' : '') + '. Name each speaker, or leave them out:</div>' +
     (job.cap_secs && Number(job.secs_est) > Number(job.cap_secs) ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Gold and Platinum transcribe the whole recording.</div>' : '') +   // v3.6.22
     (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
     '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14
@@ -30835,17 +30895,17 @@ function sendEmailPreview() {
 }
 
 function loadGenerationSettings() {
-  var el = document.getElementById('gen-story-wpt');
+  var el = document.getElementById('gen-story-in');   // v3.6.89
   if (!el) return;
   fetch('/api/admin/generation-settings')
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (j) {
       if (!j) return;
       var g = function(id){ return document.getElementById(id); };
-      if (g('gen-story-wpt')) g('gen-story-wpt').value = j.storyWordsPerToken;
-      if (g('gen-story-floor')) g('gen-story-floor').value = j.storyFloor;
-      if (g('gen-narr-ppt')) g('gen-narr-ppt').value = j.narrativePanelsPerToken;
-      if (g('gen-narr-floor')) g('gen-narr-floor').value = j.narrativeFloor;
+      // v3.6.89 -- TD-1148 stage 3: words in and out, each with a floor
+      [['story', 'gen-story'], ['narrative', 'gen-narr']].forEach(function (p) { var r = j[p[0]] || {};
+        if (g(p[1] + '-in')) g(p[1] + '-in').value = r.in; if (g(p[1] + '-floor-in')) g(p[1] + '-floor-in').value = r.floorIn;
+        if (g(p[1] + '-out')) g(p[1] + '-out').value = r.out; if (g(p[1] + '-floor-out')) g(p[1] + '-floor-out').value = r.floorOut; });
       if (g('transcript-cache-ttl')) g('transcript-cache-ttl').value = (j.transcriptCacheTtl === '1h') ? '1h' : '5m';
       if (g('layout-loop-cost')) g('layout-loop-cost').value = (j.layoutLoopCostCents != null ? j.layoutLoopCostCents : 8);   // v3.0.356
       if (g('gen-summary-limit')) g('gen-summary-limit').value = (j.summaryCharLimit != null ? j.summaryCharLimit : 1500);   // v3.0.967 -- TD-852
@@ -30862,10 +30922,8 @@ function saveGenerationSettings() {
   fetch('/api/admin/generation-settings', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      storyWordsPerToken: iv('gen-story-wpt'),
-      storyFloor: iv('gen-story-floor'),
-      narrativePanelsPerToken: iv('gen-narr-ppt'),
-      narrativeFloor: iv('gen-narr-floor'),
+      story: { in: iv('gen-story-in'), floorIn: iv('gen-story-floor-in'), out: iv('gen-story-out'), floorOut: iv('gen-story-floor-out') },   // v3.6.89
+      narrative: { in: iv('gen-narr-in'), floorIn: iv('gen-narr-floor-in'), out: iv('gen-narr-out'), floorOut: iv('gen-narr-floor-out') },
       transcriptCacheTtl: (g('transcript-cache-ttl') && g('transcript-cache-ttl').value === '1h') ? '1h' : '5m',
       summaryCharLimit: (function () { var n = parseInt((g('gen-summary-limit') || {}).value, 10); return (isFinite(n) && n >= 200) ? n : 1500; })(),   // v3.0.967 -- TD-852
       writtenMaxWords: (function () { var n = parseInt((g('gen-written-max-words') || {}).value, 10); return (isFinite(n) && n >= 100) ? n : 3000; })(),   // v3.1.51 -- TD-941
@@ -32587,6 +32645,15 @@ function optimizeLockStop() {
 function goToPublishOptions() {
   if (!canOpenPublishPage()) return;   // v3.1.41 -- the button is hidden then; this only guards a stale page
   if (optimizeRunIsElsewhere()) { optimizeLockNotice(); return; }
+  // v3.6.98 (testers, via Ian, 2026-11-17: "Should take you to publishing for the version you are looking at"): the
+  // version of the session on screen travels to the Publish page, as Open on a Publish card carries it the other way
+  // (goToSessionPage). loadNovelPeople picks it ahead of the star and the default; the Canonical (role 'dm') opens the
+  // Canonical. A version the Publish list does not hold falls back to the usual default.
+  try {
+    var _pf = (state.sessionForks || []).filter(function (x) { return String(x.fork_id) === String(state.currentForkId); })[0];
+    state._pubOpenVersion = state.currentCampaign ? { campaignId: String(state.currentCampaign.id),
+      versionId: (_pf && _pf.version_id) ? String(_pf.version_id) : null, canonical: !_pf || _pf.role === 'dm' || !!_pf.is_canonical } : null;
+  } catch (e) { state._pubOpenVersion = null; }
   showCampaignSection('novel');
   switchNovelTab('sessions');
 }
@@ -32629,7 +32696,7 @@ function applyOptimizeViewMode() {
   if (afterZoom) afterZoom.style.display = showDiag ? 'none' : 'inline-flex';   // zoom + right spine are the user-view viewing aids
   if (afterNav) afterNav.style.display = showDiag ? 'none' : 'flex';
   var estNote = document.getElementById('layoutai-est-note');
-  if (estNote) estNote.style.display = showDiag ? 'none' : '';
+  if (estNote) estNote.style.display = 'none';   // v3.6.93: the estimate is in the Optimize button's tooltip
   // 'Load Last Optimized File' is a RECOVERY affordance, not a viewing aid, so it is shown to everyone
   // whenever a saved file exists. It used to be hidden in the admin diagnostic view on the reasoning
   // that Before/After compare replaces it -- but the After pane is cleared by finalizeClearScanState
@@ -34329,6 +34396,12 @@ function finalizeUpdateEstimateBadge() {
   var est = finalizeOptimizeEstimate();
   btn.setAttribute('data-est', est ? String(est) : '');
   var lbl = document.getElementById('layoutai-est-note');
+  // v3.6.93 (Ian, 2026-11-17: "Move all those text areas onto tool tips"): the estimate is in the button's tooltip; the
+  // note beside it stays hidden (still filled, for anything that reads it).
+  var tip0 = btn.getAttribute('data-tip0');
+  if (tip0 == null) { tip0 = String(btn.getAttribute('title') || ''); btn.setAttribute('data-tip0', tip0); }
+  btn.setAttribute('title', tip0 + (est ? ' Estimated cost: up to ' + est + ' token' + (est === 1 ? '' : 's') + '.' : ' Working out the cost\u2026'));
+  if (lbl) lbl.style.display = 'none';
   // v3.0.357 -- the estimate needs a page count, which arrives asynchronously, so this used to sit
   // showing one sentence and then visibly rewrite itself into another while the user watched. Show a
   // spinner until the number is known, then ONLY the number -- no trailing explanation.
@@ -40817,7 +40890,7 @@ function ibViewerHtml() {
   // and the form's messages (a missing field, out of tokens) just under it, where the button is.
   var bar = '<div class="ib-bar">' +
     '<div class="ib-bar-left">' +
-      '<button class="btn btn-primary btn-sm" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + '>' + (IB.busy ? 'Sending\u2026' : ('Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')')) + '</button>' +
+      '<button class="btn btn-primary btn-sm" id="ib-go" onclick="ibGenerate()"' + (IB.busy ? ' disabled' : '') + ' title="Make the picture. ' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + '.">' + (IB.busy ? 'Sending\u2026' : 'Generate') + '</button>' +
       '<button class="btn btn-sm" id="ib-new" onclick="ibNew()" title="Clear the form for a new picture">New picture</button>' +
       '<span id="ib-bar-state" style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">@@IBSTATE@@</span>' +   // v3.3.77 -- Draft / Ready
     '</div>' +
@@ -41187,7 +41260,7 @@ function ibEditPrompt(id) {
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
         '<button class="btn btn-sm" onclick="ibClosePrompt()">Cancel</button>' +
         '<button class="btn btn-sm" onclick="ibSavePrompt(' + im.id + ', false)">Save</button>' +
-        '<button class="btn btn-sm btn-primary" onclick="ibSavePrompt(' + im.id + ', true)">Save &amp; Regen (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')</button>' +
+        '<button class="btn btn-sm btn-primary" onclick="ibSavePrompt(' + im.id + ', true)" title="Save the prompt and draw the picture again. ' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + '.">Save &amp; Regen</button>' +
       '</div></div>';
   document.body.appendChild(overlay);
 }
@@ -41676,7 +41749,7 @@ function ibGenerate() {
   var body = { name: IB.name.trim(), description: IB.desc.trim(), shape: IB.shape, art_style: IB.style, image_type: IB.type || null, include_lore: !!IB.lore,
     refs: { characters: IB.chars.map(function (c) { return { id: c.id, look: c.look }; }), assets: IB.assets.map(function (a) { return a.id; }), scenes: (IB.scenes || []).map(function (s) { return s.id; }),   // v3.4.19
       title: String(IB.ttl.title || '').trim() ? Object.assign({}, IB.ttl) : null }, type_text: (IB.type && IB.typeText) ? IB.typeText : null };   // v3.3.83; v3.3.86 -- type_text
-  var done = function () { IB.busy = false; var b = document.getElementById('ib-go'); if (b) { b.disabled = false; b.textContent = 'Generate (' + IB.cost + ' token' + (IB.cost === 1 ? '' : 's') + ')'; } };
+  var done = function () { IB.busy = false; var b = document.getElementById('ib-go'); if (b) { b.disabled = false; b.textContent = 'Generate'; } };
   ibHoForGenerate(body).then(function () { return fetch('/api/images/builder/campaigns/' + encodeURIComponent(cid) + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); })   // v3.3.92 -- the writing is set first
     .then(function (r) { return r.json(); })
     .then(function (d) {
@@ -42725,7 +42798,7 @@ function vlKfCardHTML(d, si, ki, n) {
         '<div class="moment-title" style="color:var(--accent-pale);">Retouching...</div></div>' : '') +
       (busy ? '' : vlShapeTagHTML(k.url, si, ki)) +   // v3.5.14
       '<div class="panel-img-actions"' + (busy ? ' style="display:none;"' : '') + '>' +
-        '<button type="button" class="panel-pill" onclick="vlRetouch(' + si + ',' + ki + ')" title="Change this keyframe with the Retouch window. Only this episode\'s copy changes; the storyboard is not touched.">Retouch</button>' +
+        '<button type="button" class="panel-pill" onclick="vlRetouch(' + si + ',' + ki + ')" title="Change this keyframe with the Retouch window. Only this episode\'s copy changes; the storyboard is not touched. ' + picTip() + '">Retouch</button>' +
         (k.prev ? '<button type="button" class="panel-pill" onclick="vlRevertKf(' + si + ',' + ki + ')" title="Back to the picture before the last retouch (free)">Revert</button>' : '') +
         '<button type="button" class="panel-pill" onclick="vlChoose(\'' + si + ':' + ki + '\')" title="Put a different picture from the Archive here">Replace</button>' +
         '<button type="button" class="panel-pill" onclick="vlRemove(' + si + ',' + ki + ')" title="Take this keyframe out of the episode (the storyboard is not changed)">Remove</button>' +
@@ -43425,7 +43498,7 @@ function vlShowCost() {
   if (!vlKfCount(d)) { el.textContent = 'An episode needs one keyframe at least.'; return; }
   var secs = d.shots.reduce(function (t, s) { return t + vlShotSecs(s, m); }, 0);
   var usd = d.shots.reduce(function (t, s) { var sm = vlShotM(d, s) || m; return t + (d.sound ? sm.priceSound : sm.price) * vlShotSecs(s, sm); }, 0);   // v3.5.86: each shot at its own model
-  el.textContent = d.shots.length + ' shot' + (d.shots.length === 1 ? '' : 's') + ', ' + secs + ' seconds: about ' + vlTok(usd) + ' tokens for one take of every shot';   // v3.5.39: tokens, not dollars
+  el.textContent = d.shots.length + ' shot' + (d.shots.length === 1 ? '' : 's') + ', ' + secs + ' seconds'; el.title = 'About ' + vlTok(usd) + ' tokens for one take of every shot.';   // v3.6.93: the price in the tooltip   // v3.5.39: tokens, not dollars
 }
 
 // ---- saving: one at a time -------------------------------------------------------------------
@@ -44095,15 +44168,15 @@ function vlRvFindingHTML(f) {
 function vlRvRender(box) {
   var R = VL_RV, rv = R.rv, H = [];
   H.push('<div class="help-msg help-msg-bot" style="max-width:100%;"><div style="font-weight:600;margin-bottom:4px;">Reviewing take ' + escapeHtml(R.code) + '</div>' +
-    '<div style="font-size:12px;opacity:0.8;">I watch frames of the take, listen to what is said, and compare them with what was asked. Watching is free; ' + R.price + ' token' + (R.price === 1 ? '' : 's') + ' when you choose, including ' + R.freeAsks + ' questions.</div></div>');
+    '<div style="font-size:12px;opacity:0.8;">I watch frames of the take, listen to what is said, and compare them with what was asked. Watching is free.</div></div>');   // v3.6.93: the price is on Your thoughts
   if (R.msg) H.push('<div class="help-msg help-msg-error">' + escapeHtml(R.msg) + '</div>');
   if (rv && rv.status === 'preparing') H.push('<div class="help-msg help-msg-bot help-msg-pending">Watching the take and listening to it\u2026</div>');   // v3.6.51
   if (rv && rv.status === 'ready') {   // v3.6.51: the choice
     var sp = rv.span || {}, len = sp.to != null && sp.from != null ? (Number(sp.to) - Number(sp.from)).toFixed(1) + ' s' : '';
     H.push('<div class="help-msg help-msg-bot" style="max-width:100%;">' + (rv.error ? '<div style="color:var(--danger);font-size:12px;margin-bottom:6px;">' + escapeHtml(rv.error) + '</div>' : '') +
       'I\u2019ve watched take ' + escapeHtml(R.code) + (len ? ' (' + len + ')' : '') + '. Want my thoughts, or is there something specific you\u2019d like help with?' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="btn btn-sm btn-primary" id="vl-rv-thoughts" onclick="vlRvBegin(\'\')">Your thoughts &middot; ' + R.price + ' token' + (R.price === 1 ? '' : 's') + '</button></div>' +
-      '<div style="font-size:12px;opacity:0.75;margin-top:6px;">Or type your question below (' + R.price + ' token' + (R.price === 1 ? '' : 's') + ', including ' + R.freeAsks + ' more questions).</div></div>');
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="btn btn-sm btn-primary" id="vl-rv-thoughts" onclick="vlRvBegin(\'\')" title="' + R.price + ' token' + (R.price === 1 ? '' : 's') + ', including ' + R.freeAsks + ' questions.">Your thoughts</button></div>' +
+      '<div style="font-size:12px;opacity:0.75;margin-top:6px;" title="' + R.price + ' token' + (R.price === 1 ? '' : 's') + ', including ' + R.freeAsks + ' more questions.">Or type your question below.</div></div>');
   }
   if (rv && rv.status === 'running') H.push((rv.pending ? '<div class="help-msg help-msg-user">' + escapeHtml(rv.pending) + '</div>' : '') + '<div class="help-msg help-msg-bot help-msg-pending">' + (rv.pending ? 'Looking into it\u2026' : 'Putting my thoughts together\u2026') + '</div>');
   if (rv && rv.status === 'error') H.push('<div class="help-msg help-msg-error">' + escapeHtml(rv.error || 'The review failed. Nothing was charged.') + '</div><div style="margin:6px 0;"><button type="button" class="btn btn-sm" onclick="vlRvStart()">Try again</button></div>');
@@ -44128,7 +44201,7 @@ function vlRvRender(box) {
     });
     if (rv.pending) H.push('<div class="help-msg help-msg-user">' + escapeHtml(rv.pending) + '</div><div class="help-msg help-msg-bot help-msg-pending">Thinking\u2026</div>');
     var used = Number(rv.asks_used) || 0, free = Number(rv.free_asks) || R.freeAsks, left = used < free ? free - used : (free - ((used - free) % free)) % free;
-    H.push('<div style="font-size:11px;opacity:0.75;margin:6px 2px;">' + (used < free ? left + ' question' + (left === 1 ? '' : 's') + ' left in this review.' : (left ? left + ' question' + (left === 1 ? '' : 's') + ' left before the next token.' : 'The next question costs 1 token and covers ' + free + '.')) +
+    H.push('<div style="font-size:11px;opacity:0.75;margin:6px 2px;"' + (used < free || left ? '' : ' title="The next question costs 1 token and covers ' + free + '."') + '>' + (used < free ? left + ' question' + (left === 1 ? '' : 's') + ' left in this review.' : (left ? left + ' question' + (left === 1 ? '' : 's') + ' left before the next token.' : 'No questions left in this set.')) +
       ' <a href="#" onclick="vlRvAgain();return false;" style="color:var(--accent-pale);">Review it again</a></div>');
   }
   box.innerHTML = H.join('');
@@ -44825,8 +44898,10 @@ function vlRtTrim(keep) {
   }
 }
 function vlRtPaint() {
-  var p = document.getElementById('vl-rt-price');
-  if (p && VL.rt) p.textContent = vlTakeTok(vlRtCost(VL.rt.size, VL.rt.secs)) + ' tokens, when the retouched take arrives';   // v3.5.46: tokens, not dollars
+  var p = document.getElementById('vl-rt-price'), go = document.getElementById('vl-rt-go');
+  // v3.6.93 (Ian, 2026-11-17): the price on the Retouch take button's tooltip, not beside it
+  if (p) p.textContent = '';
+  if (go && VL.rt) go.title = vlTakeTok(vlRtCost(VL.rt.size, VL.rt.secs)) + ' tokens, when the retouched take arrives.';
 }
 function vlRtSend() {
   var r = VL.rt; if (!r) return;
@@ -44940,8 +45015,8 @@ function vlSlBtnsHTML(d, writing) {
     // working button keeps full strength with a spinner in the button's own ink (a gold spinner on the gold button did
     // not show, and disabled dimmed it to half).
     var on = kind === mode && !(info.job && info.job.shot_id);   // v3.5.38: checking one shot spins that shot's button
-    return '<button class="btn btn-primary" id="vl-sl-btn-' + mode + '" onclick="' + (mode === 'precheck' ? 'vlPrecheck()' : 'vlWriteShotList(\'' + mode + '\')') + '"' + ((writing || vlAnyChecking(d.id)) ? ' disabled' : '') + ' title="' + escapeHtml(tip) + '" style="white-space:nowrap;flex:none;' + (on ? 'opacity:1;cursor:progress;' : '') + '">' +
-      (on ? vlBtnSpin() + ' ' + busyLabel : (icon ? icon + ' ' : '') + label + ' <span id="vl-sl-price-' + mode + '">' + escapeHtml(price) + '</span>') + '</button>';
+    return '<button class="btn btn-primary" id="vl-sl-btn-' + mode + '" onclick="' + (mode === 'precheck' ? 'vlPrecheck()' : 'vlWriteShotList(\'' + mode + '\')') + '"' + ((writing || vlAnyChecking(d.id)) ? ' disabled' : '') + ' title="' + escapeHtml(tip + (price ? ' ' + price : '')) + '" style="white-space:nowrap;flex:none;' + (on ? 'opacity:1;cursor:progress;' : '') + '">' +
+      (on ? vlBtnSpin() + ' ' + busyLabel : (icon ? icon + ' ' : '') + label) + '</button>';
   }
   return btn('shots', '', 'Create Shots', 'The Director is planning the shots...', VL_TIP_SHOTS, vlSlPriceText(info, 'shots')) +
     btn('notes', '', 'Director\'s Notes', 'The Director is writing the notes...', VL_TIP_NOTES, vlSlPriceText(info, 'notes')) +
@@ -45009,7 +45084,12 @@ function vlStyleHint(st, d) {
 function vlSlPriceText(info, mode) {
   var e = info && (mode === 'shots' ? info.estimate_shots : (mode === 'precheck' ? info.estimate_precheck : info.estimate));   // v3.5.34
   if (!e) return '';
-  return '(' + e.tokens + ' token' + (e.tokens === 1 ? '' : 's') + ')';
+  return 'About ' + e.tokens + ' token' + (e.tokens === 1 ? '' : 's') + '.';   // v3.6.93: a tooltip sentence (was "(N tokens)" on the button)
+}
+// v3.6.93 (Ian, 2026-11-17: prices in tooltips only): a Director button's tooltip, its price at the end
+function vlSlTip(mode, info) {
+  var t = mode === 'shots' ? VL_TIP_SHOTS : (mode === 'precheck' ? VL_TIP_PRECHECK : VL_TIP_NOTES), p = vlSlPriceText(info, mode);
+  return t + (p ? ' ' + p : '');
 }
 function vlSlMsgHTML(info) {
   var j = info && info.job;
@@ -45044,7 +45124,7 @@ function vlSlRefresh(id) {
       if (ckRun.length) { var mk = vlChecking(id); ckRun.forEach(function (c) { mk[c.shot_id] = true; }); vlRenderLive(); vlSlBtnsPaint(); vlCheckPoll(id); }
       var j = res.j.job;
       if (j && j.status === 'running') { if (!vlSlWriting(id)) { VL.writing = id; vlRenderOpen(true); } vlSlPoll(id); return; }
-      ['shots', 'notes', 'precheck'].forEach(function (m) { var pe = document.getElementById('vl-sl-price-' + m); if (pe) pe.textContent = vlSlPriceText(VL.sl[id], m); });
+      ['shots', 'notes', 'precheck'].forEach(function (m) { var pe = document.getElementById('vl-sl-btn-' + m); if (pe) pe.title = vlSlTip(m, VL.sl[id]); });
     })
     .catch(function () {});
 }
@@ -45451,7 +45531,7 @@ function vlModelTip(m) {
 }
 function vlModelOptions(ms, cur) {
   var ref = ms.filter(function (x) { return x.reference; }), kf = ms.filter(function (x) { return !x.reference; });
-  function opts(list) { return list.map(function (x) { return '<option value="' + x.key + '"' + (x.key === cur ? ' selected' : '') + ' title="' + escapeHtml(vlModelTip(x)) + '"' + '>' + escapeHtml(x.label) + (x.test ? ' (test)' : '') + ' \u2014 ' + vlTokPerSec(x) + ' \u00b7 ' + vlModelPics(x) + '</option>'; }).join(''); }   // v3.5.39 tokens a second; v3.5.41 the tips; v3.5.82 the pictures it takes
+  function opts(list) { return list.map(function (x) { return '<option value="' + x.key + '"' + (x.key === cur ? ' selected' : '') + ' title="' + escapeHtml(vlModelTip(x)) + '"' + '>' + escapeHtml(x.label) + (x.test ? ' (test)' : '') + ' \u00b7 ' + vlModelPics(x) + '</option>'; }).join(''); }   // v3.5.39 tokens a second; v3.5.41 the tips; v3.5.82 the pictures it takes
   if (!ref.length) return opts(ms);
   return '<optgroup label="Reference (recommended)">' + opts(ref) + '</optgroup>' + (kf.length ? '<optgroup label="Keyframes (exact frames)">' + opts(kf) + '</optgroup>' : '');
 }
@@ -46042,8 +46122,8 @@ function vlShotFillBtnHTML(si) {
   var off = busy || vlSlWriting(d.id);
   var eps = vlFindEp(d.id), es = eps && (eps.shots || []).filter(function (x) { return String(x.id) === String(s.id); })[0];
   return '<button type="button" class="btn btn-sm" id="vl-fill-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;"' + (off ? ' disabled' : '') +
-    ' title="The Director writes this shot: fill in the empty boxes, add to what is there, or start over." onclick="vlNotesAsk(' + si + ')">' +
-    (busy ? vlSpin(12) + ' Writing...' : 'Notes (1 token)') + '</button>' +
+    ' title="The Director writes this shot: fill in the empty boxes, add to what is there, or start over. About 1 token." onclick="vlNotesAsk(' + si + ')">' +
+    (busy ? vlSpin(12) + ' Writing...' : 'Notes') + '</button>' +
     (es && es.can_revert && !busy ? '<button type="button" class="btn btn-sm" style="font-size:12px;padding:3px 10px;white-space:nowrap;"' + (vlSlWriting(d.id) ? ' disabled' : '') +
       ' title="Put back this shot\'s words as they were before the last Notes (free)" onclick="vlRevertNotes(' + si + ')">Revert</button>' : '');
 }
@@ -46057,8 +46137,13 @@ function vlNotesAsk(si) {
   var old = document.getElementById('vl-notes-ask'); if (old) old.parentNode.removeChild(old);
   var w = document.createElement('div'); w.id = 'vl-notes-ask';
   w.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;');
+  // v3.6.93 (Ian, 2026-11-17): each way's price in its tooltip
+  var _est = (VL.sl[d.id] && VL.sl[d.id].estimate && VL.sl[d.id].estimate.tokens) || n;
+  var tipFill = all ? 'About 1 token a shot (' + n + ' shot' + (n === 1 ? '' : 's') + ').' : 'About 1 token.';
+  var tipFresh = all ? 'About ' + _est + ' token' + (_est === 1 ? '' : 's') + '.' : 'About 1 token.';
   function opt(how, title, desc, dis) {
-    return '<button type="button" class="btn btn-sm" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:8px;white-space:normal;' + (dis ? 'opacity:0.45;' : '') + '"' + (dis ? ' disabled' : '') + ' onclick="vlNotesPick(' + (all ? 'null' : si) + ',\'' + how + '\')">' +
+    var tip = how === 'fresh' ? tipFresh : tipFill;
+    return '<button type="button" class="btn btn-sm" title="' + tip + '" style="display:block;width:100%;text-align:left;padding:8px 12px;margin-bottom:8px;white-space:normal;' + (dis ? 'opacity:0.45;' : '') + '"' + (dis ? ' disabled' : '') + ' onclick="vlNotesPick(' + (all ? 'null' : si) + ',\'' + how + '\')">' +
       '<div style="font-weight:600;">' + title + '</div><div style="' + VL_DESC + 'margin-top:2px;">' + desc + '</div></button>';
   }
   w.innerHTML = '<div style="' + VL_BOX + 'max-width:520px;width:92%;padding:16px 18px;color:rgb(var(--on-panel-rgb));">' +
@@ -46066,7 +46151,7 @@ function vlNotesAsk(si) {
     opt('fill', 'Fill in the empty boxes', anyEmpty ? 'What you wrote stays as it is.' : 'Nothing is empty' + (all ? ' in any shot.' : ' in this shot.'), !anyEmpty) +
     opt('add', 'Add to what\'s there', 'Your words stay as they are; the Director adds only what is missing, never anything that contradicts them.') +
     opt('fresh', 'Clear it and start over', 'Everything but the Purpose and Concept is cleared and written again' + (all ? ', in every shot, with the overall direction' : '') + '. Pictures, references, mode and model stay.') +
-    '<div style="' + VL_DESC + 'margin:4px 0 10px;">' + (all ? 'About 1 token a shot (' + n + ' shot' + (n === 1 ? '' : 's') + ') to fill or add; starting over is priced on the button. ' : '1 token. ') + 'Each shot keeps a Revert that puts its words back.</div>' +
+    '<div style="' + VL_DESC + 'margin:4px 0 10px;">' + 'Each shot keeps a Revert that puts its words back.</div>' +
     '<div style="text-align:right;"><button type="button" class="btn btn-sm" onclick="vlNotesAskClose()">Cancel</button></div></div>';
   w.addEventListener('click', function (e) { if (e.target === w) vlNotesAskClose(); });
   document.body.appendChild(w);
@@ -46201,9 +46286,9 @@ function vlShotCheckBtnHTML(si) {
   var info = VL.sl[d.id] || {}, writing = vlSlWriting(d.id);
   var mine = !!vlChecking(d.id)[s.id];   // v3.5.43: shots are checked side by side
   var tk = (info.estimate_precheck && info.estimate_precheck.shot_tokens) || 1;
-  var label = mine ? vlSpin(12) + ' Checking...' : (vlShotPc(si) ? 'Recheck' : 'Check this shot') + ' (' + tk + ' token' + (tk === 1 ? '' : 's') + ')';
+  var label = mine ? vlSpin(12) + ' Checking...' : (vlShotPc(si) ? 'Recheck' : 'Check this shot');   // v3.6.93: the price is in the tooltip
   return '<button type="button" class="btn btn-sm vl-check-btn" id="vl-check-' + s.ck + '" style="font-size:12px;padding:3px 10px;white-space:nowrap;' + (mine ? 'opacity:1;cursor:progress;' : '') + '"' + ((writing || mine) ? ' disabled' : '') +
-    ' title="The Director checks just this shot: its pictures, words, references and mode, with the story and the pictures either side of it. Its to-do list is replaced; the other shots keep theirs." onclick="vlPrecheck(' + si + ')">' + label + '</button>';
+    ' title="The Director checks just this shot: its pictures, words, references and mode, with the story and the pictures either side of it. Its to-do list is replaced; the other shots keep theirs. About ' + tk + ' token' + (tk === 1 ? '' : 's') + '." onclick="vlPrecheck(' + si + ')">' + label + '</button>';
 }
 function vlTodoBtnHTML(si) {
   var pc = vlShotPc(si), n = vlTodoCount(si);
@@ -46757,8 +46842,8 @@ function npOpen(src, t, id) {
   NP = { src: src, after: { t: t, id: t === 'o' ? null : id }, mode: 'write', chars: {}, assets: {} };
   var L = 'display:block;margin:12px 0 4px;font-size:12px;color:var(--accent-pale);';
   var D = 'font-size:11px;line-height:1.4;color:rgba(var(--accent-text-rgb),0.6);';
-  var radio = function (name, val, label, desc, on) {
-    return '<label style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;cursor:pointer;">' +
+  var radio = function (name, val, label, desc, on, tip) {   // v3.6.93: tip, the price as a tooltip
+    return '<label' + (tip ? ' title="' + tip + '"' : '') + ' style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:6px;cursor:pointer;">' +
       '<input type="radio" name="' + name + '" value="' + val + '"' + (on ? ' checked' : '') + ' onchange="npPick(\'' + name + '\',\'' + val + '\')" style="margin-top:3px;">' +
       '<span><b style="color:var(--accent-pale);">' + label + '</b>' + (desc ? '<br><span style="' + D + '">' + desc + '</span>' : '') + '</span></label>';
   };
@@ -46777,7 +46862,7 @@ function npOpen(src, t, id) {
       '<div class="review-row"><span class="review-label">Prominence:</span> <select id="np-prom" class="moment-prom-select"><option value="1">Minimize</option><option value="3" selected>Default</option><option value="5">Maximize</option></select></div>' +
     '</div>' +
     '<div style="' + L + '">Who writes it?</div><div style="display:flex;flex-direction:column;gap:6px;">' +
-      radio('np-mode', 'write', 'Write it for me (1 token)', 'Writes the title, the picture prompt, the shape and the panel’s story text, from what you wrote above.', true) +
+      radio('np-mode', 'write', 'Write it for me', 'Writes the title, the picture prompt, the shape and the panel’s story text, from what you wrote above.', true, '1 token.') +
       radio('np-mode', 'own', 'I’ll write it myself', '', false) + '</div>' +
     '<div id="np-own" style="display:none;">' +
       '<label for="np-title" style="' + L + '">Title</label><input id="np-title" class="form-input" type="text" maxlength="64" autocomplete="off" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other">' +
@@ -47057,6 +47142,8 @@ function loadCostBasis() {
     if (!d || d.error) { box.textContent = (d && d.error) || 'Could not load.'; return; }
     CB = d;
     var ci = document.getElementById('cb-cents'); if (ci) ci.value = d.centsSet ? d.cents : '';
+    var cp = document.getElementById('cb-proj'); if (cp) cp.value = d.projected ? d.projected : '';   // v3.6.85
+    var P = d.projected ? Number(d.projected) : null;
     var th = 'style="text-align:left;padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;"';
     var td = 'style="padding:4px 10px;font-size:13px;"';
     // provider costs
@@ -47073,26 +47160,60 @@ function loadCostBasis() {
         : 'Help assistant, quick writing tools (Tighten, Word, Describe, Rewrite), picture retouch prompts, upload rights checks, asset names';
       c += '<label style="font-size:13px;">Claude ' + f + ', $ per million Anthropic tokens (sent in / written out)<div style="font-size:11px;opacity:0.75;max-width:340px;line-height:1.35;margin-top:2px;">' + uses + '</div></label><span>$ <input class="form-input cb-cl" data-f="' + f + '" data-i="0" type="number" min="0" step="0.01" value="' + cbEsc(r[0]) + '" style="width:80px;" oninput="cbClaudeEx()" /> / $ <input class="form-input cb-cl" data-f="' + f + '" data-i="1" type="number" min="0" step="0.01" value="' + cbEsc(r[1]) + '" style="width:80px;" oninput="cbClaudeEx()" /> <span class="cb-clex" data-f="' + f + '" style="font-size:12px;margin-left:10px;white-space:nowrap;"></span></span>';
     });
+    // v3.6.85 (Ian, 2026-11-17: "under the claude lines... put the video models and their cost per second"; "make the video
+    // prices editable"): $ a second without and with sound; the code's price is the default, named when it differs.
+    if (d.video && d.video.length) {
+      c += '<div style="grid-column:1/-1;font-weight:600;font-size:13px;margin-top:10px;">Video, $ a second (without sound / with sound)</div>';
+      d.video.forEach(function (v) {
+        var dflt = (v.price !== v.def[0] || v.priceSound !== v.def[1]) ? '<span style="font-size:12px;margin-left:10px;opacity:0.8;">code default $' + cbEsc(v.def[0]) + ' / $' + cbEsc(v.def[1]) + '</span>' : '';
+        c += '<label style="font-size:13px;">' + cbEsc(v.label) + '</label><span>$ <input class="form-input cb-vid" data-k="' + cbEsc(v.key) + '" data-i="0" type="number" min="0" step="0.001" value="' + cbEsc(v.price) + '" style="width:90px;" /> / $ <input class="form-input cb-vid" data-k="' + cbEsc(v.key) + '" data-i="1" type="number" min="0" step="0.001" value="' + cbEsc(v.priceSound) + '" style="width:90px;" />' + dflt + '</span>';
+      });
+    }
     c += '</div><div style="margin-top:8px;"><button class="btn btn-secondary" onclick="saveProviderCosts()">Save costs</button> <span id="cb-msg2" style="font-size:13px;"></span></div>';
     document.getElementById('cb-costs').innerHTML = c;
     cbAudio15(); cbClaudeEx();
     // what each action costs
-    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2</th></tr>';
-    var last = '';
+    // v3.6.86 (Ian, 2026-11-17: "make the projected and change columns blue so they are easy to spot"); v3.6.88: set
+    // before the header line uses them (the header was not blue)
+    var thB = 'style="text-align:left;padding:4px 10px;border-bottom:1px solid rgba(var(--accent-rgb),0.3);font-size:12px;color:#3b82f6;background:rgba(59,130,246,0.10);"';
+    var tdB = 'style="padding:4px 10px;font-size:13px;color:#3b82f6;background:rgba(59,130,246,0.10);"';
+    var boldB = ' style="padding:4px 10px;font-size:13px;font-weight:700;color:#3b82f6;background:rgba(59,130,246,0.10);"';
+    var bold = ' style="padding:4px 10px;font-size:13px;font-weight:700;"';
+    // v3.6.88 (Ian, 2026-11-17: "We don't charge partial tokens anywhere so that's how we need to do the math"): the live and
+    // projected columns are whole tokens (nearest, at least 1), and Change and Revenue change are worked out from them.
+    // Tokens today is left as it was (Ian).
+    var t = '<table style="border-collapse:collapse;"><tr><th ' + th + '>Action</th><th ' + th + '>Our cost</th><th ' + th + '>Tokens today</th><th ' + th + '>At ' + cbEsc(d.cents) + '\u00a2 Rnd (live)</th>' + (P ? '<th ' + thB + '>At ' + cbEsc(P) + '\u00a2 Rnd (proj)</th><th ' + thB + '>Change</th><th ' + thB + '>Revenue change</th>' : '') + '</tr>';
+    var last = '', cols = P ? 7 : 4;
     d.rows.forEach(function (r) {
-      if (r.group !== last) { t += '<tr><td colspan="4" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
-      var diff = (r.now != null && r.at !== r.now) ? ' style="padding:4px 10px;font-size:13px;font-weight:700;"' : ' ' + td;
-      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + cbEsc(r.at) + '</td></tr>';
+      if (r.group !== last) { t += '<tr><td colspan="' + cols + '" style="padding:10px 10px 2px;font-weight:600;font-size:13px;">' + cbEsc(r.group) + '</td></tr>'; last = r.group; }
+      var atR = cbRnd(r.at), prR = cbRnd(r.proj);
+      var diff = (r.now != null && atR !== cbRnd(r.now)) ? bold : ' ' + td;
+      t += '<tr><td ' + td + '>' + cbEsc(r.what) + '</td><td ' + td + '>' + cbUsd(r.usd) + '</td><td ' + td + '>' + (r.now == null ? '\u2014' : cbEsc(r.now)) + '</td><td' + diff + '>' + (atR == null ? '\u2014' : atR) + '</td>';
+      // v3.6.85 (Ian, 2026-11-17: "a column ... that compares the current settings to the proposed setting")
+      if (P) t += '<td' + (prR != null && prR !== atR ? boldB : ' ' + tdB) + '>' + (prR == null ? '\u2014' : prR) + '</td><td ' + tdB + '>' + cbChange(atR, prR) + '</td><td ' + tdB + '>' + cbRevCents(atR, d.cents, prR, P) + '</td>';   // v3.6.86; v3.6.88 rounded
+      t += '</tr>';
     });
     t += '</table><div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Tokens today is what we charge now. Pictures (the model in use), transcription and video are worked out from their cost at our cost per token, so the columns match unless a picture price is pinned. Writing tools: 1 token for 2 uses. Take review, custom style analyze and the book PDF: fixed prices. Bold: the basis would charge differently. Video a second is shown to two places, and Claude as the words one token covers; a real take or call is priced as a whole and rounded once.<br>Story, narrative, writing and the Optimize passes are priced from what Claude actually used, so they have no fixed row; see the real costs below.</div>';
     box.innerHTML = t;
     // the last 30 days
-    var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2</th></tr>';
-    if (!d.real.length) R += '<tr><td colspan="8" ' + td + '>Nothing yet.</td></tr>';
+    var R = '<table style="border-collapse:collapse;"><tr><th ' + th + '>What</th><th ' + th + '>Events</th><th ' + th + '>With a cost</th><th ' + th + '>Our cost</th><th ' + th + '>Avg each</th><th ' + th + '>Tokens charged</th><th ' + th + '>\u00a2 a token covered</th><th ' + th + '>Tokens each at ' + cbEsc(d.cents) + '\u00a2 (live)</th>' + (P ? '<th ' + thB + '>Tokens each at ' + cbEsc(P) + '\u00a2 (projected)</th><th ' + thB + '>Change</th><th ' + thB + '>Revenue change, 30 days</th>' : '') + '</tr>';
+    if (!d.real.length) R += '<tr><td colspan="' + (P ? 11 : 8) + '" ' + td + '>Nothing yet.</td></tr>';
+    var revTotal = 0, revAny = false;
     d.real.forEach(function (r) {
-      R += '<tr><td ' + td + '>' + cbEsc(r.label) + '</td><td ' + td + '>' + r.events + '</td><td ' + td + '>' + r.priced + '</td><td ' + td + '>' + cbUsd(r.usd, 2) + '</td><td ' + td + '>' + cbUsd(r.avgUsd) + '</td><td ' + td + '>' + r.tokens + '</td><td ' + td + '>' + (r.centsPerToken == null ? '\u2014' : r.centsPerToken.toFixed(1)) + '</td><td ' + td + '>' + (r.atPerEvent == null ? '\u2014' : r.atPerEvent) + '</td></tr>';
+      R += '<tr><td ' + td + '>' + cbEsc(r.label) + '</td><td ' + td + '>' + r.events + '</td><td ' + td + '>' + r.priced + '</td><td ' + td + '>' + cbUsd(r.usd, 2) + '</td><td ' + td + '>' + cbUsd(r.avgUsd) + '</td><td ' + td + '>' + r.tokens + '</td><td ' + td + '>' + (r.centsPerToken == null ? '\u2014' : r.centsPerToken.toFixed(1)) + '</td><td ' + td + '>' + (r.atPerEvent == null ? '\u2014' : r.atPerEvent) + '</td>';
+      if (P) {
+        R += '<td' + (r.atProjected != null && r.atProjected !== r.atPerEvent ? boldB : ' ' + tdB) + '>' + (r.atProjected == null ? '\u2014' : r.atProjected) + '</td><td ' + tdB + '>' + cbChange(r.atPerEvent, r.atProjected) + '</td>';   // v3.6.85
+        // v3.6.86 (Ian, 2026-11-17: "one more column that does the expected change in revenue"): per event, (projected tokens
+        // x projected cents) - (live tokens x live cents), times the events with a cost, in dollars
+        var rv = cbRevUsd(r.atPerEvent, d.cents, r.atProjected, P, r.priced);
+        if (rv != null) { revTotal += rv; revAny = true; }
+        R += '<td ' + tdB + '>' + cbSigned(rv) + '</td>';
+      }
+      R += '</tr>';
     });
+    if (P && revAny) R += '<tr><td colspan="10" style="padding:6px 10px;font-size:13px;font-weight:700;text-align:right;">Total revenue change, 30 days</td><td style="padding:6px 10px;font-size:13px;font-weight:700;color:#3b82f6;background:rgba(59,130,246,0.10);">' + cbSigned(revTotal) + '</td></tr>';
     R += '</table>';
+    if (P) R += '<div style="font-size:12px;margin-top:6px;opacity:0.8;line-height:1.45;">Revenue change: what the tokens are worth at our cost per token (tokens x cents a token), projected less live, for the same work; our cost is the same both ways, so this is also the change in margin. The real sale price per token comes from the plans and packs.</div>';
     if (d.claudeCalls) R += '<div style="font-size:12px;margin-top:6px;opacity:0.8;">All Claude calls in 30 days (charged or not): ' + d.claudeCalls.n + ', ' + cbUsd(d.claudeCalls.usd, 2) + '.</div>';
     document.getElementById('cb-real').innerHTML = R;
   }).catch(function () { box.textContent = 'Could not load.'; });
@@ -47100,13 +47221,36 @@ function loadCostBasis() {
 function cbAudio15() {
   var i = document.getElementById('cb-audio'), o = document.getElementById('cb-audio15'); if (!i || !o) return;
   var v = parseFloat(i.value);
-  o.textContent = isFinite(v) && v >= 0 ? '= $' + (v * 15).toFixed(3) + ' per 15 minutes' : '';
+  o.textContent = isFinite(v) && v >= 0 ? '= $' + (v * 5).toFixed(3) + ' per 5 minutes' : '';   // v3.6.87: transcription is priced per 5 minutes
 }
 // v3.6.78 (Ian, 2026-11-17): an example call beside each Claude line, 6,000 words in and 2,000 out. A word is about
 // 4/3 of an Anthropic token, so 8,000 tokens in and about 2,667 out; in our tokens at the basis on the page.
 var CB_EX_IN = 6000 * 4 / 3, CB_EX_OUT = 2000 * 4 / 3;
+// v3.6.89 (Ian, 2026-11-17: "instead of 6000 it should be 4000 and say it comes from the ... setting"): the example is a
+// Generate Story run at its own settings: its words in and words out per token, and what Story charges for it.
+function cbStoryWords() {
+  var r = (CB && CB.gen && CB.gen.story) || null;
+  if (!r) return null;
+  return { win: Number(r.in) > 0 ? Number(r.in) : 4000, wout: Number(r.out) > 0 ? Number(r.out) : 2500, r: r };
+}
 function cbClaudeEx() {
   var cents = (CB && Number(CB.cents) > 0) ? Number(CB.cents) : 8;
+  var sw = cbStoryWords();
+  if (sw) {
+    var tin = sw.win * 4 / 3, tout = sw.wout * 4 / 3;
+    var part = function (w, rate, floor) { return Math.max(Number(floor) || 0, Number(rate) > 0 ? w / Number(rate) : 0); };
+    var charged = Math.max(0, Math.floor(part(sw.win, sw.r.in, sw.r.floorIn) + part(sw.wout, sw.r.out, sw.r.floorOut) + 0.5 + 1e-9));
+    [].slice.call(document.querySelectorAll('.cb-clex')).forEach(function (o) {
+      var f = o.getAttribute('data-f');
+      var ins = document.querySelectorAll('.cb-cl[data-f="' + f + '"]');
+      var rin = parseFloat(ins[0] && ins[0].value), rout = parseFloat(ins[1] && ins[1].value);
+      if (!isFinite(rin) || !isFinite(rout)) { o.textContent = ''; return; }
+      var a = tin * rin / 1e6, b = tout * rout / 1e6, usd = a + b;
+      var tok = Math.round(usd * 100 / cents * 100) / 100;
+      o.textContent = sw.win.toLocaleString('en-US') + ' words in + ' + sw.wout.toLocaleString('en-US') + ' out (Generate Story settings) = $' + a.toFixed(3) + ' + $' + b.toFixed(3) + ' = $' + usd.toFixed(3) + ' (' + tok + ' tokens of cost at ' + cents + '\u00a2; Story charges ' + charged + ')';
+    });
+    return;
+  }
   [].slice.call(document.querySelectorAll('.cb-clex')).forEach(function (o) {
     var f = o.getAttribute('data-f');
     var ins = document.querySelectorAll('.cb-cl[data-f="' + f + '"]');
@@ -47125,11 +47269,47 @@ function cbPut(body, msgId) {
       if (d && d.ok) loadCostBasis();
     }).catch(function () { if (m) m.textContent = 'Not saved.'; });
 }
-function saveCostBasis() { var v = document.getElementById('cb-cents').value.trim(); cbPut({ cents: v === '' ? '' : v }, 'cb-msg'); }
+// v3.6.85 (Ian, 2026-11-17: rename Save to "Save Live" with a warning that it goes live immediately)
+function saveCostBasis() {
+  var v = document.getElementById('cb-cents').value.trim();
+  var what = v === '' ? 'Clearing the live cost per token (back to 8 cents)' : 'Saving ' + v + ' cents a token as live';
+  if (!window.confirm(what + ' takes effect immediately: every charge from now on (video, pictures, transcription, Optimize, video planning) uses it. Go live?')) return;
+  cbPut({ cents: v === '' ? '' : v }, 'cb-msg');
+}
+// v3.6.85: the projected basis; only adds the compare columns, never charged
+function saveProjected() { var v = document.getElementById('cb-proj').value.trim(); cbPut({ projected: v === '' ? '' : v }, 'cb-msg3'); }
+// v3.6.88: whole tokens as we charge them: nearest, half up, at least 1 (as services/aiCost.js tokensFor)
+function cbRnd(x) {
+  if (x == null || x === '' || !isFinite(x)) return null;
+  return Math.max(1, Math.floor(Number(x) + 0.5 + 1e-9));
+}
+// v3.6.86: revenue change for one action, in cents: (projected tokens x projected cents) - (live tokens x live cents)
+function cbRevCents(at, cents, proj, P) {
+  if (at == null || proj == null || !isFinite(at) || !isFinite(proj)) return '\u2014';
+  var d = Math.round((Number(proj) * Number(P) - Number(at) * Number(cents)) * 100) / 100;
+  return d === 0 ? 'same' : (d > 0 ? '+' : '') + d + '\u00a2';
+}
+// v3.6.86: the same over n events, in dollars (null when it cannot be worked out)
+function cbRevUsd(at, cents, proj, P, n) {
+  if (at == null || proj == null || !isFinite(at) || !isFinite(proj) || !(n > 0)) return null;
+  return (Number(proj) * Number(P) - Number(at) * Number(cents)) * Number(n) / 100;
+}
+function cbSigned(usd) {
+  if (usd == null || !isFinite(usd)) return '\u2014';
+  var r = Math.round(usd * 100) / 100;
+  return r === 0 ? 'same' : (r > 0 ? '+$' : '-$') + Math.abs(r).toFixed(2);
+}
+// the change from live to projected, as +n / -n tokens (two places for the per-second and per-word rows)
+function cbChange(a, b) {
+  if (a == null || b == null || !isFinite(a) || !isFinite(b)) return '\u2014';
+  var d = Math.round((Number(b) - Number(a)) * 100) / 100;
+  return d === 0 ? 'same' : (d > 0 ? '+' : '') + d;
+}
 function saveProviderCosts() {
   var images = {}; [].slice.call(document.querySelectorAll('.cb-img')).forEach(function (i) { images[i.getAttribute('data-k')] = i.value; });
   var claude = {}; [].slice.call(document.querySelectorAll('.cb-cl')).forEach(function (i) { var f = i.getAttribute('data-f'); claude[f] = claude[f] || [0, 0]; claude[f][Number(i.getAttribute('data-i'))] = i.value; });
-  cbPut({ images: images, audioMinute: document.getElementById('cb-audio').value, claude: claude }, 'cb-msg2');
+  var video = {}; [].slice.call(document.querySelectorAll('.cb-vid')).forEach(function (i) { var k = i.getAttribute('data-k'); video[k] = video[k] || [0, 0]; video[k][Number(i.getAttribute('data-i'))] = i.value; });   // v3.6.85
+  cbPut({ images: images, audioMinute: document.getElementById('cb-audio').value, claude: claude, video: video }, 'cb-msg2');
 }
 (function () {
   var orig = window.switchSettingsTab;

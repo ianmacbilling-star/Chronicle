@@ -613,8 +613,17 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
   // Optional size-based charge for Generate Narrative (admin-configured; scales
   // with panel count). Verified before the job starts; spent on job success.
-  var _narrCharge = 0;
-  try { _narrCharge = await computeGenCharge(moments.length, 'gen_narrative_panels_per_token', 'gen_narrative_floor'); } catch (e) { _narrCharge = 0; }
+  // v3.6.89 -- TD-1148 stage 3 (Ian, 2026-11-17: "lets change it to the same and get rid of the per panel charge"): words in
+  // (the customer's Story box and instructions) and words out (what Claude writes), as Generate Story. Estimate now,
+  // exact charge when the narrative comes back.
+  var _narrWc = function (t) { var v = (t == null ? '' : String(t)).trim(); return v ? v.split(/\s+/).length : 0; };
+  var _narrWordsIn = _narrWc(session.transcript) + _narrWc(directorNotes);
+  // v3.6.90 (Ian, 2026-11-17: "IF they are the users words... then yes they go and get counted"): every character's
+  // description is sent to Claude (charList below), so it counts as words in. Narrative is never sent the lore.
+  try { const _nc = await db.prepare('SELECT description FROM characters WHERE campaign_id = ?').all(session.campaign_id); _narrWordsIn += (_nc || []).reduce(function (t, c) { return t + _narrWc(c && c.description); }, 0); } catch (e) {}
+  var _narrRates = null, _narrCharge = 0, _narrOut0 = 0;
+  try { const _tk = require('./tokens'); _narrRates = await _tk.inOutRates('narrative'); _narrCharge = _tk.inOutTokens(_narrRates, _narrWordsIn, _narrRates.estOut); } catch (e) { _narrRates = null; _narrCharge = 0; }
+  try { _narrOut0 = require('../services/aiCost').claudeOutSoFar(); } catch (e) {}
 
   // v3.0.967 -- TD-852. THE SUMMARY CHARACTER CAP, READ LIVE.
   //
@@ -635,7 +644,7 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
   if (_narrCharge > 0) {
     const _nbal = await getBalance(req.session.userId);
     if (_nbal.total < _narrCharge) {
-      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'Generating this narrative costs ' + _narrCharge + ' token' + (_narrCharge === 1 ? '' : 's') + ', but you have ' + _nbal.total + '. Add tokens and try again.' });
+      return res.json({ error: 'INSUFFICIENT_TOKENS', message: 'Generating this narrative costs about ' + _narrCharge + ' token' + (_narrCharge === 1 ? '' : 's') + ', but you have ' + _nbal.total + '. Add tokens and try again.' });
     }
   }
 
@@ -1233,6 +1242,14 @@ router.post('/generate/:campaignId/:sessionId', requireAuth, async function(req,
 
     try { await logDebug(req.session.userId, { level: 'info', source: 'generation', page: 'Generate narrative', fn: 'POST /narrative/generate', message: 'Narrative generated (' + narrStyleId + ', ' + ((parsed.sections || []).length) + ' sections)', detail: { style: narrStyleId, sections: (parsed.sections || []).length, moments: moments.length, campaign_id: req.params.campaignId, session_id: req.params.sessionId } }); } catch (_le) {}
 
+    // v3.6.89: the exact charge from the words Claude wrote; never more than the balance
+    if (_narrRates) {
+      try {
+        const _o = require('../services/aiCost').claudeOutSoFar() - _narrOut0;
+        _narrCharge = require('./tokens').inOutTokens(_narrRates, _narrWordsIn, _o > 0 ? Math.round(_o * 3 / 4) : _narrRates.estOut);
+        const _b = await getBalance(req.session.userId); if (_b.total < _narrCharge) _narrCharge = Math.max(0, Number(_b.total) || 0);
+      } catch (e) {}
+    }
     if (_narrCharge > 0) {
       try { await spendTokens(req.session.userId, _narrCharge, { source: 'generate_narrative', event_type: 'generation_spend', related_campaign_id: req.params.campaignId }); } catch (e) { console.error('generate_narrative spend failed:', e.message); }
     }

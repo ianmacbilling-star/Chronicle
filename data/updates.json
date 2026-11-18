@@ -1,5 +1,229 @@
 [
   {
+    "version": "3.6.98",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3698-publish-options-version",
+        "kind": "fix",
+        "public": true,
+        "summary": "All publishing options on a session opens the Publish page on the version you were looking at.",
+        "detail": "From the testers. It used to open on your starred or default version. The Canonical opens the Canonical; a version the Publish list does not hold falls back to the usual default.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.6.97",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3697-tester-fixes-pricing",
+        "kind": "fix",
+        "public": true,
+        "summary": "Writing Coach buttons say their uses in their tooltips, not their labels; Rebuild prompt says its price; the transcription receipt says 1 token.",
+        "detail": "From the 17 Nov tester run (v3.6.96). Get feedback, Get new feedback, Write a fresh version, Try again and Show me: 'Uses 1 writing use (1 token buys 2).' Story feedback names its uses (one for every 10,000 words). Find words says Free in its tooltip. Generate Story's tooltip estimate is one token higher (Ian).",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.96",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3696-generate-images-tip",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Generate Images says its price in its tooltip: 1 token per picture.",
+        "detail": "Ian, 2026-11-17.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.95",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3695-regen-retouch-tips",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Every Regen and Retouch button says what it costs in its tooltip.",
+        "detail": "Story panels, character references, assets, video keyframes, the Retouch window, Regenerate in Art Style and the writing tools' Regen (one writing use). Picture prices follow the picture price the page knows (1 token).",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.94",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3694-story-narrative-estimate",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Generate Story and Generate Narrative show about how many tokens they will take, in their tooltips.",
+        "detail": "Worked out from your saved story, instructions, lore and characters, the same way the charge is; the exact amount is taken when the words come back. Narrative & Images adds the picture price for each picture drawn. New GET /api/tokens/estimate.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.93",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3693-prices-in-tooltips",
+        "kind": "improvement",
+        "public": true,
+        "summary": "Token prices moved off buttons and screens into tooltips: hover a button to see what it costs.",
+        "detail": "Ian (2026-11-17): no prices on buttons; estimates in tooltips only. Covers Title Builder, Image Builder, custom style, New panel, Transcribe, Optimize, the Director's buttons and Notes, Check this shot, take review, retouch take, the episode estimate and the video model menu. Confirmation boxes, receipts and error messages keep their numbers.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.92",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3692-planning-rates",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video planning (shot list, Director's Notes, Pre-production check) is priced at the Financial tab's Claude rates (TD-1148).",
+        "detail": "The rates for the model the planner runs (TEXT_MODEL); the old shotlist_price_in/out_per_mtok settings are only a fallback. Same $3/$15 today, so charges do not change.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.91",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3691-optimize-rates",
+        "kind": "fix",
+        "public": false,
+        "summary": "Optimize prices each pass at the Financial tab's Claude rates (was its own $3/$15 in code) (TD-1148).",
+        "detail": "Same model (TEXT_MODEL), cache reads and writes counted as everywhere else. Today's rates are the same, so charges do not change until the tab's rates do.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.90",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3690-words-in-characters",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Story and Narrative words in now count the character descriptions sent to Claude (TD-1148).",
+        "detail": "Ian: the customer's words all count. Story: Story box, instructions, lore and every character description; Narrative: Story box, instructions and every character description (Narrative is never sent the lore).",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.89",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3689-story-in-out",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Generate Story and Generate Narrative are charged on words in and words out: 1 token per 4,000 words in and per 2,500 words out, at least 1 each, the total rounded once (TD-1148 stage 3).",
+        "detail": "Words in are the customer's own words; words out are what Claude wrote (output tokens x 3/4). The balance is checked first on an estimate (the Already Written recommended words as the words out); the exact amount is charged when the words come back, never more than the balance. Narrative's per-panel charge is gone. Settings: eight new fields under Generation charging. The Financial tab's Claude example is a Story run at those settings.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.88",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3688-rounded-columns",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: the live and projected columns are whole tokens (At 8c Rnd (live), At 5c Rnd (proj)); Change and Revenue change use them (TD-1148).",
+        "detail": "Ian: we never charge partial tokens. Nearest, at least 1. Video rows are rounded per second. The blue header now shows (its style was set after the header line).",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.87",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3687-transcribe-5min",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Audio Transcription is priced per started 5 minutes: 1 token each (was 2 per 15 minutes) (TD-1148).",
+        "detail": "The tokens per 5 minutes come from the minute cost at our cost per token ($0.04 a block: 1 token at 8 and at 5 cents). The window works the price out and states it; the Free Trial's 20 minutes is still 4 tokens at most. Financial tab and the Brain updated. Ian: ships now, before the 5-cent switch.",
+        "td": ["TD-1148", "TD-1046"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.86",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3686-revenue-change",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: a Revenue change column beside Projected in both grids, with a 30-day total (TD-1148).",
+        "detail": "Per action in cents, and over the last 30 days in dollars: projected tokens x projected cents less live tokens x live cents. Example: a 4-cent picture at 1 token goes from 8 to 5 cents, -3 cents.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.85",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3685-financial-projected",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: Save Live with a warning, a Projected cost per token with compare columns, and video prices editable (TD-1148).",
+        "detail": "The basis text is Ian's wording. Projected is saved apart (cost_cents_per_token_projected), never charged, and adds a projected column and the change to the action table and the 30-day grid. Video prices per model, without and with sound, are settings (unit_cost:video:<model>) over the code's prices. Fixed: the video rows of the action table had not shown since v3.6.79.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.84",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3684-video-prices",
+        "kind": "fix",
+        "public": false,
+        "summary": "Video prices match fal's bill: Kling Standard up, Kling O3 Pro reference and MiniMax H3 Max (768P) down (TD-1148).",
+        "detail": "Checked against fal's 30-day usage and our seconds. Kling 3.0 Standard and Kling O3 Standard $0.14/s with sound; Kling O3 Pro reference $0.14 (was $0.28); H3 Max 768P keyframes $0.056, reference $0.086. Wan 3.0, Seedance, Veo, Vidu, Omni, Wan 2.7 already matched.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.83",
+    "staged_on": "2026-11-17",
+    "entries": [
+      {
+        "id": "3683-cost-labels",
+        "kind": "improvement",
+        "public": false,
+        "summary": "Financial tab: Title Builder and title retouch rows named (TD-1148).",
+        "detail": "The last-30-days grid names title_build, title_retouch and panel picture rows in words.",
+        "td": ["TD-1148"]
+      }
+    ]
+  },
+  {
     "version": "3.6.82",
     "staged_on": "2026-11-17",
     "entries": [

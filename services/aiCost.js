@@ -29,11 +29,11 @@ async function db() { if (!_db) _db = await require('../database/db').getDb(); r
 let _cache = null, _cacheAt = 0;
 async function loadSettings(force) {
   if (!force && _cache && Date.now() - _cacheAt < 60000) return _cache;
-  const s = { cents: null, oldShot: null, oldLayout: null, audioMinute: DEFAULTS.audioMinute,
-    claude: JSON.parse(JSON.stringify(DEFAULTS.claude)), images: Object.assign({}, DEFAULTS.images) };
+  const s = { cents: null, projected: null, oldShot: null, oldLayout: null, audioMinute: DEFAULTS.audioMinute,
+    claude: JSON.parse(JSON.stringify(DEFAULTS.claude)), images: Object.assign({}, DEFAULTS.images), video: {} };
   try {
     const d = await db();
-    const rows = await d.prepare("SELECT setting_key, value FROM app_settings WHERE setting_key IN ('cost_cents_per_token','shotlist_cents_per_token','layout_loop_cost_cents','unit_cost:audio_minute') OR setting_key LIKE 'unit_cost:image:%' OR setting_key LIKE 'claude_rate:%'").all();
+    const rows = await d.prepare("SELECT setting_key, value FROM app_settings WHERE setting_key IN ('cost_cents_per_token','cost_cents_per_token_projected','shotlist_cents_per_token','layout_loop_cost_cents','unit_cost:audio_minute') OR setting_key LIKE 'unit_cost:image:%' OR setting_key LIKE 'unit_cost:video:%' OR setting_key LIKE 'claude_rate:%'").all();
     for (const r of rows || []) {
       const k = r.setting_key, v = String(r.value == null ? '' : r.value).trim();
       const n = parseFloat(v);
@@ -42,6 +42,13 @@ async function loadSettings(force) {
       else if (k === 'layout_loop_cost_cents' && n >= 1) s.oldLayout = n;
       else if (k === 'unit_cost:audio_minute' && n >= 0) s.audioMinute = n;
       else if (k.indexOf('unit_cost:image:') === 0 && n >= 0) s.images[k.slice(16)] = n;
+      // v3.6.85 (Ian, 2026-11-17): a projected basis to look at before it goes live (never charged), and video prices
+      // editable on the Financial tab as "silent/with sound" dollars a second; the code's prices are the defaults.
+      else if (k === 'cost_cents_per_token_projected' && n >= 1) s.projected = n;
+      else if (k.indexOf('unit_cost:video:') === 0) {
+        const p = v.split('/').map(parseFloat);
+        if (p.length === 2 && p[0] >= 0 && p[1] >= 0) s.video[k.slice(16)] = p;
+      }
       else if (k.indexOf('claude_rate:') === 0) {
         const p = v.split('/').map(parseFloat);
         if (p.length === 2 && p[0] >= 0 && p[1] >= 0) s.claude[k.slice(12)] = p;
@@ -49,7 +56,21 @@ async function loadSettings(force) {
     }
   } catch (e) { /* defaults */ }
   _cache = s; _cacheAt = Date.now();
+  try { applyVideo(s, require('../routes/videoLab').MODELS); } catch (e) { /* video not loaded: its own prices stand */ }
   return s;
+}
+// v3.6.85: set each video model's price from the settings, in place, so every reader of MODELS (estimate, charge, the
+// model menu) sees it. The code's price is kept on first touch and comes back when the setting is removed.
+function applyVideo(s, M) {
+  if (!M) return;
+  Object.keys(M).forEach(function (k) {
+    const m = M[k];
+    if (!m || typeof m !== 'object') return;
+    if (m._price0 === undefined) { m._price0 = m.price; m._priceSound0 = m.priceSound; }
+    const o = s && s.video && s.video[k];
+    m.price = o ? o[0] : m._price0;
+    m.priceSound = o ? o[1] : m._priceSound0;
+  });
 }
 function forget() { _cache = null; }
 
@@ -105,6 +126,9 @@ async function audioMinuteUsd() { return (await loadSettings()).audioMinute; }
 function middleware(req, res, next) { als.run({ req: req, calls: [] }, next); }
 function store() { return als.getStore() || null; }
 
+// v3.6.89: all the Anthropic tokens Claude has written on this request so far (takeClaude does not clear it). A charge
+// reads it before and after its calls; the difference x 3/4 is the words written.
+function claudeOutSoFar() { const st = store(); return st ? (st.outAll || 0) : 0; }
 // Take the Claude usage this request has run up since the last take. { calls, in, out, usd }
 function takeClaude() {
   const st = store();
@@ -122,7 +146,7 @@ async function noteClaude(json) {
     const usd = claudeUsd(s, json.model, u);
     const inAll = (Number(u.input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0);
     const st = store();
-    if (st) st.calls.push({ in: inAll, out: Number(u.output_tokens) || 0, usd: usd });
+    if (st) { st.calls.push({ in: inAll, out: Number(u.output_tokens) || 0, usd: usd }); st.outAll = (st.outAll || 0) + (Number(u.output_tokens) || 0); }   // v3.6.89: outAll for the words-out charge
     const req = st && st.req;
     const uid = req && req.session && req.session.userId ? req.session.userId : null;
     const where = req ? String((req.method || '') + ' ' + (req.baseUrl || '') + (req.path || '')).slice(0, 200) : 'background';
@@ -153,5 +177,5 @@ function hookFetch() {
   };
 }
 
-module.exports = { DEFAULTS, loadSettings, forget, centsPerToken, tokensFor, claudeUsd, family, imageKey, imageUsd, imageUsdSync,
-  audioMinuteUsd, middleware, store, takeClaude, noteClaude, hookFetch };
+module.exports = { DEFAULTS, loadSettings, forget, applyVideo, centsPerToken, tokensFor, claudeUsd, family, imageKey, imageUsd, imageUsdSync,
+  audioMinuteUsd, middleware, store, takeClaude, claudeOutSoFar, noteClaude, hookFetch };

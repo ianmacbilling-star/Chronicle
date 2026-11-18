@@ -577,12 +577,14 @@ const COST_LABELS = { video_take: 'Video take', video_shot_list: 'Video shot lis
   layout_review: 'Optimize (layout pass)', layout_apply: 'Optimize (apply)', new_panel: 'New panel', story_page_ocr: 'Story from photos (OCR)',
   character_sheet_import: 'Character sheet import', custom_style_analyze: 'Custom style analyze', custom_style_preview: 'Custom style preview',
   panel_retouch: 'Picture retouch', character_reference: 'Character picture', amendment_reference: 'Chapter reference picture', asset_reference: 'Asset picture',
-  asset_retouch: 'Asset retouch', upload_rights_check: 'Upload rights check (free)', asset_suggestions_accept: 'Suggested assets (free)', asset_classify_names: 'Asset names (free)' };
+  asset_retouch: 'Asset retouch', title_build: 'Title Builder', title_retouch: 'Title retouch', generation: 'Picture (panel)', panel_regen: 'Picture regenerate',   // v3.6.83 (Ian, 2026-11-17)
+  upload_rights_check: 'Upload rights check (free)', asset_suggestions_accept: 'Suggested assets (free)', asset_classify_names: 'Asset names (free)' };
 router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
   try {
     const ac = require('../services/aiCost');
     const s = await ac.loadSettings(true);
     const cents = await ac.centsPerToken('');
+    const proj = s.projected;   // v3.6.85 (Ian, 2026-11-17): "review the numbers before pushing it live"; null when not set
     const tk = require('./tokens');
     const rows = [];
     // v3.6.79: tokens to two places, for the per-second and per-1,000-word rows (no rounding, no floor)
@@ -591,18 +593,24 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     // v3.6.80 -- TD-1148 stage 2: pictures and transcription are worked out from cost now, so "today" is what they charge;
     // the model in use is marked, and a pinned picture price (token_cost:nano2) is named.
     const picNow = await tk.getTokenCost('nano2'), picPin = await tk.getTokenCostPin('nano2'), inUse = ac.imageKey('nano2');
-    Object.keys(s.images).forEach(function (k) { const live = k === inUse; rows.push({ group: 'Pictures', what: 'Picture: ' + k + (live ? ' (in use' + (picPin != null ? ', pinned at ' + picPin : '') + ')' : ''), usd: s.images[k], now: live ? picNow : null, at: ac.tokensFor(s.images[k], cents) }); });
-    let qNow = null; try { qNow = await require('./audio').quarterTokens(); } catch (e) {}
-    rows.push({ group: 'Transcription', what: 'Transcription, 15 minutes', usd: s.audioMinute * 15, now: qNow, at: ac.tokensFor(s.audioMinute * 15, cents) });
+    Object.keys(s.images).forEach(function (k) { const live = k === inUse; rows.push({ group: 'Pictures', what: 'Picture: ' + k + (live ? ' (in use' + (picPin != null ? ', pinned at ' + picPin : '') + ')' : ''), usd: s.images[k], now: live ? picNow : null, at: ac.tokensFor(s.images[k], cents), proj: proj ? ac.tokensFor(s.images[k], proj) : null }); });
+    // v3.6.87 (Ian, 2026-11-17): transcription is priced per started 5 minutes
+    let qNow = null; try { qNow = await require('./audio').blockTokens(); } catch (e) {}
+    rows.push({ group: 'Transcription', what: 'Transcription, 5 minutes', usd: s.audioMinute * 5, now: qNow, at: ac.tokensFor(s.audioMinute * 5, cents), proj: proj ? ac.tokensFor(s.audioMinute * 5, proj) : null });
     // video: every model at its default length, no sound; its "now" already follows the basis (it is priced from cost)
+    const video = [];
     try {
       const M = require('./videoLab').MODELS, vc = await ac.centsPerToken('video');
       Object.keys(M).forEach(function (k) {
+        const m = M[k];   // v3.6.85: this line was lost in v3.6.79, so no video row showed
+        // v3.6.85 (Ian, 2026-11-17: "make the video prices editable"): every model, its price and the code's default
+        video.push({ key: k, label: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : ''), price: Number(m.price) || 0,
+          priceSound: Number(m.priceSound) || 0, def: [m._price0 !== undefined ? m._price0 : m.price, m._priceSound0 !== undefined ? m._priceSound0 : m.priceSound], set: !!s.video[k] });
         // v3.6.79 (Ian, 2026-11-17: "do it by 1 second not 5"): per second, in tokens to two places; a take is still
         // priced as a whole (its seconds x this) and rounded once.
         const usd = Number(m.price) || 0;
         if (!usd) return;
-        rows.push({ group: 'Video (a second)', what: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : ''), usd: usd, now: frac(usd, vc), at: frac(usd, cents), exact: true });
+        rows.push({ group: 'Video (a second)', what: (m.label || k) + (m.reference ? ' (reference)' : '') + (m.test ? ' [test]' : ''), usd: usd, now: frac(usd, vc), at: frac(usd, cents), proj: proj ? frac(usd, proj) : null, exact: true });
       });
     } catch (e) {}
     // v3.6.77 (Ian): Claude in the table. v3.6.79 (Ian, 2026-11-17: "per 1000 word instead of per million tokens... my
@@ -617,7 +625,7 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
         if (!(p[0] > 0)) return;
         const words = Math.max(100, Math.round((cents / 100) / (KW * p[0] / 1e6) * 1000 / 100) * 100);
         const usd = words / 1000 * KW * p[0] / 1e6;
-        rows.push({ group: 'Claude (words for 1 token)', what: nm + ', ' + words.toLocaleString('en-US') + ' words ' + p[1], usd: usd, now: null, at: frac(usd, cents), exact: true });
+        rows.push({ group: 'Claude (words for 1 token)', what: nm + ', ' + words.toLocaleString('en-US') + ' words ' + p[1], usd: usd, now: null, at: frac(usd, cents), proj: proj ? frac(usd, proj) : null, exact: true });
       });
     });
     // the last 30 days, real: what each kind of generation cost us beside what it charged
@@ -629,11 +637,13 @@ router.get('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
         tokens: Number(r.tokens) || 0, qty: r.qty == null ? null : Number(r.qty), unit: r.unit || '',
         avgUsd: (usd != null && priced) ? usd / priced : null,
         centsPerToken: (usd != null && pricedTok) ? usd * 100 / pricedTok : null,
-        atPerEvent: (usd != null && priced) ? ac.tokensFor(usd / priced, cents, 0) : null };
+        atPerEvent: (usd != null && priced) ? ac.tokensFor(usd / priced, cents, 0) : null,
+        atProjected: (proj && usd != null && priced) ? ac.tokensFor(usd / priced, proj, 0) : null };   // v3.6.85
     });
     let claude = null;
     try { claude = await db.prepare("SELECT COUNT(*) AS n, SUM(cost_usd) AS usd FROM ai_calls WHERE created_at >= NOW() - INTERVAL '30 days'").get(); } catch (e) {}
-    res.json({ cents: cents, centsSet: !!s.cents, oldVideo: s.oldShot, oldLayout: s.oldLayout, audioMinute: s.audioMinute, images: s.images, claude: s.claude,
+    let gen = null; try { gen = { story: await tk.inOutRates('story'), narrative: await tk.inOutRates('narrative') }; } catch (e) {}   // v3.6.89
+    res.json({ cents: cents, centsSet: !!s.cents, projected: proj, video: video, gen: gen, oldVideo: s.oldShot, oldLayout: s.oldLayout, audioMinute: s.audioMinute, images: s.images, claude: s.claude,
       defaults: ac.DEFAULTS, rows: rows, real: realRows, claudeCalls: claude ? { n: Number(claude.n) || 0, usd: claude.usd == null ? 0 : Number(claude.usd) } : null,
       since: 'v3.6.76' });
   } catch (e) { console.error('[cost-basis] GET', e && e.message); res.status(500).json({ error: 'Server error' }); }
@@ -646,6 +656,23 @@ router.put('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
     if (b.cents !== undefined) {
       if (b.cents === '' || b.cents === null) pairs.push(['cost_cents_per_token', null]);
       else { const c = num(b.cents, 1, 100); if (c == null) return res.status(400).json({ error: 'Cost per token must be between 1 and 100 cents.' }); pairs.push(['cost_cents_per_token', String(c)]); }
+    }
+    // v3.6.85: the projected basis (shown beside the live one, never charged); empty clears it
+    if (b.projected !== undefined) {
+      if (b.projected === '' || b.projected === null) pairs.push(['cost_cents_per_token_projected', null]);
+      else { const c = num(b.projected, 1, 100); if (c == null) return res.status(400).json({ error: 'The projected cost per token must be between 1 and 100 cents.' }); pairs.push(['cost_cents_per_token_projected', String(c)]); }
+    }
+    // v3.6.85: video prices, dollars a second without and with sound; the code's price is the default, so a price set
+    // back to it removes the setting
+    if (b.video && typeof b.video === 'object') {
+      let M = {}; try { M = require('./videoLab').MODELS; } catch (e) {}
+      for (const k of Object.keys(b.video)) {
+        const m = M[k]; if (!m) return res.status(400).json({ error: 'There is no video model ' + k + '.' });
+        const p = num(b.video[k] && b.video[k][0], 0, 5), ps = num(b.video[k] && b.video[k][1], 0, 5);
+        if (p == null || ps == null) return res.status(400).json({ error: 'Video prices for ' + (m.label || k) + ' must be 0 to 5 dollars a second.' });
+        const d0 = m._price0 !== undefined ? m._price0 : m.price, d1 = m._priceSound0 !== undefined ? m._priceSound0 : m.priceSound;
+        pairs.push(['unit_cost:video:' + k, (Math.abs(p - d0) < 1e-9 && Math.abs(ps - d1) < 1e-9) ? null : p + '/' + ps]);
+      }
     }
     if (b.audioMinute !== undefined) { const a = num(b.audioMinute, 0, 10); if (a == null) return res.status(400).json({ error: 'Transcription cost must be 0 to 10 dollars a minute.' }); pairs.push(['unit_cost:audio_minute', String(a)]); }
     if (b.images && typeof b.images === 'object') {
@@ -671,6 +698,7 @@ router.put('/cost-basis', requireAuth, requireAdmin, async function (req, res) {
       else await db.prepare('INSERT INTO app_settings (setting_key, value) VALUES (?, ?)').run(p[0], p[1]);
     }
     require('../services/aiCost').forget();
+    try { await require('../services/aiCost').loadSettings(true); } catch (e) {}   // v3.6.85: video prices take effect now
     res.json({ ok: true, saved: pairs.length });
   } catch (e) { console.error('[cost-basis] PUT', e && e.message); res.status(500).json({ error: 'Server error' }); }
 });
@@ -679,10 +707,9 @@ router.get('/generation-settings', requireAuth, requireAdmin, async function (re
     const db = await getDb();
     async function g(k){ const r = await db.prepare('SELECT value FROM app_settings WHERE setting_key = ?').get(k); return r ? r.value : null; }
     res.json({
-      storyWordsPerToken: _giToInt(await g('gen_story_words_per_token')),
-      storyFloor: _giToInt(await g('gen_story_floor')),
-      narrativePanelsPerToken: _giToInt(await g('gen_narrative_panels_per_token')),
-      narrativeFloor: _giToInt(await g('gen_narrative_floor')),
+      // v3.6.89 -- TD-1148 stage 3: words in and words out per token, each with a floor (Story and Narrative)
+      story: await require('./tokens').inOutRates('story'),
+      narrative: await require('./tokens').inOutRates('narrative'),
       transcriptCacheTtl: ((await g('transcript_cache_ttl')) === '1h') ? '1h' : '5m',
       // v3.0.356 -- what ONE layout-loop token is worth to us, in cents. The layout charge divides
       // the real Anthropic cost of each AI pass by this, so raising it makes Optimize cheaper for
@@ -706,10 +733,16 @@ router.put('/generation-settings', requireAuth, requireAdmin, async function (re
     const b = req.body || {};
     const ttl = (b.transcriptCacheTtl === '1h') ? '1h' : '5m';
     const pairs = [
-      ['gen_story_words_per_token', String(_giToInt(b.storyWordsPerToken))],
-      ['gen_story_floor', String(_giToInt(b.storyFloor))],
-      ['gen_narrative_panels_per_token', String(_giToInt(b.narrativePanelsPerToken))],
-      ['gen_narrative_floor', String(_giToInt(b.narrativeFloor))],
+      // v3.6.89: the old words-per-token, panels-per-token and floor settings are no longer read (gen_story_words_per_token
+      // only as the default for Story's words in); these replace them
+      ['gen_story_words_in_per_token', String(_giToInt(b.story && b.story.in))],
+      ['gen_story_floor_in', String(_giToInt(b.story && b.story.floorIn))],
+      ['gen_story_words_out_per_token', String(_giToInt(b.story && b.story.out))],
+      ['gen_story_floor_out', String(_giToInt(b.story && b.story.floorOut))],
+      ['gen_narrative_words_in_per_token', String(_giToInt(b.narrative && b.narrative.in))],
+      ['gen_narrative_floor_in', String(_giToInt(b.narrative && b.narrative.floorIn))],
+      ['gen_narrative_words_out_per_token', String(_giToInt(b.narrative && b.narrative.out))],
+      ['gen_narrative_floor_out', String(_giToInt(b.narrative && b.narrative.floorOut))],
       ['transcript_cache_ttl', ttl],
       // v3.0.356 -- floor of 1 cent, default 8. Never allow 0: the charge site divides by it.
       ['layout_loop_cost_cents', String((function (v) { var n = parseInt(v, 10); return (Number.isFinite(n) && n >= 1) ? n : 8; })(b.layoutLoopCostCents))],

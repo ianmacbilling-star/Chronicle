@@ -91,7 +91,7 @@ const MODELS = {
   kling3std: {
     label: 'Kling 3.0 Standard', group: 'keyframes', endpoint: 'fal-ai/kling-video/v3/standard/image-to-video',
     start: 'start_image_url', end: 'end_image_url', durations: ['3', '5', '8', '10', '12', '15'], defDuration: '5',
-    durationValue: function (d) { return String(d); }, price: 0.084, priceSound: 0.126,
+    durationValue: function (d) { return String(d); }, price: 0.094, priceSound: 0.14,   // v3.6.84: fal billed $0.14/s with sound (was 0.084/0.126); silent scaled the same
     extra: {}, promptRequired: false
   },
   veo31fast: {
@@ -126,7 +126,7 @@ const MODELS = {
   klingo3ref: {
     label: 'Kling O3 Standard', group: 'reference', endpoint: 'fal-ai/kling-video/o3/standard/reference-to-video', reference: true,
     durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
-    durationValue: function (d) { return String(d); }, price: 0.084, priceSound: 0.112,
+    durationValue: function (d) { return String(d); }, price: 0.105, priceSound: 0.14,   // v3.6.84: fal billed $0.14/s with sound (was 0.084/0.112); silent scaled the same
     extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4,
     maxPrompt: 2500   // v3.5.44: fal refuses a Kling O3 prompt over 2500 characters (Ian's first take failed)
   },
@@ -144,7 +144,7 @@ const MODELS = {
   klingo3proref: {
     label: 'Kling O3 Pro', group: 'reference', test: true, pair: 'klingo3pro', endpoint: 'fal-ai/kling-video/o3/pro/reference-to-video', reference: true,
     durations: ['3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
-    durationValue: function (d) { return String(d); }, price: 0.224, priceSound: 0.28,   // fal's playground; other listings say half
+    durationValue: function (d) { return String(d); }, price: 0.112, priceSound: 0.14,   // v3.6.84: fal billed $0.14/s with sound (was 0.224/0.28 from fal's playground)
     extra: { aspect_ratio: VIDEO_ASPECT }, promptRequired: true, maxRefs: 7, maxScene: 4, maxPrompt: 2500
   },
   viduq3: {
@@ -163,13 +163,13 @@ const MODELS = {
   h3max: {
     label: 'MiniMax H3 Max', group: 'keyframes', test: true, pair: 'h3maxref', endpoint: 'minimax/h3-max/image-to-video',
     start: 'image_url', end: 'end_image_url', durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
-    durationValue: function (d) { return Number(d); }, price: 0.08, priceSound: 0.08,
+    durationValue: function (d) { return Number(d); }, price: 0.056, priceSound: 0.056,   // v3.6.84: fal billed $0.056 per second we made at 768P (was 0.08)
     extra: { resolution: '768P', prompt_expansion_mode: 'disabled' }, promptRequired: true, audioField: null   // v3.5.91: our words as written, no MiniMax rewrite (was 'balanced')
   },
   h3maxref: {
     label: 'MiniMax H3 Max', group: 'reference', test: true, pair: 'h3max', endpoint: 'minimax/h3-max/reference-to-video', reference: true,
     durations: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'], defDuration: '5',
-    durationValue: function (d) { return Number(d); }, price: 0.10, priceSound: 0.10,   // $0.08 at 768p, plus a little for pictures past the fourth
+    durationValue: function (d) { return Number(d); }, price: 0.086, priceSound: 0.086,   // v3.6.84: fal billed $0.086 per second we made at 768P (was 0.10)
     extra: { resolution: '768P', aspect_ratio: VIDEO_ASPECT, prompt_expansion_mode: 'disabled' }, promptRequired: true, maxRefs: 9, maxScene: 5,   // v3.5.91: no rewrite (was 'balanced')
     audioField: null, refsField: 'reference_image_urls', tag: function (n) { return 'Image ' + n; }
   },
@@ -830,6 +830,7 @@ function vlSaveSummary(b) {
 
 // ---- the list, new, save ---------------------------------------------------------------------
 router.get('/models', requireAuth, requireVideo, async function (req, res) {
+  try { await require('../services/aiCost').loadSettings(); } catch (e) {}   // v3.6.85: the Financial tab's video prices
   const out = Object.keys(MODELS).map(function (k) {
     const m = MODELS[k];
     if (m.test && !req.vlAdmin) return null;   // v3.5.82: the test models are for admins
@@ -1565,6 +1566,7 @@ async function makeShot(db, req, ep0, shot, shotNo) {
   const hook = webhookUrl();
   if (!hook) return { status: 500, error: 'PUBLIC_BASE_URL is not set, so fal cannot report back.' };
   const sound = !!ep.sound;
+  try { await require('../services/aiCost').loadSettings(); } catch (e) {}   // v3.6.85: the Financial tab's video prices
   const cost = Math.round(plan.moves.reduce(function (t, x) { return t + estCost(m, x.duration, sound); }, 0) * 10000) / 10000;
   const tokens = await takeTokens(db, cost);   // v3.5.46
   const tf = await tokensFree(db, req.session.userId);
@@ -1638,6 +1640,7 @@ router.post('/episodes/:id/make', requireAuth, requireVideo, async function (req
     // Check every shot first, so a missing word in shot 5 does not leave shots 1 to 4 made and the rest not.
     const full = {};   // v3.5.15: shots that already have MAX_TAKES takes are skipped, and named
     let need = 0;
+    try { await require('../services/aiCost').loadSettings(); } catch (e) {}   // v3.6.85: the Financial tab's video prices
     for (let i = 0; i < shots.length; i++) {
       if (shots[i].chosen_status === 'done' || shots[i].chosen_status === 'making') continue;
       if (await takesFull(db, shots[i].id, maxTakes(req))) { full[i] = true; continue; }
@@ -2681,6 +2684,13 @@ async function shotListPrices(db) {
   }
   // v3.6.76 -- TD-1148: the one cost basis (Financial tab) wins when set; else shotlist_cents_per_token as before.
   try { out.shotlist_cents_per_token = await require('../services/aiCost').centsPerToken('video'); } catch (e) {}
+  // v3.6.92 (Ian, 2026-11-17: "point those at the financial tab as well"): the Claude rates are the Financial tab's, for
+  // the model the planner runs (TEXT_MODEL); shotlist_price_in/out_per_mtok are only the fallback now.
+  try {
+    const ac = require('../services/aiCost');
+    const r = (await ac.loadSettings()).claude[ac.family(require('../config/models').TEXT_MODEL)];
+    if (r && Number.isFinite(r[0]) && Number.isFinite(r[1])) { out.shotlist_price_in_per_mtok = r[0]; out.shotlist_price_out_per_mtok = r[1]; }
+  } catch (e) {}
   return out;
 }
 function usdFor(prices, inTok, outTok) {

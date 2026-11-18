@@ -725,7 +725,7 @@
             <div id="layoutai-header" style="font-size:12px;color:var(--on-panel);background:rgba(var(--accent-rgb),0.06);border-left:2px solid rgba(var(--accent-rgb),0.4);border-radius:3px;padding:8px 10px;margin-bottom:10px;line-height:1.5;"></div>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
               <button id="layoutai-run-btn" class="has-token" onclick="runLayoutAiDryRun()" style="background:var(--accent-bright);color:var(--panel);border:none;border-radius:var(--radius);padding:6px 16px;font-family:var(--font-display);font-weight:600;letter-spacing:0.05em;cursor:pointer;flex:0 0 auto;"
-                      title="Hands the whole book to the AI art director to lay out again. This SPENDS TOKENS and takes several minutes -- both grow with the size of your book. The estimate beside this button is the most it can cost.">Optimize layout</button>
+                      title="Hands the whole book to the AI art director to lay out again. This SPENDS TOKENS and takes several minutes -- both grow with the size of your book.">Optimize layout</button>
               <button id="layoutai-cancel-btn" onclick="finalizeCancelOptimize()" style="display:none;background:none;border:1px solid rgba(var(--error-soft-line-rgb),0.55);color:var(--error-light);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Cancel</button>
               <!-- v3.0.382 -- shown only when an Optimize run COMPLETES, in the slot the Cancel
                    button vacates. The publish source is already armed to the optimized book at
@@ -743,7 +743,7 @@
               <!-- v3.0.981 -- TD-901. Save to Bookshelf: same visibility as Download PDF (finalizeSyncPublishBtn). -->
               <button id="layoutai-shelf-btn" onclick="finalizeSaveToShelf()" title="Keep a copy of this optimized book, layout and all, on your Bookshelf" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--accent-bright);border-radius:var(--radius);padding:6px 14px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Save to Bookshelf</button>
               <button id="layoutai-load-last" onclick="finalizeLoadLastOptimized(true)" style="display:none;background:none;border:1px solid rgba(var(--accent-rgb),0.45);color:var(--accent-bright);border-radius:var(--radius);padding:6px 12px;font-family:var(--font-display);font-size:12px;letter-spacing:0.03em;cursor:pointer;flex:0 0 auto;">Load Last Optimized File</button>
-              <span id="layoutai-est-note" style="font-size:11px;color:rgba(var(--on-panel-rgb),0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>
+              <span id="layoutai-est-note" style="display:none;font-size:11px;color:rgba(var(--on-panel-rgb),0.55);font-style:italic;flex:0 0 auto;align-self:center;"><span class="est-spin" aria-hidden="true"></span>Estimating cost&hellip;</span>
               <span id="layoutai-scan-label" style="display:none;font-size:13px;color:rgba(var(--on-panel-rgb),0.7);font-style:italic;flex:0 0 auto;">Scanning book&hellip;</span>
               <div id="layoutai-delta" style="display:none;font-size:13px;color:var(--soft-line-text);line-height:1.5;flex:1 1 auto;min-width:0;"></div>
             </div>
@@ -1263,7 +1263,7 @@
         <div id="sc-content" style="display:none;">
           <div class="sc-style-bar">
             <!-- v3.4.49 -- the explanation line was removed (Ian); the buttons sit at the right (style.css .sc-style-bar). -->
-            <button class="btn btn-sm" id="sc-restyle-all-btn" onclick="restyleAllReferences()" title="Story images are often better when the character reference images match the version's art style.">Regenerate in Art Style</button>
+            <button class="btn btn-sm" id="sc-restyle-all-btn" onclick="restyleAllReferences()" title="Story images are often better when the character reference images match the version's art style. Costs 1 token for each character picture.">Regenerate in Art Style</button>
             <!-- v3.4.45 -- TD-1040. Add a campaign character Generate Story missed; shown by renderSessionCharacters to those who can act. -->
             <button class="btn btn-sm" id="sc-add-char-btn" onclick="scAddCharacter()" style="display:none;border-radius:999px;" title="Bring a campaign character into this session, with their latest look in this version.">Add A Character</button>
           </div>
@@ -1315,7 +1315,7 @@
               <span style="flex:1 1 auto;"></span>
               <button class="btn btn-primary btn-sm dm-only" id="sb-generate-narr-btn" data-idle="Generate Narrative" onclick="generateNarrativeOnly()" title="We work up the narrative for the whole story from your outline and style selection. Your pictures stay as they are.">Generate Narrative</button>
               <button class="btn btn-xs" id="sb-narr-cancel-btn" onclick="cancelNarrOnly()" style="display:none;">Cancel</button>
-              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()" title="We work up the illustrations for every panel. Pictures you've locked are kept; the rest are regenerated.">Generate Images</button>
+              <button class="btn btn-primary btn-sm dm-only" id="generate-all-btn" onclick="generateAllImages()" title="We work up the illustrations for every panel. Pictures you've locked are kept; the rest are regenerated. Costs 1 token per picture.">Generate Images</button>
               <button class="btn btn-xs" id="genall-cancel-btn" onclick="cancelGenAll()" style="display:none;">Cancel</button>
             </div>
             <div id="gen-bars-row" style="display:flex;gap:14px;margin-top:10px;align-items:flex-start;">
@@ -2064,16 +2064,25 @@
         <!-- v3.0.356: existing story/narrative charging, boxed as its own sub-section -->
         <div style="border:1px solid rgba(var(--amber-note-line-rgb),0.35);border-radius:6px;padding:12px 14px;margin-bottom:14px;">
         <div style="color:var(--accent-bright);font-size:13px;font-weight:600;margin-bottom:6px;">Story &amp; narrative generation</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Charge tokens for story/narrative generation, scaled by size. Tokens = max(floor, size &divide; rate) rounded down. Set a rate to 0 to charge only the floor; set both floor and rate to 0 to charge nothing.</div>
+                <!-- v3.6.89 -- TD-1148 stage 3 (Ian, 2026-11-17): words in and words out, each with its floor; rounded once -->
+        <div class="settings-section-desc" style="margin-bottom:10px;">Charged on words in (the customer's own words: Story box, instructions, lore) and words out (what Claude writes). Tokens = max(floor in, words in &divide; rate in) + max(floor out, words out &divide; rate out), the total rounded to the nearest token. Before a run the balance is checked using the Already Written recommended words as the words out; the exact amount is charged when the words come back. A rate of 0 charges only its floor.</div>
         <div style="display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;max-width:460px;">
-          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; words per token</label>
-          <input type="number" min="0" step="1" id="gen-story-wpt" style="width:110px;" />
-          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; floor (min tokens)</label>
-          <input type="number" min="0" step="1" id="gen-story-floor" style="width:110px;" />
-          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; panels per token</label>
-          <input type="number" min="0" step="1" id="gen-narr-ppt" style="width:110px;" />
-          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; floor (min tokens)</label>
-          <input type="number" min="0" step="1" id="gen-narr-floor" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; words in per token</label>
+          <input type="number" min="0" step="1" id="gen-story-in" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; floor in (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-story-floor-in" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; words out per token</label>
+          <input type="number" min="0" step="1" id="gen-story-out" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Story &mdash; floor out (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-story-floor-out" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; words in per token</label>
+          <input type="number" min="0" step="1" id="gen-narr-in" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; floor in (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-narr-floor-in" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; words out per token</label>
+          <input type="number" min="0" step="1" id="gen-narr-out" style="width:110px;" />
+          <label style="color:var(--accent-bright);font-size:13px;">Generate Narrative &mdash; floor out (min tokens)</label>
+          <input type="number" min="0" step="1" id="gen-narr-floor-out" style="width:110px;" />
           <label style="color:var(--accent-bright);font-size:13px;">Transcript cache duration</label>
           <select id="transcript-cache-ttl" style="width:110px;">
             <option value="5m">5 minutes</option>
@@ -2227,13 +2236,24 @@
              at that basis, and the last 30 days of real costs. Filled by loadCostBasis() in app.js. -->
         <div class="settings-section">
           <div class="settings-section-title">Our cost per token</div>
-          <div class="settings-section-desc">How many cents of our provider cost (fal, Anthropic) one token covers. Video takes, video planning, Optimize, pictures and transcription follow it (v3.6.80); story, narrative and writing join in the next stage. Empty: video and Optimize keep their old settings (8).</div>
+          <div class="settings-section-desc">How many cents of our provider cost (fal, Anthropic) one token covers. What 1 token costs us in cents. This is our baseline for all the cost math to follow.</div>
+          <!-- v3.6.85 (Ian, 2026-11-17): Live and Projected. Projected is shown beside the live numbers below and never
+               charged; Save Live warns that it takes effect at once. -->
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+            <span style="font-size:13px;width:70px;font-weight:600;">Live</span>
             <input class="form-input" id="cb-cents" type="number" min="1" max="100" step="0.5" placeholder="8" style="width:110px;" />
             <span style="font-size:13px;">cents a token</span>
-            <button class="btn btn-primary" onclick="saveCostBasis()">Save</button>
+            <button class="btn btn-primary" onclick="saveCostBasis()">Save Live</button>
             <span id="cb-msg" style="font-size:13px;"></span>
           </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+            <span style="font-size:13px;width:70px;font-weight:600;">Projected</span>
+            <input class="form-input" id="cb-proj" type="number" min="1" max="100" step="0.5" placeholder="not set" style="width:110px;" />
+            <span style="font-size:13px;">cents a token</span>
+            <button class="btn btn-secondary" onclick="saveProjected()">Projected</button>
+            <span id="cb-msg3" style="font-size:13px;"></span>
+          </div>
+          <div style="font-size:12px;opacity:0.8;margin-top:4px;">Projected only adds a column to the tables below so you can compare; nothing is charged at it. Empty it to hide the column.</div>
         </div>
         <div class="settings-section">
           <div class="settings-section-title">Our provider costs</div>
@@ -3023,7 +3043,7 @@
          result it produces, rather than in the footer beside Done. Ian marked the move on a
          screenshot. Done stays in the footer, where a close button belongs. -->
     <div class="tb-gen-row">
-      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()">Generate (1 token)</button>
+      <button class="btn btn-primary has-token" id="title-build-go" onclick="titleBuildGenerate()" title="Draw the title as artwork. 1 token.">Generate</button>
     </div>
     <div class="tb-result" id="title-build-result">
       <!-- v3.0.629 -- Ian: "make it so when you open the Title builder the Replace button is there
@@ -3109,7 +3129,7 @@
       <label class="form-label">Image</label>
       <div id="asset-modal-image-body"></div>
       <input type="file" id="asset-image" accept="image/*,.heic,.heif" style="display:none;" onchange="handleAssetFileSelect(event)" />
-      <div class="form-hint" style="margin-top:4px;">Generate an image from the description, or upload your own. Generating costs 1 token.</div>
+      <div class="form-hint" style="margin-top:4px;">Generate an image from the description, or upload your own.</div>
     </div>
     <div class="modal-footer">
       <button class="btn" id="asset-done-btn" onclick="assetDone()">Done</button>
@@ -3780,7 +3800,7 @@
         </div>
         </div>
       </div>
-      <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;">Analyze style <span class="btn-cost">(1 token)</span></button>
+      <button class="btn btn-primary" id="cstyle-analyze-btn" onclick="analyzeCustomStyle()" style="width:100%;" title="Studies your sample pictures and writes the style description. 1 token.">Analyze style</button>
     <div id="cs-bar-analyze"></div>
     <div id="cs-disagree" class="alert alert-warning hidden" style="margin:12px 0 0;"></div>
     <div id="cs-convert-wrap" class="cs-section hidden">
@@ -3907,7 +3927,7 @@
     </div>
     <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-sm" onclick="closeRetouch()">Cancel</button>
-      <button class="btn btn-sm btn-primary" id="retouch-go-btn" onclick="submitRetouch()">Retouch image</button>
+      <button class="btn btn-sm btn-primary" id="retouch-go-btn" onclick="submitRetouch()" title="Costs 1 token.">Retouch image</button>
     </div>
   </div>
 </div>
