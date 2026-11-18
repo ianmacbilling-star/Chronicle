@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.07",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3707-memories-from-to",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 2 shows From this, To this.",
+        "detail": "The box beside Type, Paste or Upload plays the old typed page under From this, then fades to the same story in the Story box under To this (from-to.mp4).",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.06",
     "staged_on": "2026-11-18",
     "entries": [
