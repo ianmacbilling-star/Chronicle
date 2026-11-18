@@ -33172,7 +33172,7 @@ function finalizeNavHighlight(navId, scrollId) {
   for (var j = 0; j < nav.children.length; j++) {
     var el = nav.children[j], on = (el.getAttribute('data-page') == best);
     el.style.color = on ? 'var(--accent-bright)' : 'rgba(var(--on-panel-rgb),0.6)';
-    el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent';
+    el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; if (el.classList) el.classList.toggle('nav-on', !!on);
     // v3.0.609 -- THE SPINE FOLLOWS AGAIN, AND THIS REVERSES v3.0.606 ON PURPOSE.
     // Ian, 2026-08-10: "when the preview panel scrolls past the page number on the right, the page
     // number panel should scroll too to always keep the page number you are on visible."
@@ -33513,7 +33513,7 @@ function finalizeAfterGoToPage(n) {
     if (canvas) after.scrollTop = canvas.offsetTop - (after.firstChild ? after.firstChild.offsetTop : 0) - 2;
   }
   var nav = document.getElementById('finalize-after-nav');
-  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--accent-bright)' : 'rgba(var(--on-panel-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; } }
+  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--accent-bright)' : 'rgba(var(--on-panel-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; if (el.classList) el.classList.toggle('nav-on', !!on); } }
 }
 // After-pane zoom: scales the rendered PDF canvases. 'Fit' (default) lets them fill the pane width.
 // Persisted across refreshes so the user's choice sticks.
@@ -34269,7 +34269,7 @@ function finalizeGoToPage(n) {
     });
   }
   var nav = document.getElementById('finalize-page-nav');
-  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--accent-bright)' : 'rgba(var(--on-panel-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; } }
+  if (nav) { for (var i = 0; i < nav.children.length; i++) { var el = nav.children[i]; var on = (el.getAttribute('data-page') == n); el.style.color = on ? 'var(--accent-bright)' : 'rgba(var(--on-panel-rgb),0.6)'; el.style.background = on ? 'rgba(var(--accent-rgb),0.15)' : 'transparent'; if (el.classList) el.classList.toggle('nav-on', !!on); } }
 }
 var LAYOUT_DISPLAY = {
   'classic': 'Picture Book', 'paired': 'Picture Book', 'picture book': 'Picture Book',

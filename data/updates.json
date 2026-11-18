@@ -1,5 +1,61 @@
 [
   {
+    "version": "3.7.02",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3702-story-optimize-colours",
+        "kind": "fix",
+        "public": true,
+        "summary": "Story: the Optimize and Order & Publish tabs are easier to read.",
+        "detail": "Page breaks show between book pages, the current page and the Edit buttons stand out in the page strip, and headings, buttons and links in both tabs are darker. Campaignia is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.01",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3701-book-pen-names",
+        "kind": "fix",
+        "public": true,
+        "summary": "Books now show pen names, not account names.",
+        "detail": "The Story Master line, the copyright line and the players beside their characters use each person's pen name in the preview, the PDF and the printed book, as the Library copy already did. Someone with no pen name still shows as before.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.00",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3700-memories-writing-coach",
+        "kind": "feature",
+        "public": false,
+        "summary": "The /memories writing coach box is now a clip of the coach at work.",
+        "detail": "writing-coach.mp4 (with its poster) plays muted and looping beside Want to keep the story in your own words.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
+    "version": "3.6.99",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3699-memories-two-characters",
+        "kind": "feature",
+        "public": false,
+        "summary": "The /memories character builder clip now shows two characters back to back.",
+        "detail": "The carpenter and Bizz play one after the other in one looping clip (characters.mp4), beside Nail the character design.",
+        "td": ["TD-1158"]
+      }
+    ]
+  },
+  {
     "version": "3.6.98",
     "staged_on": "2026-11-17",
     "entries": [

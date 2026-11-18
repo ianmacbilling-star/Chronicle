@@ -6003,7 +6003,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   // Public Library render: each real name is replaced by that person's pen
   // name (members + Story Master); a missing pen name renders blank. Off for
   // every private/preview/print render -- byte-identical when fPublic is false.
-  function _pubName(real, pen) { return fPublic ? (pen || '') : (real || ''); }
+  function _pubName(real, pen) { return fPublic ? (pen || '') : (pen || real || ''); }   // v3.7.01: pen name first in every book (Ian), the typed name only when there is none
   var fCover  = (pageOpts && pageOpts.noCover) ? false : (co ? !!co.cover : true);
   var fCast   = co ? !!co.cast      : true;
   var fCastNpc = co ? !!co.castnpc  : false;   // v3.0.611 -- NPCs on the Company page; off unless asked
@@ -6343,7 +6343,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
   if (_castFields === 'list' && _castWords.cap) castBlockHTML += '<div class="cast-roster cast-roster-own">' + _fmEsc(_castWords.cap) + '</div>';
 
   // Get DM name from campaign
-  const dmName = campaign.owner_name || campaign.dm_name || 'The Story Master';
+  const dmName = campaign.owner_pen_name || campaign.owner_name || campaign.dm_name || 'The Story Master';   // v3.7.01: the Story Master by pen name (Ian)
 
   // Build session content. When paginated, only one session is rendered,
   // but it keeps its real session number, and the chapter seam is suppressed
@@ -6463,7 +6463,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
     .filter(function(n){ if (!n) return false; var k = n.toLowerCase(); if (_pseen[k]) return false; _pseen[k] = 1; return true; })
     .join(', ');
   var copyYear = _dts.length ? new Date(Math.max.apply(null, _dts)).getFullYear() : new Date().getFullYear();
-  var copyHolder = fPublic ? (campaign.owner_pen_name || '') : (campaign.owner_name || campaign.dm_name || dmName);
+  var copyHolder = fPublic ? (campaign.owner_pen_name || '') : (campaign.owner_pen_name || campaign.owner_name || campaign.dm_name || dmName);   // v3.7.01
   // v3.0.748 -- TD-547. The byline drops the date range. dateRange itself STAYS: formatDateRange
   // is exported and campaigns.js seeds the book subtitle from it, so removing the variable would
   // break a field on a different screen. Only this line stops printing it.
@@ -7066,7 +7066,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   const db = await getDb();
 
   const campaign = await db.prepare(
-    'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
+    'SELECT c.*, cm.role AS my_role, u.pen_name AS owner_pen_name, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
   if (campaign && !campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
 
@@ -7081,7 +7081,7 @@ router.get('/novel/:campaignId', requireAuth, async function(req, res) {
   }
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
-  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
+  const characters = await db.prepare('SELECT ch.*, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?').all(campaign.id);
 
   // Sort sessions ascending (oldest first) using a normalized YYYY-MM-DD key.
   // session_date may arrive as a string or a Date depending on the driver;
@@ -7341,7 +7341,7 @@ async function printInteriorHandler(req, res) {
   const db = await getDb();
 
   const campaign = await db.prepare(
-    'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
+    'SELECT c.*, cm.role AS my_role, u.pen_name AS owner_pen_name, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(req.params.campaignId, req.session.userId);
   if (campaign && !campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
 
@@ -7354,7 +7354,7 @@ async function printInteriorHandler(req, res) {
   }
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
-  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
+  const characters = await db.prepare('SELECT ch.*, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?').all(campaign.id);
 
   function sessionDateKey(s) {
     if (!s.session_date) return '';
@@ -8042,7 +8042,7 @@ async function printCoverHandler(req, res) {
   try {
     const db = await getDb();
     const campaign = await db.prepare(
-      'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
+      'SELECT c.*, cm.role AS my_role, u.pen_name AS owner_pen_name, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
     ).get(req.params.campaignId, req.session.userId);
     if (campaign && !campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
     if (!campaign) return res.status(403).json({ error: 'Access denied' });
@@ -9122,13 +9122,13 @@ router.post('/story/:id/meta', requireAuth, async function(req, res) {
 async function assembleNovelHtml(req, campaignId, overrides, extraCo, savedMeta) {   // v3.2.10 -- savedMeta: TD-988
   const db = await getDb();
   const campaign = await db.prepare(
-    'SELECT c.*, cm.role AS my_role, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
+    'SELECT c.*, cm.role AS my_role, u.pen_name AS owner_pen_name, u.name AS owner_name FROM campaigns c JOIN campaign_members cm ON cm.campaign_id = c.id JOIN users u ON u.id = c.user_id WHERE c.id = ? AND cm.user_id = ?'
   ).get(campaignId, req.session.userId);
   if (!campaign) { const e = new Error('Access denied'); e.status = 403; throw e; }
   if (!campaign.cover_image_url && campaign.campaign_image_url) campaign.cover_image_url = campaign.campaign_image_url;
 
   const sessions = await db.prepare('SELECT * FROM sessions WHERE campaign_id = ? ORDER BY sort_order ASC, session_date ASC, created_at ASC, id ASC').all(campaign.id);   // v3.1.37 -- same-date sessions in the order they were made, as the Publish list shows them
-  const characters = await db.prepare('SELECT * FROM characters WHERE campaign_id = ?').all(campaign.id);
+  const characters = await db.prepare('SELECT ch.*, u.pen_name AS player_pen_name FROM characters ch LEFT JOIN users u ON u.id = ch.owner_user_id WHERE ch.campaign_id = ?').all(campaign.id);
   function sessionDateKey(s) {
     if (!s.session_date) return '';
     if (typeof s.session_date === 'string') return s.session_date.split('T')[0];

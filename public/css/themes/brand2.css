@@ -255,6 +255,15 @@ html[data-brand="brand2"] .sess-tab:hover{color:#111111;}
 html[data-brand="brand2"] .sess-tab.active{color:#111111;border-bottom-color:#111111;}
 html[data-brand="brand2"] .narrative-block-header{color:#55564f;}
 html[data-brand="brand2"] .narr-block-style{color:#333333;}
+/* v3.7.02 (Ian, 2026-11-18): Optimize and Order & Publish on Story. The bright gold is a mid grey here, so inside these two tabs it is dark; the book pages sit on sage with a shadow so the breaks show; the page strips are sage with the current page marked (nav-on, set by app.js) and the Edit buttons a black pill. !important beats the inline styles. */
+html[data-brand="brand2"] #novel-tab-finalize, html[data-brand="brand2"] #novel-tab-order{--accent-bright:#4a4b45;--accent-bright-rgb:74,75,69;--link-blue:#1f5c99;}
+html[data-brand="brand2"] #novel-tab-finalize .btn-primary, html[data-brand="brand2"] #novel-tab-order .btn-primary{color:#ffffff;}
+html[data-brand="brand2"] #finalize-before-scroll, html[data-brand="brand2"] #finalize-after-scroll{background:#e5e6e1 !important;}
+html[data-brand="brand2"] #finalize-before-scroll canvas, html[data-brand="brand2"] #finalize-after-scroll canvas{box-shadow:0 1px 3px rgba(0,0,0,0.25);}
+html[data-brand="brand2"] #finalize-page-nav, html[data-brand="brand2"] #finalize-after-nav{background:#e5e6e1 !important;border-color:#bec0b9 !important;}
+html[data-brand="brand2"] #finalize-page-nav > div[data-page], html[data-brand="brand2"] #finalize-after-nav > div[data-page]{color:#55564f !important;}
+html[data-brand="brand2"] #finalize-page-nav > div.nav-on, html[data-brand="brand2"] #finalize-after-nav > div.nav-on{color:#111111 !important;background:#bec0b9 !important;font-weight:700;}
+html[data-brand="brand2"] #finalize-page-nav .fix-btn, html[data-brand="brand2"] #finalize-after-nav .fix-btn{background:#111111 !important;border-color:#111111 !important;color:#ffffff !important;}
 
 /* Brand 2's page (v3.6.65, TD-1158): plain, no wash, in the /memories font. */
 body{background-image:none;font-family:'Manrope','Helvetica Neue',Arial,sans-serif;}
