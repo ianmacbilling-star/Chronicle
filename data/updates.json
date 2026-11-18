@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.05",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3705-memories-real-covers",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the example stories show their real book covers, title and all.",
+        "detail": "Our Family Stories and The Dojo of the Dragon Spirits use the cover page the Library shows (their old picture if it cannot load); the example boxes are book shaped (2:3) and show the whole cover.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.04",
     "staged_on": "2026-11-18",
     "entries": [
