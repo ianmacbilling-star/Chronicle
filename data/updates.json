@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.10",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3710-memories-clip-panels",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the feature clips are bigger, each panel shaped like its clip.",
+        "detail": "Full column width, never taller than the screen; the editing a scene clip is Ian's trimmed version.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.09",
     "staged_on": "2026-11-18",
     "entries": [
