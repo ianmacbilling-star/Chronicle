@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.06",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3706-memories-upload-step",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 2 is Type, Paste or Upload Your Story.",
+        "detail": "It says old, hard-to-read documents and audio of interviews or narration work too, and shows an old typed page (old-document.jpg).",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.05",
     "staged_on": "2026-11-18",
     "entries": [
