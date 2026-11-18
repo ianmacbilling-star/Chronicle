@@ -127,7 +127,7 @@
     .steps .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
     .steps .pic.has-img img{width:100%;height:100%;object-fit:contain;display:block;}
     /* v3.7.15 (Ian, 2026-11-18): step 1 fades between the real photograph and the AI scene of the same man */
-    .steps .pic.has-img.xfade{position:relative;}
+    .step .pic.has-img.xfade{position:relative;}   /* v3.7.16: the phone copy only; beside the steps the box stays full height */
     .steps .pic.has-img.xfade img{position:absolute;inset:0;}
     .steps .pic.has-img.xfade img+img{animation:xfade 8s ease-in-out infinite;}
     @keyframes xfade{0%,42%{opacity:0;}50%,92%{opacity:1;}100%{opacity:0;}}
