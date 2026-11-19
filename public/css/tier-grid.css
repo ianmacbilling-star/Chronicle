@@ -300,3 +300,30 @@
   .tg-val { font-size: 15px; }
   .tg-open { font-size: 17px; padding: 9px 20px; }
 }
+
+/* v3.7.24 -- THE STORY LOOK (Ian, 2026-11-19: the tier grid matches the brand's style sheet). Only under the Story
+   brand (html[data-brand="brand2"]: the app and the Library on Story, and /memories, which sets it on its own <html>);
+   Campaignia's grid is untouched. The /memories look: Manrope, a white rounded window, small capital title, an outline
+   pill to close, sage label column. The tier colours and coins stay. */
+html[data-brand="brand2"] .tg-root { --tg-display: 'Manrope', 'Helvetica Neue', Arial, sans-serif; --tg-label: 'Manrope', 'Helvetica Neue', Arial, sans-serif; --tg-body: 'Manrope', 'Helvetica Neue', Arial, sans-serif; }
+html[data-brand="brand2"] .tg-open { background: #111111; color: #ffffff; border: 1.5px solid #111111; border-radius: 999px; box-shadow: none; font-size: 15px; font-weight: 600; letter-spacing: 0.04em; padding: 12px 26px; }
+html[data-brand="brand2"] .tg-open:hover, html[data-brand="brand2"] .tg-open:active { transform: translateY(-2px); box-shadow: none; }
+html[data-brand="brand2"] .tg-overlay { background: rgba(17,17,17,0.6); color: #333333; }
+html[data-brand="brand2"] .tg-panel { background: #ffffff; border: 0; border-radius: 18px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+html[data-brand="brand2"] .tg-head { background: #ffffff; border-bottom: 1px solid #d6d7d0; padding: 16px 22px; }
+html[data-brand="brand2"] .tg-title { color: #111111; font-size: 15px; font-weight: 700; letter-spacing: 0.14em; }
+html[data-brand="brand2"] .tg-close { background: #ffffff; color: #111111; border: 1.5px solid #111111; border-radius: 999px; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; padding: 8px 18px; }
+html[data-brand="brand2"] .tg-close:hover { background: #111111; color: #ffffff; }
+html[data-brand="brand2"] .tg-table th, html[data-brand="brand2"] .tg-table td { border-bottom-color: #e5e6e1; }
+html[data-brand="brand2"] .tg-table tbody tr:hover { background: #fafaf8; }
+html[data-brand="brand2"] .tg-table th.tg-feat, html[data-brand="brand2"] .tg-table td.tg-feat { background: #f4f4f0; border-right-color: #d6d7d0; color: #55564f; font-weight: 600; letter-spacing: 0.06em; }
+html[data-brand="brand2"] .tg-feat-sub { font-weight: 400; color: #6b6b66; }
+html[data-brand="brand2"] .tg-table thead th { background: #f4f4f0; border-bottom: 1px solid #d6d7d0; }
+html[data-brand="brand2"] .tg-tier-name { font-size: 18px; font-weight: 700; letter-spacing: 0.02em; }
+html[data-brand="brand2"] .tg-val { color: #111111; }
+html[data-brand="brand2"] .tg-sub { color: #6b6b66; }
+html[data-brand="brand2"] .tg-more .tg-foot::before { color: #6b6b66; background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.94) 62%); }
+html[data-brand="brand2"] .tg-foot { background: #f4f4f0; border-top: 1px solid #d6d7d0; }
+html[data-brand="brand2"] .tg-note { color: #55564f; }
+html[data-brand="brand2"] .tg-note-coin { color: #333333; }
+html[data-brand="brand2"] .tg-note b { color: #111111; font-weight: 700; }

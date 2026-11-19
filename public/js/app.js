@@ -18571,6 +18571,62 @@ function saveImagePrompt() {
     });
 }
 
+// v3.7.26 -- LINE UP THE WORDS ON THE STORYBOARD (Ian, 2026-11-19: "line up the Narrative panels... so their tops line
+// up. I've had some people say it's confusing to read."). A text-only space (a Bridge, or the Opening or Closing with no
+// picture) sits at the top of its spot in the grid, beside pictures whose words start under the picture and title, so
+// the eye did not know which to read next. Each text-only space in a row with pictures now drops down so its header
+// lines up with the highest narrative header under those pictures; the space above it stays empty (Ian: "leave empty
+// for now"). A row with no pictures, and the one-column phone layout, are left alone. It is worked out again whenever a
+// card changes size (a picture loads, a title wraps, the ... options open), the window changes width, or the board
+// is drawn again. Only margins on the text-only spaces change, and those are not watched, so it cannot loop.
+var _sbAlignRaf = 0, _sbAlignRO = null, _sbAlignMO = null;
+function sbAlignRows() {
+  _sbAlignRaf = 0;
+  var grid = document.querySelector('#moments-grid > .panels-grid');
+  if (!grid) return;
+  var cells = Array.prototype.filter.call(grid.children, function (c) { return c.nodeType === 1; });
+  var cols = String(getComputedStyle(grid).gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean).length || 1;
+  for (var r = 0; r < cells.length; r += cols) {
+    var row = cells.slice(r, r + cols), drop = 0, hasPic = false;
+    if (cols > 1) row.forEach(function (c) {
+      if (!c.classList.contains('storyboard-panel')) return;
+      var inner = c.querySelector('.narrative-panel');
+      if (!inner || !inner.offsetParent) return;
+      hasPic = true;
+      drop = Math.max(drop, inner.getBoundingClientRect().top - c.getBoundingClientRect().top);
+    });
+    row.forEach(function (c) {
+      if (!c.classList.contains('narrative-panel')) return;
+      var want = (hasPic && drop > 0.5) ? (Math.round(drop * 100) / 100) + 'px' : '';
+      if (c.style.marginTop !== want) c.style.marginTop = want;
+    });
+  }
+}
+function sbAlignSoon() { if (!_sbAlignRaf) _sbAlignRaf = requestAnimationFrame(sbAlignRows); }
+function sbAlignWatch() {
+  var host = document.getElementById('moments-grid');
+  if (!host) return;
+  if (typeof ResizeObserver === 'function') {
+    if (!_sbAlignRO) _sbAlignRO = new ResizeObserver(sbAlignSoon);
+    _sbAlignRO.disconnect();
+    var grid = host.querySelector('.panels-grid');
+    if (grid) {
+      _sbAlignRO.observe(grid);
+      Array.prototype.forEach.call(grid.querySelectorAll(':scope > .storyboard-panel'), function (c) { _sbAlignRO.observe(c); });
+    }
+  }
+  if (!_sbAlignMO && typeof MutationObserver === 'function') {
+    // a card swapped or added without a full redraw: watch it too
+    _sbAlignMO = new MutationObserver(function (list) {
+      for (var i = 0; i < list.length; i++) if (list[i].type === 'childList') { sbAlignWatchSoon(); return; }
+    });
+    _sbAlignMO.observe(host, { childList: true, subtree: true });
+  }
+  sbAlignSoon();
+}
+var _sbWatchRaf = 0;
+function sbAlignWatchSoon() { if (!_sbWatchRaf) _sbWatchRaf = requestAnimationFrame(function () { _sbWatchRaf = 0; sbAlignWatch(); }); }
+
 function renderStoryboard() {
   document.getElementById('sb-empty').style.display = 'none';
   document.getElementById('sb-content').style.display = 'block';
@@ -18799,6 +18855,7 @@ function renderStoryboard() {
 
   document.getElementById('moments-grid').innerHTML = '<div class="panels-grid">' + cells.join('') + '</div>';
   try { npPaintCap(); } catch (e) {}   // v3.5.27 -- TD-1117: New Panel off at the plan's limit
+  try { sbAlignWatch(); } catch (e) {}   // v3.7.26 -- line up the words beside the pictures
   try { _panelBusyRepaint(); _panelJobsSync(); } catch (e) {}   // v3.2.91 -- TD-1025: the redraw just wiped every spinner; put back the ones still running
 }
 
@@ -39966,7 +40023,7 @@ function openCompareTiersGrid(btn) {
   if (msg) msg.textContent = '';
   if (!document.getElementById('tier-grid-css')) {
     var l = document.createElement('link');
-    l.id = 'tier-grid-css'; l.rel = 'stylesheet'; l.href = '/css/tier-grid.css?v=3.0.896';
+    l.id = 'tier-grid-css'; l.rel = 'stylesheet'; l.href = '/css/tier-grid.css?v=3.7.24';   // v3.7.24: the Story look
     document.head.appendChild(l);
   }
   var old = document.getElementById('tg-overlay');

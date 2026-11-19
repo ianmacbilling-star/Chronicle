@@ -1,5 +1,355 @@
 [
   {
+    "version": "3.7.27",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3727-story-moment-options",
+        "kind": "fix",
+        "public": true,
+        "summary": "Story: the storyboard ... panel (characters, assets, prominence) is readable.",
+        "detail": "It was a grey film with faint grey words and buttons; now a light panel with dark words, black outline buttons and clear chips. Campaignia unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.26",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3726-storyboard-lineup",
+        "kind": "feature",
+        "public": true,
+        "summary": "Storyboard: Bridge text lines up with the words under the pictures beside it.",
+        "detail": "A text-only space (a Bridge, or an Opening or Closing with no picture) drops down so its header is level with the narrative headers in the same row. Easier to read across. One-column phones are unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.25",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3725-gift-back-button",
+        "kind": "feature",
+        "public": true,
+        "summary": "The gift page has a Back button at the top.",
+        "detail": "It goes where the Back link at the bottom goes: the app when signed in, otherwise the page you came from.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.24",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3724-library-brand-shelf",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library opens on your kind of stories, and Story pages share one look.",
+        "detail": "From the Story side the Library starts filtered to true-to-life and everyday genres; from Campaignia, to fantasy, sci fi, horror, mystery and thriller. Untick any of it or press Show everything. On Story, the Library, the gift page and Compare the Tiers now match the /memories look.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.23",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3723-memories-so-it-begins",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the product is called So It Begins on this page.",
+        "detail": "Title, header, brand line, wording and picture descriptions; web addresses unchanged. The app keeps Campaignia until the name is official.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.22",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3722-memories-step2-pictures",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 2 shows the old typed page, then the storyboard, as you scroll.",
+        "detail": "No From this / To this cards; each picture as big as the box allows; phones fade on a timer. from-to.mp4 stays in the repo, unused.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.21",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3721-memories-step3-shoes",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 3 shows a picture before and after a quick retouch, as you scroll; step 2 fills its panel.",
+        "detail": "One Pair of Shoes: one boy in shoes, then both barefoot; beside the steps it follows the scroll like step 1, phones fade on a timer.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.20",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3720-memories-step1-steve",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 1 shows Steve's photos then his character as you scroll; step 2 ends on the storyboard.",
+        "detail": "Beside the steps the second picture comes in halfway through step 1 and goes back on scrolling up; phones keep the timed fade. Step 2 is now From this, the old PDF, To this, then the Savannah River storyboard (12 s).",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.19",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3719-memories-who-bill",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: Who it is for shows Bill's photograph beside Bill at Elsenborn Ridge.",
+        "detail": "Head and shoulders from the real photograph in a third of the width, the full ridge scene in two thirds, the same height; stacked on phones.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.18",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3718-memories-step-timing",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the step pictures change when the next step reaches them, and step 2 tells its story in order.",
+        "detail": "Bill switches about every 2.5 seconds; step 2 plays From this, the old PDF, To this, then the clean text, each filling the box, and starts over each time step 2 comes up.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.17",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3717-memories-comic-cinematic",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the Comic Dialogue and Cinematic Script samples read the way the app writes them.",
+        "detail": "Comic Dialogue mixes narration with quoted lines; Cinematic Script is storyboard prose, not screenplay format.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.16",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3716-memories-step1-height",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 1 pictures are full size beside the steps.",
+        "detail": "v3.7.15 made the step 1 box short; it is full height again, like the other steps.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.15",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3715-memories-bill-fade",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 1 fades between a real photograph and the same man drawn in a scene.",
+        "detail": "Bill in uniform (the top of Ian's photograph) and Bill at Elsenborn Ridge, about 3.5 seconds each with a quick fade; a click opens the one on show. Also: hidden step pictures no longer catch clicks meant for the one on show.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.14",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3714-memories-full-book",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 4 shows the finished book page by page.",
+        "detail": "Ian's European Vacation book in the Optimize view, cropped to the pages and page strip (full-book.mp4), in place of the cover picture.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.13",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3713-memories-books-picture",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the books picture from the Story page fills the shelf box.",
+        "detail": "story-books.jpg (picture books lying open on a table), cropped to the wide box; a click shows it whole.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.12",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3712-memories-melvin-v2",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: new editing tools clip; the tallest clip panels are shorter.",
+        "detail": "Ian's new Melvin to the Rescue recording; clip panels stop at 560 px (or three quarters of the screen) tall.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.11",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3711-memories-editing-tools",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: a clip of the editing tools.",
+        "detail": "Beside the editing tools text: building the Melvin to the Rescue cover in the Image Builder (editing-tools.mp4, 61 s).",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.10",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3710-memories-clip-panels",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the feature clips are bigger, each panel shaped like its clip.",
+        "detail": "Full column width, never taller than the screen; the editing a scene clip is Ian's trimmed version.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.09",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3709-memories-zoom",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: click any picture or clip to see it bigger.",
+        "detail": "It opens over a dark screen and closes with a click, the close button or Escape; clips keep playing. The example covers still open their Library page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.08",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3708-memories-scene-edit",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: a clip of editing a single scene.",
+        "detail": "Beside Reprompt with precision: retouching a picture (both boys barefoot) and its words, cropped from Ian's recording (scene-edit.mp4).",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.07",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3707-memories-from-to",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 2 shows From this, To this.",
+        "detail": "The box beside Type, Paste or Upload plays the old typed page under From this, then fades to the same story in the Story box under To this (from-to.mp4).",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.06",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3706-memories-upload-step",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 2 is Type, Paste or Upload Your Story.",
+        "detail": "It says old, hard-to-read documents and audio of interviews or narration work too, and shows an old typed page (old-document.jpg).",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.05",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3705-memories-real-covers",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the example stories show their real book covers, title and all.",
+        "detail": "Our Family Stories and The Dojo of the Dragon Spirits use the cover page the Library shows (their old picture if it cannot load); the example boxes are book shaped (2:3) and show the whole cover.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.04",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3704-memories-salmon-river",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: a third example story and a less fantasy Epic Saga.",
+        "detail": "Salmon River Trip by Beth Knapp is the third example, linked to the Library; the Epic Saga passage keeps its sweep without the fantasy words.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.03",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3703-memories-narrative-passages",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: the narrative styles now show one moment told eleven ways.",
+        "detail": "Sam comes home to Grandma, told in each narrative style in a book font, under a panel with the plain moment; the heading adds or write it in your own words; Adventurer's Journal named as in the app.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.02",
     "staged_on": "2026-11-18",
     "entries": [
