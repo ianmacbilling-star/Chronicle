@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.22",
+    "staged_on": "2026-11-18",
+    "entries": [
+      {
+        "id": "3722-memories-step2-pictures",
+        "kind": "fix",
+        "public": true,
+        "summary": "/memories: step 2 shows the old typed page, then the storyboard, as you scroll.",
+        "detail": "No From this / To this cards; each picture as big as the box allows; phones fade on a timer. from-to.mp4 stays in the repo, unused.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.21",
     "staged_on": "2026-11-18",
     "entries": [
