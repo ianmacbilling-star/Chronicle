@@ -310,3 +310,18 @@ body{background-image:none;font-family:'Manrope','Helvetica Neue',Arial,sans-ser
 @font-face{font-family:'Patrick Hand';font-style:italic;font-weight:600;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
 @font-face{font-family:'Patrick Hand';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
 @font-face{font-family:'Patrick Hand';font-style:italic;font-weight:700;font-display:swap;src:url('/fonts/brand2/patrick-hand-latin-400-normal.woff2') format('woff2');}
+/* v3.7.27 -- THE STORYBOARD "..." PANEL ON STORY (Ian, 2026-11-19 screenshot: the Characters / Assets / Prominence panel
+   under a picture was a grey film with faint grey words and buttons). Its background was Campaignia's see-through dark
+   brown, and its words and chips use the mid-grey "gold" (--accent-bright #939587), so on Story it read grey on grey.
+   Here it is a light panel with ink words, like the narrative boxes below it; Campaignia is untouched. */
+html[data-brand="brand2"] .moment-options{--accent-bright:#4a4b45;--accent-bright-rgb:74,75,69;--text-light:#55564f;background:#f4f4f0;border-top:1px solid #d6d7d0;border-bottom:1px solid #d6d7d0;}
+html[data-brand="brand2"] .moment-options .review-label{color:#55564f;font-weight:700;}
+html[data-brand="brand2"] .moment-options .review-chip{background:#e5e6e1;color:#111111;}
+html[data-brand="brand2"] .moment-options .review-chip-asset{background:rgba(122,140,184,0.18);color:#243663;}
+html[data-brand="brand2"] .moment-options .review-chip-x{opacity:0.7;}
+html[data-brand="brand2"] .moment-options .review-add-btn,html[data-brand="brand2"] .moment-options .review-add-select,html[data-brand="brand2"] .moment-options .review-reset-btn{background:#ffffff;color:#111111;border:1px solid #111111;border-radius:999px;padding:3px 11px;}
+html[data-brand="brand2"] .moment-options .review-add-btn:hover,html[data-brand="brand2"] .moment-options .review-add-select:hover,html[data-brand="brand2"] .moment-options .review-reset-btn:hover{background:#111111;color:#ffffff;border-color:#111111;}
+html[data-brand="brand2"] .moment-options .moment-prom-select{background:#ffffff;color:#111111;border:1px solid #111111;border-radius:8px;padding:3px 8px;}
+html[data-brand="brand2"] .moment-options .review-cast-badge{background:rgba(122,140,184,0.18);color:#243663;}
+html[data-brand="brand2"] .moment-options .review-cast-badge.is-custom{background:#e5e6e1;color:#111111;}
+html[data-brand="brand2"] .moment-options .moment-opts-hint,html[data-brand="brand2"] .moment-options .moment-opts-note,html[data-brand="brand2"] .moment-options .moment-opts-loading,html[data-brand="brand2"] .moment-options .review-none{color:#55564f;}

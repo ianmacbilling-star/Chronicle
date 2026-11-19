@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.27",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3727-story-moment-options",
+        "kind": "fix",
+        "public": true,
+        "summary": "Story: the storyboard ... panel (characters, assets, prominence) is readable.",
+        "detail": "It was a grey film with faint grey words and buttons; now a light panel with dark words, black outline buttons and clear chips. Campaignia unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.26",
     "staged_on": "2026-11-19",
     "entries": [
