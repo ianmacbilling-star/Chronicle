@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.25",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3725-gift-back-button",
+        "kind": "feature",
+        "public": true,
+        "summary": "The gift page has a Back button at the top.",
+        "detail": "It goes where the Back link at the bottom goes: the app when signed in, otherwise the page you came from.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.24",
     "staged_on": "2026-11-19",
     "entries": [

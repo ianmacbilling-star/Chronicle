@@ -52,6 +52,9 @@
   .links { text-align: center; margin-top: 16px; font-size: 13px; } .links a { color: var(--accent); }
   .sub a { color: var(--accent); } /* v3.1.55 -- the Back to Campaignia link beside Want to send another? */
   .hidden { display: none !important; }
+  /* v3.7.25 -- a Back button at the top of the box (Ian, 2026-11-19); it goes where the Back link at the bottom goes. */
+  .back-btn { position: absolute; top: 18px; left: 20px; z-index: 2; font-family: 'Cinzel', Georgia, serif; font-size: 13px; letter-spacing: 1px; color: var(--accent); text-decoration: none; border: 1px solid rgba(var(--accent-rgb),0.45); border-radius: 999px; padding: 6px 14px; }
+  .back-btn:hover { background: rgba(var(--accent-rgb),0.12); }
   @media (max-width: 520px) { .box { padding: 22px 18px; } .two { grid-template-columns: 1fr; } }
   /* v3.7.24 -- THE STORY LOOK (Ian, 2026-11-19: the gift page matches the brand's style sheet). Only under the Story
      brand's sheet (html[data-brand="brand2"]); Campaignia's gift page is untouched. The /memories look: Manrope, thin
@@ -80,12 +83,15 @@
   html[data-brand="brand2"] .btn-go:hover { background: #333333; }
   html[data-brand="brand2"] .ok { background: #f4f4f0; border-color: #d6d7d0; color: #111111; }
   html[data-brand="brand2"] .links a, html[data-brand="brand2"] .sub a { color: #111111; font-weight: 600; }
+  html[data-brand="brand2"] .back-btn { color: #111111; border: 1.5px solid #111111; font-size: 14px; font-weight: 600; letter-spacing: 0; padding: 7px 16px; }
+  html[data-brand="brand2"] .back-btn:hover { background: #111111; color: #ffffff; }
   @media (max-width: 520px) { html[data-brand="brand2"] .box { padding: 24px 18px; } }
 </style>
 </head>
 <body>
 <div class="page">
   <div class="box">
+    <a href="/" class="back-btn" id="back-btn">&larr; Back</a>
     <img class="logo" src="/images/Campaignia_Logo.png" alt="Campaignia logo" />
     <h1>Give Campaignia as a Gift</h1>
     <p class="sub" id="sub">Months of Platinum or a block of tokens, emailed to them now or on the day you choose. Gifts never expire.</p>
@@ -161,7 +167,7 @@
   // v3.1.55 -- ONE SETTER FOR BOTH BACK LINKS. Back from Stripe, the line under the title reads
   // 'Want to send another? . Back to Campaignia' (Ian, 2026-10-12: so nobody has to scroll to the bottom).
   // Both links take their href from here, so they cannot disagree.
-  function setBack(href) { ['back-link', 'back-link-top'].forEach(function (id) { var a = $(id); if (a) a.href = href; }); }
+  function setBack(href) { ['back-btn', 'back-link', 'back-link-top'].forEach(function (id) { var a = $(id); if (a) a.href = href; }); }
   setBack(backTarget(false));
   var state = { items: [], pick: null, me: null };
   var q = new URLSearchParams(window.location.search);
