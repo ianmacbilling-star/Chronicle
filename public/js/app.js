@@ -39966,7 +39966,7 @@ function openCompareTiersGrid(btn) {
   if (msg) msg.textContent = '';
   if (!document.getElementById('tier-grid-css')) {
     var l = document.createElement('link');
-    l.id = 'tier-grid-css'; l.rel = 'stylesheet'; l.href = '/css/tier-grid.css?v=3.0.896';
+    l.id = 'tier-grid-css'; l.rel = 'stylesheet'; l.href = '/css/tier-grid.css?v=3.7.24';   // v3.7.24: the Story look
     document.head.appendChild(l);
   }
   var old = document.getElementById('tg-overlay');

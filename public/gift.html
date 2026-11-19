@@ -53,6 +53,34 @@
   .sub a { color: var(--accent); } /* v3.1.55 -- the Back to Campaignia link beside Want to send another? */
   .hidden { display: none !important; }
   @media (max-width: 520px) { .box { padding: 22px 18px; } .two { grid-template-columns: 1fr; } }
+  /* v3.7.24 -- THE STORY LOOK (Ian, 2026-11-19: the gift page matches the brand's style sheet). Only under the Story
+     brand's sheet (html[data-brand="brand2"]); Campaignia's gift page is untouched. The /memories look: Manrope, thin
+     ink heading, small capital section labels, white cards on sage, a black pill to pay. */
+  html[data-brand="brand2"] body, html[data-brand="brand2"] body * { font-family: 'Manrope', 'Helvetica Neue', Arial, sans-serif; }
+  html[data-brand="brand2"] .page { background: #e5e6e1; background-image: none; }
+  html[data-brand="brand2"] .page::before { display: none; }
+  html[data-brand="brand2"] .box { background: #ffffff; border: 0; border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.08); color: #333333; padding: 36px; }
+  html[data-brand="brand2"] h1 { color: #111111; font-size: 32px; font-weight: 300; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 10px; }
+  html[data-brand="brand2"] .sub { color: #6b6b66; font-size: 15px; }
+  html[data-brand="brand2"] .divider { background: #e5e6e1; }
+  html[data-brand="brand2"] h2 { color: #6b6b66; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+  html[data-brand="brand2"] .item { background: #ffffff; border: 1.5px solid #d6d7d0; border-radius: 14px; }
+  html[data-brand="brand2"] .item.sel { background: #f4f4f0; border-color: #111111; box-shadow: 0 0 0 1px #111111 inset; }
+  html[data-brand="brand2"] .item:focus-within { outline-color: #111111; }
+  html[data-brand="brand2"] .item-kicker { color: #6b6b66; font-weight: 700; }
+  html[data-brand="brand2"] .item-name { color: #111111; font-weight: 600; }
+  html[data-brand="brand2"] .item-detail { color: #6b6b66; }
+  html[data-brand="brand2"] .item-price { color: #111111; font-size: 20px; font-weight: 600; }
+  html[data-brand="brand2"] label.f, html[data-brand="brand2"] .when { color: #111111; }
+  html[data-brand="brand2"] .when input, html[data-brand="brand2"] .item input { accent-color: #111111; }
+  html[data-brand="brand2"] .in { background: #ffffff; border: 1.5px solid #d6d7d0; border-radius: 10px; color: #111111; }
+  html[data-brand="brand2"] .in:focus { border-color: #111111; }
+  html[data-brand="brand2"] .count, html[data-brand="brand2"] .note { color: #6b6b66; }
+  html[data-brand="brand2"] .btn-go { background: #111111; color: #ffffff; border: 1.5px solid #111111; border-radius: 999px; font-size: 16px; font-weight: 600; letter-spacing: 0; padding: 15px; }
+  html[data-brand="brand2"] .btn-go:hover { background: #333333; }
+  html[data-brand="brand2"] .ok { background: #f4f4f0; border-color: #d6d7d0; color: #111111; }
+  html[data-brand="brand2"] .links a, html[data-brand="brand2"] .sub a { color: #111111; font-weight: 600; }
+  @media (max-width: 520px) { html[data-brand="brand2"] .box { padding: 24px 18px; } }
 </style>
 </head>
 <body>
@@ -117,7 +145,7 @@
   // Nothing known (a link from an email): the game landing page.
   function backTarget(signedIn) {
     if (signedIn) return '/app.html';
-    var ok = { '/': '/', '/index.html': '/', '/story': '/story' };
+    var ok = { '/': '/', '/index.html': '/', '/story': '/story', '/memories': '/memories' };   // v3.7.24: /memories too
     var from = '';
     try { from = new URLSearchParams(window.location.search).get('from') || ''; } catch (e) {}
     if (!ok[from]) {

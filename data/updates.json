@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.24",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3724-library-brand-shelf",
+        "kind": "feature",
+        "public": true,
+        "summary": "The Library opens on your kind of stories, and Story pages share one look.",
+        "detail": "From the Story side the Library starts filtered to true-to-life and everyday genres; from Campaignia, to fantasy, sci fi, horror, mystery and thriller. Untick any of it or press Show everything. On Story, the Library, the gift page and Compare the Tiers now match the /memories look.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.23",
     "staged_on": "2026-11-18",
     "entries": [
