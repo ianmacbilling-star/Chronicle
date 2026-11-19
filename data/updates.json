@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.26",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3726-storyboard-lineup",
+        "kind": "feature",
+        "public": true,
+        "summary": "Storyboard: Bridge text lines up with the words under the pictures beside it.",
+        "detail": "A text-only space (a Bridge, or an Opening or Closing with no picture) drops down so its header is level with the narrative headers in the same row. Easier to read across. One-column phones are unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.25",
     "staged_on": "2026-11-19",
     "entries": [
