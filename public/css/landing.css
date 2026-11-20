@@ -64,8 +64,10 @@
     }
 
     /* STAGING ENV INDICATOR */
-    html.staging-env nav { background:#ff6a00; border-bottom:3px solid #7a2e00; box-shadow:0 3px 0 rgba(0,0,0,0.25); }
-    html.staging-env .nav-logo-text { color:#2b1400; }
+    /* v3.7.45 -- orange on the right half only, as in the app (v3.7.39): the logo half keeps the normal bar.
+       The links sit on the orange, where their faint gold could not be read, so on staging they go dark. */
+    html.staging-env nav { background:linear-gradient(90deg,rgba(var(--page-bg-rgb),0.96) 0%,rgba(var(--page-bg-rgb),0.96) 45%,#ff6a00 62%,#ff6a00 100%); }
+    html.staging-env .nav-link { color:rgba(43,20,0,0.85); }
 
     .nav-logo {
       display: flex;
@@ -75,6 +77,14 @@
     }
 
     .nav-logo img { height: 30px; }   /* v3.0.928 -- was 38px, joint-tallest child of the bar. */
+    /* v3.7.45 -- the new white Campaignia logo (Ian, 2026-11-20), in the top bar and the footer. The new image sits
+       between the old one and the text; another brand (data-brand on <html>) keeps the old logo and text. */
+    .nav-logo .nav-logo-new, .footer-logo .footer-logo-new { display: none; }
+    html:not([data-brand]) .nav-logo .nav-logo-old,
+    html:not([data-brand]) .nav-logo .nav-logo-new ~ .nav-logo-text,
+    html:not([data-brand]) .footer-logo .footer-logo-old { display: none; }
+    html:not([data-brand]) .nav-logo .nav-logo-new { display: block; height: 30px; width: auto; }
+    html:not([data-brand]) .footer-logo .footer-logo-new { display: block; height: 30px; width: auto; }
 
     .nav-logo-text {
       font-family: var(--font-label);
@@ -1096,6 +1106,7 @@
     @media (max-width: 400px) {
       .hero-title { font-size: 34px; }
       .nav-logo-text { font-size: 14px; letter-spacing: 2px; }
+      html:not([data-brand]) .nav-logo .nav-logo-new { height: 24px; }
       .btn-nav { font-size: 13px; padding: 4px 12px; }   /* v3.0.928 -- was 14px / 8px 16px, which
          had become TALLER than the desktop rule it overrides. */
       .hero-text-panel { padding: 22px 16px !important; }

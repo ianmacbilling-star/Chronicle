@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.7.45",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3745-landing-new-logo",
+        "kind": "change",
+        "public": true,
+        "summary": "The new Campaignia logo on the home page.",
+        "detail": "The white Campaignia logo in the top bar and the footer of the home page, /game-masters, /story and the example books page.",
+        "td": []
+      },
+      {
+        "id": "3745-landing-staging-bar",
+        "kind": "change",
+        "public": false,
+        "summary": "Staging: the home page bar is orange on the right half only, with dark links.",
+        "detail": "As in the app since v3.7.39. The faint gold links could not be read on the orange, so on staging they are dark.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.44",
     "staged_on": "2026-11-20",
     "entries": [
