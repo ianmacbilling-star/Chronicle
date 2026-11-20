@@ -2262,6 +2262,19 @@ html.staging-env .app-header{
   background:linear-gradient(90deg,var(--ink-bg) 0%,var(--ink-bg) 45%,#ff6a00 62%,#ff6a00 100%);
 }
 
+/* ===== HEADER LOGO (v3.7.40) =====
+   The new Campaignia logo (Ian, 2026-11-20): the maroon wordmark with a light orange glow so it reads on the
+   dark header. Campaignia only -- another brand sets data-brand on <html> and keeps the old logo and text.
+   Up to 1100px the full wordmark does not fit (the old text was hidden there too), so the dagger mark alone shows. */
+.app-logo .app-logo-new{display:none;width:auto;filter:drop-shadow(0 0 1px rgba(255,220,180,1)) drop-shadow(0 0 2px rgba(255,190,120,0.9)) drop-shadow(0 0 8px rgba(255,150,80,0.65));}
+html:not([data-brand]) .app-logo .app-logo-old,
+html:not([data-brand]) .app-logo .app-logo-text{display:none;}
+html:not([data-brand]) .app-logo .app-logo-wordmark{display:block;height:30px;}
+@media (max-width: 1100px) {
+  html:not([data-brand]) .app-logo .app-logo-wordmark{display:none;}
+  html:not([data-brand]) .app-logo .app-logo-mark{display:block;height:32px;}
+}
+
 /* Storyboard moment prominence control */
 .moment-prom{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:rgba(var(--accent-text-rgb),0.7);}
 .moment-prom-select{background:rgba(var(--panel-rgb),0.9);color:var(--accent-bright);border:1px solid rgba(var(--accent-rgb),0.35);border-radius:5px;font-size:11px;padding:2px 6px;font-family:inherit;cursor:pointer;}

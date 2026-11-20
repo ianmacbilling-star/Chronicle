@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.40",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3740-header-new-logo",
+        "kind": "change",
+        "public": true,
+        "summary": "A new Campaignia logo in the header.",
+        "detail": "The maroon Campaignia wordmark with a soft orange glow; on narrower screens the dagger mark alone.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.39",
     "staged_on": "2026-11-20",
     "entries": [
