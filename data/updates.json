@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.41",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3741-header-logo-white-gold",
+        "kind": "change",
+        "public": true,
+        "summary": "The header logo is now white with a soft gold glow.",
+        "detail": "White Campaignia lettering glowing in the same gold as the app's lettering; on narrower screens the dagger mark alone.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.40",
     "staged_on": "2026-11-20",
     "entries": [
