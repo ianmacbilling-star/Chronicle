@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.43",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3743-new-logo-emails-covers",
+        "kind": "change",
+        "public": true,
+        "summary": "The new Campaignia logo on emails and book covers.",
+        "detail": "Emails open with the white logo above the same tagline. Book covers carry the white logo on the back and the white dagger on the spine; the copyright page inside uses the logo in maroon.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.42",
     "staged_on": "2026-11-20",
     "entries": [
