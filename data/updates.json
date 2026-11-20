@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.39",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3739-staging-banner-right-half",
+        "kind": "change",
+        "public": false,
+        "summary": "Staging header: orange on the right half only.",
+        "detail": "The logo half of the header keeps its normal colors on staging; the orange fades in from the middle so the test site is still obvious. Production is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.38",
     "staged_on": "2026-11-20",
     "entries": [

@@ -2256,12 +2256,11 @@ body.role-player #stab-export { display: block !important; }
 .panel-dark .form-input::placeholder{color:rgba(var(--accent-text-rgb),0.5);}
 
 /* ===== STAGING ENVIRONMENT INDICATOR ===== */
+/* v3.7.39 -- only the right half of the header is orange (Ian, 2026-11-20). The logo half keeps the normal
+   header colors (logo text included); the orange fades in across the right half so staging is still obvious. */
 html.staging-env .app-header{
-  background:#ff6a00;
-  border-bottom:1px solid #7a2e00;
-  box-shadow:0 2px 12px rgba(0,0,0,0.35);
+  background:linear-gradient(90deg,var(--ink-bg) 0%,var(--ink-bg) 45%,#ff6a00 62%,#ff6a00 100%);
 }
-html.staging-env .app-logo-text{color:#2b1400;}
 
 /* Storyboard moment prominence control */
 .moment-prom{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:rgba(var(--accent-text-rgb),0.7);}
