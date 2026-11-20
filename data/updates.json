@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.36",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3736-memories-example-order",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: example books in a new order.",
+        "detail": "Top: Our Family Stories, Greatest Sports Moments Never Filmed, Down the River. Below: the Dojo, Scary Things We Have to Do, Salmon River Trip.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.35",
     "staged_on": "2026-11-20",
     "entries": [
