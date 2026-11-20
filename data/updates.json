@@ -1,5 +1,89 @@
 [
   {
+    "version": "3.7.38",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3738-memories-germany-example",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: Germany 1944 - 1946 is an example book.",
+        "detail": "In place of Salmon River Trip, in the middle of the second row; Scary Things We Have to Do moves to the end.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.37",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3737-memories-delivery-price",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: about two weeks to your door, roughly 50 cents a page.",
+        "detail": "The truck line and the print-and-ship answer say about two weeks (a week to print, a week to ship); a new answer says a printed book is roughly 50 cents a page plus shipping.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.36",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3736-memories-example-order",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: example books in a new order.",
+        "detail": "Top: Our Family Stories, Greatest Sports Moments Never Filmed, Down the River. Below: the Dojo, Scary Things We Have to Do, Salmon River Trip.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.35",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3735-memories-six-examples",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: six example books.",
+        "detail": "The Dojo of the Dragon Spirits is back, with Greatest Sports Moments Never Filmed and Scary Things We Have to Do; two rows of three.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.34",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3734-memories-down-the-river-2",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: step 4 plays Ian's new Down the River clip.",
+        "detail": "down-the-river-2.mp4 (toolbar cropped off, 1000x570, 17 s) in place of the first Down the River clip, beside the steps and on phones.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.33",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3733-memories-down-the-river-example",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: Down the River is the middle example book.",
+        "detail": "In place of The Dojo of the Dragon Spirits, with its cover page and Library link.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.32",
     "staged_on": "2026-11-19",
     "entries": [
