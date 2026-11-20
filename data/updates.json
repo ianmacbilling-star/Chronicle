@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.33",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3733-memories-down-the-river-example",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: Down the River is the middle example book.",
+        "detail": "In place of The Dojo of the Dragon Spirits, with its cover page and Library link.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.32",
     "staged_on": "2026-11-19",
     "entries": [
