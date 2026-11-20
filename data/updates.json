@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.37",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3737-memories-delivery-price",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: about two weeks to your door, roughly 50 cents a page.",
+        "detail": "The truck line and the print-and-ship answer say about two weeks (a week to print, a week to ship); a new answer says a printed book is roughly 50 cents a page plus shipping.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.36",
     "staged_on": "2026-11-20",
     "entries": [
