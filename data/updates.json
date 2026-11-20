@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.30",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3730-memories-prose-picture",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: the prose panel shows storyboard pictures with their words.",
+        "detail": "Ian's rafting storyboard (storyboard-prose.jpg) in place of the narrative styles clip; the panel takes the picture's shape, so it is shorter.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.29",
     "staged_on": "2026-11-19",
     "entries": [
