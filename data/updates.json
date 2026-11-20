@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.28",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3728-memories-down-the-river",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: step 4 shows the Down the River book page by page.",
+        "detail": "Ian's Down the River book in the Optimize view (down-the-river.mp4, toolbar cropped off) in place of European Vacation, beside the steps and on phones.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.27",
     "staged_on": "2026-11-19",
     "entries": [
