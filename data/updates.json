@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.35",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3735-memories-six-examples",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: six example books.",
+        "detail": "The Dojo of the Dragon Spirits is back, with Greatest Sports Moments Never Filmed and Scary Things We Have to Do; two rows of three.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.34",
     "staged_on": "2026-11-20",
     "entries": [
