@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.44",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3744-library-new-logo",
+        "kind": "change",
+        "public": true,
+        "summary": "The new Campaignia logo in the Library.",
+        "detail": "The Library's top bar shows the white Campaignia logo, as in the app.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.43",
     "staged_on": "2026-11-20",
     "entries": [
