@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.34",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3734-memories-down-the-river-2",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: step 4 plays Ian's new Down the River clip.",
+        "detail": "down-the-river-2.mp4 (toolbar cropped off, 1000x570, 17 s) in place of the first Down the River clip, beside the steps and on phones.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.33",
     "staged_on": "2026-11-20",
     "entries": [
