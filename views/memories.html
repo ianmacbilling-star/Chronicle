@@ -195,6 +195,9 @@
     /* v3.7.10 (Ian, 2026-11-18): each clip panel takes the clip's own shape, full column width, never taller than the screen */
     .feat .pic.wide.has-vid{aspect-ratio:auto;min-height:0;}
     .feat .pic.has-vid video{width:100%;height:auto;max-height:min(560px,75vh);object-fit:contain;display:block;}
+    .feat .pic.has-img{padding:18px;border:0;overflow:hidden;background:#e5e6e1;}   /* v3.7.29: a picture panel in the panel's own shape, like the clips */
+    .feat .pic.wide.has-img{aspect-ratio:auto;min-height:0;}
+    .feat .pic.has-img img{width:auto;max-width:100%;height:auto;max-height:min(560px,75vh);object-fit:contain;display:block;border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,0.10);}
     .feat p{font-size:21px;line-height:1.6;color:var(--m-text);}
     .shelf{max-width:960px;margin:0 auto;}
     .shelf .pic.has-img{padding:0;border:0;overflow:hidden;background:#e5e6e1;}
@@ -366,7 +369,7 @@
         <div class="pic on has-img xfade" data-pic="0"><img src="/images/memories/steve-refs.jpg" alt="Old photographs of Steve added as his reference pictures"><img src="/images/memories/steve-sheet.jpg" alt="The character picture So It Begins drew of Steve from those photographs"></div>
         <div class="pic has-img xfade" data-pic="1"><img src="/images/memories/pdf-page.jpg" alt="From this: an old typed page from the river trip, curled and hard to read"><img src="/images/memories/storyboard.jpg" alt="To this: the same trip as a storyboard of pictures and passages in So It Begins"></div>
         <div class="pic has-img xfade" data-pic="2"><img src="/images/memories/shoes-before.jpg" alt="A storyboard panel: two boys in a motel room, one wearing shoes"><img src="/images/memories/shoes-after.jpg" alt="The same panel after a quick retouch: both boys barefoot, one pair of shoes on the floor"></div>
-        <div class="pic has-vid" data-pic="3"><video src="/images/memories/full-book.mp4" poster="/images/memories/full-book.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The finished book, page by page, in the Optimize view" width="1000" height="550"></video></div>
+        <div class="pic has-vid" data-pic="3"><video src="/images/memories/down-the-river.mp4" poster="/images/memories/down-the-river.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Down the River, the finished book page by page, in the Optimize view" width="994" height="660"></video></div>
       </div>
       <div>
         <div class="step on" data-step="0">
@@ -385,7 +388,7 @@
           <p>It&rsquo;s your memory, and you want So It Begins to get it right. Edit whole sections or minute details with the click of a button. All the tools are in one place to edit every part of your book.</p>
         </div>
         <div class="step" data-step="3">
-          <div class="pic has-vid"><video src="/images/memories/full-book.mp4" poster="/images/memories/full-book.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The finished book, page by page, in the Optimize view" width="1000" height="550"></video></div>
+          <div class="pic has-vid"><video src="/images/memories/down-the-river.mp4" poster="/images/memories/down-the-river.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Down the River, the finished book page by page, in the Optimize view" width="994" height="660"></video></div>
           <h3>4. Print, Order, Ship</h3>
           <p>Choose your layout, preview it in the app, and order your story as a bound book &ndash; comic, hardback, or softback, your call. Hand it to your family. Frame it. It&rsquo;s a real storybook.</p>
         </div>
@@ -439,8 +442,8 @@
     <h2>So It Begins Gives You Complete Control</h2>
     <div id="featList">
       <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/characters.mp4" poster="/images/memories/character-creator.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The character creator, two characters in a row: photos and a description become a consistent character" width="732" height="832"></video></div><p>Nail the character design with reference images and detailed descriptions. Once you get it right, So It Begins will make sure the character shows up the same in every scene.</p></div>
-      <div class="feat"><div class="pic wide"><b>Picture</b>Amateur photos, paintings and a child&rsquo;s drawings (they can&rsquo;t look too crisp)</div><p>Eager to keep it intimate and familiar? Use real family photos, a child&rsquo;s drawings, your own artwork. Upload them and place them right in the story, surrounded by AI-generated narrative.</p></div>
-      <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/narrative-styles.mp4" poster="/images/memories/narrative-styles.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Choosing a narrative style: each style with a sample line" width="966" height="840"></video></div><p>So It Begins turns your bullet points into prose &ndash; opening scenes, smooth transitions, surprise twists &ndash; so it reads like a real novel. Tinker with multiple narrative styles, lengths, and points of view to hit that sweet spot.</p></div>
+      <div class="feat"><div class="pic wide has-img"><img loading="lazy" decoding="async" src="/images/memories/childs-drawing.jpg" alt="A book page with Maggie&rsquo;s crayon drawing of the carousel set beside the story" width="602" height="615"></div><p>Eager to keep it intimate and familiar? Use real family photos, a child&rsquo;s drawings, your own artwork. Upload them and place them right in the story, surrounded by AI-generated narrative.</p></div>
+      <div class="feat"><div class="pic wide has-img"><img loading="lazy" decoding="async" src="/images/memories/storyboard-prose.jpg" alt="Two storyboard pictures from a rafting trip, each with its passage of prose beneath" width="1246" height="756"></div><p>So It Begins turns your bullet points into prose &ndash; opening scenes, smooth transitions, surprise twists &ndash; so it reads like a real novel. Tinker with multiple narrative styles, lengths, and points of view to hit that sweet spot.</p></div>
       <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/scene-edit.mp4" poster="/images/memories/scene-edit.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Editing a single scene: retouching the picture and its words" width="634" height="832"></video></div><p>Reprompt with precision. Every sentence, character, background, and minute detail can be edited without destroying your hard work. Keep what you like and change what you need to match reality.</p></div>
       <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/editing-tools.mp4" poster="/images/memories/editing-tools.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The editing tools: building a book cover in the Image Builder" width="1100" height="628"></video></div><p>So It Begins combines over a dozen AI and editing tools into a harmonious, intuitive platform. Our tutorial walks you through every step so you can rewrite, retouch, and rework with ease.</p></div>
       <div class="feat"><div class="pic wide has-vid"><video src="/images/memories/writing-coach.mp4" poster="/images/memories/writing-coach.jpg" autoplay muted loop playsinline preload="metadata" aria-label="The writing coach giving feedback on a passage" width="720" height="900"></video></div><p>Want to keep the story in your own words? Our digital coach gives helpful and honest feedback on any passage. It edits, offers suggestions, and helps you communicate your vision.</p></div>
@@ -496,7 +499,8 @@
       <div><div class="pic icon">Icon: calendar</div><div class="d">30 Day Free Trial</div></div>
       <div><div class="pic icon">Icon: cancel</div><div class="d">Cancel Anytime</div></div>
     </div>
-    <details class="more">
+    <!-- v3.7.31: hidden until the book details are written (Ian, 2026-11-19) -->
+    <details class="more" hidden>
       <summary>More Product Details</summary>
       <ul>
         <li><span class="tbd">TBD</span> Every physical detail of the book, like an Amazon listing: ink, types of photos, paper construction, book sizes, paper thickness, and so on.</li>
