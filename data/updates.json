@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.38",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3738-memories-germany-example",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: Germany 1944 - 1946 is an example book.",
+        "detail": "In place of Salmon River Trip, in the middle of the second row; Scary Things We Have to Do moves to the end.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.37",
     "staged_on": "2026-11-20",
     "entries": [
