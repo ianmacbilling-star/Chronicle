@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.42",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3742-header-logo-plain-white",
+        "kind": "change",
+        "public": true,
+        "summary": "The header logo is plain white.",
+        "detail": "The glow around the white Campaignia logo is gone.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.41",
     "staged_on": "2026-11-20",
     "entries": [
