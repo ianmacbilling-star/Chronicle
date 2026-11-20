@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.29",
+    "staged_on": "2026-11-19",
+    "entries": [
+      {
+        "id": "3729-memories-childs-drawing",
+        "kind": "feature",
+        "public": true,
+        "summary": "/memories: the amateur photos panel shows a book page with a child's drawing.",
+        "detail": "Ian's page from the carousel story with Maggie's crayon drawing (childs-drawing.jpg), in place of the placeholder; the panel takes the picture's shape and opens bigger on click.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.28",
     "staged_on": "2026-11-19",
     "entries": [
