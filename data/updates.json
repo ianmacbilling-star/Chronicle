@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.46",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3746-new-logo-everywhere",
+        "kind": "change",
+        "public": true,
+        "summary": "The new Campaignia logo on every page.",
+        "detail": "Sign in, redeem, invite, gift, password reset, the not-found page and the marketplace pages show the white Campaignia logo; in the app, campaigns without art and the empty screens show the new dagger.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.45",
     "staged_on": "2026-11-20",
     "entries": [

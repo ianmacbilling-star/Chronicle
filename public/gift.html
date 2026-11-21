@@ -87,12 +87,18 @@
   html[data-brand="brand2"] .back-btn:hover { background: #111111; color: #ffffff; }
   @media (max-width: 520px) { html[data-brand="brand2"] .box { padding: 24px 18px; } }
 </style>
+<style>
+/* v3.7.46 -- the new Campaignia logo (Ian, 2026-11-20). The old image (cmp-logo-old) stays for any other brand;
+   Campaignia shows the new one (cmp-logo-new) and hides the name text beside the old icon (cmp-logo-label). */
+html[data-brand] .cmp-logo-new { display:none !important; }
+html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { display:none !important; }
+</style>
 </head>
 <body>
 <div class="page">
   <div class="box">
     <a href="/" class="back-btn" id="back-btn">&larr; Back</a>
-    <img class="logo" src="/images/Campaignia_Logo.png" alt="Campaignia logo" />
+    <img class="logo cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia logo" /><img class="cmp-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" style="display:block;height:44px;width:auto;max-width:90%;margin:0 auto;margin-bottom:14px;" />
     <h1>Give Campaignia as a Gift</h1>
     <p class="sub" id="sub">Months of Platinum or a block of tokens, emailed to them now or on the day you choose. Gifts never expire.</p>
 

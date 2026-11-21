@@ -619,13 +619,13 @@ function pageShell(o) {
     '<link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />\n' +
     (o.jsonld ? '<script type="application/ld+json">' + jsonLd(o.jsonld) + '</script>\n' : '') +
     '</head>\n<body class="mkt-page">\n' +
-    '<nav class="mkt-page-nav"><a href="/" class="mkt-page-logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /><span>Campaignia</span></a>' +
+    '<nav class="mkt-page-nav"><a href="/" class="mkt-page-logo"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" /><img class="cmp-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" /><span class="cmp-logo-label">Campaignia</span></a>' +
       '<span class="mkt-page-navlinks"><a href="/guild">The Guild</a><a href="/library">Library</a><a class="mkt-page-cta" href="/login">Create your own</a></span></nav>\n' +
     '<main class="mkt-wrap mkt-page-main">' + (o.preview ? '<div class="mkt-preview-line">The Guild is switched off. Only admins can see this page, and search engines are told not to list it.</div>' : '') + o.body + '</main>\n' +
     '<footer class="mkt-page-foot">&copy; ' + new Date().getFullYear() + ' So It Begins, LLC &middot; Campaignia &middot; <a href="/">Home</a> &middot; <a href="/library">Library</a> &middot; <a href="/guild-terms.html">Guild Terms</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/privacy.html">Privacy</a></footer>\n' +
     '<script src="/js/marketplace.js?v=' + PAGE_ASSET_V + '" defer></script>\n</body>\n</html>\n';
 }
-const PAGE_ASSET_V = '3.3.17';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
+const PAGE_ASSET_V = '3.7.46';   // the marketplace.css / marketplace.js version these pages ask for; bump with them
 // v3.3.10 -- how the art is made, on the cards and the page
 function mediaTagsSrv(p) {
   if (!p.media || !p.media.length) return '';

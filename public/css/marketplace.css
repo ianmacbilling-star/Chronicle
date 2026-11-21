@@ -206,3 +206,8 @@ a.mkt-card { text-decoration: none; }
 .mkt-share { display: inline-flex; align-items: center; gap: 7px; background: transparent; color: var(--accent); border: 1px solid rgba(var(--accent-rgb),0.5); padding: 8px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; font-family: inherit; cursor: pointer; }
 .mkt-share:hover { border-color: var(--accent); background: rgba(var(--accent-rgb),0.08); }
 .mkt-share-msg { font-size: 12px; color: rgba(var(--on-panel-rgb),0.75); margin-left: 8px; }
+
+/* v3.7.46 -- the new Campaignia logo (Ian, 2026-11-20). The old image (cmp-logo-old) stays for any other brand;
+   Campaignia shows the new one (cmp-logo-new) and hides the name text beside the old icon (cmp-logo-label). */
+html[data-brand] .cmp-logo-new { display:none !important; }
+html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { display:none !important; }

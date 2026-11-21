@@ -127,11 +127,17 @@
       border-color: var(--accent);
     }
   </style>
+<style>
+/* v3.7.46 -- the new Campaignia logo (Ian, 2026-11-20). The old image (cmp-logo-old) stays for any other brand;
+   Campaignia shows the new one (cmp-logo-new) and hides the name text beside the old icon (cmp-logo-label). */
+html[data-brand] .cmp-logo-new { display:none !important; }
+html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { display:none !important; }
+</style>
 </head>
 <body>
   <div class="panel">
     <div class="panel-top">
-      <div class="logo"><img src="/images/Campaignia_Logo.png" alt="Campaignia" /></div>
+      <div class="logo"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" /><img class="cmp-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" style="display:block;height:34px;width:auto;max-width:90%;margin:0 auto;" /></div>
     </div>
     <div class="panel-body">
       <div class="error-num">404</div>

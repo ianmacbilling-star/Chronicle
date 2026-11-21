@@ -3890,7 +3890,7 @@ function renderCampaigns() {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' + campPinHtml(c) +   // v3.4.15 -- TD-1094
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
-        : '<div class="campaign-card-img campaign-card-img-empty"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
+        : '<div class="campaign-card-img campaign-card-img-empty"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="" /><img class="cmp-logo-new" src="/images/Campaignia_Mark_White_Print.png" alt="" /></div>') +
       '<div class="campaign-card-body">' +
         '<div class="campaign-card-name">' + c.name + '</div>' +
         campCardDescHtml(c.description) +
@@ -4042,12 +4042,12 @@ function renderSessions() {
   if (!state.sessions.length) {
     var _isDM = state.currentCampaign && state.currentCampaign.my_role === 'dm';
     if (!_isDM) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /><img class="cmp-logo-new" src="/images/Campaignia_Mark_White_Print.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
         '<h3>No sessions ready yet</h3>' +
         '<p>Waiting on the Story Master to ready a session for viewing.</p></div>';
       return;
     }
-    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /><img class="cmp-logo-new" src="/images/Campaignia_Mark_White_Print.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:var(--accent);font-size:13px;">It works best if you create your characters before making your session.</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
@@ -19213,7 +19213,7 @@ function renderCampaigns() {
     return '<div class="campaign-card" onclick="selectCampaign(' + c.id + ')">' + campPinHtml(c) +   // v3.4.15 -- TD-1094
       ((c.campaign_image_url || c.cover_image_url)
         ? '<img class="campaign-card-img" src="' + encodeURI(c.campaign_image_url || c.cover_image_url) + '" alt="" loading="lazy" />'
-        : '<div class="campaign-card-img campaign-card-img-empty"><img src="/images/Campaignia_Logo.png" alt="" /></div>') +
+        : '<div class="campaign-card-img campaign-card-img-empty"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="" /><img class="cmp-logo-new" src="/images/Campaignia_Mark_White_Print.png" alt="" /></div>') +
       '<div class="campaign-card-body">' +
         '<div class="campaign-card-name">' + c.name + '</div>' +
         campCardDescHtml(c.description) +
@@ -19365,12 +19365,12 @@ function renderSessions() {
   if (!state.sessions.length) {
     var _isDM = state.currentCampaign && state.currentCampaign.my_role === 'dm';
     if (!_isDM) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
+      list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /><img class="cmp-logo-new" src="/images/Campaignia_Mark_White_Print.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
         '<h3>No sessions ready yet</h3>' +
         '<p>Waiting on the Story Master to ready a session for viewing.</p></div>';
       return;
     }
-    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
+    list.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /><img class="cmp-logo-new" src="/images/Campaignia_Mark_White_Print.png" alt="Campaignia" style="width:96px;height:96px;object-fit:contain;vertical-align:middle;" /></div>' +
       '<h3>No sessions yet</h3><p>Create your first session to start uploading transcripts and generating storyboards</p>' +
       '<p id="no-char-session-hint" style="display:none;margin-top:-2px;color:var(--accent);font-size:13px;">It works best if you create your characters before making your session.</p>' +
       '<button class="btn btn-primary" onclick="openSessionModal()">+ New session</button></div>';
@@ -22668,7 +22668,7 @@ function campaignBookHtml(c) {
     (pic ? '<div class="cbook-amb" style="background-image:url(&quot;' + encodeURI(pic) + '&quot;)"></div>' : '') +
     '<div class="cbook-art">' +
       (pic ? '<img' + (picIsTitle ? ' class="cbook-title"' : '') + ' src="' + encodeURI(pic) + '" alt="" loading="lazy" onerror="this.remove()" />'
-           : '<img class="cbook-logo" src="/images/Campaignia_Logo.png" alt="" />') +
+           : '<img class="cbook-logo cmp-logo-old" src="/images/Campaignia_Logo.png" alt="" /><img class="cbook-logo cmp-logo-new" src="/images/Campaignia_Mark_White_Print.png" alt="" />') +
     '</div>' +
     '<div class="cbook-fade"></div>' +
     '<div class="cbook-frame"></div>' +
@@ -37901,7 +37901,7 @@ function _ciCampaigns() {
     b.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">' + list.map(function (c) {
       // v3.4.03 -- the campaign's picture, as on its My Campaigns card (Ian); the logo when it has none
       var _cpic = c.image ? '<img class="ci-camp-pic" src="' + escapeHtml(c.image) + '" alt="" loading="lazy" style="width:100%;aspect-ratio:16/10;object-fit:contain;display:block;border-radius:6px;background:rgba(var(--panel-deep-rgb),0.5);">'
-        : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(var(--panel-deep-rgb),0.5);display:flex;align-items:center;justify-content:center;"><img src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
+        : '<div class="ci-camp-pic" style="width:100%;aspect-ratio:16/10;border-radius:6px;background:rgba(var(--panel-deep-rgb),0.5);display:flex;align-items:center;justify-content:center;"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"><img class="cmp-logo-new" src="/images/Campaignia_Mark_White_Print.png" alt="" style="width:56px;height:56px;object-fit:contain;opacity:0.7;"></div>';
       // v3.4.17 -- TD-1094: a pinned campaign carries the My Campaigns pin (pinning itself stays on My Campaigns).
       var _cpin = c.pinned ? '<span class="ci-pin" title="Pinned on My Campaigns" style="position:absolute;top:10px;right:12px;color:var(--highlight);line-height:0;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 4px rgba(0,0,0,0.7));">' + _vpickPinSvg(true) + '</span>' : '';
       return '<button type="button" class="ci-camp" data-id="' + c.id + '" data-name="' + escapeHtml(c.name) + '" style="' + CI_TILE + 'position:relative;">' + _cpin + _cpic +
