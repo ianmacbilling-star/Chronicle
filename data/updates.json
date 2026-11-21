@@ -1,5 +1,27 @@
 [
   {
+    "version": "3.7.47",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3747-brand-clear-landing",
+        "kind": "fix",
+        "public": false,
+        "summary": "Staging: ?brand=clear now really goes back to Campaignia.",
+        "detail": "It cleared the brand switch but not the remembered landing page, so after a visit to /memories or /story the Story look stayed. It clears both now.",
+        "td": []
+      },
+      {
+        "id": "3747-story-email-banner",
+        "kind": "fix",
+        "public": false,
+        "summary": "Story emails keep their own heading after the new Campaignia email banner.",
+        "detail": "The Story look swapped the Campaignia banner out by its file name, and the new banner had a new name, so Story emails showed the Campaignia banner. Both names are matched now.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.46",
     "staged_on": "2026-11-20",
     "entries": [
