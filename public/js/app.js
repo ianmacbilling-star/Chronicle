@@ -36365,6 +36365,7 @@ function resetPublishForCampaignSwitch(force) {
   if (!force && (window._aiLoopRunning || window._aiPreloop || window._aiFinishing)) return;
   if (!force && resetPublishForCampaignSwitch._last === _cid) return;   // already reset for this campaign
   resetPublishForCampaignSwitch._last = _cid;
+  try { if (typeof printOrderForgetForCampaignSwitch === 'function') printOrderForgetForCampaignSwitch(); } catch (e) {}   // v3.7.49 -- the Order tab's prepared files belong to the old book
   resetOptimizeLogForSwitch(force);   // v3.0.328: the optimize log describes a book we are leaving
   _finalizeSessInc = null; _finalizeSessTotal = null;   // v3.0.333: session counts belong to the old book
   var t = document.getElementById('prep-title'); if (t) t.value = '';
@@ -47375,3 +47376,29 @@ function saveProviderCosts() {
   w._cbWrapped = true;
   window.switchSettingsTab = w;
 })();
+
+// =================================================================================================
+// v3.7.49 -- THE ORDER TAB FORGETS THE OLD BOOK ON A CAMPAIGN SWITCH (Ian, 2026-11-22).
+//
+// Prepare Your Order on campaign A builds the two files Lulu prints (interior + cover) and keeps them in
+// preparedInteriorUrl / preparedCoverUrl, with the review panel linking to both. Switching to campaign B
+// cleared Publish to Library (resetPublishForCampaignSwitch) but nothing cleared these, so B's Order tab
+// still offered A's PDFs. Called from resetPublishForCampaignSwitch, which every campaign switch reaches.
+// Shipping details are left alone -- they are about the person, not the book. Appended at the end of the
+// file on purpose (TD-853: duplicate declarations, the later one wins).
+// =================================================================================================
+function printOrderForgetForCampaignSwitch() {
+  try { if (typeof reorderClear === 'function') reorderClear(); } catch (e) {}
+  try { preparedInteriorUrl = ''; preparedCoverUrl = ''; preparedSignature = ''; } catch (e) {}
+  try { printActualPages = 0; printInteriorCache = { key: '', url: '', pages: 0, mismatch: null }; } catch (e) {}
+  try { var _rv = document.getElementById('print-review'); if (_rv) _rv.style.display = 'none'; } catch (e) {}
+  try { var _rs = document.getElementById('print-review-summary'); if (_rs) _rs.innerHTML = ''; } catch (e) {}
+  try { var _pv = document.getElementById('print-review-preview'); if (_pv) _pv.removeAttribute('href'); } catch (e) {}
+  try { var _cv = document.getElementById('print-review-cover-preview'); if (_cv && _cv.parentNode) _cv.parentNode.removeChild(_cv); } catch (e) {}
+  try { var _at = document.getElementById('print-attest'); if (_at) _at.checked = false; } catch (e) {}
+  try { if (typeof hideFinalConfirm === 'function') hideFinalConfirm(); } catch (e) {}
+  try { var _pb = document.getElementById('print-place-btn'); if (_pb) { _pb.style.display = ''; _pb.disabled = false; _pb.textContent = 'Prepare Your Order'; } } catch (e) {}
+  try { var _q = document.getElementById('print-quote'); if (_q) _q.textContent = ''; } catch (e) {}
+  try { if (typeof showPrintBtnMsg === 'function') showPrintBtnMsg('', null); } catch (e) {}
+  try { if (typeof printProgressDone === 'function') printProgressDone(); } catch (e) {}
+}

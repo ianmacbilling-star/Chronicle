@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.49",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3749-order-forgets-old-book",
+        "kind": "fix",
+        "public": true,
+        "summary": "Switching campaigns clears a print order you had started on another book.",
+        "detail": "After preparing an order, the Order tab of the next campaign you opened could still offer the previous book's interior and cover. It now starts fresh for each campaign.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.48",
     "staged_on": "2026-11-22",
     "entries": [
