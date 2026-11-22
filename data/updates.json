@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.60",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3760-real-books-style-back",
+        "kind": "change",
+        "public": false,
+        "summary": "Example Books page: the new look, and a Back button.",
+        "detail": "The Real Books, Really Printed page now matches the new Game Masters page, and has a Back button at the top that returns you to the page you came from.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.59",
     "staged_on": "2026-11-22",
     "entries": [
