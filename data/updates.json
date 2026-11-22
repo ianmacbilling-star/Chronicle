@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.56",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3756-gm-page-icons",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: gold outline icons.",
+        "detail": "The dashed placeholder circles in the key facts, the Get a Real Book list and the AI groups are now gold line icons in the page colours.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.55",
     "staged_on": "2026-11-22",
     "entries": [
