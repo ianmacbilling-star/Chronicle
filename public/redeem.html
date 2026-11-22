@@ -6,7 +6,7 @@
 <title>Campaignia &mdash; Redeem a Gift</title>
 <meta name="description" content="Redeem a Campaignia gift." />
 <meta name="robots" content="noindex" />
-<link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+<link rel="icon" type="image/png" href="/images/Campaignia_Tab_Icon.png" />
 <link rel="stylesheet" href="/css/fonts.css">
 <link rel="stylesheet" href="/css/style.css">
 <script>/* v3.4.69 -- the page's brand (services/brands.js). The server names it in the cmp_brand cookie, and never for Campaignia; any other brand's theme sheet is laid over Campaignia's here, before the first paint, and the toolbar takes its page color. */(function(){var m=document.cookie.match(/(?:^|;\s*)cmp_brand=([a-z0-9-]+)/);if(!m||m[1]==='campaignia')return;document.write('<link rel="stylesheet" href="/css/themes/'+m[1]+'.css">');document.documentElement.setAttribute('data-brand',m[1]);document.addEventListener('DOMContentLoaded',function(){var t=document.querySelector('meta[name="theme-color"]'),c=getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim();if(t&&c)t.setAttribute('content',c);});})();</script>
@@ -52,12 +52,18 @@
   .links a { color: var(--accent); }
   .hidden { display: none !important; }
 </style>
+<style>
+/* v3.7.46 -- the new Campaignia logo (Ian, 2026-11-20). The old image (cmp-logo-old) stays for any other brand;
+   Campaignia shows the new one (cmp-logo-new) and hides the name text beside the old icon (cmp-logo-label). */
+html[data-brand] .cmp-logo-new { display:none !important; }
+html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { display:none !important; }
+</style>
 </head>
 <body>
 <div class="auth-page">
   <div class="auth-box">
     <div class="auth-logo-wrap">
-      <img class="auth-logo-img" src="/images/Campaignia_Logo.png" alt="Campaignia logo" />
+      <img class="auth-logo-img cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia logo" /><img class="cmp-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" style="display:block;height:48px;width:auto;max-width:90%;margin:0 auto;" />
     </div>
     <div class="auth-title">Redeem a Gift</div>
     <div class="auth-subtitle" id="subtitle">Enter the code from your gift email.</div>

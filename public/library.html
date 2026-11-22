@@ -25,7 +25,7 @@
   <meta name="twitter:title" content="Graphic Novel Gallery — Campaignia" />
   <meta name="twitter:description" content="Graphic novels made with Campaignia — from tabletop campaigns to family stories." />
   <meta name="twitter:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
-  <link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />
+  <link rel="icon" type="image/png" href="/images/Campaignia_Tab_Icon.png" />
 <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     /* v3.4.61 -- colors come from the brand theme sheet, /css/themes/campaignia.css */
@@ -40,6 +40,10 @@
     .nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
     .nav-logo img { height:30px; }
     .nav-logo-text { font-family:'Cinzel',serif; font-size:16px; font-weight:700; color:var(--accent); letter-spacing:3px; }
+    /* v3.7.44 -- the new white Campaignia logo (Ian, 2026-11-20), as in the app header. Another brand keeps the old logo and text. */
+    .nav-logo .nav-logo-new { display:none; }
+    html:not([data-brand]) .nav-logo .nav-logo-old, html:not([data-brand]) .nav-logo .nav-logo-text { display:none; }
+    html:not([data-brand]) .nav-logo .nav-logo-new { display:block; height:30px; width:auto; }
     .nav-actions { display:flex; align-items:center; gap:14px; }
     .nav-link { font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; color:rgba(var(--accent-text-rgb),0.6); text-decoration:none; transition:color .2s; }
     .nav-link:hover { color:var(--accent); }
@@ -100,6 +104,7 @@
 
     @media (max-width:600px) {
       .nav-logo-text { font-size:14px; letter-spacing:2px; }
+      html:not([data-brand]) .nav-logo .nav-logo-new { height:24px; }
       /* v3.0.739 -- column-width is meaningless to a flex row. The JS already picks the column
          count from the container width, so this just tidies the padding. */
       .gallery { padding:0 14px 30px; }
@@ -322,7 +327,8 @@
 <body>
   <nav>
     <a href="/" class="nav-logo" onclick="goHome(event)">
-      <img src="/images/Campaignia_Logo.png" alt="Campaignia" />
+      <img class="nav-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" />
+      <img class="nav-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" />
       <span class="nav-logo-text">Campaignia</span>
     </a>
     <div class="nav-actions">

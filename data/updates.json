@@ -1,5 +1,217 @@
 [
   {
+    "version": "3.7.52",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3752-tab-icon",
+        "kind": "change",
+        "public": true,
+        "summary": "A new browser tab icon: the Campaignia dagger.",
+        "detail": "The tab now shows the maroon sword-and-pen from the new logo.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.51",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3751-print-cover-spine",
+        "kind": "change",
+        "public": true,
+        "summary": "Printed covers: a white spine title in your cover's title style, and CAMPAIGNIA.COM on the trim.",
+        "detail": "The title on the spine is white and uses the same lettering as the title you picked for the front cover. The gold trim line reads CAMPAIGNIA.COM, as in the book preview, and the dagger on the spine is in the logo's maroon.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.50",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3750-backcover-logo-optical-centre",
+        "kind": "change",
+        "public": false,
+        "summary": "Back-cover logo nudged so it looks centred.",
+        "detail": "It was centred by its outline, but its weight sits to the right (thin dagger, heavy lettering), so it looked off. Shifted left by 2.15% of its width on the PDF back cover and the print cover.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.49",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3749-order-forgets-old-book",
+        "kind": "fix",
+        "public": true,
+        "summary": "Switching campaigns clears a print order you had started on another book.",
+        "detail": "After preparing an order, the Order tab of the next campaign you opened could still offer the previous book's interior and cover. It now starts fresh for each campaign.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.48",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3748-preview-toolbar-overlap",
+        "kind": "fix",
+        "public": true,
+        "summary": "The preview toolbar buttons no longer overlap.",
+        "detail": "The session navigation could slide over the zoom buttons on a narrower window. The zoom controls now sit at the far right of the toolbar.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.47",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3747-brand-clear-landing",
+        "kind": "fix",
+        "public": false,
+        "summary": "Staging: ?brand=clear now really goes back to Campaignia.",
+        "detail": "It cleared the brand switch but not the remembered landing page, so after a visit to /memories or /story the Story look stayed. It clears both now.",
+        "td": []
+      },
+      {
+        "id": "3747-story-email-banner",
+        "kind": "fix",
+        "public": false,
+        "summary": "Story emails keep their own heading after the new Campaignia email banner.",
+        "detail": "The Story look swapped the Campaignia banner out by its file name, and the new banner had a new name, so Story emails showed the Campaignia banner. Both names are matched now.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.46",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3746-new-logo-everywhere",
+        "kind": "change",
+        "public": true,
+        "summary": "The new Campaignia logo on every page.",
+        "detail": "Sign in, redeem, invite, gift, password reset, the not-found page and the marketplace pages show the white Campaignia logo; in the app, campaigns without art and the empty screens show the new dagger.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.45",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3745-landing-new-logo",
+        "kind": "change",
+        "public": true,
+        "summary": "The new Campaignia logo on the home page.",
+        "detail": "The white Campaignia logo in the top bar and the footer of the home page, /game-masters, /story and the example books page.",
+        "td": []
+      },
+      {
+        "id": "3745-landing-staging-bar",
+        "kind": "change",
+        "public": false,
+        "summary": "Staging: the home page bar is orange on the right half only, with dark links.",
+        "detail": "As in the app since v3.7.39. The faint gold links could not be read on the orange, so on staging they are dark.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.44",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3744-library-new-logo",
+        "kind": "change",
+        "public": true,
+        "summary": "The new Campaignia logo in the Library.",
+        "detail": "The Library's top bar shows the white Campaignia logo, as in the app.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.43",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3743-new-logo-emails-covers",
+        "kind": "change",
+        "public": true,
+        "summary": "The new Campaignia logo on emails and book covers.",
+        "detail": "Emails open with the white logo above the same tagline. Book covers carry the white logo on the back and the white dagger on the spine; the copyright page inside uses the logo in maroon.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.42",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3742-header-logo-plain-white",
+        "kind": "change",
+        "public": true,
+        "summary": "The header logo is plain white.",
+        "detail": "The glow around the white Campaignia logo is gone.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.41",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3741-header-logo-white-gold",
+        "kind": "change",
+        "public": true,
+        "summary": "The header logo is now white with a soft gold glow.",
+        "detail": "White Campaignia lettering glowing in the same gold as the app's lettering; on narrower screens the dagger mark alone.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.40",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3740-header-new-logo",
+        "kind": "change",
+        "public": true,
+        "summary": "A new Campaignia logo in the header.",
+        "detail": "The maroon Campaignia wordmark with a soft orange glow; on narrower screens the dagger mark alone.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.39",
+    "staged_on": "2026-11-20",
+    "entries": [
+      {
+        "id": "3739-staging-banner-right-half",
+        "kind": "change",
+        "public": false,
+        "summary": "Staging header: orange on the right half only.",
+        "detail": "The logo half of the header keeps its normal colors on staging; the orange fades in from the middle so the test site is still obvious. Production is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.38",
     "staged_on": "2026-11-20",
     "entries": [

@@ -5740,7 +5740,7 @@ ${previewScrollbarCss()}
      column, so removing it would have let the title fall by exactly its height, and a hidden twin
      held the space. With no logo in this column there is nothing to hold, so the twin and its rule
      are deleted rather than left behind describing an element that no longer exists. */
-  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-52.15%);width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   /* v3.0.595 -- WAS a bare reference to titleFaceImp, WHICH ONLY EXISTS IN buildNovelHTML. This is
@@ -5806,7 +5806,7 @@ ${fCover ? `<!-- COVER PAGE -->
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${fCover ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Wordmark_White_Print.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -6524,7 +6524,7 @@ function buildNovelHTML(campaign, sessions, characters, layoutStyle, pageOpts, o
       '<div class="dp-footer">' +
         // v3.2.83 -- TD-1018. Ian: the copyright line sits just above the Campaignia logo, at the foot of the page.
         '<div class="dp-copyright">&copy; ' + copyYear + (copyHolder ? ' ' + _fmEsc(copyHolder) : '') + '. All rights reserved.</div>' +
-        '<img class="dp-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" />' +
+        '<img class="dp-logo" src="/images/Campaignia_Wordmark_Print.png" alt="Campaignia" />' +
         '<div class="dp-disclaimer">Created with Campaignia &middot; campaignia.com.<br/>' +
           // v3.0.391 -- Ian, exact wording. The tabletop role-playing reference is gone: the term
           // is right in the marketing copy and in the AI system prompts, where it does real work,
@@ -6598,7 +6598,7 @@ ${previewScrollbarCss()}
      column, so removing it would have let the title fall by exactly its height, and a hidden twin
      held the space. With no logo in this column there is nothing to hold, so the twin and its rule
      are deleted rather than left behind describing an element that no longer exists. */
-  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:110px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-52.15%);width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${titleFaceImp}
@@ -6755,7 +6755,7 @@ ${previewScrollbarCss()}
   .dp-label { font-family:'Cinzel',serif;font-size:8.5pt;color:#8a6a2a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.04in; }
   .dp-value { font-family:'Crimson Text',serif;font-size:12pt;color:#2c1810;line-height:1.5; }
   .dp-copyright { font-family:'Crimson Text',serif;font-size:10.5pt;color:#3a2a1a;margin-top:0.3in; }
-  .dp-logo { width:0.85in;height:auto;object-fit:contain;display:block;margin:0.14in auto 0.12in;opacity:0.9; }   /* v3.2.83 -- was 0.3in on top; the copyright line now sits just above */
+  .dp-logo { width:1.4in;height:auto;object-fit:contain;display:block;margin:0.14in auto 0.12in;opacity:0.9; }   /* v3.2.83 -- was 0.3in on top; the copyright line now sits just above */
   .dp-disclaimer { font-family:'Crimson Text',serif;font-size:8.5pt;color:#8a7a68;line-height:1.5;margin-top:0.2in;max-width:6in; }
   .dp-footer { margin-top:auto;display:flex;flex-direction:column;align-items:center;width:100%; }   /* v3.2.85 -- TD-1020: the page bottom padding is 0.4in (was 1in), so the footer sits lower */
 
@@ -6857,7 +6857,7 @@ ${allSessionsHTML}
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && (!paginated || pageOpts.page === totalSessions)) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Logo.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Wordmark_White_Print.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -7765,10 +7765,16 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   // v3.0.616 -- THE MARK MOVES TO THE BACK PANEL. Ian: same location, on the back. It is no longer
   // optional, so there is no flag: the Platinum hide-logo control is gone and both marks always draw.
   // The FRONT panel keeps none, which is what makes room for a built title overlay to own that space.
-  var logo = '<img class="wc-logo" src="/images/Campaignia_Logo.png" alt="" />';
-  var spineLogo = '<img class="wc-spine-logo" src="/images/Campaignia_Logo.png" alt="" />';
+  var logo = '<img class="wc-logo" src="/images/Campaignia_Wordmark_White_Print.png" alt="" />';
+  var spineLogo = '<img class="wc-spine-logo" src="/images/Campaignia_Mark_Print.png" alt="" />';   // v3.7.51 -- maroon, to match the red inside the book (white: Campaignia_Mark_White_Print.png)
   var spineFont = Math.max(7, Math.min(20, Math.round(spineW * 56)));
   var spineLogoW = Math.max(0.12, Math.min(0.5, spineW * 0.78));
+  // v3.7.51 -- the spine title is set in the cover title's face (Ian). Chronicle and Engraved are Cinzel, which the spine
+  // already inherits; a built title is a picture with no face, so its spine keeps Cinzel too. The faces these name are
+  // already in the document: Bangers in every one (baseFontCss), EB Garamond / Dancing Script via titleFaceCss above.
+  var SPINE_FACE = { pulp: "'Bangers',cursive", manuscript: "'EB Garamond',Georgia,serif", quill: "'Dancing Script',cursive" };
+  var _spineFaceKey = (wco && !builtTitle) ? String(wco.titleStyle || '') : '';
+  var spineFaceCss = Object.prototype.hasOwnProperty.call(SPINE_FACE, _spineFaceKey) ? ('font-family:' + SPINE_FACE[_spineFaceKey] + ';') : '';
 
   // v3.0.791 -- TD-591. THE FRAME WAS MEASURED FROM THE SHEET, AND THE SHEET IS NOT THE BOOK.
   //
@@ -7850,7 +7856,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   } catch (e) {}
 
   var framing = '<div class="wc-bg"></div><div class="wc-border"></div><div class="wc-border-inner"></div>';
-  var mark = '<div class="wc-mark">CAMPAIGNIA</div>';
+  var mark = '<div class="wc-mark">CAMPAIGNIA.COM</div>';   // v3.7.51 -- the same words as the book PDF's covers (Ian)
   var frontInner = frontImg
     ? framing +
       '<div class="wc-frame"><img class="wc-img cover-art-img" src="' + frontImg + '" alt="" />' +
@@ -7942,7 +7948,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-front .wc-mark { left:' + _markLeftCss(false) + '; }' +
     '.wc-back  .wc-mark { left:' + _markLeftCss(true)  + '; }' +
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
-    '.wc-spine-text { font-size:' + spineFont + 'pt; color:' + titleColor + '; letter-spacing:0.06em; }' +
+    '.wc-spine-text { font-size:' + spineFont + 'pt; color:#ffffff; letter-spacing:0.06em; ' + spineFaceCss + '}' +   // v3.7.51 -- white, in the cover title's face
     // v3.0.791 -- TD-591. 0.16in from the SHEET put this 0.715in round the board on a casewrap and
     // 0.035in inside the trim on a paperback -- inside the cut tolerance. Missing from both books,
     // present on both proofs, which is exactly what a trimmed-off element looks like.
@@ -7967,7 +7973,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // beside it is left at 0.95 on purpose: one printed sheet then carries a heavy alpha and a
     // light one, and comparing them says whether flattening is faithful across the range
     // rather than only at one value.
-    '.wc-logo { width:1.05in; height:auto; object-fit:contain; opacity:' + COVER_LOGO_OPACITY + '; }' +
+    '.wc-logo { width:1.6in; height:auto; object-fit:contain; transform:translateX(-2.15%); opacity:' + COVER_LOGO_OPACITY + '; }' +   // v3.7.50 -- optical centring: the logo's weight sits 2.15% right of its middle
     // v3.0.616 -- bottom centre of the BACK panel, the position the front cap used to give it, and
     // the same COVER_LOGO_OPACITY. z-index clears the artwork; the 40 percent is still the
     // v3.0.378 flattener test with the spine logo at 0.95 as its control.

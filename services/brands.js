@@ -7,7 +7,7 @@
 //
 // HOW A PAGE'S BRAND IS CHOSEN, first match wins:
 //   1. the staging switch: ?brand=<key> on any page, remembered by that browser (cmp_brand_switch);
-//      ?brand=clear forgets it. Never on production.
+//      ?brand=clear forgets it -- and, since v3.7.47, the landing page too (step 5). Never on production.
 //   2. the BRAND Railway variable (staging only): the whole staging site shows that brand.
 //   3. a brand's own web address (BRANDS[k].hosts), once a brand has one.
 //   4. the signed-in person's brand (users.home_brand, cached in the session).
@@ -256,7 +256,7 @@ function emailLook(key, html) {
   if (alts.length) s = s.replace(new RegExp('(' + alts.join('|') + ')(?![0-9a-fA-F])', 'gi'), function (hit) { return map[hit.toLowerCase()] || hit; });
   // v3.4.83 -- with the logo beside it (Ian: "You can still put the logo on these emails"): the small chest picture the
   // emails already send (Campaignia_Favicon.png, 64px, 5 KB), from the same address as the banner it replaces.
-  return s.replace(/<img\b[^>]*?src="([^"]*?)Campaignia_Email_Banner\.png"[^>]*>/gi, function (m, base) {
+  return s.replace(/<img\b[^>]*?src="([^"]*?)Campaignia_Email_Banner(?:_v2)?\.png"[^>]*>/gi, function (m, base) {   // v3.7.47: the _v2 banner (v3.7.43) too
     return '<div style="text-align:center;padding:22px 12px 12px;line-height:1.2;">' +
       '<img src="' + base + 'Campaignia_Favicon.png" width="52" height="52" alt="" style="display:inline-block;vertical-align:middle;border:0;margin-right:10px;" />' +
       '<span style="display:inline-block;vertical-align:middle;font-family:' + look.font.replace(/"/g, "'") + ';font-size:30px;line-height:1.2;font-weight:600;letter-spacing:1px;color:' + look.title + ';">Campaignia</span></div>';
@@ -305,12 +305,13 @@ function middleware(getDb) {
         return next();
       }
       var sw = readCookie(req, COOKIE_SWITCH);
+      var cleared = false;
       if (!prod && typeof req.query.brand === 'string') {
         var q = req.query.brand.trim().toLowerCase();
-        if (q === 'clear' || q === 'off' || q === '') { clearCookie(res, req, COOKIE_SWITCH); sw = null; }
+        if (q === 'clear' || q === 'off' || q === '') { clearCookie(res, req, COOKIE_SWITCH); clearCookie(res, req, COOKIE_ENTRY); sw = null; cleared = true; }   // v3.7.47: the landing page too
         else if (isKnown(q)) { setCookie(res, req, COOKIE_SWITCH, q, 30 * DAY); sw = q; }
       }
-      var entry = readCookie(req, COOKIE_ENTRY);
+      var entry = cleared ? null : readCookie(req, COOKIE_ENTRY);
       var lb = landingBrand(req.path);
       if (lb && allowed(lb, prod)) { if (entry !== lb) setCookie(res, req, COOKIE_ENTRY, lb, 180 * DAY); entry = lb; }
       var userBrand = null;

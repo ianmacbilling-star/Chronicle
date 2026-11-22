@@ -80,7 +80,7 @@ function passwordResetHTML(name, resetUrl) {
 </head>
 <body>
   <div class="container">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">Password Reset Request</div>
       <div class="text">Greetings, ${name}.</div>
@@ -119,7 +119,7 @@ function verifyEmailHTML(name, verifyUrl) {
 </head>
 <body>
   <div class="container">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">Confirm your email</div>
       <div class="text">Greetings, ${name}.</div>
@@ -162,7 +162,7 @@ function welcomeHTML(name) {
 </head>
 <body>
   <div class="container">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">Welcome to Campaignia, ${name}!</div>
       <div class="text">Thank you for signing up &mdash; we're absolutely thrilled to have you. Campaignia turns your imagination into illustrated comics and print-ready graphic novels, so the stories you tell become something you can hold, share, and keep forever.</div>
@@ -317,7 +317,7 @@ function inviteEmailHTML(invitee_hint, dm_name, campaign_name, character_name, c
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:${TC['panel']};">
   <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:${TC['accent']};margin-bottom:12px;">${dm_name} invited you to a campaign</div>
       <div style="font-size:14px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:20px;">A place in the story awaits you.</div>
@@ -367,7 +367,7 @@ function joinNotificationHTML(dm_name, player_name, player_email, campaign_name,
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:${TC['panel']};">
   <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:${TC['accent']};margin-bottom:12px;">${player_name} joined ${campaign_name}</div>
       <div style="font-size:14px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:20px;">Greetings, ${dm_name}.</div>
@@ -410,7 +410,7 @@ function playerJoinedWelcomeHTML(player_name, dm_name, campaign_name, character_
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:${TC['panel']};">
   <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:${TC['accent']};margin-bottom:12px;">Welcome to ${campaign_name}</div>
       <div style="font-size:14px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:20px;">Greetings, ${player_name}.</div>
@@ -626,7 +626,7 @@ function orderConfirmationHTML(name, order) {
 </head>
 <body>
   <div class="container">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
       <div class="text">Your print order for <strong>${esc(bookTitle)}</strong> has been received and sent to print. Here are the details:</div>
@@ -742,7 +742,7 @@ function purchaseReceiptHTML(name, receipt) {
 </head>
 <body>
   <div class="container">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">Thank you${name ? ', ' + esc(name) : ''}!</div>
       <div class="text">${esc(lead)}</div>
@@ -884,7 +884,7 @@ function orderProblemHTML(name, order) {
 </head>
 <body>
   <div class="container">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">There was a problem with your order</div>
       <div class="text">${name ? esc(name) + ', we' : 'We'} ran into a problem while placing your print order for <strong>${esc(bookTitle)}</strong>, so it has not been sent to print.</div>
@@ -1054,7 +1054,7 @@ function trialLifecycleHTML(copy, name, ctaUrl) {
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:${TC['panel']};">
   <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:${TC['on-panel']};margin-bottom:16px;">${copy.headline}</div>
       <div style="font-size:15px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:24px;">Hi ${safeName},<br><br>${copy.body}</div>
@@ -1265,7 +1265,7 @@ function giftEmailHTML(g) {
   <link href="${EMAIL_FONT_CSS}" rel="stylesheet"></head>
 <body style="margin:0;padding:24px 0;background:${TC['panel']};">
   <div style="max-width:520px;margin:0 auto;background:${TC['page-bg']};border:2px solid #000000;border-radius:0;overflow:hidden;font-family:Georgia,serif;color:${TC['accent-pale']};">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div style="padding:32px;">
       <div style="font-size:20px;color:${TC['on-panel']};margin-bottom:16px;">${esc(g.fromName)} sent you a gift</div>
       <div style="font-size:15px;line-height:1.7;color:${TC['accent-pale']};margin-bottom:18px;">Hi ${esc(g.recipientName || 'there')},<br><br>${esc(g.fromName)} has given you <b>${esc(g.description)}</b>.</div>
@@ -1588,7 +1588,7 @@ function emailChangeShell(title, inner) {
 </head>
 <body>
   <div class="container">
-    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
+    <div style="line-height:0;font-size:0;"><img src="${EMAIL_ASSET_BASE}/Campaignia_Email_Banner_v2.png" alt="Campaignia - You make it legendary. Campaignia makes it forever." width="520" style="display:block;width:100%;max-width:520px;height:auto;border:0;" /></div>
     <div class="body">
       <div class="title">${title}</div>
       ${inner}

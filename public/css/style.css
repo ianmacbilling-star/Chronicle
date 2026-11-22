@@ -2256,12 +2256,26 @@ body.role-player #stab-export { display: block !important; }
 .panel-dark .form-input::placeholder{color:rgba(var(--accent-text-rgb),0.5);}
 
 /* ===== STAGING ENVIRONMENT INDICATOR ===== */
+/* v3.7.39 -- only the right half of the header is orange (Ian, 2026-11-20). The logo half keeps the normal
+   header colors (logo text included); the orange fades in across the right half so staging is still obvious. */
 html.staging-env .app-header{
-  background:#ff6a00;
-  border-bottom:1px solid #7a2e00;
-  box-shadow:0 2px 12px rgba(0,0,0,0.35);
+  background:linear-gradient(90deg,var(--ink-bg) 0%,var(--ink-bg) 45%,#ff6a00 62%,#ff6a00 100%);
 }
-html.staging-env .app-logo-text{color:#2b1400;}
+
+/* ===== HEADER LOGO (v3.7.40) =====
+   The new Campaignia logo (Ian, 2026-11-20): the maroon wordmark with a light orange glow so it reads on the
+   dark header. v3.7.41 -- white lettering, and the glow is the font gold (--accent-bright) instead of orange (Ian).
+   v3.7.42 -- no glow at all: plain white lettering (Ian, 2026-11-20).
+   Campaignia only -- another brand sets data-brand on <html> and keeps the old logo and text.
+   Up to 1100px the full wordmark does not fit (the old text was hidden there too), so the dagger mark alone shows. */
+.app-logo .app-logo-new{display:none;width:auto;}
+html:not([data-brand]) .app-logo .app-logo-old,
+html:not([data-brand]) .app-logo .app-logo-text{display:none;}
+html:not([data-brand]) .app-logo .app-logo-wordmark{display:block;height:30px;}
+@media (max-width: 1100px) {
+  html:not([data-brand]) .app-logo .app-logo-wordmark{display:none;}
+  html:not([data-brand]) .app-logo .app-logo-mark{display:block;height:32px;}
+}
 
 /* Storyboard moment prominence control */
 .moment-prom{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:rgba(var(--accent-text-rgb),0.7);}
@@ -2812,9 +2826,11 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    the pager was landing hard right). Absolute centring only on wider screens; below that it wraps
    normally in the flex row so it can never overlap the zoom controls on mobile. */
 .nprev-toolbar { position: relative; }
-@media (min-width: 820px) {
-  .nprev-toolbar > #novel-pager { position: absolute; left: 50%; transform: translateX(-50%); margin: 0; }
-}
+/* v3.7.48 -- no more absolute centring: it slid the pager over the zoom buttons on narrower windows (Ian). The pager
+   now takes the middle of the row in normal flex order, and the zoom controls + a small True View sit at the right. */
+.nprev-toolbar > #novel-pager { flex: 1 1 260px; justify-content: center; }
+.nprev-toolbar > .nprev-right { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: 0 0 auto; }
+.nprev-toolbar .nprev-tv { font-size: 10px; padding: 2px 7px; line-height: 1.4; min-height: 0; opacity: 0.8; }
 
 /* ==================== Order & Publish tab ====================
    Two bordered cards: the print order (two columns on desktop -- what-to-print + format on the
@@ -3208,3 +3224,8 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
 /* v3.5.60 -- our tooltip everywhere (Ian: like the ?s help's): every title shows in this, placed by app.js */
 #cg-tip{position:fixed;z-index:100000;display:none;max-width:340px;white-space:pre-line;background:var(--light-panel);color:var(--hover-fill-text);
   font:400 13px/1.45 Georgia,serif;letter-spacing:0;text-transform:none;text-align:left;padding:7px 11px;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,0.5);pointer-events:none;}
+
+/* v3.7.46 -- the new Campaignia logo (Ian, 2026-11-20). The old image (cmp-logo-old) stays for any other brand;
+   Campaignia shows the new one (cmp-logo-new) and hides the name text beside the old icon (cmp-logo-label). */
+html[data-brand] .cmp-logo-new { display:none !important; }
+html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { display:none !important; }
