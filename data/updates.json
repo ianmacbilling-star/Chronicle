@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.64",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3764-gm-clip-panel",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the step 1 clip shows whole in a thinner panel.",
+        "detail": "The character build clip in How it Works step 1 sits in a panel the same shape as the clip, so the whole picture shows, the finished character included.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.63",
     "staged_on": "2026-11-22",
     "entries": [

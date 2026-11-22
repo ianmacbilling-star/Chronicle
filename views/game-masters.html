@@ -262,6 +262,10 @@
     /* v3.7.63 -- NO DOTS (Ian, 2026-11-22: "get rid of the dots. We don't need them."). landing.css lays a halftone dot screen
        over every landing page (body::before); this page hides it, as the Example Books page already does. Home keeps its own. */
     body::before{display:none;}
+    /* v3.7.64 -- A THINNER PANEL FOR THE CLIP (Ian, 2026-11-22: "make the panel a little thinner. The final picture in that
+       Mp4 needs to fit in the panel"). On a wide screen the clip's box takes the clip's own shape (640 x 820), as tall as the
+       other pictures and centred in its column, so the whole frame shows and nothing is cut off, the last picture included. */
+    .gm-steps-pic .gm-pic.has-video{inset:0 auto auto 50%;height:100%;width:auto;aspect-ratio:640/820;max-width:100%;transform:translateX(-50%);}
     @media (max-width:900px){ .gm-step .gm-pic.has-video{aspect-ratio:640/820;} }
   </style>
 </head>
