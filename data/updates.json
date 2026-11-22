@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.59",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3759-gm-faq-from-memories",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Point of View and two FAQ answers taken from the Memories page.",
+        "detail": "The Point of View feature now says what the Memories page says (narrative styles, lengths and points of view), and the FAQ answers how long printing and shipping take and what a printed book costs.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.58",
     "staged_on": "2026-11-22",
     "entries": [
