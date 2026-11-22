@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.62",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3762-gm-clip-fill",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the step 1 clip fills its panel.",
+        "detail": "The character build clip in How it Works step 1 is zoomed to fill its box instead of sitting in it with dark space either side.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.61",
     "staged_on": "2026-11-22",
     "entries": [

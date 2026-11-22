@@ -256,7 +256,9 @@
        silent, looping, played inline. It is taller than wide, so it is shown whole (contain) on a dark panel, and on a
        phone its box takes the clip's own shape instead of 4:3. */
     .gm-pic.has-video{padding:0;border:1px solid rgba(var(--accent-rgb),0.3);background:var(--panel-deep);overflow:hidden;}
-    .gm-pic.has-video video{width:100%;height:100%;object-fit:contain;display:block;}
+    /* v3.7.62 -- Ian: "zoom into it so it fills the panel". Cover, not contain: the clip fills the box edge to edge and a
+       little of its top and bottom is trimmed on a wide screen. On a phone the box is the clip's own shape, so nothing is. */
+    .gm-pic.has-video video{width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block;}
     @media (max-width:900px){ .gm-step .gm-pic.has-video{aspect-ratio:640/820;} }
   </style>
 </head>
