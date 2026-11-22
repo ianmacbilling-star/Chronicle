@@ -259,6 +259,9 @@
     /* v3.7.62 -- Ian: "zoom into it so it fills the panel". Cover, not contain: the clip fills the box edge to edge and a
        little of its top and bottom is trimmed on a wide screen. On a phone the box is the clip's own shape, so nothing is. */
     .gm-pic.has-video video{width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block;}
+    /* v3.7.63 -- NO DOTS (Ian, 2026-11-22: "get rid of the dots. We don't need them."). landing.css lays a halftone dot screen
+       over every landing page (body::before); this page hides it, as the Example Books page already does. Home keeps its own. */
+    body::before{display:none;}
     @media (max-width:900px){ .gm-step .gm-pic.has-video{aspect-ratio:640/820;} }
   </style>
 </head>

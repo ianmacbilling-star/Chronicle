@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.63",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3763-gm-no-dots",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: no halftone dots.",
+        "detail": "The fine dot screen laid over the Game Masters page is gone, so the pictures and the clip show clean.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.62",
     "staged_on": "2026-11-22",
     "entries": [
