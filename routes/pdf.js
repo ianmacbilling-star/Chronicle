@@ -5740,7 +5740,7 @@ ${previewScrollbarCss()}
      column, so removing it would have let the title fall by exactly its height, and a hidden twin
      held the space. With no logo in this column there is nothing to hold, so the twin and its rule
      are deleted rather than left behind describing an element that no longer exists. */
-  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-52.15%);width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   /* v3.0.595 -- WAS a bare reference to titleFaceImp, WHICH ONLY EXISTS IN buildNovelHTML. This is
@@ -6598,7 +6598,7 @@ ${previewScrollbarCss()}
      column, so removing it would have let the title fall by exactly its height, and a hidden twin
      held the space. With no logo in this column there is nothing to hold, so the twin and its rule
      are deleted rather than left behind describing an element that no longer exists. */
-  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-50%);width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-52.15%);width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${titleFaceImp}
@@ -7967,7 +7967,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // beside it is left at 0.95 on purpose: one printed sheet then carries a heavy alpha and a
     // light one, and comparing them says whether flattening is faithful across the range
     // rather than only at one value.
-    '.wc-logo { width:1.6in; height:auto; object-fit:contain; opacity:' + COVER_LOGO_OPACITY + '; }' +
+    '.wc-logo { width:1.6in; height:auto; object-fit:contain; transform:translateX(-2.15%); opacity:' + COVER_LOGO_OPACITY + '; }' +   // v3.7.50 -- optical centring: the logo's weight sits 2.15% right of its middle
     // v3.0.616 -- bottom centre of the BACK panel, the position the front cap used to give it, and
     // the same COVER_LOGO_OPACITY. z-index clears the artwork; the 40 percent is still the
     // v3.0.378 flattener test with the spine logo at 0.95 as its control.

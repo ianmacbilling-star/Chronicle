@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.50",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3750-backcover-logo-optical-centre",
+        "kind": "change",
+        "public": false,
+        "summary": "Back-cover logo nudged so it looks centred.",
+        "detail": "It was centred by its outline, but its weight sits to the right (thin dagger, heavy lettering), so it looked off. Shifted left by 2.15% of its width on the PDF back cover and the print cover.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.49",
     "staged_on": "2026-11-22",
     "entries": [
