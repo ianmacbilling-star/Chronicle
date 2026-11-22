@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.58",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3758-tiers-gift-style-back",
+        "kind": "change",
+        "public": true,
+        "summary": "The gift page's Back button takes you back to the page you came from.",
+        "detail": "Signed in, Back on the Give as a Gift page used to take you into the app even when you came from a landing page. It now takes you back to that page. The gift page and the Compare the Tiers window on the Game Masters page also have the new look.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.57",
     "staged_on": "2026-11-22",
     "entries": [

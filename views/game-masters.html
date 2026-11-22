@@ -238,9 +238,23 @@
     .gm-plans .tg-open{font-family:var(--font-label);font-weight:700;font-size:15px;letter-spacing:0.1em;padding:14px 30px;border-radius:6px;border:1.5px solid rgba(var(--accent-rgb),0.7);background:transparent;color:var(--accent-bright);box-shadow:none;}
     .gm-plans .tg-open:hover{transform:translateY(-2px);background:var(--accent);color:var(--page-bg);box-shadow:none;}
     @media (max-width:900px){ .gm-plans .comic-page{padding:0 16px;} .gm-plans .tier-row{padding:14px 18px;} .gm-plans .pass-cards{grid-template-columns:1fr;padding:8px 18px 22px;} }
+    /* v3.7.58 -- COMPARE THE TIERS IN THE NEW STYLE (Ian, 2026-11-22). The window is built by tier-grid.js and added to
+       <body>, so body.gm-page scopes it to this page; tier-grid.css and the home page's window are untouched. */
+    body.gm-page .tg-root{--tg-display:var(--font-display);}
+    body.gm-page .tg-overlay{background:rgba(6,4,2,0.9);}
+    body.gm-page .tg-panel{border:1px solid rgba(var(--accent-rgb),0.35);border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,0.6);overflow:hidden;}
+    body.gm-page .tg-head{background:transparent;border-bottom:1px solid rgba(var(--accent-rgb),0.25);padding:20px 26px;}
+    body.gm-page .tg-title{font-family:var(--font-display);font-weight:700;font-size:clamp(24px,3vw,34px);letter-spacing:0.02em;color:var(--accent-bright);}
+    body.gm-page .tg-close{font-family:var(--font-label);font-weight:700;font-size:13px;letter-spacing:0.1em;padding:10px 18px;border:1.5px solid rgba(var(--accent-rgb),0.7);border-radius:6px;background:transparent;color:var(--accent-bright);}
+    body.gm-page .tg-close:hover{background:var(--accent);color:var(--page-bg);border-color:var(--accent);}
+    body.gm-page .tg-table thead th{border-bottom:1px solid rgba(var(--accent-rgb),0.35);}
+    body.gm-page .tg-tier-name{font-weight:700;font-size:20px;letter-spacing:0.06em;}
+    body.gm-page .tg-table th.tg-feat,body.gm-page .tg-table td.tg-feat{letter-spacing:0.1em;}
+    body.gm-page .tg-val{font-weight:700;}
+    body.gm-page .tg-foot{border-top:1px solid rgba(var(--accent-rgb),0.35);}
   </style>
 </head>
-<body>
+<body class="gm-page">
 
 
 <!-- NAV -->
