@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.55",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3755-gm-page-audio-transcript",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: step 2 mentions audio recordings and transcripts.",
+        "detail": "How it Works, step 2 is now Type, Paste or Upload, and says you can drop in the session transcript or upload the audio recording of the session.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.54",
     "staged_on": "2026-11-22",
     "entries": [
