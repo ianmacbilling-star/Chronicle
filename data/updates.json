@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.54",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3754-gm-page-character-sheet",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: step 1 mentions uploading a character sheet.",
+        "detail": "How it Works, step 1 now says you can upload an existing character sheet and Campaignia reads the key details from it.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.53",
     "staged_on": "2026-11-22",
     "entries": [
