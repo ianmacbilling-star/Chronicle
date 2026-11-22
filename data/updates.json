@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.57",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3757-gm-page-plans-style",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: plans and Sign In in the new style.",
+        "detail": "Choose Your Path (free trial, passes, subscriptions, Compare the Tiers) and the Sign In button now use the page's own lettering and buttons: red for starting, a gold outline for picking a plan.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.56",
     "staged_on": "2026-11-22",
     "entries": [

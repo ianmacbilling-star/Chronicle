@@ -204,6 +204,40 @@
     .gm-final p{font-size:21px;line-height:1.7;margin:0 auto 6px;max-width:700px;}
     .gm-final .gm-cta-row{justify-content:center;}
     #how,#pricing,#faq,#features{scroll-margin-top:66px;}   /* the fixed nav must not cover a heading the menu jumps to */
+    /* v3.7.57 -- THE OLD PARTS IN THE NEW STYLE (Ian, 2026-11-22): the Choose Your Path block (tiers, passes, Start Free,
+       Compare the Tiers) and the Sign In button, dressed like the rest of this page. On this page only -- landing.css is
+       untouched, so the home page keeps its look. */
+    nav .btn-nav{font-family:var(--font-label);font-weight:700;font-size:13px;letter-spacing:0.12em;padding:8px 20px;background:var(--button-cta);color:#fff;border:2px solid var(--button-cta);border-radius:6px;box-shadow:0 4px 14px rgba(192,57,43,0.35);}
+    nav .btn-nav:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(192,57,43,0.45);}
+    @media (max-width:600px){ nav .btn-nav{font-size:12px;padding:6px 14px;} }
+    .gm-plans{padding:90px 0 40px;background:var(--page-bg);}
+    .gm-plans .comic-book{background:transparent;}
+    .gm-plans .comic-page{max-width:1200px;margin:0 auto;padding:0 32px;background:transparent;}
+    .gm-plans .panel-pricing{border:1px solid rgba(var(--accent-rgb),0.3);border-radius:14px;overflow:hidden;background:var(--panel);}
+    .gm-plans .pricing-header{background:transparent;border-bottom:1px solid rgba(var(--accent-rgb),0.2);padding:34px 28px 24px;text-align:center;}
+    .gm-plans .pricing-header-title{font-family:var(--font-display);font-weight:700;font-size:clamp(30px,4vw,52px);letter-spacing:0.02em;color:var(--accent-bright);line-height:1.1;}
+    .gm-plans .pricing-header-sub{color:rgba(var(--on-panel-rgb),0.7);font-size:18px;margin-top:8px;}
+    .gm-plans .tier-row{padding:16px 28px;border-bottom:1px solid rgba(var(--accent-rgb),0.12);gap:18px;}
+    .gm-plans .tier-name-row{font-family:var(--font-display);font-weight:700;font-size:24px;letter-spacing:0.06em;}
+    .gm-plans .tier-perks{font-size:16px;}
+    .gm-plans .tier-price-tag,.gm-plans .pass-card-price{font-family:var(--font-display);font-weight:700;font-size:26px;color:#fff;}
+    .gm-plans .plan-blurb{padding:24px 28px 14px;border-bottom:0;}
+    .gm-plans .plan-blurb b{font-family:var(--font-label);font-weight:700;font-size:15px;letter-spacing:0.16em;color:var(--accent);}
+    .gm-plans .pass-cards{padding:8px 28px 26px;gap:18px;border-bottom:1px solid rgba(var(--accent-rgb),0.12);}
+    .gm-plans .pass-card{border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;background:var(--page-bg);padding:24px 20px 22px;}
+    .gm-plans .pass-card:hover{border-color:var(--accent);background:rgba(var(--accent-rgb),0.05);}
+    .gm-plans .pass-card-kicker{font-family:var(--font-label);font-size:11px;letter-spacing:0.2em;color:var(--accent);}
+    .gm-plans .pass-card-term{font-family:var(--font-display);font-weight:700;font-size:24px;letter-spacing:0.06em;color:var(--on-panel);}
+    .gm-plans .pass-card-tokens{font-family:var(--font-display);font-weight:700;font-size:30px;color:var(--accent-bright);}
+    /* every button: the page's button, red for starting, a gold outline for choosing a plan */
+    .gm-plans .btn-tier,.gm-plans .btn-pass,.gm-plans .tier-row .btn-tier{font-family:var(--font-label);font-weight:700;font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:6px;border:1.5px solid rgba(var(--accent-rgb),0.7);background:transparent;color:var(--accent-bright);box-shadow:none;}
+    .gm-plans .btn-tier:hover,.gm-plans .btn-pass:hover{transform:translateY(-2px);background:var(--accent);color:var(--page-bg);border-color:var(--accent);box-shadow:none;}
+    .gm-plans .tier-trial .btn-tier{background:var(--button-cta);border-color:var(--button-cta);color:#fff;box-shadow:0 6px 20px rgba(192,57,43,0.35);}
+    .gm-plans .tier-trial .btn-tier:hover{background:var(--button-cta);color:#fff;border-color:var(--button-cta);box-shadow:0 10px 28px rgba(192,57,43,0.45);}
+    .gm-plans .tg-open-wrap{border-top:0;padding:22px 20px 26px;}
+    .gm-plans .tg-open{font-family:var(--font-label);font-weight:700;font-size:15px;letter-spacing:0.1em;padding:14px 30px;border-radius:6px;border:1.5px solid rgba(var(--accent-rgb),0.7);background:transparent;color:var(--accent-bright);box-shadow:none;}
+    .gm-plans .tg-open:hover{transform:translateY(-2px);background:var(--accent);color:var(--page-bg);box-shadow:none;}
+    @media (max-width:900px){ .gm-plans .comic-page{padding:0 16px;} .gm-plans .tier-row{padding:14px 18px;} .gm-plans .pass-cards{grid-template-columns:1fr;padding:8px 18px 22px;} }
   </style>
 </head>
 <body>
