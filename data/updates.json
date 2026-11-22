@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.51",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3751-print-cover-spine",
+        "kind": "change",
+        "public": true,
+        "summary": "Printed covers: a white spine title in your cover's title style, and CAMPAIGNIA.COM on the trim.",
+        "detail": "The title on the spine is white and uses the same lettering as the title you picked for the front cover. The gold trim line reads CAMPAIGNIA.COM, as in the book preview, and the dagger on the spine is in the logo's maroon.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.50",
     "staged_on": "2026-11-22",
     "entries": [

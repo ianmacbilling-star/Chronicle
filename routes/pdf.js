@@ -7766,9 +7766,15 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   // optional, so there is no flag: the Platinum hide-logo control is gone and both marks always draw.
   // The FRONT panel keeps none, which is what makes room for a built title overlay to own that space.
   var logo = '<img class="wc-logo" src="/images/Campaignia_Wordmark_White_Print.png" alt="" />';
-  var spineLogo = '<img class="wc-spine-logo" src="/images/Campaignia_Mark_White_Print.png" alt="" />';
+  var spineLogo = '<img class="wc-spine-logo" src="/images/Campaignia_Mark_Print.png" alt="" />';   // v3.7.51 -- maroon, to match the red inside the book (white: Campaignia_Mark_White_Print.png)
   var spineFont = Math.max(7, Math.min(20, Math.round(spineW * 56)));
   var spineLogoW = Math.max(0.12, Math.min(0.5, spineW * 0.78));
+  // v3.7.51 -- the spine title is set in the cover title's face (Ian). Chronicle and Engraved are Cinzel, which the spine
+  // already inherits; a built title is a picture with no face, so its spine keeps Cinzel too. The faces these name are
+  // already in the document: Bangers in every one (baseFontCss), EB Garamond / Dancing Script via titleFaceCss above.
+  var SPINE_FACE = { pulp: "'Bangers',cursive", manuscript: "'EB Garamond',Georgia,serif", quill: "'Dancing Script',cursive" };
+  var _spineFaceKey = (wco && !builtTitle) ? String(wco.titleStyle || '') : '';
+  var spineFaceCss = Object.prototype.hasOwnProperty.call(SPINE_FACE, _spineFaceKey) ? ('font-family:' + SPINE_FACE[_spineFaceKey] + ';') : '';
 
   // v3.0.791 -- TD-591. THE FRAME WAS MEASURED FROM THE SHEET, AND THE SHEET IS NOT THE BOOK.
   //
@@ -7850,7 +7856,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   } catch (e) {}
 
   var framing = '<div class="wc-bg"></div><div class="wc-border"></div><div class="wc-border-inner"></div>';
-  var mark = '<div class="wc-mark">CAMPAIGNIA</div>';
+  var mark = '<div class="wc-mark">CAMPAIGNIA.COM</div>';   // v3.7.51 -- the same words as the book PDF's covers (Ian)
   var frontInner = frontImg
     ? framing +
       '<div class="wc-frame"><img class="wc-img cover-art-img" src="' + frontImg + '" alt="" />' +
@@ -7942,7 +7948,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     '.wc-front .wc-mark { left:' + _markLeftCss(false) + '; }' +
     '.wc-back  .wc-mark { left:' + _markLeftCss(true)  + '; }' +
     '.wc-spine-group { transform:rotate(90deg); transform-origin:center; white-space:nowrap; }' +
-    '.wc-spine-text { font-size:' + spineFont + 'pt; color:' + titleColor + '; letter-spacing:0.06em; }' +
+    '.wc-spine-text { font-size:' + spineFont + 'pt; color:#ffffff; letter-spacing:0.06em; ' + spineFaceCss + '}' +   // v3.7.51 -- white, in the cover title's face
     // v3.0.791 -- TD-591. 0.16in from the SHEET put this 0.715in round the board on a casewrap and
     // 0.035in inside the trim on a paperback -- inside the cut tolerance. Missing from both books,
     // present on both proofs, which is exactly what a trimmed-off element looks like.
