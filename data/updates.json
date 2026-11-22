@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.53",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3753-new-game-masters-page",
+        "kind": "change",
+        "public": false,
+        "summary": "New Game Masters page (/game-masters), in progress.",
+        "detail": "Built from Riley's Normal home page plan with the How it Works, AI and FAQ sections of his Restrained plan. Not indexed yet; dashed boxes are pictures and clips still to come, yellow marks are facts to settle, and the testimonials are placeholders. The old page is kept as views/game-masters-v1.html; the home page is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.52",
     "staged_on": "2026-11-22",
     "entries": [
