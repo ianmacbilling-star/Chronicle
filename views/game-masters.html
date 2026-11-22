@@ -252,6 +252,12 @@
     body.gm-page .tg-table th.tg-feat,body.gm-page .tg-table td.tg-feat{letter-spacing:0.1em;}
     body.gm-page .tg-val{font-weight:700;}
     body.gm-page .tg-foot{border-top:1px solid rgba(var(--accent-rgb),0.35);}
+    /* v3.7.61 -- THE FIRST CLIP (Ian, 2026-11-22: the Gubuk character build on step 1). A video in place of the dashed box:
+       silent, looping, played inline. It is taller than wide, so it is shown whole (contain) on a dark panel, and on a
+       phone its box takes the clip's own shape instead of 4:3. */
+    .gm-pic.has-video{padding:0;border:1px solid rgba(var(--accent-rgb),0.3);background:var(--panel-deep);overflow:hidden;}
+    .gm-pic.has-video video{width:100%;height:100%;object-fit:contain;display:block;}
+    @media (max-width:900px){ .gm-step .gm-pic.has-video{aspect-ratio:640/820;} }
   </style>
 </head>
 <body class="gm-page">
@@ -353,7 +359,7 @@
     <h2 class="gm-h2">How it Works</h2>
     <div class="gm-steps">
       <div class="gm-steps-pic" aria-hidden="true">
-        <div class="gm-pic on" data-pic="0"><b>Clip</b>The character creator: reference pictures and a description becoming a consistent character</div>
+        <div class="gm-pic on has-video" data-pic="0"><video src="/images/gm-character-build.mp4" poster="/images/gm-character-build-poster.jpg" autoplay muted loop playsinline preload="auto"></video></div>
         <div class="gm-pic" data-pic="1"><b>Clip</b>Dragging in a session transcript and typing a little direction</div>
         <div class="gm-pic" data-pic="2"><b>Clip</b>Someone typing their own passage, with the writing coach helping</div>
         <div class="gm-pic" data-pic="3"><b>Clip</b>Retouching one picture: a small change, everything else the same</div>
@@ -361,9 +367,9 @@
       </div>
       <div>
         <div class="gm-step on" data-step="0">
-          <div class="gm-pic"><b>Clip</b>The character creator</div>
+          <div class="gm-pic has-video"><video src="/images/gm-character-build.mp4" poster="/images/gm-character-build-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
           <div class="num">1</div><h3 class="gm-h3">Characters</h3>
-          <p>Add reference pictures of your characters and describe their personalities, quirks and look. Already have a character sheet? Upload it, and Campaignia reads all the key details from it. Then it keeps everyone visually consistent across every chapter.</p>
+          <p>Add reference pictures of your characters and describe their personalities, quirks and look. Already have a character sheet? Upload it, and Campaignia reads all the key details from it. Then it keeps everyone visually consistent across every session.</p>
         </div>
         <div class="gm-step" data-step="1">
           <div class="gm-pic"><b>Clip</b>Dropping in a transcript</div>

@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.61",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3761-gm-character-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the character build clip on How it Works step 1.",
+        "detail": "Step 1 (Characters) now shows a short clip of a character being built, and its text ends with every session rather than every chapter.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.60",
     "staged_on": "2026-11-22",
     "entries": [
