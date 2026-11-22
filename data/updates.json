@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.48",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3748-preview-toolbar-overlap",
+        "kind": "fix",
+        "public": true,
+        "summary": "The preview toolbar buttons no longer overlap.",
+        "detail": "The session navigation could slide over the zoom buttons on a narrower window. The zoom controls now sit at the far right of the toolbar.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.47",
     "staged_on": "2026-11-20",
     "entries": [

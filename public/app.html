@@ -420,12 +420,6 @@
                  on the Prep panel is not in the preview yet (prepMarkPreviewStale in app.js). True View moved to the
                  far right of this row. -->
             <button class="btn btn-sm" id="prep-refresh-btn" onclick="refreshNovelPreview()" title="Redraw the preview with your latest changes.">&#8635; Refresh preview</button>
-            <div id="novel-zoom-ctrl" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;" title="Zoom the Quick View (or Ctrl/Cmd + scroll over the preview)">
-              <button class="btn btn-sm" onclick="novelZoomStep(-0.1)" title="Zoom out">&minus;</button>
-              <span id="novel-zoom-label" style="font-size:11px;color:var(--accent-bright);min-width:38px;text-align:center;">100%</span>
-              <button class="btn btn-sm" onclick="novelZoomStep(0.1)" title="Zoom in">+</button>
-              <button class="btn btn-sm" onclick="novelZoomFit()" title="Fit to width">Fit</button>
-            </div>
           </div>
           <div id="novel-pager" style="display:none;align-items:center;gap:8px;flex-wrap:nowrap;min-width:0;">
             <button class="btn btn-sm" id="novel-pager-prev" onclick="novelPagePrev()" style="flex:0 0 auto;">Prev</button>
@@ -433,7 +427,16 @@
             <button class="btn btn-sm" id="novel-pager-next" onclick="novelPageNext()" style="flex:0 0 auto;">Next</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="exportNovelPDF()" style="display:none">Review in a New Tab</button>
-          <button class="btn btn-sm" id="prep-trueview-btn" onclick="prepTrueView()" style="display:none;margin-left:auto;" title="Opens the REAL paged PDF in a new tab, straight from the current settings. Skips the Optimize run -- so it is the un-optimised book, which is exactly what you want when you are judging how something RENDERS rather than how it paginates.">True View &mdash; admin only</button>
+          <!-- v3.7.48 -- zoom far right, True View small between Next and zoom (Ian, 2026-11-22). -->
+          <div class="nprev-right">
+            <button class="btn btn-sm nprev-tv" id="prep-trueview-btn" onclick="prepTrueView()" style="display:none;" title="Admin only. Opens the REAL paged PDF in a new tab, straight from the current settings. Skips the Optimize run -- so it is the un-optimised book, which is exactly what you want when you are judging how something RENDERS rather than how it paginates.">True View</button>
+            <div id="novel-zoom-ctrl" style="display:inline-flex;align-items:center;gap:4px;" title="Zoom the Quick View (or Ctrl/Cmd + scroll over the preview)">
+                <button class="btn btn-sm" onclick="novelZoomStep(-0.1)" title="Zoom out">&minus;</button>
+                <span id="novel-zoom-label" style="font-size:11px;color:var(--accent-bright);min-width:38px;text-align:center;">100%</span>
+                <button class="btn btn-sm" onclick="novelZoomStep(0.1)" title="Zoom in">+</button>
+                <button class="btn btn-sm" onclick="novelZoomFit()" title="Fit to width">Fit</button>
+              </div>
+          </div>
         </div>
         <div id="novel-preview-warning" style="display:none;padding:8px 12px;background:rgba(var(--accent-rgb),0.08);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:var(--radius);font-size:11px;color:rgba(var(--accent-text-rgb),0.6);margin-bottom:10px;">
           Large novel detected — preview shows one session at a time. The exported PDF contains the full novel.

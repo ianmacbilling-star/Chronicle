@@ -2826,9 +2826,11 @@ input[type="password"]::-ms-reveal,input[type="password"]::-ms-clear{display:non
    the pager was landing hard right). Absolute centring only on wider screens; below that it wraps
    normally in the flex row so it can never overlap the zoom controls on mobile. */
 .nprev-toolbar { position: relative; }
-@media (min-width: 820px) {
-  .nprev-toolbar > #novel-pager { position: absolute; left: 50%; transform: translateX(-50%); margin: 0; }
-}
+/* v3.7.48 -- no more absolute centring: it slid the pager over the zoom buttons on narrower windows (Ian). The pager
+   now takes the middle of the row in normal flex order, and the zoom controls + a small True View sit at the right. */
+.nprev-toolbar > #novel-pager { flex: 1 1 260px; justify-content: center; }
+.nprev-toolbar > .nprev-right { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: 0 0 auto; }
+.nprev-toolbar .nprev-tv { font-size: 10px; padding: 2px 7px; line-height: 1.4; min-height: 0; opacity: 0.8; }
 
 /* ==================== Order & Publish tab ====================
    Two bordered cards: the print order (two columns on desktop -- what-to-print + format on the
