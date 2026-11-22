@@ -616,7 +616,7 @@ function pageShell(o) {
     (o.canonical ? '<meta property="og:url" content="' + esc(o.canonical) + '" />\n' : '') +
     (o.ogImage ? '<meta property="og:image" content="' + esc(o.ogImage) + '" />\n<meta name="twitter:card" content="summary_large_image" />\n<meta name="twitter:image" content="' + esc(o.ogImage) + '" />\n' : '<meta name="twitter:card" content="summary" />\n') +
     '<meta name="twitter:title" content="' + esc(o.title) + '" />\n<meta name="twitter:description" content="' + esc(o.description) + '" />\n' +
-    '<link rel="icon" type="image/png" href="/images/Campaignia_Favicon.png" />\n' +
+    '<link rel="icon" type="image/png" href="/images/Campaignia_Tab_Icon.png" />\n' +
     (o.jsonld ? '<script type="application/ld+json">' + jsonLd(o.jsonld) + '</script>\n' : '') +
     '</head>\n<body class="mkt-page">\n' +
     '<nav class="mkt-page-nav"><a href="/" class="mkt-page-logo"><img class="cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" /><img class="cmp-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" /><span class="cmp-logo-label">Campaignia</span></a>' +

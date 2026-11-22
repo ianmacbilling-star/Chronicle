@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.52",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3752-tab-icon",
+        "kind": "change",
+        "public": true,
+        "summary": "A new browser tab icon: the Campaignia dagger.",
+        "detail": "The tab now shows the maroon sword-and-pen from the new logo.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.51",
     "staged_on": "2026-11-22",
     "entries": [
