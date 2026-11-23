@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.66",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3766-gm-transcript-clip-2",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the new transcript clip on How it Works step 2.",
+        "detail": "Step 2 (Type, Paste or Upload) shows the new, narrower transcript clip.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.65",
     "staged_on": "2026-11-22",
     "entries": [

@@ -269,8 +269,10 @@
     /* v3.7.65 -- THE SECOND CLIP (Ian, 2026-11-22: the transcript drop, "next after the character MP4"). It is wide (1280 x 614),
        so its box is the full width of the column at the clip's own shape, centred top to bottom where the other pictures sit:
        the whole frame shows, nothing cut off. On a phone the box takes the same shape. */
-    .gm-steps-pic .gm-pic.has-video.wide{inset:50% 0 auto 0;width:100%;height:auto;max-width:none;aspect-ratio:1280/614;transform:translateY(-50%);}
-    @media (max-width:900px){ .gm-step .gm-pic.has-video.wide{aspect-ratio:1280/614;} }
+    .gm-steps-pic .gm-pic.has-video.wide{inset:50% 0 auto 0;width:100%;height:auto;max-width:none;aspect-ratio:1206/814;transform:translateY(-50%);}
+    /* v3.7.66 -- THE NEW TRANSCRIPT CLIP (Ian, 2026-11-22: "not as wide as the other one"): 1206 x 814, so the box above and the
+       phone box below take that shape. */
+    @media (max-width:900px){ .gm-step .gm-pic.has-video.wide{aspect-ratio:1206/814;} }
     @media (max-width:900px){ .gm-step .gm-pic.has-video{aspect-ratio:640/820;} }
   </style>
 </head>
@@ -374,7 +376,7 @@
     <div class="gm-steps">
       <div class="gm-steps-pic" aria-hidden="true">
         <div class="gm-pic on has-video" data-pic="0"><video src="/images/gm-character-build.mp4" poster="/images/gm-character-build-poster.jpg" autoplay muted loop playsinline preload="auto"></video></div>
-        <div class="gm-pic has-video wide" data-pic="1"><video src="/images/gm-transcript-drop.mp4" poster="/images/gm-transcript-drop-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+        <div class="gm-pic has-video wide" data-pic="1"><video src="/images/gm-transcript-drop-2.mp4" poster="/images/gm-transcript-drop-2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
         <div class="gm-pic" data-pic="2"><b>Clip</b>Someone typing their own passage, with the writing coach helping</div>
         <div class="gm-pic" data-pic="3"><b>Clip</b>Retouching one picture: a small change, everything else the same</div>
         <div class="gm-pic" data-pic="4"><b>Clip</b>Opening the box and taking out the book, with the cover they were editing</div>
@@ -386,7 +388,7 @@
           <p>Add reference pictures of your characters and describe their personalities, quirks and look. Already have a character sheet? Upload it, and Campaignia reads all the key details from it. Then it keeps everyone visually consistent across every session.</p>
         </div>
         <div class="gm-step" data-step="1">
-          <div class="gm-pic has-video wide"><video src="/images/gm-transcript-drop.mp4" poster="/images/gm-transcript-drop-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+          <div class="gm-pic has-video wide"><video src="/images/gm-transcript-drop-2.mp4" poster="/images/gm-transcript-drop-2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
           <div class="num">2</div><h3 class="gm-h3">Type, Paste or Upload</h3>
           <p>Drop in your notes, an outline or the session transcript, or upload the audio recording of the session. Campaignia builds your storyboard around the key moments, turning the chaos at the table into a structured story.</p>
         </div>
