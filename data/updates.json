@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.79",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3779-library-new-style",
+        "kind": "change",
+        "public": false,
+        "summary": "Library in the new Campaignia style.",
+        "detail": "The Library drops its comic lettering and comic buttons for the same look as the new Game Masters page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.78",
     "staged_on": "2026-11-22",
     "entries": [
