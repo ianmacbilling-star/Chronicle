@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.86",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3786-gm-image-gen-wording",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Image Generation no longer promises a picture for every panel.",
+        "detail": "The Image Generation feature and the Copy and Paste card now say Campaignia illustrates the key moments, not every panel.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.85",
     "staged_on": "2026-11-22",
     "entries": [
