@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.07",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3807-unlinked-old-pages",
+        "kind": "change",
+        "public": false,
+        "summary": "/story and /game-masters typed-in only; the home page always opens on Campaignia.",
+        "detail": "The old Story and Game Masters addresses are no longer listed for search engines, and campaignia.com always opens on the Campaignia home page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.06",
     "staged_on": "2026-11-22",
     "entries": [

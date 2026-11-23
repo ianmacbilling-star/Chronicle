@@ -390,7 +390,7 @@ router.get('/sitemap-pages.xml', function (req, res) {
     '<url><loc>' + xmlEsc(base + '/') + '</loc></url>',
     '<url><loc>' + xmlEsc(base + '/library') + '</loc></url>',
     '<url><loc>' + xmlEsc(base + '/our-story') + '</loc></url>',
-    '<url><loc>' + xmlEsc(base + '/story') + '</loc></url>',   // v3.1.84 -- the storyteller landing page, now indexable
+    // v3.8.07: /story is no longer listed; it is typed-in only and noindex now.
     // v3.8.05: /game-masters is no longer listed. It is the home page now (canonical /), and listing both made a duplicate.
     '<url><loc>' + xmlEsc(base + '/example-books') + '</loc></url>',   // v3.6.57 -- photos of real printed books
     '</urlset>'];
