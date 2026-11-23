@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.70",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3770-gm-retouch-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the retouch clip on How it Works step 4.",
+        "detail": "Step 4 (Customize) now shows a clip of one picture being retouched: a character added, everything else kept.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.69",
     "staged_on": "2026-11-22",
     "entries": [
