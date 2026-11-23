@@ -1,5 +1,33 @@
 [
   {
+    "version": "3.8.09",
+    "staged_on": "2026-11-23",
+    "entries": [
+      {
+        "id": "3809-hero-line-fades",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: the big line also fades as it slides.",
+        "detail": "On the Campaignia home page, You Made it Legendary fades as it slides up and Now Make Sure it Lasts fades in as it rises.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.8.08",
+    "staged_on": "2026-11-23",
+    "entries": [
+      {
+        "id": "3808-hero-line-scrolls",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: the big line slides with the scroll and the picture fades as the second line arrives.",
+        "detail": "On the Campaignia home page, scrolling moves You Made it Legendary up out of sight and brings Now Make Sure it Lasts up in its place; the picture fades to the second one as that line appears. Everything else stays still.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.07",
     "staged_on": "2026-11-22",
     "entries": [
