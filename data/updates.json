@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.71",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3771-gm-retouch-recut",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the retouch clip re-cut around the slide.",
+        "detail": "The retouch clip in How it Works step 4 is cut so the spinner turns about twice without the picture jumping.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.70",
     "staged_on": "2026-11-22",
     "entries": [
