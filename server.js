@@ -330,7 +330,8 @@ app.get('/fonts/:file', function (req, res) {
 // before. The old home lives on at /old-game-master: no-store, never indexed, linked from nowhere. Before express.static,
 // which would otherwise hand out public/index.html for /.
 function homeFile(req) {
-  if (req.brand && req.brand !== 'campaignia') return path.join(__dirname, 'public', 'index.html');
+  // v3.8.04: the Story brand's home is the Memories page, not the old Campaignia home in the Story look (Ian, 2026-11-23).
+  if (req.brand && req.brand !== 'campaignia') return path.join(__dirname, 'views', 'memories.html');
   return path.join(__dirname, 'views', 'game-masters.html');
 }
 app.get(['/', '/index.html'], function (req, res) {

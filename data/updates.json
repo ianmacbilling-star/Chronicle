@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.04",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3804-signout-keeps-brand",
+        "kind": "change",
+        "public": false,
+        "summary": "Signing out keeps your brand; the Story brand home is Memories.",
+        "detail": "Signing out now takes you to the home page of the brand you were using, and the Story home page is the Memories page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.03",
     "staged_on": "2026-11-22",
     "entries": [

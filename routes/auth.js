@@ -602,6 +602,13 @@ router.post('/logout', async function(req, res) {
       await db.prepare('UPDATE users SET debug_mode = false WHERE id = ?').run(req.session.userId);
     }
   } catch (e) { try { console.warn('[logout] debug_mode reset failed: ' + (e && e.message)); } catch (_e) {} }
+  // v3.8.04 -- SIGNING OUT KEEPS YOUR BRAND (Ian, 2026-11-23: signed out from Campaignia, "/" showed the old home in the Story
+  // look). Signed out, the brand comes from the last landing page (cmp_entry), which can be Story after a visit to /memories.
+  // The brand the session was in becomes that landing page, so the page after sign-out matches the app you just left.
+  try {
+    var _b = (req.session && req.session.brand) || 'campaignia';
+    if (/^[a-z0-9-]{1,20}$/.test(_b)) res.cookie('cmp_entry', _b, { path: '/', sameSite: 'lax', secure: !!req.secure, httpOnly: false, maxAge: 180 * 24 * 60 * 60 * 1000 });
+  } catch (e) {}
   req.session.destroy();
   res.json({ success: true });
 });
