@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.85",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3785-gm-step2-wording",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: step 2 no longer promises a picture for every panel.",
+        "detail": "How it Works step 2 now says Campaignia turns your session into a complete, illustrated story told in narrative prose.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.84",
     "staged_on": "2026-11-22",
     "entries": [
