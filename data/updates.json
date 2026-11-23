@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.80",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3780-gm-redirects",
+        "kind": "change",
+        "public": false,
+        "summary": "campaignia.com/game-master and other spellings open the Game Masters page.",
+        "detail": "Typing game-master, gamemaster, gm and similar after the address now opens the Game Masters page instead of a not-found page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.79",
     "staged_on": "2026-11-22",
     "entries": [
