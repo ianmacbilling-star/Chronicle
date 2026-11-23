@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.05",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3805-sitemap-no-gm",
+        "kind": "change",
+        "public": false,
+        "summary": "Sitemap: /game-masters no longer listed beside the home page.",
+        "detail": "The sitemap no longer lists the Game Masters address separately from the home page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.04",
     "staged_on": "2026-11-22",
     "entries": [
