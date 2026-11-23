@@ -220,7 +220,9 @@ function isProdHost(req) { return PROD_HOSTS.indexOf(String(req.hostname || '').
 // when the crawler is allowed to fetch the page and read it.
 // Express routes match case-insensitively and with or without a trailing slash, so the path is
 // folded the same way before it is compared, or /LOGIN/ would serve the page without the header.
-var NOINDEX_PATHS = ['/app', '/app.html', '/login', '/login.html', '/reset-password', '/reset-password.html', '/invite.html', '/offline.html'];
+// v3.8.07 -- /story and /game-masters stay served but typed-in only (Ian, 2026-11-23: "nothing should link to them... we may want
+// to see them or get something from them someday"): never indexed, out of the sitemap, linked from no page.
+var NOINDEX_PATHS = ['/app', '/app.html', '/login', '/login.html', '/reset-password', '/reset-password.html', '/invite.html', '/offline.html', '/story', '/game-masters'];
 function robotsHeaderFor(req) {
   if (!isProdHost(req)) return 'noindex, nofollow';
   var p = String(req.path || '').toLowerCase();
