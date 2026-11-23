@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.83",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3783-gm-faq-personal-use",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the own art FAQ mentions personal use.",
+        "detail": "The FAQ on using your own art or writing now says Campaignia is built for your own personal use.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.82",
     "staged_on": "2026-11-22",
     "entries": [
