@@ -273,6 +273,10 @@
     /* v3.7.66 -- THE NEW TRANSCRIPT CLIP (Ian, 2026-11-22: "not as wide as the other one"): 1206 x 814, so the box above and the
        phone box below take that shape. */
     @media (max-width:900px){ .gm-step .gm-pic.has-video.wide{aspect-ratio:1206/814;} }
+    /* v3.7.72 -- THE REAL BOOK CLIP (Ian, 2026-11-22): Ian's phone video of The Strangers being paged through, in the Get a Real
+       Book panel. It is upright (576 x 1024), so its box has that shape, capped in height and centred beside the list. */
+    .gm-book .gm-pic.has-video{aspect-ratio:576/1024;height:min(78vh,680px);width:auto;max-width:100%;justify-self:center;}
+    @media (max-width:900px){ .gm-book .gm-pic.has-video{height:auto;width:min(100%,420px);} }
     @media (max-width:900px){ .gm-step .gm-pic.has-video{aspect-ratio:640/820;} }
   </style>
 </head>
@@ -434,7 +438,7 @@
       </ul>
       <a href="/example-books" class="gm-btn ghost">SEE EXAMPLES</a>
     </div>
-    <div class="gm-pic"><b>Picture</b>A real book of a campaign, in everyday life: not a dungeon, no hooded GM, fewer candles, relaxed faces</div>
+    <div class="gm-pic has-video"><video src="/images/gm-real-book.mp4" poster="/images/gm-real-book-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="A printed Campaignia book being paged through on a table"></video></div>
   </div>
 </section>
 

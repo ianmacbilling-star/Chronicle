@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.72",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3772-gm-real-book-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: a video of a real printed book in Get a Real Book.",
+        "detail": "The Get a Real Book of Your Campaign section now shows a short video of a printed book being paged through.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.71",
     "staged_on": "2026-11-22",
     "entries": [
