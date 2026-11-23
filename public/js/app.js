@@ -2311,7 +2311,8 @@ function checkAuth() {
 function logout() {
   _helpSendTranscriptOnLogout(function() {
     fetch('/api/auth/logout', { method: 'POST' })
-      .then(function() { window.location.href = '/'; });
+      // v3.8.00 -- SIGN OUT GOES HOME BY BRAND (Ian, 2026-11-23): / for Campaignia, /memories for the Story brand.
+      .then(function() { window.location.href = document.documentElement.getAttribute('data-brand') === 'brand2' ? '/memories' : '/'; });
   });
 }
 
@@ -19003,7 +19004,8 @@ function checkAuth() {
 function logout() {
   _helpSendTranscriptOnLogout(function() {
     fetch('/api/auth/logout', { method: 'POST' })
-      .then(function() { window.location.href = '/'; });
+      // v3.8.00 -- SIGN OUT GOES HOME BY BRAND (Ian, 2026-11-23): / for Campaignia, /memories for the Story brand.
+      .then(function() { window.location.href = document.documentElement.getAttribute('data-brand') === 'brand2' ? '/memories' : '/'; });
   });
 }
 
@@ -47402,3 +47404,19 @@ function printOrderForgetForCampaignSwitch() {
   try { if (typeof showPrintBtnMsg === 'function') showPrintBtnMsg('', null); } catch (e) {}
   try { if (typeof printProgressDone === 'function') printProgressDone(); } catch (e) {}
 }
+
+// v3.8.00 -- A PLAN OR PASS PICKED ON THE WEBSITE WHILE SIGNED IN (testers, 2026-11-23). /login sends an already signed-in
+// visitor here with ?upgrade=gold or ?upgrade=pass:p3; open My Account on its plans and say which one they picked.
+(function () {
+  var up = '';
+  try { up = (new URLSearchParams(window.location.search).get('upgrade') || '').toLowerCase(); } catch (e) {}
+  if (!/^(silver|gold|platinum|pass:[a-z0-9_-]{1,20})$/.test(up)) return;
+  try { var u = new URL(window.location.href); u.searchParams.delete('upgrade'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) {}
+  var names = { silver: 'Silver plan', gold: 'Gold plan', platinum: 'Platinum plan', 'pass:p3': '3 Month Platinum Pass', 'pass:p6': '6 Month Platinum Pass', 'pass:p12': '12 Month Platinum Pass' };
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      try { if (typeof goToPlans === 'function') goToPlans(); else if (typeof showView === 'function') showView('account'); } catch (e) {}
+      try { if (typeof billingToast === 'function') billingToast('You picked the ' + (names[up] || 'plan') + '. Your plans and passes are below.', 'info'); } catch (e) {}
+    }, 900);
+  });
+})();

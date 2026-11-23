@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.00",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3800-testers-site-fixes",
+        "kind": "change",
+        "public": false,
+        "summary": "Testers fixes: what you are signing up for, a way back from sign-in, contact addresses, and Zara.",
+        "detail": "The create-account page now says which plan or pass you are signing up for. Signed-in customers who pick a plan on the website go straight to their plans. Sign-in has a way back to the site, and a few links and prices on the website were corrected.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.99",
     "staged_on": "2026-11-22",
     "entries": [

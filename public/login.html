@@ -69,6 +69,14 @@
     margin-bottom: 4px;
     letter-spacing: 1px;
   }
+  /* v3.8.00 -- the way back to the site, and what you are signing up for (testers, 2026-11-23; Ian). */
+  .auth-back { display:inline-block; font-size:13px; color:rgba(var(--accent-rgb),0.75); text-decoration:none; margin-bottom:14px; }
+  .auth-back:hover { color:var(--accent-bright); }
+  .signup-for { margin:-10px 0 20px; padding:12px 14px; border:1px solid rgba(var(--accent-rgb),0.35); border-radius:8px;
+    background:rgba(var(--accent-rgb),0.07); text-align:center; font-size:14px; line-height:1.5; color:var(--on-panel, #f0e8d0); }
+  .signup-for b { color:var(--accent-bright); }
+  .signup-for .sf-next { display:block; margin-top:4px; font-size:12.5px; opacity:0.75; }
+  .signup-for a { color:var(--accent-bright); text-decoration:underline; cursor:pointer; }
   .auth-subtitle {
     font-size: 13px;
     color: rgba(var(--accent-rgb),0.5);
@@ -155,10 +163,11 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
 <body>
 <div class="auth-page">
   <div class="auth-box">
-    <div class="auth-logo-wrap">
+    <a href="/" class="auth-back" id="auth-back">&larr; Back to the site</a>
+    <a href="/" class="auth-logo-wrap" id="auth-home" title="Back to the site" style="display:block;text-decoration:none;">
       <img class="auth-logo-img cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia logo" /><img class="cmp-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" style="display:block;height:52px;width:auto;max-width:90%;margin:0 auto;" />
       <div class="auth-logo-name cmp-logo-label">CAMPAIGNIA</div>
-    </div>
+    </a>
 
     <!-- LOGIN -->
     <div id="login-panel">
@@ -212,6 +221,7 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
     <div id="register-panel" class="hidden">
       <div class="auth-title">Campaignia — Where Your Story Begins</div>
       <div class="auth-subtitle">Create your Story Master account</div>
+      <div id="signup-for" class="signup-for hidden" aria-live="polite"></div>
       <div class="auth-divider"></div>
       <div class="form-group">
         <label class="form-label">Your name</label>
@@ -491,7 +501,48 @@ function _cmpAppLanding() {
   } catch (e) {}
   return '/app.html';
 }
-fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:_cmpAppLanding()); } });
+// v3.8.00 -- A PLAN OR PASS CHOSEN WHILE ALREADY SIGNED IN IS KEPT (testers, 2026-11-23: "an existing customer trying to
+// upgrade is dropped" on My Campaigns). With ?plan= or ?pass= the app opens on its Plans with that choice named (?upgrade=).
+function _cmpUpgradeLanding() {
+  if (!_signupPlan) return null;
+  if (!/^(silver|gold|platinum|pass:[a-z0-9_-]{1,20})$/.test(_signupPlan)) return null;
+  return '/app.html?upgrade=' + encodeURIComponent(_signupPlan);
+}
+fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:(_cmpUpgradeLanding()||_cmpAppLanding())); } });
+// v3.8.00 -- WHAT YOU ARE SIGNING UP FOR (Ian, 2026-11-23: "it should say what you are signing up for"). Plan and pass names,
+// prices and tokens come from /api/public/pricing, the same figures the app charges, so they cannot drift. The logo and the
+// Back link return to the site: / for Campaignia, /memories for the Story brand.
+(function () {
+  var story = document.documentElement.getAttribute('data-brand') === 'brand2';
+  var home = story ? '/memories' : '/';
+  ['auth-back', 'auth-home'].forEach(function (id) { var a = document.getElementById(id); if (a) a.setAttribute('href', home); });
+  var box = document.getElementById('signup-for');
+  if (!box) return;
+  var change = story ? '' : ' <a href="/#pricing">Change</a>';
+  function show(html) { box.innerHTML = html; box.classList.remove('hidden'); }
+  function money(c) { var d = Number(c) / 100; return isFinite(d) ? '$' + (d % 1 === 0 ? String(d) : d.toFixed(2)) : ''; }
+  var NAMES = { silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
+  var next = '<span class="sf-next">After you confirm your email, you&rsquo;ll go to checkout.</span>';
+  if (!_signupPlan) {
+    try { if (new URLSearchParams(window.location.search).has('signup')) show('You&rsquo;re starting the <b>free trial</b>.' + change); } catch (e) {}
+    return;
+  }
+  var isPass = _signupPlan.indexOf('pass:') === 0, id = isPass ? _signupPlan.slice(5) : _signupPlan;
+  if (!isPass && !NAMES[id]) return;
+  show('You&rsquo;re signing up for the <b>' + (isPass ? 'Platinum Pass' : NAMES[id] + ' plan') + '</b>.' + change + next);
+  fetch('/api/public/pricing').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (!d) return;
+    if (isPass) {
+      var p = (d.passes || []).filter(function (x) { return x && x.id === id; })[0];
+      if (!p) return;
+      show('You&rsquo;re signing up for the <b>' + (p.name || 'Platinum Pass') + '</b>, ' + money(p.price_cents) +
+        (Number(p.tokens) > 0 ? ' with ' + Number(p.tokens) + ' tokens' : '') + '.' + change + next);
+    } else {
+      var pr = Number((d.pricing || {})[id]);
+      if (pr > 0) show('You&rsquo;re signing up for the <b>' + NAMES[id] + ' plan</b>, $' + pr + ' a month.' + change + next);
+    }
+  }).catch(function () {});
+})();
 </script>
 <script src="/js/pw-eye.js" defer></script>
 </body>
