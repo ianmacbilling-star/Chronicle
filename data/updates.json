@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.91",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3791-gm-visual-consistency-handouts",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Visual Consistency mentions your own handouts, maps and art.",
+        "detail": "The Visual Consistency feature now mentions bringing in the handouts, maps and art you used at the table.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.90",
     "staged_on": "2026-11-22",
     "entries": [
