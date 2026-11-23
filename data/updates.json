@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.75",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3775-gm-view-work-books",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: View Their Work opens the Library on Books.",
+        "detail": "The View Their Work button on the Game Masters page opens the Library on its Books tab.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.74",
     "staged_on": "2026-11-22",
     "entries": [
