@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.82",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3782-gm-faq-ai-artists",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: new ending for the AI and artists FAQ.",
+        "detail": "The FAQ on AI and artists drops a feature that does not exist yet and says how Campaignia uses AI to enhance creativity, not replace it.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.81",
     "staged_on": "2026-11-22",
     "entries": [
