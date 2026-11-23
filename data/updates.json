@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.03",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3803-gm-characters-advance",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: step 1 moves on to the next character when one finishes.",
+        "detail": "How it Works step 1 now goes on to the next character when one finishes, even if you do not scroll.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.02",
     "staged_on": "2026-11-22",
     "entries": [

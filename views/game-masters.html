@@ -829,6 +829,14 @@ function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=documen
   [].slice.call(document.querySelectorAll('video[src="' + CLIPS[0].src + '"]')).forEach(function (v) {
     var i = start, away = false, shown = false;
     if (i !== 0) put(v, i);
+    // v3.8.03 -- AND ON TO THE NEXT WHEN ONE FINISHES (Ian, 2026-11-23: "if you just sit there and don't scroll... it should also
+    // go through the different characters"). No loop: at the end of a clip the next character starts. The browser fires pause
+    // just before ended, so away is cleared here or the play below would count as coming back into view and skip one.
+    v.loop = false; v.removeAttribute('loop');
+    v.addEventListener('ended', function () {
+      away = false; i = (i + 1) % CLIPS.length; put(v, i);
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+    });
     v.addEventListener('pause', function () { if (shown) away = true; });
     v.addEventListener('play', function () {
       if (away) { away = false; i = (i + 1) % CLIPS.length; put(v, i); var p = v.play(); if (p && p.catch) p.catch(function () {}); }
