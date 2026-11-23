@@ -81,18 +81,17 @@
     .gm-hero-wrap{height:230vh;position:relative;}
     .gm-hero-sticky{position:sticky;top:64px;height:calc(100vh - 64px);overflow:hidden;display:grid;grid-template-columns:1fr 1fr;}
     .gm-hero-pics{position:relative;overflow:hidden;}
-    .gm-hero-pics .gm-pic{position:absolute;inset:0;border-radius:0;transition:opacity .7s;}
+    .gm-hero-pics .gm-pic{position:absolute;inset:0;border-radius:0;transition:opacity .9s;}
     .gm-hero-pics .gm-pic img{object-position:50% 30%;}
     .gm-hero-pics .gm-pic.b{opacity:0;}
     .gm-hero.second .gm-hero-pics .gm-pic.b{opacity:1;}
     .gm-hero-pics::after{content:'';position:absolute;inset:0;background:linear-gradient(to right,transparent 60%,var(--page-bg));pointer-events:none;}
     .gm-hero-text{display:flex;flex-direction:column;justify-content:center;padding:40px 56px;position:relative;}
-    .gm-hero-lines{position:relative;height:clamp(150px,18vw,250px);margin-bottom:18px;}
-    .gm-hero-lines h2{position:absolute;left:0;right:0;bottom:0;margin:0;font-family:var(--font-display);font-weight:900;font-size:clamp(42px,5.6vw,84px);line-height:1.02;color:#fff;transition:opacity .6s,transform .6s;}
+    /* v3.8.08: the big line rides the scroll. The first slides up out of this box, the second rises into it; everything else stays still */
+    .gm-hero-lines{position:relative;height:clamp(150px,18vw,250px);margin-bottom:18px;overflow:hidden;}
+    .gm-hero-lines h2{position:absolute;left:0;right:0;bottom:0;margin:0;font-family:var(--font-display);font-weight:900;font-size:clamp(42px,5.6vw,84px);line-height:1.02;color:#fff;will-change:transform;}
     .gm-hero-lines h2 span{color:var(--button-cta);}
-    .gm-hero-lines h2.b{opacity:0;transform:translateY(24px);}
-    .gm-hero.second .gm-hero-lines h2.a{opacity:0;transform:translateY(-24px);}
-    .gm-hero.second .gm-hero-lines h2.b{opacity:1;transform:none;}
+    .gm-hero-lines h2.b{transform:translateY(300px);}
     .gm-hero h1{font-family:var(--font-body);font-weight:400;font-size:clamp(19px,1.7vw,24px);line-height:1.45;color:var(--on-panel);margin:0 0 34px;max-width:520px;}
     .gm-hero h1 b{color:var(--accent-bright);font-weight:600;}
     .gm-hero-dots{display:flex;gap:10px;margin-top:40px;}
@@ -106,7 +105,7 @@
       .gm-hero-text{padding:30px 22px 60px;}
       .gm-hero-dots{display:none;}
       /* no scrolling show here: both lines, one under the other, with the first picture */
-      .gm-hero-lines{height:auto;}
+      .gm-hero-lines{height:auto;overflow:visible;}
       .gm-hero-lines h2{position:static;opacity:1 !important;transform:none !important;font-size:clamp(34px,10vw,52px);}
       .gm-hero-lines h2.b{margin-top:10px;}
     }
@@ -741,20 +740,30 @@ function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=documen
 <script>
 // v3.7.53 -- the new Game Masters page's moving parts. Each one does nothing on a phone or with reduced motion,
 // where the CSS lays everything out flat instead.
-// 1. above the fold: past the middle of the scroll, the second picture and line take over
+// 1. above the fold (v3.8.08): the big line rides the scroll. Over the first part of the run the first line slides up
+// out of its box and the second rises into its place; the picture starts fading the moment the second line shows.
 (function(){
   var hero=document.getElementById('gmHero'),wrap=document.getElementById('gmHeroWrap'),d0=document.getElementById('gmDot0'),d1=document.getElementById('gmDot1');
   if(!hero||!wrap)return;
+  var lines=hero.querySelector('.gm-hero-lines'),ha=hero.querySelector('.gm-hero-lines h2.a'),hb=hero.querySelector('.gm-hero-lines h2.b');
+  if(!lines||!ha||!hb)return;
   var mq=window.matchMedia('(max-width:900px), (prefers-reduced-motion: reduce)');
+  var queued=false;
   function tick(){
-    if(mq.matches){hero.classList.remove('second');return;}
+    queued=false;
+    if(mq.matches){hero.classList.remove('second');ha.style.transform='';hb.style.transform='';return;}
     var r=wrap.getBoundingClientRect(),run=wrap.offsetHeight-window.innerHeight;
     var p=run>0?Math.min(1,Math.max(0,-r.top/run)):0;
-    var two=p>=0.5;
+    var t=Math.min(1,p/0.55);
+    var H=lines.clientHeight*1.12,below=(1-t)*H;
+    ha.style.transform='translateY('+(-t*H).toFixed(1)+'px)';
+    hb.style.transform='translateY('+below.toFixed(1)+'px)';
+    var two=t>0&&below<hb.offsetHeight;
     hero.classList.toggle('second',two);
     if(d0)d0.classList.toggle('on',!two);if(d1)d1.classList.toggle('on',two);
   }
-  window.addEventListener('scroll',tick,{passive:true});window.addEventListener('resize',tick);tick();
+  function ask(){if(!queued){queued=true;window.requestAnimationFrame(tick);}}
+  window.addEventListener('scroll',ask,{passive:true});window.addEventListener('resize',ask);tick();
 })();
 // 4. how it works: the step whose top has reached the picture box is the one shown
 (function(){
