@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.02",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3802-signup-just-name",
+        "kind": "change",
+        "public": false,
+        "summary": "Sign-in and sign-up: light boxes that match, and just the name of what you are signing up for.",
+        "detail": "The create-account page now just names the plan or pass you picked, and the text boxes on sign-in and sign-up now look the same.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.01",
     "staged_on": "2026-11-22",
     "entries": [
