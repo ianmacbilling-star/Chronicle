@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.90",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3790-gm-styles-wording",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Styles to Match wording.",
+        "detail": "The Styles to Match feature now ends with build a custom art style all your own.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.89",
     "staged_on": "2026-11-22",
     "entries": [
