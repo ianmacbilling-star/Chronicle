@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.92",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3792-gm-faq-expand",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: AI FAQ says enhance and expand.",
+        "detail": "The FAQ on AI and artists now says Campaignia uses AI to enhance and expand human creativity, not replace it.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.91",
     "staged_on": "2026-11-22",
     "entries": [
