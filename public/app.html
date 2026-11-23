@@ -4258,7 +4258,7 @@
     fetch('/api/auth/me', { credentials: 'same-origin' })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
-        if (!d || !d.is_admin) return;
+        return;   // v3.7.97 -- THE LOGO IS NOT THE DRAFT LINK ANY MORE (Ian, 2026-11-23): it goes home for everyone (top of the page).
         var el = document.getElementById('app-logo');
         if (!el) return;
         el.style.cursor = 'pointer';

@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.97",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3797-app-logo-no-draft",
+        "kind": "change",
+        "public": false,
+        "summary": "The app logo no longer opens the draft Story page for admins.",
+        "detail": "For admins, the logo in the app now goes to the home page like everyone else, instead of opening the draft Story page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.96",
     "staged_on": "2026-11-22",
     "entries": [
