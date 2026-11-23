@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.89",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3789-app-icon",
+        "kind": "change",
+        "public": false,
+        "summary": "New installed-app icon: the maroon sword and pen on cream.",
+        "detail": "The Campaignia app icon on phone home screens and desktops is now the new maroon sword-and-pen on cream.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.88",
     "staged_on": "2026-11-22",
     "entries": [
