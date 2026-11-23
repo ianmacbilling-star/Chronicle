@@ -68,7 +68,9 @@
   <div class="app-logo" id="app-logo" role="link" tabindex="0" title="Campaignia home" aria-label="Campaignia home"><img class="app-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia" /><span class="app-logo-text">Campaignia</span><img class="app-logo-new app-logo-wordmark" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" /><img class="app-logo-new app-logo-mark" src="/images/Campaignia_Mark_White.png" alt="Campaignia" /><span id="build-stamp" style="display:none;margin-left:7px;font:11px/1 ui-monospace,Menlo,Consolas,monospace;color:var(--muted-text);opacity:0.75;letter-spacing:0.02em;align-self:center;"></span></div><script>/* v3.7.94 -- THE LOGO GOES HOME (Ian, 2026-11-23: "if you hit the logo inside the app it takes you to the home page").
    Click, Enter or Space on the logo opens / (the Game Masters page for Campaignia). The build stamp beside it is left out. */
 (function () { var l = document.getElementById('app-logo'); if (!l) return; l.style.cursor = 'pointer';
-  function go(e) { if (e && e.target && e.target.id === 'build-stamp') return; window.location.href = '/'; }
+  // v3.7.95 -- BY BRAND (Ian, 2026-11-23): Campaignia goes to / (the new home page); the Story brand goes to /memories.
+  function home() { return document.documentElement.getAttribute('data-brand') === 'brand2' ? '/memories' : '/'; }
+  function go(e) { if (e && e.target && e.target.id === 'build-stamp') return; window.location.href = home(); }
   l.addEventListener('click', go);
   l.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } }); })();
 </script>

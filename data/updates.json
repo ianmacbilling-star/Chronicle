@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.95",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3795-app-logo-by-brand",
+        "kind": "change",
+        "public": false,
+        "summary": "The app logo goes to Memories for the Story brand.",
+        "detail": "In the app, the logo takes Campaignia users to the home page and Story users to the Memories page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.94",
     "staged_on": "2026-11-22",
     "entries": [
