@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.76",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3776-gm-custom-art-styles",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Styles to Match mentions custom art styles.",
+        "detail": "The Styles to Match feature now mentions building a custom art style of your own.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.75",
     "staged_on": "2026-11-22",
     "entries": [
