@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.87",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3787-gm-hide-see-examples",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: See Examples button hidden for now.",
+        "detail": "The See Examples button under Get a Real Book is hidden for now; the book video shows the real thing.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.86",
     "staged_on": "2026-11-22",
     "entries": [
