@@ -91,7 +91,7 @@
   <div class="agent">
     <p style="margin:0;"><strong>DMCA Designated Agent</strong><br />
     So It Begins, LLC &mdash; Attn: Copyright Agent<br />
-    Email: <a href="mailto:support@campaignia.com">support@campaignia.com</a><br />
+    Email: <a href="mailto:info@campaignia.com">info@campaignia.com</a><br />
     Mailing address:<br />
     94 Tate St.<br />
     Waynesville, NC 28786</p>
@@ -114,7 +114,7 @@
   <p><strong>Tokens already purchased.</strong> A change in token pricing does not change the number of tokens already in your balance.</p>
 
   <h2>14. Account Deletion &amp; Termination</h2>
-  <p>You may stop using Campaignia and request deletion of your account at any time by contacting <a href="mailto:support@campaignia.com">support@campaignia.com</a>. When you delete your account, we will delete or anonymize your personal information and private content within a reasonable period, except for content you published publicly, information retained in routine backups for a limited time, and records we are required to keep by law. We may suspend or terminate your account if you violate these Terms, if required by law, or to protect the service or other users. Sections that by their nature should survive termination (including ownership, licenses you granted for already-public content, disclaimers, limitation of liability, and indemnification) will survive.</p>
+  <p>You may stop using Campaignia and request deletion of your account at any time by contacting <a href="mailto:info@campaignia.com">info@campaignia.com</a>. When you delete your account, we will delete or anonymize your personal information and private content within a reasonable period, except for content you published publicly, information retained in routine backups for a limited time, and records we are required to keep by law. We may suspend or terminate your account if you violate these Terms, if required by law, or to protect the service or other users. Sections that by their nature should survive termination (including ownership, licenses you granted for already-public content, disclaimers, limitation of liability, and indemnification) will survive.</p>
 
   <h2>15. Privacy</h2>
   <p>We collect the information you provide (such as your name, email, date of birth, and content) and basic technical data needed to run the service, and we use it to operate, secure, and improve Campaignia. We do not sell your personal information. We use third-party providers (for example, hosting, email, payment, image generation, and print) who process data on our behalf. A separate, fuller privacy policy may be provided and, when posted, will be incorporated into these Terms.</p>
@@ -126,12 +126,24 @@
   <p>These Terms are governed by the laws of the State of North Carolina, without regard to its conflict-of-laws rules. You agree that the state and federal courts located in North Carolina will have exclusive jurisdiction over any dispute arising out of or relating to these Terms or the service, and you consent to personal jurisdiction and venue there.</p>
 
   <h2>18. Contact</h2>
-  <p>Questions about these Terms? Contact So It Begins, LLC at <a href="mailto:support@campaignia.com">support@campaignia.com</a>.</p>
+  <p>Questions about these Terms? Contact So It Begins, LLC at <a href="mailto:info@campaignia.com">info@campaignia.com</a>.</p>
 
   <footer>
     &copy; <span id="yr"></span> So It Begins, LLC. All rights reserved. Campaignia is a service of So It Begins, LLC.
   </footer>
 </div>
 <script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
+<script>
+// v3.8.00 -- WHICH ADDRESS (Ian, 2026-11-23): on the website, signed out, write to info@; signed in, to support@.
+(function () {
+  fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (!d || !d.authenticated) return;
+    [].slice.call(document.querySelectorAll('a[href^="mailto:info@campaignia.com"]')).forEach(function (a) {
+      a.setAttribute('href', a.getAttribute('href').replace('info@', 'support@'));
+      if (a.textContent.indexOf('info@campaignia.com') !== -1) a.textContent = a.textContent.replace('info@', 'support@');
+    });
+  }).catch(function () {});
+})();
+</script>
 </body>
 </html>

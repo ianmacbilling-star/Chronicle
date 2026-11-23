@@ -67,12 +67,24 @@
   <p>We may update these Guild Terms from time to time. When we make material changes, we will update the version number and the &ldquo;Last updated&rdquo; date, and ask you to accept the new version the next time you update your listing.</p>
 
   <h2>8. Contact</h2>
-  <p>Questions about the Guild? Contact So It Begins, LLC at <a href="mailto:support@campaignia.com">support@campaignia.com</a>.</p>
+  <p>Questions about the Guild? Contact So It Begins, LLC at <a href="mailto:info@campaignia.com">info@campaignia.com</a>.</p>
 
   <footer>
     &copy; <span id="yr"></span> So It Begins, LLC. All rights reserved. Campaignia is a service of So It Begins, LLC.
   </footer>
 </div>
 <script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
+<script>
+// v3.8.00 -- WHICH ADDRESS (Ian, 2026-11-23): on the website, signed out, write to info@; signed in, to support@.
+(function () {
+  fetch('/api/auth/me', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (!d || !d.authenticated) return;
+    [].slice.call(document.querySelectorAll('a[href^="mailto:info@campaignia.com"]')).forEach(function (a) {
+      a.setAttribute('href', a.getAttribute('href').replace('info@', 'support@'));
+      if (a.textContent.indexOf('info@campaignia.com') !== -1) a.textContent = a.textContent.replace('info@', 'support@');
+    });
+  }).catch(function () {});
+})();
+</script>
 </body>
 </html>

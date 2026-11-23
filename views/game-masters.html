@@ -13,11 +13,11 @@
        FAQ and AI sections of his "Restrained" plan. It replaced the v3.2.54 copy of the home page, which is kept, unserved,
        as views/game-masters-v1.html. NOT INDEXED while it is being finished, so it can be reviewed before people are sent
        here; take the robots line out when it is ready. The home page (public/index.html) is untouched. -->
-  <meta name="robots" content="noindex">
-  <link rel="canonical" href="https://campaignia.com/game-masters" />
+  <!-- v3.7.93: this is the home page now (Ian, 2026-11-23), so it is indexed and its canonical is the site root. -->
+  <link rel="canonical" href="https://campaignia.com/" />
   <meta property="og:site_name" content="Campaignia" />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://campaignia.com/game-masters" />
+  <meta property="og:url" content="https://campaignia.com" />
   <meta property="og:title" content="Campaignia for Game Masters — You make it legendary. We make it forever." />
   <meta property="og:description" content="Turn your TTRPG sessions into stunning graphic novels. Paste your transcript, AI generates your storyboard and images, export a print-ready PDF." />
   <meta property="og:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
@@ -26,7 +26,7 @@
   <meta name="twitter:description" content="Turn your TTRPG sessions into stunning graphic novels with AI." />
   <meta name="twitter:image" content="https://campaignia.com/images/Campaignia_Book_Payoff2.png" />
   <link rel="icon" type="image/png" href="/images/Campaignia_Tab_Icon.png" />
-  <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
+  <link rel="apple-touch-icon" href="/images/Campaignia_App_Icon_180.png" />
   <!-- v3.0.891 -- TD-767. Compare the Tiers. Its own stylesheet ON PURPOSE: this is the file a
        second landing page swaps out. Version-stamped because Cloudflare caches /css and /js by
        extension and index.html cannot stamp itself the way app.html does. -->
@@ -394,7 +394,7 @@
         <div class="gm-step" data-step="1">
           <div class="gm-pic has-video wide"><video src="/images/gm-transcript-drop-2.mp4" poster="/images/gm-transcript-drop-2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
           <div class="num">2</div><h3 class="gm-h3">Type, Paste or Upload</h3>
-          <p>Drop in your notes, an outline or the session transcript, or upload the audio recording of the session. Campaignia builds your storyboard around the key moments, turning the chaos at the table into a structured story.</p>
+          <p>Drop in your notes, an outline or the session transcript, or upload the audio recording of the session. Campaignia builds your storyboard around the key moments, then turns the chaos at the table into a complete, illustrated story told in narrative prose.<!-- not every panel --><!-- v3.7.84 full story --></p>
         </div>
         <div class="gm-step" data-step="2">
           <div class="gm-pic has-video wide" style="aspect-ratio:1240/900;"><video src="/images/gm-writing-coach.mp4" poster="/images/gm-writing-coach-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
@@ -436,7 +436,8 @@
         <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14.5 2.5V7H19"/><path d="M9 12h7M9 15h7M9 18h4"/></svg></span>A print-ready PDF too</li>
         <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5L12 4l9 5.5z"/><path d="M5 11.5v6.5M9.5 11.5v6.5M14.5 11.5v6.5M19 11.5v6.5"/><path d="M3 20.5h18M4 18.5h16"/></svg></span>Show it off in the Campaignia Library, or keep it to yourself</li>
       </ul>
-      <a href="/example-books" class="gm-btn ghost">SEE EXAMPLES</a>
+      <!-- hidden for now (Ian, 2026-11-23: the book video is enough); remove the style to bring it back -->
+      <a href="/example-books" class="gm-btn ghost" style="display:none;">SEE EXAMPLES</a>
     </div>
     <div class="gm-pic has-video"><video src="/images/gm-real-book.mp4" poster="/images/gm-real-book-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="A printed Campaignia book being paged through on a table"></video></div>
   </div>
@@ -447,7 +448,7 @@
   <div class="gm-wrap gm-center">
     <h2 class="gm-h2">Campaignia Adjusts to Your Time, Skill and Needs</h2>
     <div class="gm-cards c4" style="text-align:left;">
-      <div class="gm-card"><h3 class="gm-h3">Copy and Paste</h3><p>Paste in the session notes. Campaignia writes the prose and illustrates every panel, start to finish.</p></div>
+      <div class="gm-card"><h3 class="gm-h3">Copy and Paste</h3><p>Paste in the session notes. Campaignia writes the prose and illustrates the key moments, start to finish.</p></div>
       <div class="gm-card"><h3 class="gm-h3">Edit and Perfect</h3><p>Spend hours on characters, pictures and prompts. Regenerate whole sections or tiny details until the story matches your imagination.</p></div>
       <div class="gm-card"><h3 class="gm-h3">Do it Yourself</h3><p>Artist? Put in your own art and let Campaignia write the story around it. Aspiring author? Write it yourself, with the writing coach beside you, while Campaignia adds the pictures.</p></div>
       <div class="gm-card"><h3 class="gm-h3">Build Together</h3><p>Invite your players for free. Each can make their own version of a session, compare it with yours, and share pictures and ideas. Everyone&rsquo;s strengths count.</p></div>
@@ -457,7 +458,8 @@
 </section>
 
 <!-- 7. TESTIMONIALS: none yet. Riley wants 3 at least, ideally 7 or 9, each with a name, a picture or avatar and a link to what they made. -->
-<section class="gm-sec alt">
+<!-- v3.7.93: hidden until there are real quotes (Ian, 2026-11-23); remove the style to bring it back -->
+<section class="gm-sec alt" style="display:none;">
   <div class="gm-wrap gm-center">
     <h2 class="gm-h2">Tabletop Community Perspectives</h2>
     <div class="gm-cards c3" style="text-align:left;">
@@ -470,7 +472,7 @@
 </section>
 
 <!-- 8. THE AI QUESTION, answered before it is asked (from the Restrained plan) -->
-<section class="gm-sec">
+<section class="gm-sec alt">
   <div class="gm-wrap gm-groups gm-center">
     <div class="gm-group">
       <h2 class="gm-h2">Human-Centered AI</h2>
@@ -492,17 +494,17 @@
 </section>
 
 <!-- 9. COMPLETE CONTROL -->
-<section class="gm-sec alt" id="features">
+<section class="gm-sec" id="features">
   <div class="gm-wrap">
     <div class="gm-center"><div class="gm-eyebrow">Your Arsenal</div><h2 class="gm-h2">Campaignia Gives You Complete Control</h2></div>
     <div class="gm-feats">
       <div class="gm-feat"><h3>Human-Centered</h3><p>Campaignia uses pre-trained AI that never trains on your stories or art, and you decide how much of the book it makes.</p></div>
-      <div class="gm-feat"><h3>Image Generation</h3><p>Every panel gets its own illustration. You control the prompts, you control the scenes. <a href="/library?genre=fantasy,thriller,scifi,horror,mystery" style="color:var(--accent);text-decoration:underline;">See what others have made</a></p></div><!-- v3.7.77 gallery link -->
-      <div class="gm-feat"><h3>Styles to Match</h3><p>Pick from 11 art styles and 11 narrative styles to match the feel of your campaign, or build a custom art style of your own.</p></div><!-- v3.7.76 custom art styles -->
+      <div class="gm-feat"><h3>Image Generation</h3><p><!-- key moments, not every panel -->Bring the key moments to life with illustrations. You control the prompts, you control the scenes. <a href="/library?genre=fantasy,thriller,scifi,horror,mystery" style="color:var(--accent);text-decoration:underline;">See what others have made</a></p></div><!-- v3.7.77 gallery link -->
+      <div class="gm-feat"><h3>Styles to Match</h3><p>Pick from 11 art styles and 11 narrative styles to match the feel of your campaign, or build a custom art style all your own.</p><!-- all your own --></div><!-- v3.7.76 custom art styles -->
       <div class="gm-feat"><h3>Built-in Structure</h3><p>Storyboards take you from the opening scene, through every twist, to the closing chapter.</p></div>
       <div class="gm-feat"><h3>Point of View</h3><p>Tinker with narrative styles, lengths and points of view until the story reads the way your table remembers it.</p></div>
       <div class="gm-feat"><h3>Narrative Prose</h3><p>Campaignia turns chaotic session notes into prose that reads like a real novel.</p></div>
-      <div class="gm-feat"><h3>Visual Consistency</h3><p>Create your characters, then upload or generate items, NPCs or locations, so everything stays consistent from moment to moment, session to session.</p></div><!-- v3.7.74 Ian's wording -->
+      <div class="gm-feat"><h3>Visual Consistency</h3><p><!-- like your game -->Create your characters, then upload or generate items, NPCs or locations. Bring in the same handouts, maps and art you used at the table, so the book looks just like your game and stays consistent from moment to moment, session to session.</p></div><!-- v3.7.74 Ian's wording -->
       <div class="gm-feat"><h3>Collaborate</h3><p>Keep the game going between sessions. Invite everyone in the party to write, edit or illustrate.</p></div>
       <div class="gm-feat"><h3>Total Control</h3><p>All the tools in one place to edit every part of your book: rewrite the prose, retouch the pictures, rework the layout.</p></div>
       <div class="gm-feat"><h3>Writing Coach</h3><p>An honest verdict on any passage, suggested rewrites, and the better word when you need it.</p></div>
@@ -545,25 +547,25 @@
             <div class="pass-card-term">3 MONTHS</div>
             <div class="pass-card-tokens" data-pass-tokens="p3">200 tokens</div>
             <div class="pass-card-tokens-sub">yours to spend whenever</div>
-            <div class="pass-card-price" data-pass-price="p3">$79</div>
+            <div class="pass-card-price" data-pass-price="p3">$80</div>
             <a href="/login?signup&amp;pass=p3" class="btn-tier btn-pass">GET THE 3-MONTH PASS</a>
           </div>
 
           <div class="pass-card" data-pass="p6">
             <div class="pass-card-kicker">PLATINUM PASS</div>
             <div class="pass-card-term">6 MONTHS</div>
-            <div class="pass-card-tokens" data-pass-tokens="p6">375 tokens</div>
+            <div class="pass-card-tokens" data-pass-tokens="p6">425 tokens</div>
             <div class="pass-card-tokens-sub">yours to spend whenever</div>
-            <div class="pass-card-price" data-pass-price="p6">$149</div>
+            <div class="pass-card-price" data-pass-price="p6">$150</div>
             <a href="/login?signup&amp;pass=p6" class="btn-tier btn-pass">GET THE 6-MONTH PASS</a>
           </div>
 
           <div class="pass-card" data-pass="p12">
             <div class="pass-card-kicker">PLATINUM PASS</div>
             <div class="pass-card-term">12 MONTHS</div>
-            <div class="pass-card-tokens" data-pass-tokens="p12">700 tokens</div>
+            <div class="pass-card-tokens" data-pass-tokens="p12">1000 tokens</div>
             <div class="pass-card-tokens-sub">yours to spend whenever</div>
-            <div class="pass-card-price" data-pass-price="p12">$279</div>
+            <div class="pass-card-price" data-pass-price="p12">$300</div>
             <a href="/login?signup&amp;pass=p12" class="btn-tier btn-pass">GET THE 12-MONTH PASS</a>
           </div>
         </div>
@@ -641,7 +643,7 @@
     <!-- v3.7.59: the next two answers are the Memories page's own (Ian, 2026-11-22: fill the gaps from Memories). -->
     <details><summary>How long does it take to print and ship my book?</summary><p>About two weeks from the day you order: about a week to print your book and about a week to ship it to your door.</p></details>
     <details><summary>How much does a printed book cost?</summary><p>Roughly 50 cents a page, plus shipping. You see the exact price before you pay.</p></details>
-    <details><summary>Doesn&rsquo;t AI just threaten artists, and human creativity in general?</summary><p>In many ways it can. We are musicians, writers and coders ourselves, and we are not blind to the harm AI has done to many creative people and industries. That is why Campaignia includes training tools that encourage creative skill, and lets you put in as much of your own art and writing as you like. As much as AI threatens artists and creators, it also opens up exciting new possibilities that simply weren&rsquo;t practical or affordable before. We believe Campaignia takes the best of AI to enhance human creativity, not replace it.</p><!-- v3.7.82 AI answer --></details>
+    <details><summary>Doesn&rsquo;t AI just threaten artists, and human creativity in general?</summary><p>In many ways it can. We are musicians, writers and coders ourselves, and we are not blind to the harm AI has done to many creative people and industries. That is why Campaignia includes training tools that encourage creative skill, and lets you put in as much of your own art and writing as you like. As much as AI threatens artists and creators, it also opens up exciting new possibilities that simply weren&rsquo;t practical or affordable before. We believe Campaignia takes the best of AI to enhance and expand human creativity, not replace it.</p><!-- enhance and expand --><!-- v3.7.82 AI answer --></details>
   </div>
 </section>
 
@@ -731,14 +733,8 @@ function cmpAddDraftLink(d){
   a.style.cssText = 'font-size:9px;letter-spacing:1px;opacity:0.5;';
   signIn.parentNode.insertBefore(a, signIn);
 }
-(function(){
-  try {
-    fetch('/api/auth/me', { credentials: 'same-origin' })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(cmpAddDraftLink)
-      .catch(function(){});
-  } catch (e) {}
-})();
+// v3.7.96 -- NO DRAFT LINK (Ian, 2026-11-23: "get rid of the Draft in the top banner"). This page is the home page now and
+// the admin-only DRAFT link to /story is no longer added; cmpAddDraftLink above is left in place but never called.
 function cmpToggleNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(!m)return;var open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
 function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');}
 </script>
@@ -804,6 +800,48 @@ function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=documen
   vids.forEach(function (v) {
     io.observe(v);
     if (inStack(v)) new MutationObserver(function () { check(v); }).observe(v.parentElement, { attributes: true, attributeFilter: ['class'] });
+  });
+})();
+</script>
+<script>
+// v3.7.98 -- A DIFFERENT CHARACTER EACH TIME (Ian, 2026-11-23: "Can you alternate a video in and out there if I give you
+// several different characters?" ... "every time it comes to that particular part it should be different, so each new visit").
+// How it Works step 1 shows one character clip, looping. Each time step 1 comes back into view (the restart script at the foot
+// of the page pauses it out of view and plays it from 0:00 back in view) the next character takes its place, and each new
+// visit to the page starts on the character after the one the visitor saw first last time. Each box takes its clip's shape.
+// To add a character, add a line to CLIPS.
+(function () {
+  var CLIPS = [
+    { src: '/images/gm-character-build-2.mp4', poster: '/images/gm-character-build-2-poster.jpg', ar: '632/808' },   // Gubuk
+    { src: '/images/gm-character-elvarra.mp4', poster: '/images/gm-character-elvarra-poster.jpg', ar: '640/804' },   // Elvarra
+    { src: '/images/gm-character-galahorn.mp4', poster: '/images/gm-character-galahorn-poster.jpg', ar: '640/810' },   // Galahorn
+    { src: '/images/gm-character-bol.mp4', poster: '/images/gm-character-bol-poster.jpg', ar: '640/810' },   // Bol
+    { src: '/images/gm-character-zara.mp4', poster: '/images/gm-character-zara-poster.jpg', ar: '710/808' },   // Zara
+    { src: '/images/gm-character-kip.mp4', poster: '/images/gm-character-kip-poster.jpg', ar: '710/816' }   // Kip
+  ];
+  var KEY = 'cmp_gm_char', start = 0;
+  try { start = (parseInt(localStorage.getItem(KEY), 10) || 0) % CLIPS.length; localStorage.setItem(KEY, String((start + 1) % CLIPS.length)); } catch (e) {}
+  function put(v, i) {
+    var c = CLIPS[i];
+    v.poster = c.poster; v.src = c.src;
+    if (v.parentElement) v.parentElement.style.aspectRatio = c.ar;
+  }
+  [].slice.call(document.querySelectorAll('video[src="' + CLIPS[0].src + '"]')).forEach(function (v) {
+    var i = start, away = false, shown = false;
+    if (i !== 0) put(v, i);
+    // v3.8.03 -- AND ON TO THE NEXT WHEN ONE FINISHES (Ian, 2026-11-23: "if you just sit there and don't scroll... it should also
+    // go through the different characters"). No loop: at the end of a clip the next character starts. The browser fires pause
+    // just before ended, so away is cleared here or the play below would count as coming back into view and skip one.
+    v.loop = false; v.removeAttribute('loop');
+    v.addEventListener('ended', function () {
+      away = false; i = (i + 1) % CLIPS.length; put(v, i);
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+    });
+    v.addEventListener('pause', function () { if (shown) away = true; });
+    v.addEventListener('play', function () {
+      if (away) { away = false; i = (i + 1) % CLIPS.length; put(v, i); var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+      shown = true;
+    });
   });
 })();
 </script>

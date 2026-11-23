@@ -7,7 +7,7 @@
 <title>Campaignia — Sign In</title>
   <meta name="description" content="Sign in to Campaignia — Your TTRPG session graphic novel generator." />
   <link rel="icon" type="image/png" href="/images/Campaignia_Tab_Icon.png" />
-  <link rel="apple-touch-icon" href="/images/Campaignia_Favicon.png" />
+  <link rel="apple-touch-icon" href="/images/Campaignia_App_Icon_180.png" />
 <link rel="stylesheet" href="/css/style.css">
 <script>/* v3.4.69 -- the page's brand (services/brands.js). The server names it in the cmp_brand cookie, and never for Campaignia; any other brand's theme sheet is laid over Campaignia's here, before the first paint, and the toolbar takes its page color. */(function(){var m=document.cookie.match(/(?:^|;\s*)cmp_brand=([a-z0-9-]+)/);if(!m||m[1]==='campaignia')return;document.write('<link rel="stylesheet" href="/css/themes/'+m[1]+'.css">');document.documentElement.setAttribute('data-brand',m[1]);document.addEventListener('DOMContentLoaded',function(){var t=document.querySelector('meta[name="theme-color"]'),c=getComputedStyle(document.documentElement).getPropertyValue('--page-bg').trim();if(t&&c)t.setAttribute('content',c);});})();</script>
 <style>
@@ -69,6 +69,11 @@
     margin-bottom: 4px;
     letter-spacing: 1px;
   }
+  /* v3.8.00 -- the way back to the site, and what you are signing up for (testers, 2026-11-23; Ian). */
+  .auth-back { display:inline-block; font-size:13px; color:rgba(var(--accent-rgb),0.75); text-decoration:none; margin-bottom:14px; }
+  .auth-back:hover { color:var(--accent-bright); }
+  .signup-for { margin:-8px 0 18px; text-align:center; font-size:13px; font-weight:600; text-transform:uppercase;
+    letter-spacing:0.08em; color:rgba(var(--accent-rgb),0.85); }   /* v3.8.02: just the name, in the form labels' lettering */
   .auth-subtitle {
     font-size: 13px;
     color: rgba(var(--accent-rgb),0.5);
@@ -83,17 +88,22 @@
   .auth-box .form-label {
     color: rgba(var(--accent-rgb),0.7);
   }
+  /* v3.8.02 -- LIGHT BOXES, DARK TEXT, EVERYWHERE (Ian, 2026-11-23: "I want the boxes light with dark text, I want them to
+     match"). Chrome paints a box it fills in from a saved login pale blue (#e8f0fe) with dark text, so sign-in looked light and
+     sign-up dark. Every box on this page now uses that same pale blue, filled in or not, so they all match. */
   .auth-box .form-input {
-    background: rgba(255,255,255,0.05);
-    border-color: rgba(var(--accent-rgb),0.2);
-    color: var(--accent-pale);
+    background: #e8f0fe;
+    border-color: rgba(var(--accent-rgb),0.35);
+    color: #1a1208;
+    color-scheme: light;
   }
   .auth-box .form-input:focus {
-    border-color: rgba(var(--accent-rgb),0.6);
+    border-color: var(--accent-bright);
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb),0.35);
     outline: none;
   }
   .auth-box .form-input::placeholder {
-    color: rgba(var(--accent-rgb),0.25);
+    color: rgba(26,18,8,0.45);
   }
   .auth-box .btn-primary {
     background: var(--accent);
@@ -155,10 +165,11 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
 <body>
 <div class="auth-page">
   <div class="auth-box">
-    <div class="auth-logo-wrap">
+    <a href="/" class="auth-back" id="auth-back">&larr; Back to the site</a>
+    <a href="/" class="auth-logo-wrap" id="auth-home" title="Back to the site" style="display:block;text-decoration:none;">
       <img class="auth-logo-img cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia logo" /><img class="cmp-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" style="display:block;height:52px;width:auto;max-width:90%;margin:0 auto;" />
       <div class="auth-logo-name cmp-logo-label">CAMPAIGNIA</div>
-    </div>
+    </a>
 
     <!-- LOGIN -->
     <div id="login-panel">
@@ -212,6 +223,7 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
     <div id="register-panel" class="hidden">
       <div class="auth-title">Campaignia — Where Your Story Begins</div>
       <div class="auth-subtitle">Create your Story Master account</div>
+      <div id="signup-for" class="signup-for hidden" aria-live="polite"></div>
       <div class="auth-divider"></div>
       <div class="form-group">
         <label class="form-label">Your name</label>
@@ -491,7 +503,39 @@ function _cmpAppLanding() {
   } catch (e) {}
   return '/app.html';
 }
-fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:_cmpAppLanding()); } });
+// v3.8.00 -- A PLAN OR PASS CHOSEN WHILE ALREADY SIGNED IN IS KEPT (testers, 2026-11-23: "an existing customer trying to
+// upgrade is dropped" on My Campaigns). With ?plan= or ?pass= the app opens on its Plans with that choice named (?upgrade=).
+function _cmpUpgradeLanding() {
+  if (!_signupPlan) return null;
+  if (!/^(silver|gold|platinum|pass:[a-z0-9_-]{1,20})$/.test(_signupPlan)) return null;
+  return '/app.html?upgrade=' + encodeURIComponent(_signupPlan);
+}
+fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ var _rt=_safeReturnTo(); window.location.replace(_rt?_rt:(_cmpUpgradeLanding()||_cmpAppLanding())); } });
+// v3.8.00 -- WHAT YOU ARE SIGNING UP FOR (Ian, 2026-11-23: "it should say what you are signing up for"). Plan and pass names,
+// prices and tokens come from /api/public/pricing, the same figures the app charges, so they cannot drift. The logo and the
+// Back link return to the site: / for Campaignia, /memories for the Story brand.
+(function () {
+  var story = document.documentElement.getAttribute('data-brand') === 'brand2';
+  var home = story ? '/memories' : '/';
+  ['auth-back', 'auth-home'].forEach(function (id) { var a = document.getElementById(id); if (a) a.setAttribute('href', home); });
+  var box = document.getElementById('signup-for');
+  if (!box) return;
+  // v3.8.02 -- JUST THE NAME (Ian, 2026-11-23: "this is too much info... Just say 3 Month Platinum Pass"). No price, tokens,
+  // Change link or next step; the pass name still comes from /api/public/pricing.
+  function show(t) { box.textContent = t; box.classList.remove('hidden'); }
+  var NAMES = { silver: 'Silver Plan', gold: 'Gold Plan', platinum: 'Platinum Plan' };
+  if (!_signupPlan) {
+    try { if (new URLSearchParams(window.location.search).has('signup')) show('Free Trial'); } catch (e) {}
+    return;
+  }
+  var isPass = _signupPlan.indexOf('pass:') === 0, id = isPass ? _signupPlan.slice(5) : _signupPlan;
+  if (!isPass) { if (NAMES[id]) show(NAMES[id]); return; }
+  show('Platinum Pass');
+  fetch('/api/public/pricing').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    var p = d && (d.passes || []).filter(function (x) { return x && x.id === id; })[0];
+    if (p && p.name) show(p.name);
+  }).catch(function () {});
+})();
 </script>
 <script src="/js/pw-eye.js" defer></script>
 </body>

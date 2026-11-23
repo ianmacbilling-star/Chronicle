@@ -1,5 +1,299 @@
 [
   {
+    "version": "3.8.04",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3804-signout-keeps-brand",
+        "kind": "change",
+        "public": false,
+        "summary": "Signing out keeps your brand; the Story brand home is Memories.",
+        "detail": "Signing out now takes you to the home page of the brand you were using, and the Story home page is the Memories page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.8.03",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3803-gm-characters-advance",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: step 1 moves on to the next character when one finishes.",
+        "detail": "How it Works step 1 now goes on to the next character when one finishes, even if you do not scroll.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.8.02",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3802-signup-just-name",
+        "kind": "change",
+        "public": false,
+        "summary": "Sign-in and sign-up: light boxes that match, and just the name of what you are signing up for.",
+        "detail": "The create-account page now just names the plan or pass you picked, and the text boxes on sign-in and sign-up now look the same.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.8.01",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3801-gm-kip",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: Kip joins the step 1 characters.",
+        "detail": "How it Works step 1 now has six characters to show, with Kip added.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.8.00",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3800-testers-site-fixes",
+        "kind": "change",
+        "public": false,
+        "summary": "Testers fixes: what you are signing up for, a way back from sign-in, contact addresses, and Zara.",
+        "detail": "The create-account page now says which plan or pass you are signing up for. Signed-in customers who pick a plan on the website go straight to their plans. Sign-in has a way back to the site, and a few links and prices on the website were corrected.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.99",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3799-gm-more-characters",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: Galahorn and Bol join the step 1 characters.",
+        "detail": "How it Works step 1 now has four characters to show: Gubuk, Elvarra, Galahorn and Bol.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.98",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3798-gm-characters-in-turn",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: step 1 shows a different character each time.",
+        "detail": "How it Works step 1 now shows a different character being built each time you come to it.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.97",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3797-app-logo-no-draft",
+        "kind": "change",
+        "public": false,
+        "summary": "The app logo no longer opens the draft Story page for admins.",
+        "detail": "For admins, the logo in the app now goes to the home page like everyone else, instead of opening the draft Story page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.96",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3796-home-no-draft-link",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: the admin DRAFT link is gone from the top banner.",
+        "detail": "Admins no longer see a DRAFT link in the top banner of the home page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.95",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3795-app-logo-by-brand",
+        "kind": "change",
+        "public": false,
+        "summary": "The app logo goes to Memories for the Story brand.",
+        "detail": "In the app, the logo takes Campaignia users to the home page and Story users to the Memories page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.94",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3794-app-logo-home",
+        "kind": "change",
+        "public": false,
+        "summary": "The logo inside the app takes you to the home page.",
+        "detail": "Clicking the Campaignia logo at the top of the app now takes you to the home page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.93",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3793-new-home",
+        "kind": "change",
+        "public": false,
+        "summary": "The new Game Masters page is the home page; the old home moves to /old-game-master.",
+        "detail": "campaignia.com now opens on the new page. The quotes section is hidden until there are real quotes.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.92",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3792-gm-faq-expand",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: AI FAQ says enhance and expand.",
+        "detail": "The FAQ on AI and artists now says Campaignia uses AI to enhance and expand human creativity, not replace it.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.91",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3791-gm-visual-consistency-handouts",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Visual Consistency mentions your own handouts, maps and art.",
+        "detail": "The Visual Consistency feature now mentions bringing in the handouts, maps and art you used at the table.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.90",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3790-gm-styles-wording",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Styles to Match wording.",
+        "detail": "The Styles to Match feature now ends with build a custom art style all your own.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.89",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3789-app-icon",
+        "kind": "change",
+        "public": false,
+        "summary": "New installed-app icon: the maroon sword and pen on cream.",
+        "detail": "The Campaignia app icon on phone home screens and desktops is now the new maroon sword-and-pen on cream.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.88",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3788-backcover-logo-outline",
+        "kind": "change",
+        "public": false,
+        "summary": "Back cover logo outlined so it shows on white or pale pictures.",
+        "detail": "The Campaignia logo on the back cover now has a thin dark outline, so it stays readable over a white or pale back cover picture.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.87",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3787-gm-hide-see-examples",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: See Examples button hidden for now.",
+        "detail": "The See Examples button under Get a Real Book is hidden for now; the book video shows the real thing.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.86",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3786-gm-image-gen-wording",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Image Generation no longer promises a picture for every panel.",
+        "detail": "The Image Generation feature and the Copy and Paste card now say Campaignia illustrates the key moments, not every panel.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.85",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3785-gm-step2-wording",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: step 2 no longer promises a picture for every panel.",
+        "detail": "How it Works step 2 now says Campaignia turns your session into a complete, illustrated story told in narrative prose.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.84",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3784-gm-step2-full-story",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: step 2 says Campaignia writes and illustrates the full story.",
+        "detail": "How it Works step 2 now says Campaignia turns your session into a complete story, with narrative prose and pictures for every panel.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.83",
     "staged_on": "2026-11-22",
     "entries": [
