@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.78",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3778-gm-insert-art-tbd",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: TBD mark off Insert Your Art.",
+        "detail": "The Insert Your Art feature on the Game Masters page no longer shows a TBD mark.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.77",
     "staged_on": "2026-11-22",
     "entries": [
