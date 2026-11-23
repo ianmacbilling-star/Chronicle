@@ -378,6 +378,14 @@ app.get('/story', function (req, res) {
 
 // v3.2.54 -- THE GAME MASTERS LANDING PAGE, one page per audience (Ian, 2026-10-24). Same reasons as /story above:
 // served only from views/, no-store, one URL. Its canonical is /game-masters; the home page keeps its own.
+// v3.7.80 -- ONE GAME MASTERS PAGE, WHATEVER YOU TYPE (Ian, 2026-11-22: "I just want the new page to be pulled up if i type in
+// Game-Master. There should be no other Game-Master page."). The near-misses all go to /game-masters with a 301, the query kept;
+// Express already ignores capital letters and a trailing slash. The old page (views/game-masters-v1.html) is a copy only and is
+// served by nothing.
+app.get(['/game-master', '/gamemaster', '/gamemasters', '/game_master', '/game_masters', '/gm', '/gms'], function (req, res) {
+  var i = req.originalUrl.indexOf('?');
+  res.redirect(301, '/game-masters' + (i >= 0 ? req.originalUrl.slice(i) : ''));
+});
 app.get('/game-masters', function (req, res) {
   res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'views', 'game-masters.html'));
