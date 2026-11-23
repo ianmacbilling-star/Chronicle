@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.67",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3767-clips-restart",
+        "kind": "change",
+        "public": false,
+        "summary": "Clips on the Game Masters and Memories pages start from the beginning when they come into view.",
+        "detail": "Every clip on the Game Masters and Memories pages, in the step-by-step walkthrough and the feature panels, starts over from the beginning each time you scroll it into view.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.66",
     "staged_on": "2026-11-22",
     "entries": [
