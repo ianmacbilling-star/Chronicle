@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.77",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3777-gm-image-gen-gallery-link",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Image Generation links to the gallery.",
+        "detail": "The Image Generation feature on the Game Masters page has a See what others have made link to the Library gallery.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.76",
     "staged_on": "2026-11-22",
     "entries": [
