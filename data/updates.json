@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.06",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3806-app-icon-maroon",
+        "kind": "change",
+        "public": false,
+        "summary": "Installed-app icon: white sword and pen on maroon, as large as it fits.",
+        "detail": "The Campaignia app icon on phones and desktops is now a large white sword and pen on maroon.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.05",
     "staged_on": "2026-11-22",
     "entries": [
