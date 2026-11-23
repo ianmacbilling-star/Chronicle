@@ -106,7 +106,7 @@
     ].join(';');
 
     var icon = document.createElement('img');
-    icon.src = '/images/cmp-icon-v2-192.png';   // v3.7.89 the new icon
+    icon.src = '/images/cmp-icon-v3-192.png';   // v3.7.89 the new icon
     icon.alt = '';
     icon.style.cssText = 'width:34px;height:34px;flex:none;border-radius:7px';
     wrap.appendChild(icon);
