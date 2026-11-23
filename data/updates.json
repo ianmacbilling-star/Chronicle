@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.73",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3773-gm-character-clip-2",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the new character build clip on How it Works step 1.",
+        "detail": "Step 1 (Characters) shows the new, shorter character build clip.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.72",
     "staged_on": "2026-11-22",
     "entries": [
