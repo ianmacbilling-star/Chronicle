@@ -7,11 +7,13 @@
   <meta charset="UTF-8">
   <script>(function(){var P=['campaignia.com','www.campaignia.com'];if(P.indexOf(location.hostname)===-1){document.documentElement.classList.add('staging-env');}})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Campaignia for Game Masters — You make it legendary. We make it forever.</title>
-  <meta name="description" content="Turn your TTRPG sessions into stunning graphic novels. AI-powered storyboards, image generation, and PDF export for Dungeon Masters." />
-  <!-- v3.2.54 -- THE GAME MASTERS LANDING PAGE (Ian, 2026-10-24: "I think I need to start having specific landing pages
-       for different groups"). A copy of the home page as it stood at v3.2.53, so it can grow its own wording; served only
-       by the /game-masters route in server.js, like /story. Search engines are told THIS is the Game Masters page. -->
+  <title>Campaignia for Game Masters — You made it legendary. Now make sure it lasts.</title>
+  <meta name="description" content="Campaignia helps Game Masters and storytellers turn their TTRPG campaigns into graphic novels: your notes or transcript in, a real printed book out." />
+  <!-- v3.7.53 -- THE NEW GAME MASTERS PAGE (Ian, 2026-11-22), built from Riley's "Normal" home page plan with the How it Works,
+       FAQ and AI sections of his "Restrained" plan. It replaced the v3.2.54 copy of the home page, which is kept, unserved,
+       as views/game-masters-v1.html. NOT INDEXED while it is being finished, so it can be reviewed before people are sent
+       here; take the robots line out when it is ready. The home page (public/index.html) is untouched. -->
+  <meta name="robots" content="noindex">
   <link rel="canonical" href="https://campaignia.com/game-masters" />
   <meta property="og:site_name" content="Campaignia" />
   <meta property="og:type" content="website" />
@@ -48,8 +50,238 @@
   <script src="/js/pwa.js" defer></script>
     <script src="/analytics.js"></script>
     <script src="/promo.js"></script>
+  <style>
+    /* v3.7.53 -- THE NEW GAME MASTERS PAGE (Ian, 2026-11-22). Riley's "Normal" home page plan, with the How it Works walkthrough,
+       the Human-Centered AI / Protecting Creativity groups and the FAQ from his "Restrained" plan. landing.css still dresses the
+       nav, the footer and the Choose Your Path pricing block; everything new is namespaced gm- so it cannot collide with it.
+       Dashed boxes are pictures still to come, with Riley's note inside; yellow TBD marks are facts still to settle. */
+    .gm-wrap{max-width:1200px;margin:0 auto;padding:0 32px;}
+    .gm-sec{padding:110px 0;position:relative;}
+    .gm-sec.alt{background:var(--panel-deep);}
+    .gm-eyebrow{font-family:var(--font-label);font-size:13px;letter-spacing:0.22em;color:var(--accent);text-transform:uppercase;margin-bottom:14px;}
+    .gm-h2{font-family:var(--font-display);font-weight:700;font-size:clamp(30px,4vw,52px);line-height:1.1;color:var(--accent-bright);letter-spacing:0.02em;margin:0 0 22px;}
+    .gm-h3{font-family:var(--font-display);font-weight:700;font-size:22px;color:var(--accent-bright);letter-spacing:0.03em;line-height:1.25;margin:0 0 10px;}
+    .gm-lead{font-size:21px;line-height:1.6;color:var(--on-panel);max-width:760px;}
+    .gm-center{text-align:center;} .gm-center .gm-lead{margin:0 auto;}
+    .gm-tbd{background:#ffe36e;color:#111;font-weight:700;padding:0 6px;border-radius:4px;font-family:Arial,sans-serif;font-size:0.8em;}
+    .gm-btn{display:inline-block;background:var(--button-cta);color:#fff;font-family:var(--font-label);font-weight:700;font-size:17px;letter-spacing:0.1em;text-decoration:none;padding:17px 36px;border-radius:6px;border:2px solid var(--button-cta);transition:transform .15s,box-shadow .15s;box-shadow:0 6px 20px rgba(192,57,43,0.35);}
+    .gm-btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(192,57,43,0.45);}
+    .gm-btn.ghost{background:transparent;color:var(--accent-bright);border-color:rgba(var(--accent-rgb),0.6);box-shadow:none;}
+    .gm-cta-row{display:flex;gap:16px;flex-wrap:wrap;align-items:center;}
+    .gm-center .gm-cta-row{justify-content:center;}
+    .gm-note{font-size:15px;color:rgba(var(--on-panel-rgb),0.6);margin-top:12px;font-style:italic;}
+    /* a picture still to come: Riley's note in a dashed box */
+    .gm-pic{background:rgba(var(--accent-rgb),0.05);border:2px dashed rgba(var(--accent-rgb),0.35);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;color:rgba(var(--on-panel-rgb),0.7);font-size:15px;line-height:1.45;min-height:220px;}
+    .gm-pic b{display:block;font-family:var(--font-label);font-size:11px;letter-spacing:0.18em;color:var(--accent);margin-bottom:8px;}
+    .gm-pic.has-img{padding:0;border:0;overflow:hidden;background:#000;}
+    .gm-pic.has-img img{width:100%;height:100%;object-fit:cover;display:block;}
+
+    /* 1. above the fold: the picture and the line change as you scroll; logo line and button stay */
+    .gm-hero{padding:64px 0 0;background:var(--page-bg);}   /* the nav is fixed, 64px */
+    .gm-hero-wrap{height:230vh;position:relative;}
+    .gm-hero-sticky{position:sticky;top:64px;height:calc(100vh - 64px);overflow:hidden;display:grid;grid-template-columns:1fr 1fr;}
+    .gm-hero-pics{position:relative;overflow:hidden;}
+    .gm-hero-pics .gm-pic{position:absolute;inset:0;border-radius:0;transition:opacity .7s;}
+    .gm-hero-pics .gm-pic img{object-position:50% 30%;}
+    .gm-hero-pics .gm-pic.b{opacity:0;}
+    .gm-hero.second .gm-hero-pics .gm-pic.b{opacity:1;}
+    .gm-hero-pics::after{content:'';position:absolute;inset:0;background:linear-gradient(to right,transparent 60%,var(--page-bg));pointer-events:none;}
+    .gm-hero-text{display:flex;flex-direction:column;justify-content:center;padding:40px 56px;position:relative;}
+    .gm-hero-lines{position:relative;height:clamp(150px,18vw,250px);margin-bottom:18px;}
+    .gm-hero-lines h2{position:absolute;left:0;right:0;bottom:0;margin:0;font-family:var(--font-display);font-weight:900;font-size:clamp(42px,5.6vw,84px);line-height:1.02;color:#fff;transition:opacity .6s,transform .6s;}
+    .gm-hero-lines h2 span{color:var(--button-cta);}
+    .gm-hero-lines h2.b{opacity:0;transform:translateY(24px);}
+    .gm-hero.second .gm-hero-lines h2.a{opacity:0;transform:translateY(-24px);}
+    .gm-hero.second .gm-hero-lines h2.b{opacity:1;transform:none;}
+    .gm-hero h1{font-family:var(--font-body);font-weight:400;font-size:clamp(19px,1.7vw,24px);line-height:1.45;color:var(--on-panel);margin:0 0 34px;max-width:520px;}
+    .gm-hero h1 b{color:var(--accent-bright);font-weight:600;}
+    .gm-hero-dots{display:flex;gap:10px;margin-top:40px;}
+    .gm-hero-dots i{width:34px;height:4px;border-radius:2px;background:rgba(var(--accent-rgb),0.25);transition:background .3s;}
+    .gm-hero-dots i.on{background:var(--accent-bright);}
+    @media (max-width:900px), (prefers-reduced-motion: reduce){
+      .gm-hero-wrap{height:auto;}
+      .gm-hero-sticky{position:static;height:auto;grid-template-columns:1fr;}
+      .gm-hero-pics{height:58vh;}
+      .gm-hero-pics::after{background:linear-gradient(to bottom,transparent 60%,var(--page-bg));}
+      .gm-hero-text{padding:30px 22px 60px;}
+      .gm-hero-dots{display:none;}
+      /* no scrolling show here: both lines, one under the other, with the first picture */
+      .gm-hero-lines{height:auto;}
+      .gm-hero-lines h2{position:static;opacity:1 !important;transform:none !important;font-size:clamp(34px,10vw,52px);}
+      .gm-hero-lines h2.b{margin-top:10px;}
+    }
+
+    /* 2. the key facts, in a strip */
+    .gm-facts{background:var(--panel);border-top:1px solid rgba(var(--accent-rgb),0.2);border-bottom:1px solid rgba(var(--accent-rgb),0.2);padding:40px 0;}
+    .gm-facts .gm-wrap{display:grid;grid-template-columns:repeat(5,1fr);gap:20px;text-align:center;}
+    .gm-ico{width:64px;height:64px;border-radius:50%;border:1.5px solid rgba(var(--accent-rgb),0.6);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;color:var(--accent-bright);background:radial-gradient(circle at 50% 40%,rgba(var(--accent-rgb),0.12),transparent 70%);}   /* v3.7.56 -- gold outline icons (Ian) */
+    .gm-ico svg{width:32px;height:32px;display:block;}
+    .gm-fact{font-family:var(--font-label);font-weight:700;font-size:14px;letter-spacing:0.08em;color:var(--on-panel);text-transform:uppercase;}
+
+    /* 3. the story: dark picture behind, light boxes in front */
+    .gm-story{background:linear-gradient(rgba(10,8,6,0.72),rgba(10,8,6,0.82)),url('/images/DM_Rolling_Dice.png') center/cover fixed;}
+    .gm-story .gm-wrap{max-width:880px;}
+    .gm-box{background:#f3ead6;color:#1d140c;border-radius:12px;padding:38px 44px;margin-bottom:26px;box-shadow:0 18px 50px rgba(0,0,0,0.5);opacity:0;transform:translateY(30px);transition:opacity .7s,transform .7s;}
+    .gm-box.seen{opacity:1;transform:none;}
+    .gm-box h2,.gm-box h3{font-family:var(--font-display);color:#2c1810;margin:0 0 14px;}
+    .gm-box h2{font-size:clamp(26px,3.2vw,38px);line-height:1.15;}
+    .gm-box h3{font-size:22px;}
+    .gm-box p{font-size:19px;line-height:1.65;margin:0;}
+    .gm-box.punch{background:#2c1810;color:var(--accent-bright);text-align:center;}
+    .gm-box.punch h3{color:var(--accent-bright);font-size:clamp(22px,2.6vw,30px);margin:0;}
+    @media (prefers-reduced-motion: reduce){ .gm-box{opacity:1;transform:none;} }
+    @media (max-width:900px){ .gm-story{background-attachment:scroll;} .gm-box{padding:28px 24px;} }
+
+    /* 4. how it works: the step in view grows, the picture beside it follows */
+    .gm-steps{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:60px;}
+    .gm-steps-pic{position:sticky;top:110px;height:min(66vh,580px);}
+    .gm-steps-pic .gm-pic{position:absolute;inset:0;opacity:0;transition:opacity .45s;}
+    .gm-steps-pic .gm-pic.on{opacity:1;}
+    .gm-step{padding:46px 40px;margin-bottom:26px;border-radius:14px;border:1px solid rgba(var(--accent-rgb),0.25);background:var(--panel);opacity:0.4;transform:scale(0.96);transform-origin:left center;transition:opacity .4s,transform .4s,box-shadow .4s;min-height:40vh;display:flex;flex-direction:column;justify-content:center;}
+    .gm-step.on{opacity:1;transform:none;box-shadow:0 18px 50px rgba(0,0,0,0.5);border-color:rgba(var(--accent-rgb),0.55);}
+    .gm-step .num{font-family:var(--font-display);font-weight:900;font-size:46px;color:var(--button-cta);line-height:1;margin-bottom:10px;}
+    .gm-step p{font-size:19px;line-height:1.6;margin:0;}
+    .gm-step .gm-pic{display:none;}
+    .gm-steps > div:last-child{padding-bottom:calc(min(66vh,580px) - 40vh);}
+    @media (max-width:900px){
+      .gm-steps{grid-template-columns:minmax(0,1fr);gap:0;}
+      .gm-steps-pic{display:none;}
+      .gm-step{opacity:1;transform:none;min-height:0;padding:30px 22px;}
+      .gm-step .gm-pic{display:flex;margin-bottom:22px;aspect-ratio:4/3;min-height:0;}
+      .gm-steps > div:last-child{padding-bottom:0;}
+    }
+    .gm-trial{text-align:center;margin-top:50px;}
+    .gm-trial .gm-h3{margin-bottom:4px;}
+
+    /* 5. the book */
+    .gm-book{display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:center;}
+    .gm-book .gm-pic{aspect-ratio:4/5;}
+    .gm-list{list-style:none;margin:26px 0 34px;padding:0;}
+    .gm-list li{display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid rgba(var(--accent-rgb),0.15);font-size:19px;}
+    .gm-list .gm-ico{width:46px;height:46px;margin:0;flex-shrink:0;}
+    .gm-list .gm-ico svg{width:24px;height:24px;}
+
+    /* 6. your way, 7. testimonials, 8. the AI groups, 9. features: card grids */
+    .gm-cards{display:grid;gap:22px;margin-top:50px;}
+    .gm-cards.c4{grid-template-columns:repeat(4,1fr);} .gm-cards.c3{grid-template-columns:repeat(3,1fr);}
+    .gm-card{background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.25);border-radius:14px;padding:32px 28px;}
+    .gm-sec.alt .gm-card{background:var(--page-bg);}
+    .gm-card p{font-size:17px;line-height:1.6;margin:0;color:rgba(var(--on-panel-rgb),0.88);}
+    .gm-card.quote{border-style:dashed;}
+    .gm-card.quote .who{display:flex;align-items:center;gap:12px;margin-top:20px;font-family:var(--font-label);font-size:13px;letter-spacing:0.08em;color:var(--accent);}
+    .gm-card.quote .who i{width:40px;height:40px;border-radius:50%;border:2px dashed rgba(var(--accent-rgb),0.4);}
+    .gm-groups{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:50px;}
+    .gm-group .gm-h2{font-size:clamp(24px,2.6vw,34px);}
+    .gm-group .row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:center;margin-top:24px;}
+    .gm-feats{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:50px;border:1px solid rgba(var(--accent-rgb),0.25);border-radius:14px;overflow:hidden;}
+    .gm-feat{padding:30px 28px;border-right:1px solid rgba(var(--accent-rgb),0.15);border-bottom:1px solid rgba(var(--accent-rgb),0.15);}
+    .gm-feat:nth-child(3n){border-right:0;}
+    .gm-feat h3{font-family:var(--font-label);font-size:15px;letter-spacing:0.12em;color:var(--accent-bright);margin:0 0 8px;text-transform:uppercase;}
+    .gm-feat p{font-size:16.5px;line-height:1.55;margin:0;color:rgba(var(--on-panel-rgb),0.85);}
+    @media (max-width:900px){
+      .gm-sec{padding:76px 0;} .gm-wrap{padding:0 22px;}
+      .gm-facts .gm-wrap{grid-template-columns:repeat(2,1fr);row-gap:30px;}
+      .gm-book,.gm-groups{grid-template-columns:minmax(0,1fr);gap:40px;}
+      .gm-cards.c4,.gm-cards.c3,.gm-feats{grid-template-columns:minmax(0,1fr);}
+      .gm-feat{border-right:0;}
+    }
+
+    /* 10. the plans: the Choose Your Path block from the old page, as it was */
+    .gm-plans .comic-book{padding-top:0;min-height:0;}
+
+    /* 11. FAQ */
+    .gm-faq .gm-wrap{max-width:900px;}
+    .gm-faq details{background:var(--panel);border:1px solid rgba(var(--accent-rgb),0.25);border-radius:12px;margin-bottom:12px;padding:0 26px;}
+    .gm-faq summary{cursor:pointer;list-style:none;padding:22px 0;font-family:var(--font-display);font-weight:700;font-size:18px;color:var(--accent-bright);display:flex;justify-content:space-between;gap:20px;}
+    .gm-faq summary::-webkit-details-marker{display:none;}
+    .gm-faq summary::after{content:'+';font-size:26px;line-height:1;color:var(--accent);}
+    .gm-faq details[open] summary::after{content:'\2212';}
+    .gm-faq details p{font-size:18px;line-height:1.65;padding-bottom:22px;margin:0;}
+
+    /* 12. the last word */
+    .gm-final{text-align:center;padding:140px 0;background:radial-gradient(ellipse at center,rgba(192,57,43,0.18),transparent 65%),var(--page-bg);}
+    .gm-final .gm-h2{font-size:clamp(34px,5vw,66px);}
+    .gm-final p{font-size:21px;line-height:1.7;margin:0 auto 6px;max-width:700px;}
+    .gm-final .gm-cta-row{justify-content:center;}
+    #how,#pricing,#faq,#features{scroll-margin-top:66px;}   /* the fixed nav must not cover a heading the menu jumps to */
+    /* v3.7.57 -- THE OLD PARTS IN THE NEW STYLE (Ian, 2026-11-22): the Choose Your Path block (tiers, passes, Start Free,
+       Compare the Tiers) and the Sign In button, dressed like the rest of this page. On this page only -- landing.css is
+       untouched, so the home page keeps its look. */
+    nav .btn-nav{font-family:var(--font-label);font-weight:700;font-size:13px;letter-spacing:0.12em;padding:8px 20px;background:var(--button-cta);color:#fff;border:2px solid var(--button-cta);border-radius:6px;box-shadow:0 4px 14px rgba(192,57,43,0.35);}
+    nav .btn-nav:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(192,57,43,0.45);}
+    @media (max-width:600px){ nav .btn-nav{font-size:12px;padding:6px 14px;} }
+    .gm-plans{padding:90px 0 40px;background:var(--page-bg);}
+    .gm-plans .comic-book{background:transparent;}
+    .gm-plans .comic-page{max-width:1200px;margin:0 auto;padding:0 32px;background:transparent;}
+    .gm-plans .panel-pricing{border:1px solid rgba(var(--accent-rgb),0.3);border-radius:14px;overflow:hidden;background:var(--panel);}
+    .gm-plans .pricing-header{background:transparent;border-bottom:1px solid rgba(var(--accent-rgb),0.2);padding:34px 28px 24px;text-align:center;}
+    .gm-plans .pricing-header-title{font-family:var(--font-display);font-weight:700;font-size:clamp(30px,4vw,52px);letter-spacing:0.02em;color:var(--accent-bright);line-height:1.1;}
+    .gm-plans .pricing-header-sub{color:rgba(var(--on-panel-rgb),0.7);font-size:18px;margin-top:8px;}
+    .gm-plans .tier-row{padding:16px 28px;border-bottom:1px solid rgba(var(--accent-rgb),0.12);gap:18px;}
+    .gm-plans .tier-name-row{font-family:var(--font-display);font-weight:700;font-size:24px;letter-spacing:0.06em;}
+    .gm-plans .tier-perks{font-size:16px;}
+    .gm-plans .tier-price-tag,.gm-plans .pass-card-price{font-family:var(--font-display);font-weight:700;font-size:26px;color:#fff;}
+    .gm-plans .plan-blurb{padding:24px 28px 14px;border-bottom:0;}
+    .gm-plans .plan-blurb b{font-family:var(--font-label);font-weight:700;font-size:15px;letter-spacing:0.16em;color:var(--accent);}
+    .gm-plans .pass-cards{padding:8px 28px 26px;gap:18px;border-bottom:1px solid rgba(var(--accent-rgb),0.12);}
+    .gm-plans .pass-card{border:1px solid rgba(var(--accent-rgb),0.35);border-radius:12px;background:var(--page-bg);padding:24px 20px 22px;}
+    .gm-plans .pass-card:hover{border-color:var(--accent);background:rgba(var(--accent-rgb),0.05);}
+    .gm-plans .pass-card-kicker{font-family:var(--font-label);font-size:11px;letter-spacing:0.2em;color:var(--accent);}
+    .gm-plans .pass-card-term{font-family:var(--font-display);font-weight:700;font-size:24px;letter-spacing:0.06em;color:var(--on-panel);}
+    .gm-plans .pass-card-tokens{font-family:var(--font-display);font-weight:700;font-size:30px;color:var(--accent-bright);}
+    /* every button: the page's button, red for starting, a gold outline for choosing a plan */
+    .gm-plans .btn-tier,.gm-plans .btn-pass,.gm-plans .tier-row .btn-tier{font-family:var(--font-label);font-weight:700;font-size:13px;letter-spacing:0.1em;padding:12px 22px;border-radius:6px;border:1.5px solid rgba(var(--accent-rgb),0.7);background:transparent;color:var(--accent-bright);box-shadow:none;}
+    .gm-plans .btn-tier:hover,.gm-plans .btn-pass:hover{transform:translateY(-2px);background:var(--accent);color:var(--page-bg);border-color:var(--accent);box-shadow:none;}
+    .gm-plans .tier-trial .btn-tier{background:var(--button-cta);border-color:var(--button-cta);color:#fff;box-shadow:0 6px 20px rgba(192,57,43,0.35);}
+    .gm-plans .tier-trial .btn-tier:hover{background:var(--button-cta);color:#fff;border-color:var(--button-cta);box-shadow:0 10px 28px rgba(192,57,43,0.45);}
+    .gm-plans .tg-open-wrap{border-top:0;padding:22px 20px 26px;}
+    .gm-plans .tg-open{font-family:var(--font-label);font-weight:700;font-size:15px;letter-spacing:0.1em;padding:14px 30px;border-radius:6px;border:1.5px solid rgba(var(--accent-rgb),0.7);background:transparent;color:var(--accent-bright);box-shadow:none;}
+    .gm-plans .tg-open:hover{transform:translateY(-2px);background:var(--accent);color:var(--page-bg);box-shadow:none;}
+    @media (max-width:900px){ .gm-plans .comic-page{padding:0 16px;} .gm-plans .tier-row{padding:14px 18px;} .gm-plans .pass-cards{grid-template-columns:1fr;padding:8px 18px 22px;} }
+    /* v3.7.58 -- COMPARE THE TIERS IN THE NEW STYLE (Ian, 2026-11-22). The window is built by tier-grid.js and added to
+       <body>, so body.gm-page scopes it to this page; tier-grid.css and the home page's window are untouched. */
+    body.gm-page .tg-root{--tg-display:var(--font-display);}
+    body.gm-page .tg-overlay{background:rgba(6,4,2,0.9);}
+    body.gm-page .tg-panel{border:1px solid rgba(var(--accent-rgb),0.35);border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,0.6);overflow:hidden;}
+    body.gm-page .tg-head{background:transparent;border-bottom:1px solid rgba(var(--accent-rgb),0.25);padding:20px 26px;}
+    body.gm-page .tg-title{font-family:var(--font-display);font-weight:700;font-size:clamp(24px,3vw,34px);letter-spacing:0.02em;color:var(--accent-bright);}
+    body.gm-page .tg-close{font-family:var(--font-label);font-weight:700;font-size:13px;letter-spacing:0.1em;padding:10px 18px;border:1.5px solid rgba(var(--accent-rgb),0.7);border-radius:6px;background:transparent;color:var(--accent-bright);}
+    body.gm-page .tg-close:hover{background:var(--accent);color:var(--page-bg);border-color:var(--accent);}
+    body.gm-page .tg-table thead th{border-bottom:1px solid rgba(var(--accent-rgb),0.35);}
+    body.gm-page .tg-tier-name{font-weight:700;font-size:20px;letter-spacing:0.06em;}
+    body.gm-page .tg-table th.tg-feat,body.gm-page .tg-table td.tg-feat{letter-spacing:0.1em;}
+    body.gm-page .tg-val{font-weight:700;}
+    body.gm-page .tg-foot{border-top:1px solid rgba(var(--accent-rgb),0.35);}
+    /* v3.7.61 -- THE FIRST CLIP (Ian, 2026-11-22: the Gubuk character build on step 1). A video in place of the dashed box:
+       silent, looping, played inline. It is taller than wide, so it is shown whole (contain) on a dark panel, and on a
+       phone its box takes the clip's own shape instead of 4:3. */
+    .gm-pic.has-video{padding:0;border:1px solid rgba(var(--accent-rgb),0.3);background:var(--panel-deep);overflow:hidden;}
+    /* v3.7.62 -- Ian: "zoom into it so it fills the panel". Cover, not contain: the clip fills the box edge to edge and a
+       little of its top and bottom is trimmed on a wide screen. On a phone the box is the clip's own shape, so nothing is. */
+    .gm-pic.has-video video{width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block;}
+    /* v3.7.63 -- NO DOTS (Ian, 2026-11-22: "get rid of the dots. We don't need them."). landing.css lays a halftone dot screen
+       over every landing page (body::before); this page hides it, as the Example Books page already does. Home keeps its own. */
+    body::before{display:none;}
+    /* v3.7.64 -- A THINNER PANEL FOR THE CLIP (Ian, 2026-11-22: "make the panel a little thinner. The final picture in that
+       Mp4 needs to fit in the panel"). On a wide screen the clip's box takes the clip's own shape (640 x 820), as tall as the
+       other pictures and centred in its column, so the whole frame shows and nothing is cut off, the last picture included. */
+    .gm-steps-pic .gm-pic.has-video{inset:0 auto auto 50%;height:100%;width:auto;aspect-ratio:640/820;max-width:100%;transform:translateX(-50%);}
+    /* v3.7.65 -- THE SECOND CLIP (Ian, 2026-11-22: the transcript drop, "next after the character MP4"). It is wide (1280 x 614),
+       so its box is the full width of the column at the clip's own shape, centred top to bottom where the other pictures sit:
+       the whole frame shows, nothing cut off. On a phone the box takes the same shape. */
+    .gm-steps-pic .gm-pic.has-video.wide{inset:50% 0 auto 0;width:100%;height:auto;max-width:none;aspect-ratio:1206/814;transform:translateY(-50%);}
+    /* v3.7.66 -- THE NEW TRANSCRIPT CLIP (Ian, 2026-11-22: "not as wide as the other one"): 1206 x 814, so the box above and the
+       phone box below take that shape. */
+    @media (max-width:900px){ .gm-step .gm-pic.has-video.wide{aspect-ratio:1206/814;} }
+    /* v3.7.72 -- THE REAL BOOK CLIP (Ian, 2026-11-22): Ian's phone video of The Strangers being paged through, in the Get a Real
+       Book panel. It is upright (576 x 1024), so its box has that shape, capped in height and centred beside the list. */
+    .gm-book .gm-pic.has-video{aspect-ratio:576/1024;height:min(78vh,680px);width:auto;max-width:100%;justify-self:center;}
+    @media (max-width:900px){ .gm-book .gm-pic.has-video{height:auto;width:min(100%,420px);} }
+    @media (max-width:900px){ .gm-step .gm-pic.has-video{aspect-ratio:640/820;} }
+  </style>
 </head>
-<body>
+<body class="gm-page">
+
 
 <!-- NAV -->
 <nav>
@@ -59,6 +291,7 @@
     <span class="nav-logo-text">Campaignia</span>
   </a>
   <div class="nav-actions">
+    <a href="#how" class="nav-link">HOW IT WORKS</a>
     <a href="/our-story" class="nav-link">OUR STORY</a>
     <a href="/library?genre=fantasy,thriller,scifi,horror,mystery" class="nav-link">LIBRARY</a>
     <a href="#pricing" class="nav-link">PRICING</a>
@@ -70,255 +303,219 @@
   </div>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
+  <a href="#how" onclick="cmpCloseNav()">HOW IT WORKS</a>
   <a href="/our-story" onclick="cmpCloseNav()">OUR STORY</a>
   <a href="/library?genre=fantasy,thriller,scifi,horror,mystery" onclick="cmpCloseNav()">LIBRARY</a>
   <a href="#pricing" onclick="cmpCloseNav()">PRICING</a>
   <a href="#faq" onclick="cmpCloseNav()">FAQ</a>
 </div>
 
-<div class="comic-book">
-<div class="comic-page">
-
-  <!-- ============================================================
-       PANEL 1 — HERO SPLIT (text left, image right)
-       ============================================================ -->
-  <div class="hero-split" style="display:flex;gap:var(--gutter);margin-bottom:var(--gutter);min-height:calc(100vh - 84px);">
-
-    <!-- LEFT: Text panel -->
-    <div class="panel hero-text-panel" style="flex:1;background:var(--panel-deep);display:flex;flex-direction:column;justify-content:flex-start;padding:16px 44px;position:relative;overflow:hidden;">
-      <!-- subtle background texture -->
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(var(--accent-rgb),0.02) 0px,rgba(var(--accent-rgb),0.02) 1px,transparent 1px,transparent 12px);pointer-events:none;"></div>
-      <div class="hero-content" style="position:relative;z-index:1;">
-        <div class="hero-eyebrow">⚔ FOR GAME MASTERS AND STORYTELLERS ⚔</div>
-        <h1 class="hero-title">
-          You make it<br>
-          <span class="white">legendary.</span><br>
-          Campaignia makes it<br>
-          <span class="red">forever.</span>
-        </h1>
-        <p class="hero-sub">
-          Your players still talk about that session. The betrayal. The sacrifice.
-          The moment everything changed at the table.<br>
-          Now imagine handing them a graphic novel of exactly that night.
-        </p>
-        <div class="hero-cta-wrap">
-          <a href="/login?signup" class="btn-hero">START FREE TRIAL</a>
-          <a href="#pricing" class="btn-ghost">See Plans</a>
+<!-- ============================================================
+     1. ABOVE THE FOLD. Scroll and the picture and the big line change; the line under it and the button stay.
+     ============================================================ -->
+<section class="gm-hero" id="gmHero" aria-label="You made it legendary. Now make sure it lasts.">
+  <div class="gm-hero-wrap" id="gmHeroWrap">
+    <div class="gm-hero-sticky">
+      <div class="gm-hero-pics">
+        <!-- Riley: everyone at the table having fun, imagining the adventure above them (this is today's art until that one is made) -->
+        <div class="gm-pic has-img a"><img src="/images/Player_Scoring_a_Critical_Hit.png" alt="Players cheering around a game table as the dice land"></div>
+        <!-- Riley: one of the players reading the book alone with a smile, imagining the same scene above them (today's art until then) -->
+        <div class="gm-pic has-img b"><img src="/images/Campaignia_Book_Payoff2.png" alt="Players reading their campaign as a printed Campaignia book"></div>
+      </div>
+      <div class="gm-hero-text">
+        <div class="gm-hero-lines">
+          <h2 class="a">You Made it <span>Legendary</span></h2>
+          <h2 class="b">Now Make Sure it <span>Lasts</span></h2>
         </div>
-        <div class="hero-trial">⚔ 30-day free trial · No credit card required to explore<br>
-        AI storyboards · Your own art or words, if you like · Print-ready PDF or full hardcover graphic novel · Cancel anytime</div>
-      </div>
-    </div>
-
-    <!-- RIGHT: DM image panel -->
-    <div class="panel hero-img-panel" style="flex:1;background-image:url('/images/DM_Rolling_Dice.png');background-size:cover;background-position:center center;position:relative;">
-      <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(var(--page-bg-rgb),0.3) 0%,transparent 40%);"></div>
-    </div>
-
-  </div>
-
-  <!-- ============================================================
-       ROW 2 — Players celebrating + How It Works
-       ============================================================ -->
-  <div class="comic-row">
-
-    <!-- LEFT: Players image panel -->
-    <div class="panel panel-players">
-      <div class="players-caption">
-        <div class="caption-box gold-cap" data-label="NARRATOR">
-          These are the moments your players talked about. Campaignia makes sure they never forget.
+        <h1>Helping <b>Game Masters and Storytellers</b> translate their campaigns into graphic novels.</h1>
+        <div class="gm-cta-row">
+          <a href="/login?signup" class="gm-btn">START FREE TRIAL</a>
+          <a href="#pricing" class="gm-btn ghost">See Plans</a>
         </div>
-      </div>
-    </div>
-
-    <!-- RIGHT: How It Works -->
-    <div class="panel-how">
-      <div class="how-title-panel">
-        <span class="section-tag">⚡ THE QUEST</span>
-        <div class="section-title">THREE STEPS TO IMMORTALITY</div>
-      </div>
-
-      <div class="how-steps">
-        <div class="how-step-panel panel">
-          <div class="step-num">1</div>
-          <div class="step-content">
-            <div class="step-label">STEP ONE</div>
-            <div class="step-title">CREATE YOUR CHARACTERS</div>
-            <div class="step-desc">Add reference pictures of your party and describe their personalities, quirks, and look. Campaignia keeps everyone visually consistent across every session.</div>
-          </div>
-        </div>
-
-        <div class="how-step-panel panel">
-          <div class="step-num">2</div>
-          <div class="step-content">
-            <div class="step-label">STEP TWO</div>
-            <div class="step-title">PASTE IN YOUR STORY</div>
-            <div class="step-desc">Drop in your session — notes, chat logs, whatever you've got. Campaignia builds your storyboard, selecting the key moments and generating a stunning panel for each one, with narrative prose woven between.</div>
-          </div>
-        </div>
-
-        <div class="how-step-panel panel">
-          <div class="step-num">3</div>
-          <div class="step-content">
-            <div class="step-label">STEP THREE</div>
-            <div class="step-title">ORDER YOUR GRAPHIC NOVEL</div>
-            <div class="step-desc">Choose your layout, preview it in the app, and order your story as a bound book — comic, hardback, or softback, your call. Hand it to your players. Frame it. It's a real record of your campaign.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- ============================================================
-       FEATURES STRIP
-       ============================================================ -->
-  <div class="features-strip">
-    <div class="features-strip-header">
-      <div class="features-strip-title">YOUR ARSENAL — CAMPAIGNIA GIVES YOU COMPLETE CONTROL</div>
-    </div>
-  <!-- v3.2.43 -- TD-999. A fifth Arsenal card, the Writing Coach (Ian, 2026-10-22). landing.css lays the strip out in
-       four columns; this block makes it five on a wide screen, two with the coach across the bottom at 900px, and one
-       at 600px (the media rules are repeated here because this class outranks landing.css's own). -->
-  <style>
-    .features-strip-body.arsenal-5 { grid-template-columns: repeat(5, 1fr); }
-    @media (max-width: 900px) { .features-strip-body.arsenal-5 { grid-template-columns: 1fr 1fr; } .features-strip-body.arsenal-5 .feature-cell.arsenal-wide { grid-column: 1 / -1; } }
-    @media (max-width: 600px) { .features-strip-body.arsenal-5 { grid-template-columns: 1fr; } .features-strip-body.arsenal-5 .feature-cell { border-right: none; } }
-  </style>
-    <div class="features-strip-body arsenal-5">
-      <div class="feature-cell">
-        <div class="feature-title">IMAGE GENERATION</div>
-        <div class="feature-desc">Every panel gets a unique AI illustration. High fantasy, dark and gritty, watercolor, anime — choose the style that matches your campaign. You control the prompts, you control the scenes.</div>
-      </div>
-      <div class="feature-cell">
-        <div class="feature-title">NARRATIVE PROSE</div>
-        <div class="feature-desc">Campaignia turns your session into a graphic novel, told in prose that reads like a real novel — from the opening scene, through every twist, to the closing chapter. Choose from multiple narrative styles and points of view.</div>
-      </div>
-      <div class="feature-cell">
-        <div class="feature-title">CHARACTER MEMORY</div>
-        <div class="feature-desc">Upload reference images for each character. Campaignia keeps your party visually consistent across every session of your campaign.</div>
-      </div>
-      <div class="feature-cell">
-        <div class="feature-title">TOTAL CREATIVE CONTROL</div>
-        <div class="feature-desc">All the tools in one place to edit every part of your book. Rewrite the narrative, retouch images, rework the layout.</div>
-      </div>
-      <div class="feature-cell arsenal-wide">
-        <div class="feature-title">WRITING COACH</div>
-        <div class="feature-desc">Want to polish your prose? The coach gives an honest verdict on any passage, offers rewrites, and finds the better word. It reads your whole story too, and tells you how it holds together.</div>
+        <div class="gm-hero-dots"><i class="on" id="gmDot0"></i><i id="gmDot1"></i></div>
       </div>
     </div>
   </div>
+</section>
 
-  <!-- v3.1.50 -- TD-940. CAMPAIGNIA CAN DO IT ALL, OR YOU CAN (Ian, 2026-10-01): "if you're an artist, you
-       illustrate it; you're a writer, you write it. We've got you covered in all cases." "Illustrate", never
-       "draw", and kept vague about where (today it is the story panels). Write it yourself is Already Written
-       (TD-941). Three cells on the features-strip classes; this block only sets the three columns. -->
-  <style>
-    .features-strip-body.ways-3 { grid-template-columns: repeat(3, 1fr); }
-    /* v3.2.44 -- Ian, 2026-10-23: the tagline sits in the banner, not on a line of its own under the cards. */
-    #your-way .features-strip-header { flex-wrap: wrap; row-gap: 2px; }
-    .ways-tag { margin-left: auto; font-style: italic; font-size: 15px; color: var(--page-bg, #0a0806); opacity: 0.8; }
-    @media (max-width: 900px) { .features-strip-body.ways-3 { grid-template-columns: 1fr; } .features-strip-body.ways-3 .feature-cell { border-right: none; } }
-  </style>
-  <div class="features-strip" id="your-way">
-    <div class="features-strip-header">
-      <div class="features-strip-title">PLAY IT YOUR WAY &mdash; CAMPAIGNIA CAN DO IT ALL. OR YOU CAN.</div>
-      <div class="ways-tag">Artist, writer, or neither &mdash; we&rsquo;ve got you covered.</div>
+<!-- 2. KEY FACTS. Riley: the icons must be branded, in the graphic-novel look of the pictures above. -->
+<div class="gm-facts">
+  <div class="gm-wrap">
+    <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="1.5"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/></svg></div><div class="gm-fact">30 Day Free Trial</div></div>
+    <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="13" rx="1.5"/><path d="M2.5 10h19"/><path d="M4 21L20 4"/></svg></div><div class="gm-fact">No Credit Card Required</div></div>
+    <!-- Riley wrote "Zero Data Retention". Campaignia keeps your stories and pictures so it can build your book, so this says what IS true. -->
+    <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6z"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10.2 11V9.5a1.8 1.8 0 013.6 0V11"/></svg></div><div class="gm-fact">Never Used to Train AI</div></div>
+    <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg></div><div class="gm-fact">Cancel Anytime</div></div>
+    <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5a4 4 0 00-5 5L4 15l5 5 5.5-5.5a4 4 0 005-5l-2.5 2.5-2.5-.5-.5-2.5z"/></svg></div><div class="gm-fact">Hands-On Engagement</div></div>
+  </div>
+</div>
+
+<!-- 3. THE STORY. Dark picture behind, light boxes in front; each box arrives as you scroll. -->
+<section class="gm-sec gm-story">
+  <div class="gm-wrap">
+    <div class="gm-box">
+      <h2>Nothing Can Replace Those Moments Together</h2>
+      <p>Your players still talk about that session. The betrayal. The sacrifice. The moment everything changed in the story. You experienced those encounters, and you&rsquo;ll never forget what they felt like. It&rsquo;s a magical phenomenon that only tabletop RPG players know.</p>
     </div>
-    <div class="features-strip-body ways-3">
-      <div class="feature-cell">
-        <div class="feature-title">WE DO IT ALL</div>
-        <div class="feature-desc">Paste in the session. Campaignia writes the prose and illustrates every panel, start to finish.</div>
+    <div class="gm-box">
+      <h3>Campaignia is an AI tool that knows its place.</h3>
+      <p>We don&rsquo;t invent your story. We don&rsquo;t supplant your creativity. In fact, we don&rsquo;t touch the actual session at all. Instead, Campaignia extends your time with the story, giving you a new way to inhabit your characters and imagine the adventure.</p>
+    </div>
+    <div class="gm-box">
+      <h3>Helping you &ldquo;translate&rdquo; your TTRPG sessions into novels.</h3>
+      <p>Campaignia structures your notes, transcripts and summaries. It&rsquo;s a hands-on, thorough process to shape the story into a new medium, with every tool for precise testing and editing, so you can turn those moments into something that can be read and relived over and over again.</p>
+    </div>
+    <div class="gm-box punch">
+      <h3>Campaignia doesn&rsquo;t invent your campaign. It retells the one your table actually played.</h3>
+    </div>
+    <div class="gm-center" style="margin-top:44px;"><a href="/login?signup" class="gm-btn">START YOUR FREE TRIAL</a></div>
+  </div>
+</section>
+
+<!-- 4. HOW IT WORKS (from the Restrained plan): the step in view grows and the picture beside it follows. -->
+<section class="gm-sec" id="how">
+  <div class="gm-wrap">
+    <div class="gm-eyebrow">The Quest</div>
+    <h2 class="gm-h2">How it Works</h2>
+    <div class="gm-steps">
+      <div class="gm-steps-pic" aria-hidden="true">
+        <div class="gm-pic on has-video" data-pic="0"><video src="/images/gm-character-build.mp4" poster="/images/gm-character-build-poster.jpg" autoplay muted loop playsinline preload="auto"></video></div>
+        <div class="gm-pic has-video wide" data-pic="1"><video src="/images/gm-transcript-drop-2.mp4" poster="/images/gm-transcript-drop-2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+        <div class="gm-pic has-video wide" data-pic="2" style="aspect-ratio:1240/900;"><video src="/images/gm-writing-coach.mp4" poster="/images/gm-writing-coach-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+        <div class="gm-pic has-video wide" data-pic="3" style="aspect-ratio:1022/872;"><video src="/images/gm-retouch-2.mp4" poster="/images/gm-retouch-2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+        <div class="gm-pic has-video wide" data-pic="4" style="aspect-ratio:1282/862;"><video src="/images/gm-book.mp4" poster="/images/gm-book-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
       </div>
-      <div class="feature-cell">
-        <div class="feature-title">ILLUSTRATE IT YOURSELF</div>
-        <div class="feature-desc">Got an artist at the table? Put their art in the book, and Campaignia builds the story around it.</div>
+      <div>
+        <div class="gm-step on" data-step="0">
+          <div class="gm-pic has-video"><video src="/images/gm-character-build.mp4" poster="/images/gm-character-build-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+          <div class="num">1</div><h3 class="gm-h3">Characters</h3>
+          <p>Add reference pictures of your characters and describe their personalities, quirks and look. Already have a character sheet? Upload it, and Campaignia reads all the key details from it. Then it keeps everyone visually consistent across every session.</p>
+        </div>
+        <div class="gm-step" data-step="1">
+          <div class="gm-pic has-video wide"><video src="/images/gm-transcript-drop-2.mp4" poster="/images/gm-transcript-drop-2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+          <div class="num">2</div><h3 class="gm-h3">Type, Paste or Upload</h3>
+          <p>Drop in your notes, an outline or the session transcript, or upload the audio recording of the session. Campaignia builds your storyboard around the key moments, turning the chaos at the table into a structured story.</p>
+        </div>
+        <div class="gm-step" data-step="2">
+          <div class="gm-pic has-video wide" style="aspect-ratio:1240/900;"><video src="/images/gm-writing-coach.mp4" poster="/images/gm-writing-coach-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+          <div class="num">3</div><h3 class="gm-h3">Rewrite</h3>
+          <p>Any deviation feels like an insult to your imagination. Put in your own writing or artwork, or use Campaignia&rsquo;s writing coach to develop your skills.</p>
+        </div>
+        <div class="gm-step" data-step="3">
+          <div class="gm-pic has-video wide" style="aspect-ratio:1022/872;"><video src="/images/gm-retouch-2.mp4" poster="/images/gm-retouch-2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+          <div class="num">4</div><h3 class="gm-h3">Customize</h3>
+          <p>Generate anything that&rsquo;s beyond your ability. Edit whole sections or minute details with the click of a button. Campaignia is every tool your book will ever need, in one place.</p>
+        </div>
+        <div class="gm-step" data-step="4">
+          <div class="gm-pic has-video wide" style="aspect-ratio:1282/862;"><video src="/images/gm-book.mp4" poster="/images/gm-book-poster.jpg" autoplay muted loop playsinline preload="metadata"></video></div>
+          <div class="num">5</div><h3 class="gm-h3">Print, Order, Ship</h3>
+          <p>Choose your layout, preview it in the app, and order your story as a bound book or comic, hardback or softback. Your call. Gift it to your party, or read it to your kids.</p>
+        </div>
       </div>
-      <div class="feature-cell">
-        <div class="feature-title">WRITE IT YOURSELF</div>
-        <div class="feature-desc">The GM who keeps a campaign journal? Your words stay exactly as you wrote them, and Campaignia adds the pictures.</div>
+    </div>
+    <div class="gm-trial">
+      <div class="gm-h3">30-Day Free Trial</div>
+      <div class="gm-note" style="margin:0 0 22px;">No card required</div>
+      <a href="/login?signup" class="gm-btn">BEGIN YOUR CAMPAIGN</a>
+    </div>
+  </div>
+</section>
+
+<!-- 5. THE BOOK -->
+<section class="gm-sec alt">
+  <div class="gm-wrap gm-book">
+    <div>
+      <div class="gm-eyebrow">The Reward</div>
+      <h2 class="gm-h2">Get a Real Book of Your Campaign</h2>
+      <ul class="gm-list">
+        <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M12 10v10M7 4v6"/></svg></span>Several layout styles, previewed before you print</li>
+        <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>Built to last</li>
+        <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5c3-1.2 6-1.2 9 1 3-2.2 6-2.2 9-1v14c-3-1.2-6-1.2-9 1-3-2.2-6-2.2-9-1z"/><path d="M12 6v14"/></svg></span>Comic, hardback or softback</li>
+        <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="9" cy="7" rx="5.5" ry="2.5"/><path d="M3.5 7v4c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5V7"/><path d="M3.5 11v4c0 1.4 2.5 2.5 5.5 2.5 1 0 1.9-.1 2.7-.3"/><circle cx="16.5" cy="15.5" r="4.5"/><path d="M16.5 13.2v4.6M15 14.3h2.2a.9.9 0 010 1.8h-1.4a.9.9 0 000 1.8H18"/></svg></span>Roughly 50 cents a page, plus shipping &ndash; you see the exact price before you pay</li>
+        <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6h11v10h-11z"/><path d="M13.5 9.5h4l3.5 3.5v3h-7.5"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></span>At your door in about two weeks</li>
+        <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14.5 2.5V7H19"/><path d="M9 12h7M9 15h7M9 18h4"/></svg></span>A print-ready PDF too</li>
+        <li><span class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5L12 4l9 5.5z"/><path d="M5 11.5v6.5M9.5 11.5v6.5M14.5 11.5v6.5M19 11.5v6.5"/><path d="M3 20.5h18M4 18.5h16"/></svg></span>Show it off in the Campaignia Library, or keep it to yourself</li>
+      </ul>
+      <a href="/example-books" class="gm-btn ghost">SEE EXAMPLES</a>
+    </div>
+    <div class="gm-pic has-video"><video src="/images/gm-real-book.mp4" poster="/images/gm-real-book-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="A printed Campaignia book being paged through on a table"></video></div>
+  </div>
+</section>
+
+<!-- 6. YOUR WAY -->
+<section class="gm-sec">
+  <div class="gm-wrap gm-center">
+    <h2 class="gm-h2">Campaignia Adjusts to Your Time, Skill and Needs</h2>
+    <div class="gm-cards c4" style="text-align:left;">
+      <div class="gm-card"><h3 class="gm-h3">Copy and Paste</h3><p>Paste in the session notes. Campaignia writes the prose and illustrates every panel, start to finish.</p></div>
+      <div class="gm-card"><h3 class="gm-h3">Edit and Perfect</h3><p>Spend hours on characters, pictures and prompts. Regenerate whole sections or tiny details until the story matches your imagination.</p></div>
+      <div class="gm-card"><h3 class="gm-h3">Do it Yourself</h3><p>Artist? Put in your own art and let Campaignia write the story around it. Aspiring author? Write it yourself, with the writing coach beside you, while Campaignia adds the pictures.</p></div>
+      <div class="gm-card"><h3 class="gm-h3">Build Together</h3><p>Invite your players for free. Each can make their own version of a session, compare it with yours, and share pictures and ideas. Everyone&rsquo;s strengths count.</p></div>
+    </div>
+    <div style="margin-top:44px;"><a href="/login?signup" class="gm-btn">BEGIN YOUR CAMPAIGN</a></div>
+  </div>
+</section>
+
+<!-- 7. TESTIMONIALS: none yet. Riley wants 3 at least, ideally 7 or 9, each with a name, a picture or avatar and a link to what they made. -->
+<section class="gm-sec alt">
+  <div class="gm-wrap gm-center">
+    <h2 class="gm-h2">Tabletop Community Perspectives</h2>
+    <div class="gm-cards c3" style="text-align:left;">
+      <div class="gm-card quote"><p><span class="gm-tbd">TESTIMONIAL NEEDED</span> For example: how much time it saved, and how little editing it took.</p><div class="who"><i></i>Name &middot; their book</div></div>
+      <div class="gm-card quote"><p><span class="gm-tbd">TESTIMONIAL NEEDED</span> For example: the whole party building it together, and the characters staying the same throughout.</p><div class="who"><i></i>Name &middot; their book</div></div>
+      <div class="gm-card quote"><p><span class="gm-tbd">TESTIMONIAL NEEDED</span> For example: adding their own artwork, or the writing coach helping them improve.</p><div class="who"><i></i>Name &middot; their book</div></div>
+    </div>
+    <div style="margin-top:44px;"><a href="/library?genre=fantasy,thriller,scifi,horror,mystery" class="gm-btn ghost">VIEW THEIR WORK</a></div>
+  </div>
+</section>
+
+<!-- 8. THE AI QUESTION, answered before it is asked (from the Restrained plan) -->
+<section class="gm-sec">
+  <div class="gm-wrap gm-groups gm-center">
+    <div class="gm-group">
+      <h2 class="gm-h2">Human-Centered AI</h2>
+      <div class="row">
+        <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 8l1.5 1.5L12 7M8 13l1.5 1.5L12 12M14 8h2.5M14 13h2.5M8 18h8.5"/></svg></div><div class="gm-fact">Pre-Trained Models</div></div>
+        <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6z"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10.2 11V9.5a1.8 1.8 0 013.6 0V11"/></svg></div><div class="gm-fact">Your Stories Never Train AI</div></div>
+        <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17h6M10 20.5h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2V17h5v-1.1c0-.8.4-1.5 1-2A6 6 0 0012 3z"/></svg></div><div class="gm-fact">As Much or as Little AI as You Like</div></div>
+      </div>
+    </div>
+    <div class="gm-group">
+      <h2 class="gm-h2">Protecting Creativity</h2>
+      <div class="row">
+        <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 9L12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c1.5 1.5 3.5 2.2 5.5 2.2s4-.7 5.5-2.2V11"/><path d="M21.5 9v5"/></svg></div><div class="gm-fact">Skill Training Available</div></div>
+        <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 4.5l4 4L9 19l-5 1 1-5z"/><path d="M13.5 6.5l4 4"/></svg></div><div class="gm-fact">Diverse Editing Tools</div></div>
+        <div><div class="gm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5a4 4 0 00-5 5L4 15l5 5 5.5-5.5a4 4 0 005-5l-2.5 2.5-2.5-.5-.5-2.5z"/></svg></div><div class="gm-fact">Hands-On Engagement</div></div>
       </div>
     </div>
   </div>
+</section>
 
-  <!-- ============================================================
-       ROW 4 — Pricing + Campaignia Book Payoff
-       ============================================================ -->
-  <!-- v3.0.925 -- TD-780 Push 7b. ROW 4 IS TWO COLUMNS AGAIN, and that is what puts the book
-       back in the picture: a full-width .panel-payoff crops a 0.667 portrait image down to its
-       top 29% and the book falls out of frame. WHAT YOU GET now fills the column the pricing
-       panel used to occupy, so the payoff keeps the proportions it was cropped for and the
-       space beside it says what the photograph is of. -->
-  <div class="comic-row">
-
-    <!-- LEFT: what you actually walk away with.
-         NOT A THIRD FEATURE LIST. "THREE STEPS TO IMMORTALITY" is how you use it and "YOUR
-         ARSENAL" is what the app does; both are already on this page. What was missing is what
-         you END UP HOLDING -- which is exactly what the photograph beside it shows. Every claim
-         here is already made somewhere on the page (step three, and the FAQ), so this states the
-         product rather than extending it. -->
-    <div class="panel-reward">
-      <div class="how-title-panel">
-        <span class="section-tag">🏆 THE REWARD</span>
-        <div class="section-title">WHAT YOU GET</div>
-      </div>
-      <div class="reward-items">
-        <div class="reward-item">
-          <div class="reward-item-title">A REAL BOOK</div>
-          <div class="reward-item-desc">Comic, hardback or softback, printed and shipped to your door.</div>
-          <a href="#" class="book-gallery-link" data-order="03,08,05,04,09,06,07,10,01,02">See what they look like</a>
-        </div>
-        <div class="reward-item">
-          <div class="reward-item-title">A PRINT-READY PDF</div>
-          <div class="reward-item-desc">Cover page, illustrated panels, narrative prose and your character cast. Four layout styles, previewed before you print.</div>
-        </div>
-        <!-- v3.3.21 -- Ian, 2026-10-28: a box on working together (members, own versions, the shared Archive). -->
-        <div class="reward-item">
-          <div class="reward-item-title">BETTER TOGETHER</div>
-          <div class="reward-item-desc">Invite your players for free. Each can make their own version of a session, compare it with yours, and share pictures and ideas — one campaign, built together.</div>
-        </div>
-        <!-- IAN, 2026-09-16: "I want to start pushing a little narrative here... I don't want
-             people thinking that Campaignia makes up stories -- it rewrites the users stories."
-             So this item says whose story it is BEFORE it says how long we keep it, and it is
-             worded for the page it sits on: a table played a campaign, a person lived a story. -->
-        <div class="reward-item">
-          <div class="reward-item-title">IT’S YOUR STORY</div>
-          <div class="reward-item-desc">Campaignia doesn’t invent your campaign — it retells the one your table actually played. And it stays yours, long after a plan ends.</div>
-        </div>
-        <div class="reward-item">
-          <div class="reward-item-title">A PLACE TO SHOW IT</div>
-          <div class="reward-item-desc">Put it in the public Library for other tables to read, or keep it to your own.</div>
-        </div>
-      </div>
+<!-- 9. COMPLETE CONTROL -->
+<section class="gm-sec alt" id="features">
+  <div class="gm-wrap">
+    <div class="gm-center"><div class="gm-eyebrow">Your Arsenal</div><h2 class="gm-h2">Campaignia Gives You Complete Control</h2></div>
+    <div class="gm-feats">
+      <div class="gm-feat"><h3>Human-Centered</h3><p>Campaignia uses pre-trained AI that never trains on your stories or art, and you decide how much of the book it makes.</p></div>
+      <div class="gm-feat"><h3>Image Generation</h3><p>Every panel gets its own illustration. You control the prompts, you control the scenes.</p></div>
+      <div class="gm-feat"><h3>Styles to Match</h3><p>Pick from 11 art styles and 11 narrative styles to match the feel of your campaign.</p></div>
+      <div class="gm-feat"><h3>Built-in Structure</h3><p>Storyboards take you from the opening scene, through every twist, to the closing chapter.</p></div>
+      <div class="gm-feat"><h3>Point of View</h3><p>Tinker with narrative styles, lengths and points of view until the story reads the way your table remembers it.</p></div>
+      <div class="gm-feat"><h3>Narrative Prose</h3><p>Campaignia turns chaotic session notes into prose that reads like a real novel.</p></div>
+      <div class="gm-feat"><h3>Visual Consistency</h3><p>Upload reference pictures for each character, so the AI doesn&rsquo;t invent new looks.</p></div>
+      <div class="gm-feat"><h3>Collaborate</h3><p>Keep the game going between sessions. Invite everyone in the party to write, edit or illustrate.</p></div>
+      <div class="gm-feat"><h3>Total Control</h3><p>All the tools in one place to edit every part of your book: rewrite the prose, retouch the pictures, rework the layout.</p></div>
+      <div class="gm-feat"><h3>Writing Coach</h3><p>An honest verdict on any passage, suggested rewrites, and the better word when you need it.</p></div>
+      <div class="gm-feat"><h3>Insert Your Art</h3><p>Illustrate as much of the book yourself as you want. <span class="gm-tbd">TBD</span> Campaignia can also make outlines or coloring pages for players to fill in.</p></div>
+      <div class="gm-feat" style="display:flex;align-items:center;justify-content:center;"><a href="/login?signup" class="gm-btn">START FREE TRIAL</a></div>
     </div>
-
-    <!-- RIGHT: Campaignia Book Payoff. BACK IN A 58% COLUMN, which is the proportion this
-         picture was cropped for -- see the note above. -->
-    <div style="flex:1;display:flex;flex-direction:column;">
-      <div class="panel panel-payoff" style="flex:1;">
-        <div class="payoff-content">
-          <div class="payoff-title">This could be<br>your campaign.</div>
-        </div>
-      </div>
-      <div class="cta-strip">
-        <div>
-          <div class="cta-strip-text">YOUR NEXT SESSION DESERVES TO BE REMEMBERED.</div>
-          <div class="cta-strip-sub">Every campaign has a moment the whole table will never forget.</div>
-        </div>
-        <div style="text-align:center;flex-shrink:0;">
-          <a href="/login?signup" class="btn-cta">BEGIN YOUR CAMPAIGN</a>
-          <div class="cta-note" style="color:rgba(var(--on-panel-rgb),0.5);">30-DAY FREE TRIAL</div>
-        </div>
-      </div>
-    </div>
-
   </div>
+</section>
 
-  <!-- ============================================================
-       ROW 5 — the plans. FULL WIDTH, and that part of Push 7 stands: three pass cards in a
-       42% column were roughly 170px each.
-       ============================================================ -->
-  <div class="comic-row comic-row-pricing" id="pricing">
+<!-- 10. THE PLANS: Choose Your Path, exactly as on the old page (landing.css styles it; live prices fill it in) -->
+<section class="gm-plans" id="pricing">
+<div class="comic-book"><div class="comic-page">
+  <div class="comic-row comic-row-pricing">
 
     <div class="panel-pricing">
       <div class="pricing-header">
@@ -416,7 +613,7 @@
       <!-- v3.1.46 -- TD-934. Give Campaignia as a gift, below the tiers (Ian, 2026-10-01). Hidden until
            the server says gifts are on, so a dormant feature never shows a button that leads nowhere. -->
       <div class="tg-root" id="gift-open-wrap" style="display:none;padding:0 20px 18px;text-align:center;">
-        <a href="/gift?from=/" class="tg-open" style="display:inline-block;text-decoration:none;">GIVE CAMPAIGNIA AS A GIFT</a>
+        <a href="/gift?from=/game-masters" class="tg-open" style="display:inline-block;text-decoration:none;">GIVE CAMPAIGNIA AS A GIFT</a>
       </div>
       <script>
         fetch('/api/gifts/status').then(function (r) { return r.json(); }).then(function (d) {
@@ -426,49 +623,39 @@
     </div>
 
   </div>
+</div></div>
+</section>
 
-  <!-- ============================================================
-       FAQ STRIP
-       ============================================================ -->
-  <div class="faq-strip" id="faq">
-    <div class="faq-header">
-      <div class="faq-header-title">THE LORE — FREQUENTLY ASKED QUESTIONS</div>
-    </div>
-    <div class="faq-grid">
-      <div class="faq-cell">
-        <div class="faq-q">What transcript format does Campaignia need?</div>
-        <div class="faq-a">Anything goes — session notes, Discord logs, Roll20 exports, voice-to-text recordings, or your own summary. The more detail, the richer the output.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">How does the AI know which moments matter?</div>
-        <div class="faq-a">Campaignia identifies combat, revelations, and emotional beats automatically. You can also give it director's notes — tell it exactly which scenes you want included. <a href="https://campaignia.com/library" style="color:var(--accent);text-decoration:underline;">Click here to see</a> some of the moments other users have made.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">Can I use Campaignia for any TTRPG system?</div>
-        <div class="faq-a">Absolutely. D&D, Pathfinder, Call of Cthulhu, Blades in the Dark, Mothership — any system with a story worth telling. Campaignia works from the transcript, not the ruleset.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">Is my work safe with AI?</div>
-        <div class="faq-a">The AI is built into Campaignia, so there are no API keys and nothing to set up. Neither Campaignia nor our AI providers ever train AI models on your stories or art.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">What does the exported PDF look like?</div>
-        <div class="faq-a">A print-ready graphic novel with cover page, AI-illustrated panels, narrative prose, and your character cast. Four layout styles, preview before you print. <a href="/library#stories" style="color:var(--accent);font-weight:600;text-decoration:underline;">Click here to see our Library</a>.</div>
-      </div>
-      <div class="faq-cell">
-        <div class="faq-q">Can I cancel anytime?</div>
-        <div class="faq-a">Yes, always. Cancel anytime and keep access through your billing period. Your campaigns and sessions are always accessible — your stories don't disappear.</div>
-      </div>
-      <!-- v3.1.50 -- TD-940. The seventh question spans the row, so the grid of three stays whole. -->
-      <div class="faq-cell" style="grid-column:1 / -1;border-right:none;border-top:2px solid rgba(var(--accent-rgb),0.1);">
-        <div class="faq-q">Can I use my own art, or my own writing?</div>
-        <div class="faq-a">Yes. Campaignia can do it all, but it doesn&rsquo;t have to. Illustrate it yourself with your table&rsquo;s own art, or keep a story you&rsquo;ve already written word for word and let Campaignia add the pictures. Mix and match as you like.</div>
-      </div>
-    </div>
+<!-- 11. FAQ (the Restrained plan's questions, then the old page's) -->
+<section class="gm-sec gm-faq" id="faq">
+  <div class="gm-wrap">
+    <h2 class="gm-h2 gm-center">Frequently Asked Questions</h2>
+    <details><summary>Can I use Campaignia for any TTRPG system?</summary><p>Absolutely. D&amp;D, Pathfinder, Call of Cthulhu, Blades in the Dark, Mothership &ndash; any system with a story worth telling. Campaignia works from the transcript, not the ruleset.</p></details>
+    <details><summary>Can I cancel anytime?</summary><p>Yes, always. Cancel anytime and keep access through your billing period. Your campaigns and sessions are always accessible &ndash; your stories don&rsquo;t disappear.</p></details>
+    <details><summary>Is my work safe with AI?</summary><p>The AI is built into Campaignia, so there are no API keys and nothing to set up. Neither Campaignia nor our AI providers ever train AI models on your stories or art.</p></details>
+    <details><summary>What transcript format does Campaignia need?</summary><p>Anything goes &ndash; session notes, Discord logs, Roll20 exports, voice-to-text recordings, or your own summary. The more detail, the richer the output.</p></details>
+    <details><summary>Do I have to learn a bunch of prompting strategies?</summary><p>No. Campaignia needs your transcript and a little direction, and it is built around TTRPGs to keep prompting to a minimum. No advanced or complicated prompting needed.</p></details>
+    <details><summary>How does the AI know which moments matter?</summary><p>Campaignia picks out combat, revelations and emotional beats automatically. You can also give it director&rsquo;s notes &ndash; tell it exactly which scenes you want included. <a href="/library?genre=fantasy,thriller,scifi,horror,mystery" style="color:var(--accent);text-decoration:underline;">See some of the moments</a> other tables have made.</p></details>
+    <details><summary>Can I use my own art, or my own writing?</summary><p>Yes. Campaignia can do it all, but it doesn&rsquo;t have to. Illustrate it yourself with your table&rsquo;s own art, or keep a story you&rsquo;ve already written word for word and let Campaignia add the pictures. Mix and match as you like.</p></details>
+    <details><summary>What does the exported PDF look like?</summary><p>A print-ready graphic novel with a cover page, illustrated panels, narrative prose and your character cast, in several layout styles you preview before you print. <a href="/library#stories" style="color:var(--accent);text-decoration:underline;">See our Library</a>.</p></details>
+    <!-- v3.7.59: the next two answers are the Memories page's own (Ian, 2026-11-22: fill the gaps from Memories). -->
+    <details><summary>How long does it take to print and ship my book?</summary><p>About two weeks from the day you order: about a week to print your book and about a week to ship it to your door.</p></details>
+    <details><summary>How much does a printed book cost?</summary><p>Roughly 50 cents a page, plus shipping. You see the exact price before you pay.</p></details>
+    <details><summary>Doesn&rsquo;t AI just threaten artists, and human creativity in general?</summary><p>In many ways it can. We are musicians, writers and coders ourselves, and we are not blind to the harm AI has done to many creative people and industries. That is why Campaignia includes training tools that encourage creative skill, lets you put in as much of your own art and writing as you like, <span class="gm-tbd">TBD</span> offers partnerships with artists who take character commissions, and is for strictly personal use.</p></details>
   </div>
+</section>
 
-</div><!-- /comic-page -->
-</div><!-- /comic-book -->
+<!-- 12. THE LAST WORD -->
+<section class="gm-final">
+  <div class="gm-wrap">
+    <h2 class="gm-h2">Campaignia Can Do It All. Or You Can.</h2>
+    <p>Every campaign has a moment the whole table will never forget.</p>
+    <p>Campaignia lets you capture that moment as a PDF or a printed novel.</p>
+    <p>Whether you&rsquo;re an artist, a writer, or neither &ndash; we&rsquo;ve got you covered.</p>
+    <div class="gm-cta-row" style="margin-top:44px;"><a href="/login?signup" class="gm-btn">START FREE TRIAL</a></div>
+    <div class="gm-note">Your 30-day trial begins on your first campaign. No credit card required to explore.</div>
+  </div>
+</section>
 
 <!-- FOOTER -->
 <footer>
@@ -555,6 +742,70 @@ function cmpAddDraftLink(d){
 function cmpToggleNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(!m)return;var open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
 function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');}
 </script>
+<script>
+// v3.7.53 -- the new Game Masters page's moving parts. Each one does nothing on a phone or with reduced motion,
+// where the CSS lays everything out flat instead.
+// 1. above the fold: past the middle of the scroll, the second picture and line take over
+(function(){
+  var hero=document.getElementById('gmHero'),wrap=document.getElementById('gmHeroWrap'),d0=document.getElementById('gmDot0'),d1=document.getElementById('gmDot1');
+  if(!hero||!wrap)return;
+  var mq=window.matchMedia('(max-width:900px), (prefers-reduced-motion: reduce)');
+  function tick(){
+    if(mq.matches){hero.classList.remove('second');return;}
+    var r=wrap.getBoundingClientRect(),run=wrap.offsetHeight-window.innerHeight;
+    var p=run>0?Math.min(1,Math.max(0,-r.top/run)):0;
+    var two=p>=0.5;
+    hero.classList.toggle('second',two);
+    if(d0)d0.classList.toggle('on',!two);if(d1)d1.classList.toggle('on',two);
+  }
+  window.addEventListener('scroll',tick,{passive:true});window.addEventListener('resize',tick);tick();
+})();
+// 4. how it works: the step whose top has reached the picture box is the one shown
+(function(){
+  var steps=[].slice.call(document.querySelectorAll('.gm-step')),pics=[].slice.call(document.querySelectorAll('.gm-steps-pic .gm-pic')),box=document.querySelector('.gm-steps-pic');
+  if(!steps.length)return;
+  function tick(){
+    var best=0;
+    if(box&&box.offsetParent!==null){var top=box.getBoundingClientRect().top+4;steps.forEach(function(s,i){if(s.getBoundingClientRect().top<=top)best=i;});}
+    else{var mid=window.innerHeight*0.5,bd=1e9;steps.forEach(function(s,i){var r=s.getBoundingClientRect(),d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=i;}});}
+    steps.forEach(function(s,i){s.classList.toggle('on',i===best);});
+    pics.forEach(function(p,i){p.classList.toggle('on',i===best);});
+  }
+  window.addEventListener('scroll',tick,{passive:true});tick();
+})();
+// 3. the story boxes arrive as they scroll into view
+(function(){
+  var f=[].slice.call(document.querySelectorAll('.gm-box'));
+  if(!('IntersectionObserver' in window)){f.forEach(function(x){x.classList.add('seen');});return;}
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('seen');io.unobserve(e.target);}});},{threshold:0.2});
+  f.forEach(function(x){io.observe(x);});
+})();
+</script>
 <script src="/js/book-gallery.js?v=3.3.00" defer></script>
+<script>
+// v3.7.67 -- EVERY CLIP STARTS FROM THE BEGINNING WHEN IT COMES INTO VIEW (Ian, 2026-11-22: "when a user scrolls and each MP4
+// in the sequence is exposed, make each one start from the beginning"). A clip counts as in view when at least a third of it
+// is on screen and, for the pictures stacked beside the steps, when its own step is the one showing (its box has .on). It
+// goes back to 0:00 and plays each time it comes into view, and pauses while it is out of view.
+(function () {
+  var STACK = '.gm-steps-pic';
+  var vids = [].slice.call(document.querySelectorAll('video[autoplay]'));
+  if (!vids.length || !('IntersectionObserver' in window)) return;
+  function inStack(v) { var p = v.parentElement; return !!(p && p.parentElement && p.parentElement.matches(STACK)); }
+  function check(v) {
+    var now = !!v._cmpIn && (!inStack(v) || v.parentElement.classList.contains('on'));
+    if (now && !v._cmpShown) { try { v.currentTime = 0; } catch (e) {} var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
+    else if (!now && v._cmpShown !== false) { try { v.pause(); } catch (e) {} }
+    v._cmpShown = now;
+  }
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { e.target._cmpIn = e.isIntersecting && e.intersectionRatio >= 0.33; check(e.target); });
+  }, { threshold: [0, 0.33, 0.66] });
+  vids.forEach(function (v) {
+    io.observe(v);
+    if (inStack(v)) new MutationObserver(function () { check(v); }).observe(v.parentElement, { attributes: true, attributeFilter: ['class'] });
+  });
+})();
+</script>
 </body>
 </html>

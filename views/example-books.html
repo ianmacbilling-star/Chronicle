@@ -49,6 +49,30 @@
     .exb-end p { font-family: var(--font-body); font-size: 17px; color: rgba(var(--on-panel-rgb),0.8); margin: 0 0 20px; }
     .footer-links { flex-wrap: wrap; justify-content: center; row-gap: 8px; }
     .exb-back { display: inline-block; margin-top: 18px; font-family: var(--font-body); font-size: 15px; color: var(--accent); }
+    /* v3.7.60 -- THE NEW STYLE (Ian, 2026-11-22: "make the style changes to the Real books page"). The Game Masters page's
+       lettering, rounded panels, red button and gold outlines; nothing on the page moves and landing.css is untouched. */
+    .comic-book{background:var(--page-bg);}
+    .comic-page{background:transparent;padding-top:56px;}
+    .exb-head{background:transparent;border:0;padding:0;text-align:center;margin-bottom:26px;}
+    .exb-head .section-tag{font-family:var(--font-label);font-size:13px;letter-spacing:0.22em;color:var(--accent);text-transform:uppercase;margin-bottom:14px;}
+    .exb-head h1.section-title{font-family:var(--font-display);font-weight:700;font-size:clamp(30px,4vw,52px);line-height:1.1;color:var(--accent-bright);letter-spacing:0.02em;text-shadow:none;}
+    .exb-intro{border:0;background:transparent;padding:0;max-width:760px;margin:0 auto 46px;text-align:center;font-style:normal;font-size:20px;line-height:1.6;color:var(--on-panel);}
+    .exb-tile{border:1px solid rgba(var(--accent-rgb),0.3);border-radius:12px;background:var(--panel);box-shadow:0 10px 30px rgba(0,0,0,0.35);transition:transform .15s,border-color .15s,box-shadow .15s;}
+    .exb-tile:hover,.exb-tile:focus-visible{transform:translateY(-3px);border-color:rgba(var(--accent-rgb),0.7);box-shadow:0 14px 36px rgba(0,0,0,0.45);}
+    .exb-cap{border-top:1px solid rgba(var(--accent-rgb),0.2);font-style:normal;font-size:15px;padding:11px 14px;color:rgba(var(--on-panel-rgb),0.85);}
+    .exb-end{border:1px solid rgba(var(--accent-rgb),0.25);border-radius:14px;padding:64px 24px;margin-top:30px;background:radial-gradient(ellipse at center,rgba(192,57,43,0.18),transparent 70%),var(--panel-deep);}
+    .exb-end p{font-family:var(--font-display);font-weight:700;font-size:clamp(24px,3vw,36px);line-height:1.2;color:var(--accent-bright);margin:0 0 26px;}
+    .exb-end .btn-cta{font-family:var(--font-label);font-weight:700;font-size:17px;letter-spacing:0.1em;padding:17px 36px;color:#fff;border:2px solid var(--button-cta);border-radius:6px;box-shadow:0 6px 20px rgba(192,57,43,0.35);transition:transform .15s,box-shadow .15s;}
+    .exb-end .btn-cta:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(192,57,43,0.45);}
+    .exb-back{font-size:16px;color:var(--accent-bright);}
+    nav .btn-nav{font-family:var(--font-label);font-weight:700;font-size:13px;letter-spacing:0.12em;padding:8px 20px;background:var(--button-cta);color:#fff;border:2px solid var(--button-cta);border-radius:6px;box-shadow:0 4px 14px rgba(192,57,43,0.35);}
+    nav .btn-nav:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(192,57,43,0.45);}
+    @media (max-width:600px){ nav .btn-nav{font-size:12px;padding:6px 14px;} .comic-page{padding-top:36px;} .exb-intro{font-size:18px;} }
+    /* v3.7.60 -- A BACK BUTTON (Ian: "that needs a back button too"). Gold outline, top left; it and the link at the
+       bottom go back to the page you came from (the script at the end), or to Home when there is none. */
+    .exb-topback{position:absolute;top:22px;left:var(--gutter);font-family:var(--font-label);font-weight:700;font-size:13px;letter-spacing:0.1em;color:var(--accent-bright);text-decoration:none;border:1.5px solid rgba(var(--accent-rgb),0.7);border-radius:6px;padding:7px 16px;transition:background .15s,color .15s;}
+    .exb-topback:hover,.exb-topback:focus-visible{background:var(--accent);color:var(--page-bg);}
+    @media (max-width:600px){ .exb-topback{position:static;display:inline-block;margin-bottom:22px;} }
   </style>
   <script src="/analytics.js"></script>
   <script src="/promo.js"></script>
@@ -78,8 +102,10 @@
 <div class="comic-book">
 <div class="comic-page">
 
+  <a href="/" class="exb-topback" id="exb-topback">&larr; Back</a>
+
   <div class="how-title-panel exb-head">
-    <span class="section-tag">&#127942; EXAMPLE BOOKS</span>
+    <span class="section-tag">EXAMPLE BOOKS</span>
     <h1 class="section-title">REAL BOOKS, REALLY PRINTED</h1>
   </div>
 
@@ -133,7 +159,7 @@
   <div class="exb-end">
     <p>Your table's story, in your hands.</p>
     <a href="/login?signup" class="btn-cta">MAKE YOUR OWN</a><br>
-    <a href="/" class="exb-back">Back to Campaignia</a>
+    <a href="/" class="exb-back" id="exb-back">&larr; Back</a>
   </div>
 
 </div>
@@ -157,6 +183,19 @@
 
 <script>
 document.getElementById('footer-year').textContent = new Date().getFullYear();
+// v3.7.60 -- BACK GOES WHERE YOU CAME FROM (Ian, 2026-11-22), as on the gift page: ?from=, else this site's page that
+// linked here, else the one remembered for this tab, else Home. Only these paths are ever used, never a URL.
+(function () {
+  var ok = { '/': '/', '/index.html': '/', '/game-masters': '/game-masters', '/story': '/story', '/memories': '/memories', '/library': '/library', '/our-story': '/our-story' };
+  var from = '';
+  try { from = new URLSearchParams(window.location.search).get('from') || ''; } catch (e) {}
+  if (!ok[from]) { try { var r = document.referrer ? new URL(document.referrer) : null;
+      var rp = r ? (r.pathname.replace(/\/+$/, '') || '/') : '';
+      if (r && r.origin === window.location.origin && ok[rp]) from = rp; } catch (e) {} }
+  try { if (ok[from]) sessionStorage.setItem('exb_back', ok[from]); else from = sessionStorage.getItem('exb_back') || ''; } catch (e) {}
+  var href = ok[from] || '/';
+  ['exb-topback', 'exb-back'].forEach(function (id) { var a = document.getElementById(id); if (a) a.href = href; });
+})();
 // v3.6.58 -- the Library gallery's layout (library.html buildCols): 250px columns, at most 5, each tile into the
 // shortest column so the photos read left to right. Heights come from each photo's own width and height.
 (function () {

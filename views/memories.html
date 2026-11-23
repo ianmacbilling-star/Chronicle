@@ -662,5 +662,30 @@ function memCloseNav(){document.getElementById('mobileMenu').classList.remove('o
   mark();setTimeout(mark,1500);
 })();
 </script>
+<script>
+// v3.7.67 -- EVERY CLIP STARTS FROM THE BEGINNING WHEN IT COMES INTO VIEW (Ian, 2026-11-22: "when a user scrolls and each MP4
+// in the sequence is exposed, make each one start from the beginning"). A clip counts as in view when at least a third of it
+// is on screen and, for the pictures stacked beside the steps, when its own step is the one showing (its box has .on). It
+// goes back to 0:00 and plays each time it comes into view, and pauses while it is out of view.
+(function () {
+  var STACK = '.steps-pic';
+  var vids = [].slice.call(document.querySelectorAll('video[autoplay]'));
+  if (!vids.length || !('IntersectionObserver' in window)) return;
+  function inStack(v) { var p = v.parentElement; return !!(p && p.parentElement && p.parentElement.matches(STACK)); }
+  function check(v) {
+    var now = !!v._cmpIn && (!inStack(v) || v.parentElement.classList.contains('on'));
+    if (now && !v._cmpShown) { try { v.currentTime = 0; } catch (e) {} var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
+    else if (!now && v._cmpShown !== false) { try { v.pause(); } catch (e) {} }
+    v._cmpShown = now;
+  }
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { e.target._cmpIn = e.isIntersecting && e.intersectionRatio >= 0.33; check(e.target); });
+  }, { threshold: [0, 0.33, 0.66] });
+  vids.forEach(function (v) {
+    io.observe(v);
+    if (inStack(v)) new MutationObserver(function () { check(v); }).observe(v.parentElement, { attributes: true, attributeFilter: ['class'] });
+  });
+})();
+</script>
 </body>
 </html>

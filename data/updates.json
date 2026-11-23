@@ -1,5 +1,285 @@
 [
   {
+    "version": "3.7.72",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3772-gm-real-book-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: a video of a real printed book in Get a Real Book.",
+        "detail": "The Get a Real Book of Your Campaign section now shows a short video of a printed book being paged through.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.71",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3771-gm-retouch-recut",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the retouch clip re-cut around the slide.",
+        "detail": "The retouch clip in How it Works step 4 is cut so the spinner turns about twice without the picture jumping.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.70",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3770-gm-retouch-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the retouch clip on How it Works step 4.",
+        "detail": "Step 4 (Customize) now shows a clip of one picture being retouched: a character added, everything else kept.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.69",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3769-gm-book-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the book clip on How it Works step 5.",
+        "detail": "Step 5 (Print, Order, Ship) now shows a short clip of a finished book being paged through before it is ordered.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.68",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3768-gm-coach-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the writing coach clip on How it Works step 3.",
+        "detail": "Step 3 (Rewrite) now shows a short clip of the writing coach giving feedback on a passage.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.67",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3767-clips-restart",
+        "kind": "change",
+        "public": false,
+        "summary": "Clips on the Game Masters and Memories pages start from the beginning when they come into view.",
+        "detail": "Every clip on the Game Masters and Memories pages, in the step-by-step walkthrough and the feature panels, starts over from the beginning each time you scroll it into view.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.66",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3766-gm-transcript-clip-2",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the new transcript clip on How it Works step 2.",
+        "detail": "Step 2 (Type, Paste or Upload) shows the new, narrower transcript clip.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.65",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3765-gm-transcript-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the transcript clip on How it Works step 2.",
+        "detail": "Step 2 (Type, Paste or Upload) now shows a short clip of a session transcript being dropped in.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.64",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3764-gm-clip-panel",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the step 1 clip shows whole in a thinner panel.",
+        "detail": "The character build clip in How it Works step 1 sits in a panel the same shape as the clip, so the whole picture shows, the finished character included.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.63",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3763-gm-no-dots",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: no halftone dots.",
+        "detail": "The fine dot screen laid over the Game Masters page is gone, so the pictures and the clip show clean.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.62",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3762-gm-clip-fill",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the step 1 clip fills its panel.",
+        "detail": "The character build clip in How it Works step 1 is zoomed to fill its box instead of sitting in it with dark space either side.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.61",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3761-gm-character-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the character build clip on How it Works step 1.",
+        "detail": "Step 1 (Characters) now shows a short clip of a character being built, and its text ends with every session rather than every chapter.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.60",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3760-real-books-style-back",
+        "kind": "change",
+        "public": false,
+        "summary": "Example Books page: the new look, and a Back button.",
+        "detail": "The Real Books, Really Printed page now matches the new Game Masters page, and has a Back button at the top that returns you to the page you came from.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.59",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3759-gm-faq-from-memories",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Point of View and two FAQ answers taken from the Memories page.",
+        "detail": "The Point of View feature now says what the Memories page says (narrative styles, lengths and points of view), and the FAQ answers how long printing and shipping take and what a printed book costs.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.58",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3758-tiers-gift-style-back",
+        "kind": "change",
+        "public": true,
+        "summary": "The gift page's Back button takes you back to the page you came from.",
+        "detail": "Signed in, Back on the Give as a Gift page used to take you into the app even when you came from a landing page. It now takes you back to that page. The gift page and the Compare the Tiers window on the Game Masters page also have the new look.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.57",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3757-gm-page-plans-style",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: plans and Sign In in the new style.",
+        "detail": "Choose Your Path (free trial, passes, subscriptions, Compare the Tiers) and the Sign In button now use the page's own lettering and buttons: red for starting, a gold outline for picking a plan.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.56",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3756-gm-page-icons",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: gold outline icons.",
+        "detail": "The dashed placeholder circles in the key facts, the Get a Real Book list and the AI groups are now gold line icons in the page colours.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.55",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3755-gm-page-audio-transcript",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: step 2 mentions audio recordings and transcripts.",
+        "detail": "How it Works, step 2 is now Type, Paste or Upload, and says you can drop in the session transcript or upload the audio recording of the session.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.54",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3754-gm-page-character-sheet",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: step 1 mentions uploading a character sheet.",
+        "detail": "How it Works, step 1 now says you can upload an existing character sheet and Campaignia reads the key details from it.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.53",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3753-new-game-masters-page",
+        "kind": "change",
+        "public": false,
+        "summary": "New Game Masters page (/game-masters), in progress.",
+        "detail": "Built from Riley's Normal home page plan with the How it Works, AI and FAQ sections of his Restrained plan. Not indexed yet; dashed boxes are pictures and clips still to come, yellow marks are facts to settle, and the testimonials are placeholders. The old page is kept as views/game-masters-v1.html; the home page is unchanged.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.52",
     "staged_on": "2026-11-22",
     "entries": [
