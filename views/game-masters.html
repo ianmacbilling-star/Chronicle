@@ -803,5 +803,35 @@ function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=documen
   });
 })();
 </script>
+<script>
+// v3.7.98 -- A DIFFERENT CHARACTER EACH TIME (Ian, 2026-11-23: "Can you alternate a video in and out there if I give you
+// several different characters?" ... "every time it comes to that particular part it should be different, so each new visit").
+// How it Works step 1 shows one character clip, looping. Each time step 1 comes back into view (the restart script at the foot
+// of the page pauses it out of view and plays it from 0:00 back in view) the next character takes its place, and each new
+// visit to the page starts on the character after the one the visitor saw first last time. Each box takes its clip's shape.
+// To add a character, add a line to CLIPS.
+(function () {
+  var CLIPS = [
+    { src: '/images/gm-character-build-2.mp4', poster: '/images/gm-character-build-2-poster.jpg', ar: '632/808' },   // Gubuk
+    { src: '/images/gm-character-elvarra.mp4', poster: '/images/gm-character-elvarra-poster.jpg', ar: '640/804' }   // Elvarra
+  ];
+  var KEY = 'cmp_gm_char', start = 0;
+  try { start = (parseInt(localStorage.getItem(KEY), 10) || 0) % CLIPS.length; localStorage.setItem(KEY, String((start + 1) % CLIPS.length)); } catch (e) {}
+  function put(v, i) {
+    var c = CLIPS[i];
+    v.poster = c.poster; v.src = c.src;
+    if (v.parentElement) v.parentElement.style.aspectRatio = c.ar;
+  }
+  [].slice.call(document.querySelectorAll('video[src="' + CLIPS[0].src + '"]')).forEach(function (v) {
+    var i = start, away = false, shown = false;
+    if (i !== 0) put(v, i);
+    v.addEventListener('pause', function () { if (shown) away = true; });
+    v.addEventListener('play', function () {
+      if (away) { away = false; i = (i + 1) % CLIPS.length; put(v, i); var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+      shown = true;
+    });
+  });
+})();
+</script>
 </body>
 </html>
