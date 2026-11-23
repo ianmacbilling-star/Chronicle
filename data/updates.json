@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.99",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3799-gm-more-characters",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: Galahorn and Bol join the step 1 characters.",
+        "detail": "How it Works step 1 now has four characters to show: Gubuk, Elvarra, Galahorn and Bol.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.98",
     "staged_on": "2026-11-22",
     "entries": [

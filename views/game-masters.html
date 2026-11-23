@@ -813,7 +813,9 @@ function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=documen
 (function () {
   var CLIPS = [
     { src: '/images/gm-character-build-2.mp4', poster: '/images/gm-character-build-2-poster.jpg', ar: '632/808' },   // Gubuk
-    { src: '/images/gm-character-elvarra.mp4', poster: '/images/gm-character-elvarra-poster.jpg', ar: '640/804' }   // Elvarra
+    { src: '/images/gm-character-elvarra.mp4', poster: '/images/gm-character-elvarra-poster.jpg', ar: '640/804' },   // Elvarra
+    { src: '/images/gm-character-galahorn.mp4', poster: '/images/gm-character-galahorn-poster.jpg', ar: '640/810' },   // Galahorn
+    { src: '/images/gm-character-bol.mp4', poster: '/images/gm-character-bol-poster.jpg', ar: '640/810' }   // Bol
   ];
   var KEY = 'cmp_gm_char', start = 0;
   try { start = (parseInt(localStorage.getItem(KEY), 10) || 0) % CLIPS.length; localStorage.setItem(KEY, String((start + 1) % CLIPS.length)); } catch (e) {}
