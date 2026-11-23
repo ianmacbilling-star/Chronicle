@@ -1,5 +1,47 @@
 [
   {
+    "version": "3.7.83",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3783-gm-faq-personal-use",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the own art FAQ mentions personal use.",
+        "detail": "The FAQ on using your own art or writing now says Campaignia is built for your own personal use.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.82",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3782-gm-faq-ai-artists",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: new ending for the AI and artists FAQ.",
+        "detail": "The FAQ on AI and artists drops a feature that does not exist yet and says how Campaignia uses AI to enhance creativity, not replace it.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.81",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3781-gm-faq-handwritten",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: FAQ mentions photos or scans of handwritten notes.",
+        "detail": "The FAQ on what Campaignia can read now mentions photos or scans of handwritten notes.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.80",
     "staged_on": "2026-11-22",
     "entries": [
