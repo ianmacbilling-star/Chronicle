@@ -1,5 +1,103 @@
 [
   {
+    "version": "3.7.79",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3779-library-new-style",
+        "kind": "change",
+        "public": false,
+        "summary": "Library in the new Campaignia style.",
+        "detail": "The Library drops its comic lettering and comic buttons for the same look as the new Game Masters page.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.78",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3778-gm-insert-art-tbd",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: TBD mark off Insert Your Art.",
+        "detail": "The Insert Your Art feature on the Game Masters page no longer shows a TBD mark.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.77",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3777-gm-image-gen-gallery-link",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Image Generation links to the gallery.",
+        "detail": "The Image Generation feature on the Game Masters page has a See what others have made link to the Library gallery.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.76",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3776-gm-custom-art-styles",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: Styles to Match mentions custom art styles.",
+        "detail": "The Styles to Match feature now mentions building a custom art style of your own.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.75",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3775-gm-view-work-books",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: View Their Work opens the Library on Books.",
+        "detail": "The View Their Work button on the Game Masters page opens the Library on its Books tab.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.74",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3774-gm-visual-consistency",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: new wording for Visual Consistency.",
+        "detail": "The Visual Consistency feature now mentions items, NPCs and locations as well as characters.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.7.73",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3773-gm-character-clip-2",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the new character build clip on How it Works step 1.",
+        "detail": "Step 1 (Characters) shows the new, shorter character build clip.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.72",
     "staged_on": "2026-11-22",
     "entries": [

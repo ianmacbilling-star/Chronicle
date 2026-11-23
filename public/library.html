@@ -314,6 +314,26 @@
     html[data-brand="brand2"] .lb img { border:0; border-radius:14px; }
     html[data-brand="brand2"] .lb .lb-cap { font-style:normal; color:#e5e6e1; }
     html[data-brand="brand2"] .lb .lb-close { color:#ffffff; font-size:16px; font-weight:600; letter-spacing:0; border:1.5px solid #ffffff; border-radius:999px; padding:6px 16px; }
+    /* v3.7.79 -- THE LIBRARY IN THE NEW CAMPAIGNIA STYLE (Ian, 2026-11-22: "make sure the library buttons and fonts match the new
+       Game-masters pages... Get rid of the comic buttons and fonts"). Campaignia only (html:not([data-brand])); the Story brand
+       keeps its own look above. Cinzel lettering in place of Bangers, a red Create Your Own button, gold-outline tabs and filters
+       with 6px corners, and soft shadows in place of the hard comic offsets. Nothing moves. */
+    html:not([data-brand]) .btn-nav { font-family:'Cinzel',Georgia,serif; font-weight:700; font-size:13px; letter-spacing:0.12em; padding:8px 20px; background:var(--button-cta); color:#ffffff; border:2px solid var(--button-cta); border-radius:6px; box-shadow:0 4px 14px rgba(192,57,43,0.35); }
+    html:not([data-brand]) .btn-nav:hover { transform:translateY(-1px); box-shadow:0 6px 18px rgba(192,57,43,0.45); }
+    html:not([data-brand]) .lib-title { font-family:'Cinzel',Georgia,serif; font-weight:700; font-size:clamp(30px,4.6vw,52px); color:var(--accent-bright); letter-spacing:0.02em; text-shadow:0 2px 14px rgba(0,0,0,0.6); line-height:1.1; }
+    html:not([data-brand]) .lib-sub { font-size:clamp(16px,2.2vw,19px); }
+    html:not([data-brand]) .tab-btn, html:not([data-brand]) .filter-btn, html:not([data-brand]) .facet-clear { font-family:'Cinzel',Georgia,serif; font-weight:700; letter-spacing:0.1em; border:1.5px solid rgba(var(--accent-rgb),0.55); border-radius:6px; color:var(--accent-bright); }
+    html:not([data-brand]) .tab-btn:not(.active):hover, html:not([data-brand]) .filter-btn:not(.active):hover, html:not([data-brand]) .facet-clear:hover { border-color:var(--accent-bright); color:var(--accent-bright); background:rgba(var(--accent-rgb),0.14); }
+    html:not([data-brand]) .tab-btn.active, html:not([data-brand]) .filter-btn.active { background:var(--accent); border-color:var(--accent); color:var(--page-bg); }
+    html:not([data-brand]) .facet-add, html:not([data-brand]) .fdd-btn { border-radius:6px; }
+    html:not([data-brand]) .fdd-panel { border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,0.5); }
+    html:not([data-brand]) .lib-search input { border:1px solid rgba(var(--accent-rgb),0.35); border-radius:6px; }
+    html:not([data-brand]) .card { border:1px solid rgba(var(--accent-rgb),0.25); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+    html:not([data-brand]) .lb img { border:1px solid rgba(var(--accent-rgb),0.3); border-radius:8px; }
+    html:not([data-brand]) .lb .lb-close { font-family:'Cinzel',Georgia,serif; font-weight:700; font-size:15px; letter-spacing:0.12em; border:1.5px solid rgba(var(--accent-rgb),0.7); border-radius:6px; padding:8px 16px; color:var(--accent-bright); }
+    html:not([data-brand]) .lb .lb-close:hover { background:var(--accent); color:var(--page-bg); }
+    html:not([data-brand]) .mkt-guild-h, html:not([data-brand]) .mkt-title { font-family:'Cinzel',Georgia,serif; font-weight:700; letter-spacing:0.02em; text-shadow:none; color:var(--accent-bright); }
+    html:not([data-brand]) .mkt-card-ph { font-family:'Cinzel',Georgia,serif; font-weight:700; }
   </style>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0a0806" />
