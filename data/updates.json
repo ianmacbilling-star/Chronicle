@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.84",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3784-gm-step2-full-story",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: step 2 says Campaignia writes and illustrates the full story.",
+        "detail": "How it Works step 2 now says Campaignia turns your session into a complete story, with narrative prose and pictures for every panel.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.83",
     "staged_on": "2026-11-22",
     "entries": [
