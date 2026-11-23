@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.68",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3768-gm-coach-clip",
+        "kind": "change",
+        "public": false,
+        "summary": "Game Masters page: the writing coach clip on How it Works step 3.",
+        "detail": "Step 3 (Rewrite) now shows a short clip of the writing coach giving feedback on a passage.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.67",
     "staged_on": "2026-11-22",
     "entries": [
