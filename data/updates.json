@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.88",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3788-backcover-logo-outline",
+        "kind": "change",
+        "public": false,
+        "summary": "Back cover logo outlined so it shows on white or pale pictures.",
+        "detail": "The Campaignia logo on the back cover now has a thin dark outline, so it stays readable over a white or pale back cover picture.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.87",
     "staged_on": "2026-11-22",
     "entries": [

@@ -5740,7 +5740,7 @@ ${previewScrollbarCss()}
      column, so removing it would have let the title fall by exactly its height, and a hidden twin
      held the space. With no logo in this column there is nothing to hold, so the twin and its rule
      are deleted rather than left behind describing an element that no longer exists. */
-  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-52.15%);width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-52.11%);width:163.1px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   /* v3.0.595 -- WAS a bare reference to titleFaceImp, WHICH ONLY EXISTS IN buildNovelHTML. This is
@@ -5806,7 +5806,7 @@ ${fCover ? `<!-- COVER PAGE -->
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${fCover ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Wordmark_White_Print.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Wordmark_White_Print_Outline.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -6598,7 +6598,7 @@ ${previewScrollbarCss()}
      column, so removing it would have let the title fall by exactly its height, and a hidden twin
      held the space. With no logo in this column there is nothing to hold, so the twin and its rule
      are deleted rather than left behind describing an element that no longer exists. */
-  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-52.15%);width:160px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
+  .cover-art-logo { position:absolute;left:50%;bottom:0.25in;transform:translateX(-52.11%);width:163.1px;height:auto;object-fit:contain;opacity:${COVER_LOGO_OPACITY};z-index:2; }
   /* v3.0.551 -- the chosen title preset, emitted AFTER the rules above so it can only ADD to them.
      Chronicle contributes nothing, so this line is empty and every existing cover is untouched. */
   ${titleFaceImp}
@@ -6857,7 +6857,7 @@ ${allSessionsHTML}
 ${fWmark ? '<div class="page-watermark">CAMPAIGNIA.COM</div>' : ''}
 
 ${(fCover && (!paginated || pageOpts.page === totalSessions)) ? `<!-- BACK COVER PAGE -->
-<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Wordmark_White_Print.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
+<div class="backcover-page"><div class="cover-bg"></div><div class="cover-border"></div><div class="cover-border-inner"></div><div class="backcover-inner"><div class="cover-art-frame${campaign.back_cover_image_url ? '' : ' no-art'}">${campaign.back_cover_image_url ? `<img class="cover-art-img" src="${campaign.back_cover_image_url}" alt="" />` : ''}<img class="cover-art-logo" src="/images/Campaignia_Wordmark_White_Print_Outline.png" alt="Campaignia" /></div></div><div class="cover-watermark">CAMPAIGNIA.COM</div></div>` : ''}
 
 </body>
 </html>`;
@@ -7765,7 +7765,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
   // v3.0.616 -- THE MARK MOVES TO THE BACK PANEL. Ian: same location, on the back. It is no longer
   // optional, so there is no flag: the Platinum hide-logo control is gone and both marks always draw.
   // The FRONT panel keeps none, which is what makes room for a built title overlay to own that space.
-  var logo = '<img class="wc-logo" src="/images/Campaignia_Wordmark_White_Print.png" alt="" />';
+  var logo = '<img class="wc-logo" src="/images/Campaignia_Wordmark_White_Print_Outline.png" alt="" />';
   var spineLogo = '<img class="wc-spine-logo" src="/images/Campaignia_Mark_Print.png" alt="" />';   // v3.7.51 -- maroon, to match the red inside the book (white: Campaignia_Mark_White_Print.png)
   var spineFont = Math.max(7, Math.min(20, Math.round(spineW * 56)));
   var spineLogoW = Math.max(0.12, Math.min(0.5, spineW * 0.78));
@@ -7973,7 +7973,7 @@ function buildWrapCoverHTML(campaign, spec, dims, opts) {
     // beside it is left at 0.95 on purpose: one printed sheet then carries a heavy alpha and a
     // light one, and comparing them says whether flattening is faithful across the range
     // rather than only at one value.
-    '.wc-logo { width:1.6in; height:auto; object-fit:contain; transform:translateX(-2.15%); opacity:' + COVER_LOGO_OPACITY + '; }' +   // v3.7.50 -- optical centring: the logo's weight sits 2.15% right of its middle
+    '.wc-logo { width:1.631in; height:auto; object-fit:contain; transform:translateX(-2.11%); opacity:' + COVER_LOGO_OPACITY + '; }' +   // v3.7.50 -- optical centring: the logo's weight sits 2.15% right of its middle
     // v3.0.616 -- bottom centre of the BACK panel, the position the front cap used to give it, and
     // the same COVER_LOGO_OPACITY. z-index clears the artwork; the 40 percent is still the
     // v3.0.378 flattener test with the spine logo at 0.95 as its control.
