@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.94",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3794-app-logo-home",
+        "kind": "change",
+        "public": false,
+        "summary": "The logo inside the app takes you to the home page.",
+        "detail": "Clicking the Campaignia logo at the top of the app now takes you to the home page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.93",
     "staged_on": "2026-11-22",
     "entries": [
