@@ -323,6 +323,25 @@ app.get('/fonts/:file', function (req, res) {
   res.set('Content-Type', 'font/woff2');
   res.sendFile(p, function (err) { if (err && !res.headersSent) res.status(404).end(); });
 });
+// v3.7.93 -- THE NEW HOME PAGE (Ian, 2026-11-23: "Go ahead and make this the Home... and make the current home ... Old-Game-
+// Master page, so we can get to it but basically it's hidden"). For Campaignia, / (and /index.html, and any address nothing
+// else answers, at the end of this file) is the Game Masters page; /game-masters still serves it too, and its canonical is
+// now the root. Another brand (the Story site, staging only) keeps the old home, with its own theme laid over it, exactly as
+// before. The old home lives on at /old-game-master: no-store, never indexed, linked from nowhere. Before express.static,
+// which would otherwise hand out public/index.html for /.
+function homeFile(req) {
+  if (req.brand && req.brand !== 'campaignia') return path.join(__dirname, 'public', 'index.html');
+  return path.join(__dirname, 'views', 'game-masters.html');
+}
+app.get(['/', '/index.html'], function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(homeFile(req));
+});
+app.get('/old-game-master', function (req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Explicit page routes
@@ -523,7 +542,7 @@ app.use('/api', function(err, req, res, next) {
 
 app.get('*', function(req, res) {
   if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(homeFile(req));   // v3.7.93: the home page, as / gives it
 });
 
 const PORT = process.env.PORT || 3000;

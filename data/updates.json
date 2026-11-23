@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.93",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3793-new-home",
+        "kind": "change",
+        "public": false,
+        "summary": "The new Game Masters page is the home page; the old home moves to /old-game-master.",
+        "detail": "campaignia.com now opens on the new page. The quotes section is hidden until there are real quotes.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.92",
     "staged_on": "2026-11-22",
     "entries": [
