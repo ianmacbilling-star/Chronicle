@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.01",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3801-gm-kip",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: Kip joins the step 1 characters.",
+        "detail": "How it Works step 1 now has six characters to show, with Kip added.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.00",
     "staged_on": "2026-11-22",
     "entries": [
