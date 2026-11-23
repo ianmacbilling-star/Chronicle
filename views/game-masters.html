@@ -733,14 +733,8 @@ function cmpAddDraftLink(d){
   a.style.cssText = 'font-size:9px;letter-spacing:1px;opacity:0.5;';
   signIn.parentNode.insertBefore(a, signIn);
 }
-(function(){
-  try {
-    fetch('/api/auth/me', { credentials: 'same-origin' })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(cmpAddDraftLink)
-      .catch(function(){});
-  } catch (e) {}
-})();
+// v3.7.96 -- NO DRAFT LINK (Ian, 2026-11-23: "get rid of the Draft in the top banner"). This page is the home page now and
+// the admin-only DRAFT link to /story is no longer added; cmpAddDraftLink above is left in place but never called.
 function cmpToggleNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(!m)return;var open=m.classList.toggle('open');if(b)b.setAttribute('aria-expanded',open?'true':'false');}
 function cmpCloseNav(){var m=document.getElementById('mobileMenu');var b=document.getElementById('navToggle');if(m)m.classList.remove('open');if(b)b.setAttribute('aria-expanded','false');}
 </script>

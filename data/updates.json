@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.7.96",
+    "staged_on": "2026-11-22",
+    "entries": [
+      {
+        "id": "3796-home-no-draft-link",
+        "kind": "change",
+        "public": false,
+        "summary": "Home page: the admin DRAFT link is gone from the top banner.",
+        "detail": "Admins no longer see a DRAFT link in the top banner of the home page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.7.95",
     "staged_on": "2026-11-22",
     "entries": [
