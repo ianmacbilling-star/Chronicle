@@ -13,7 +13,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
-const { getTier, saveTierConfig, canPurchaseTokens } = require('../middleware/tiers');
+const { getTier, saveTierConfig, canPurchaseTokens, isComingSoon } = require('../middleware/tiers');   // v3.8.10 isComingSoon
 const { getPack, listPacks } = require('../services/billing/packs');
 const { getPass, listPasses } = require('../services/billing/passes');   // v3.0.923 -- TD-780
 const subscriptionPause = require('../services/billing/subscriptionPause');   // v3.1.45 -- TD-938
@@ -657,10 +657,11 @@ router.post('/pass-checkout', async function(req, res) {
     const _db0 = await getDb();
     const _row0 = await _db0.prepare('SELECT tier, stripe_subscription_id, subscription_status, cancel_at_period_end, current_period_end, sub_paused_until FROM users WHERE id = ?').get(req.session.userId);
     _subPlan = subscriptionPause.planForPass(_row0 || {}, '');
-    if (_subPlan.sub === 'platinum' && _subPlan.action === 'cancel' && (req.body || {}).confirmEnd !== true) {
-      return res.status(409).json({ code: 'CONFIRM_SUBSCRIPTION_ENDS', error: 'Please confirm what happens to your Platinum subscription first.' });
+    // v3.8.10 -- passes are Gold now: a Gold (or Platinum) subscription stops renewing; Silver pauses.
+    if ((_subPlan.sub === 'gold' || _subPlan.sub === 'platinum') && _subPlan.action === 'cancel' && (req.body || {}).confirmEnd !== true) {
+      return res.status(409).json({ code: 'CONFIRM_SUBSCRIPTION_ENDS', error: 'Please confirm what happens to your ' + ((getTier(_subPlan.sub) || {}).name || 'current') + ' subscription first.' });
     }
-    if ((_subPlan.sub === 'silver' || _subPlan.sub === 'gold') && (req.body || {}).confirmPause !== true) {
+    if (_subPlan.sub === 'silver' && (req.body || {}).confirmPause !== true) {
       return res.status(409).json({ code: 'CONFIRM_SUBSCRIPTION_PAUSE', sub: _subPlan.sub, error: 'Please confirm that your subscription will be paused while the pass runs.' });
     }
   } catch (e) {
@@ -684,7 +685,7 @@ router.post('/pass-checkout', async function(req, res) {
       customerEmail: buyerEmail,
       // v3.1.45 -- TD-938. Recorded for the support trail: 'pause' for a Silver/Gold subscriber, else empty.
       // The webhook does not depend on it; it re-reads the account and applies the same rule.
-      extraMetadata: { sub_choice: (_subPlan && (_subPlan.sub === 'silver' || _subPlan.sub === 'gold')) ? 'pause' : '' },
+      extraMetadata: { sub_choice: (_subPlan && _subPlan.sub === 'silver') ? 'pause' : '' },   // v3.8.10: only Silver pauses
       signupPromotionCodeId: await signupDiscountFor(req.session.userId, 'pass'),   // v3.3.57 -- TD-1070
       successUrl: base + '/app.html?pass=success',
       cancelUrl: base + '/app.html?pass=cancel'
@@ -712,6 +713,7 @@ router.post('/subscribe', async function(req, res) {
   if (tier !== 'silver' && tier !== 'gold' && tier !== 'platinum') {
     return res.status(400).json({ error: 'Unknown tier' });
   }
+  if (isComingSoon(tier)) return res.status(400).json({ error: ((getTier(tier) || {}).name || 'That plan') + ' is coming soon.' });   // v3.8.10
   if (!stripeProvider.isConfigured()) {
     return res.status(503).json({ error: 'billing_unconfigured' });
   }
@@ -759,6 +761,7 @@ router.post('/change-plan', async function(req, res) {
   if (tier !== 'silver' && tier !== 'gold' && tier !== 'platinum') {
     return res.status(400).json({ error: 'Unknown tier' });
   }
+  if (isComingSoon(tier)) return res.status(400).json({ error: ((getTier(tier) || {}).name || 'That plan') + ' is coming soon.' });   // v3.8.10
   if (!stripeProvider.isConfigured()) {
     return res.status(503).json({ error: 'billing_unconfigured' });
   }
@@ -1265,7 +1268,9 @@ async function fulfillPassCheckout(session, eventId) {
   const tokens = (isFinite(quotedTokens) && quotedTokens >= 0) ? quotedTokens : pass.tokens;
   const quotedMonths = parseInt(md.quoted_months, 10);
   const months = (isFinite(quotedMonths) && quotedMonths > 0) ? quotedMonths : pass.months;
-  const passTier = md.quoted_tier || pass.tier || 'platinum';
+  // v3.8.10 -- passes are Gold. A checkout quoted before the shuffle said platinum; it means today's Gold.
+  const _qt = md.quoted_tier || pass.tier || 'gold';
+  const passTier = (_qt === 'platinum') ? 'gold' : _qt;
   const paid = (session.amount_total != null) ? session.amount_total : pass.price_cents;
 
   const insRes = await db.prepare(

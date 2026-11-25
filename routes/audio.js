@@ -120,7 +120,7 @@ async function audioOn(db, req) {
 // test as the Writing Coach (wtAccess in routes/narrative.js): the campaign's effective plan has accessRank 3 or more -- Gold,
 // Platinum and the Free Trial, and a member gets it from the Story Master's plan. The tokens are still the presser's. Admins
 // always. The launch switch (audioOn) still comes first.
-const PLAN_MSG = 'Audio Transcription comes with Gold and Platinum. On the Free Trial it does the first 20 minutes of a recording.';   // v3.6.22: members never had it (the Story box is the Story Master's; a tester, 2026-11-14)
+const PLAN_MSG = 'Audio Transcription comes with Silver, Gold and Platinum. On the Free Trial it does the first 20 minutes of a recording.';   // v3.6.22: members never had it (the Story box is the Story Master's; a tester, 2026-11-14)
 // v3.6.22: the Free Trial transcribes only the first TRIAL_SECS (trial tokens cannot be topped up). Admins are never capped.
 async function isTrialPlan(db, req, campaignId) {
   const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
@@ -130,7 +130,7 @@ async function isTrialPlan(db, req, campaignId) {
 async function planAllows(db, req, campaignId) {
   const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId);
   if (u && isAdminEmail(u.email)) return true;
-  try { return accessRank(await getEffectiveTier(req.session.userId, campaignId)) >= 3; } catch (e) { return false; }
+  try { return accessRank(await getEffectiveTier(req.session.userId, campaignId)) >= 2; } catch (e) { return false; }   // v3.8.10: Silver and up (was Gold, 3)
 }
 
 // A signed address (SigV4 query string) for one object of an R2 bucket: anyone holding it may do `method` on that key until

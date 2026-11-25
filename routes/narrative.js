@@ -2283,7 +2283,7 @@ async function wtTakeUse(db, userId, campaignId) {
 
 async function wtAccess(req, tool) {
   if (!WRITING_TOOLS[tool].gold) return true;
-  try { return accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId)) >= 3; } catch (e) { return false; }
+  try { return accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId)) >= 2; } catch (e) { return false; }   // v3.8.10: Silver and up (was Gold, 3)
 }
 
 // The panel header: uses left, the balance, and whether the Gold tools are open to this person here.
@@ -2294,7 +2294,7 @@ router.get('/writing/status/:campaignId', requireAuth, async function (req, res)
     if (!role) return res.status(403).json({ error: 'Access denied' });
     const bal = await getBalance(req.session.userId);
     res.json({ uses_left: await wtUsesLeft(db, req.session.userId), balance: bal.total, uses_per_token: WRITING_USES_PER_TOKEN,
-      gold_tools: accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId)) >= 3 });
+      gold_tools: accessRank(await getEffectiveTier(req.session.userId, req.params.campaignId)) >= 2 });   // v3.8.10: Silver and up
   } catch (e) { res.status(500).json({ error: 'Could not read your writing uses.' }); }
 });
 
@@ -2344,7 +2344,7 @@ async function writingToolHandler(req, res) {
   if (!targetForkId) return res.status(403).json({ error: 'You have no version of this session' });
 
   if (!(await wtAccess(req, tool))) {
-    return res.json({ error: 'WRITING_LOCKED', message: 'Feedback and the other writing tools come with Gold and Platinum (and the Free Trial). Regen works on every plan.' });
+    return res.json({ error: 'WRITING_LOCKED', message: 'Feedback and the other writing tools come with Silver, Gold and Platinum (and the Free Trial). Regen works on every plan.' });
   }
 
   const ctx = await writingContext(db, req, session, targetForkId);

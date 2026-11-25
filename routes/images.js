@@ -3,7 +3,7 @@ const genresvc = require('../services/genres');   // v3.0.488 -- stage 4, campai
 const assetSuggest = require('../services/assetSuggestions');   // v3.1.9 -- TD-908 recurring-element notes
 const router = express.Router();
 const { requireAuth, getCampaignRole, requireAdmin, isAdminEmail } = require('../middleware/auth');   // v3.4.13 -- isAdminEmail
-const { getTier, getEffectiveTier, isTruePlatinum, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');
+const { getTier, getEffectiveTier, isTruePlatinum, isGoldPlus, tierRank, accessRank, artStyleAllowed } = require('../middleware/tiers');   // v3.8.10 isGoldPlus
 const { getDb, getDmForkId, resolveActingFork, requestedForkIdOf, forkSelfIllustrated } = require('../database/db');   // v3.0.636 -- the prefs helpers left with resolveOwnBuiltTitle
 const { releaseImage, persistToR2, fetchFile, isOurPublicUrl, deleteFile } = require('../storage/storage');   // deleteFile: v3.2.66, TD-1006   // isOurPublicUrl: v3.1.85, TD-954
 const imageCrop = require('../services/imageCrop');
@@ -1198,9 +1198,9 @@ async function resolveGenStyle(db, style, userId, campaignId) {
             }
           }
           if (allowed) {
-            // Lapse gate: the OWNING party must currently be true Platinum.
+            // Lapse gate: the OWNING party must currently be on Gold or above (v3.8.10; was true Platinum).
             const ownerTier = await getEffectiveTier(row.owner_id, null);
-            if (ownerTier !== 'platinum') return { locked: true };
+            if (!isGoldPlus(ownerTier)) return { locked: true };
             var _sp = /^STYLE:/i.test(row.style_prompt) ? row.style_prompt : ('STYLE: ' + row.style_prompt);
             // v3.2.52 -- TD-966. With a comic page or sound effects answered, isFade carries all three flags.
             var _fl = styleFlags(row.style_answers);
@@ -2770,7 +2770,7 @@ const STYLE_PREVIEW_SCENES = {
 router.post('/custom-style-preview', requireAuth, async function(req, res) {
   try {
     const own = await getEffectiveTier(req.session.userId, null);
-    if (own !== 'platinum') return res.status(403).json({ error: 'NOT_PLATINUM', message: 'Custom styles are a Platinum feature.' });
+    if (!isGoldPlus(own)) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'Custom styles are a Gold feature.' });   // v3.8.10
     let stylePrompt = (req.body && req.body.style_prompt || '').trim();
     if (!stylePrompt) return res.json({ error: 'Add a style description first.' });
     if (!/^STYLE:/i.test(stylePrompt)) stylePrompt = 'STYLE: ' + stylePrompt;
@@ -3469,7 +3469,7 @@ async function ibAllowed(userId, campaignId) {
   if (!userId || !campaignId) return false;
   try {
     if (!(await getCampaignRole(userId, campaignId))) return false;
-    return (await getEffectiveTier(userId, campaignId)) === 'platinum';
+    return isGoldPlus(await getEffectiveTier(userId, campaignId));   // v3.8.10 -- Gold and above (was Platinum)
   } catch (e) { return false; }   // never fail OPEN on an entitlement question
 }
 // v3.6.61 -- TD-1155 (Ian, 2026-11-16: "Allow them access to the Gallery even for frozen campaigns ... Refuse on the

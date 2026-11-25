@@ -39,10 +39,12 @@ function planForPass(row, choice, opts) {
   const subscriptionState = require('../gifts').subscriptionState;
   const sub = subscriptionState(row);
   const alreadyPaused = isFuture(row && row.sub_paused_until, opts.nowMs);
-  if (sub === 'platinum') {
+  // v3.8.10 -- THE TIER SHUFFLE. Passes are Gold, so a Gold subscription is the one that stops renewing (what
+  // Platinum's did), and only Silver pauses. Platinum cannot be bought yet; treated like Gold until it launches.
+  if (sub === 'gold' || sub === 'platinum') {
     return { sub: sub, action: opts.gift ? 'none' : 'cancel', stackPeriodEnd: row.current_period_end || null, alreadyPaused: alreadyPaused };
   }
-  if (sub === 'silver' || sub === 'gold') {
+  if (sub === 'silver') {
     return { sub: sub, action: 'pause', stackPeriodEnd: null, alreadyPaused: alreadyPaused };
   }
   // No subscription we would keep. A bought pass still stops one that can bill and is not already
@@ -70,7 +72,7 @@ function describePlan(plan, tierName, untilIso) {
   };
   if (!plan) return '';
   if (plan.action === 'pause') return tierName + ' paused until ' + nice(untilIso) + ', then it restarts by itself';
-  if (plan.action === 'cancel' && plan.sub === 'platinum') return 'Platinum subscription stops renewing at the end of this period';
+  if (plan.action === 'cancel' && (plan.sub === 'gold' || plan.sub === 'platinum')) return (plan.sub === 'gold' ? 'Gold' : 'Platinum') + ' subscription stops renewing at the end of this period';   // v3.8.10
   return '';
 }
 

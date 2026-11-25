@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.10",
+    "staged_on": "2026-11-24",
+    "entries": [
+      {
+        "id": "3810-tier-shuffle-rules",
+        "kind": "change",
+        "public": false,
+        "summary": "Tier shuffle, stage 1: Silver now has what Gold had, Gold has what Platinum had, Platinum is Coming Soon.",
+        "detail": "The plan rules and feature checks move down one tier: custom art styles, the Title Builder and the Image Builder are Gold and up; the writing tools, audio transcription and extra versions are Silver and up; every style is one tier lower. Passes are Gold Passes. Platinum cannot be bought yet. The Free Trial is Gold level. Accounts move with the one-time button on Dashboard, Tiers and Passes.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.09",
     "staged_on": "2026-11-23",
     "entries": [

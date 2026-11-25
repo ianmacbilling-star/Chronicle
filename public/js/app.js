@@ -867,7 +867,7 @@ function startPassCheckout(passId) {
   // A subscription already set to cancel is ending anyway, so nothing is said. The server checks the
   // same confirmations (409 until given), so this dialog can be skipped but never bypassed.
   var _billing = hasBillingSubscription(_me) && !(_me && _me.cancelAtPeriodEnd);
-  if (_billing && (_acct === 'silver' || _acct === 'gold') && typeof uiConfirm === 'function') {
+  if (_billing && _acct === 'silver' && typeof uiConfirm === 'function') {   // v3.8.10: passes are Gold, only Silver pauses
     var _sName = (_all[_acct] && _all[_acct].name) || _acct;
     var _pausedTo = (_me && _me.subPausedUntil && new Date(_me.subPausedUntil).getTime() > Date.now()) ? _cmpNiceDate(_me.subPausedUntil) : '';
     uiConfirm(_pausedTo
@@ -881,7 +881,7 @@ function startPassCheckout(passId) {
     ).then(function (ok) { if (ok) _startPassCheckout(passId, { confirmPause: true }); });
     return;
   }
-  if (_billing && _acct === 'platinum' && typeof uiConfirm === 'function') {
+  if (_billing && (_acct === 'gold' || _acct === 'platinum') && typeof uiConfirm === 'function') {   // v3.8.10
     var _acctName = (_all[_acct] && _all[_acct].name) || _acct;
     var _copperName = (_all.copper && _all.copper.name) || 'Copper';
     uiConfirm(
@@ -3533,7 +3533,7 @@ function renderAccountPasses(me, data) {
       var _subName = (_acctL.charAt(0).toUpperCase() + _acctL.slice(1)) || 'Your';
       if (me && me.cancelAtPeriodEnd) {
         desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Your subscription is already set to end, so a pass simply takes over.';
-      } else if (_acctL === 'platinum') {
+      } else if (_acctL === 'gold' || _acctL === 'platinum') {   // v3.8.10
         desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Buying one stops your Platinum ' +
           'subscription renewing; the pass starts when the time you have already paid for runs out.';
       } else {
@@ -6546,7 +6546,7 @@ function resetCustomStyleForm() {
   csLoadQuestions(csRender);
 }
 function openCustomStylesView(beforeUpgrade, beforeOpen) {   // v3.3.70 -- TD-1079: both optional (the art style window's button)
-  if (!(state && state.user && state.user.tier === 'platinum')) {
+  if (!(state && state.user && (state.user.tier === 'gold' || state.user.tier === 'platinum'))) {
     platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.', beforeUpgrade);
     return;
   }
@@ -6557,7 +6557,7 @@ function openCustomStylesView(beforeUpgrade, beforeOpen) {   // v3.3.70 -- TD-10
   loadCustomStyles(renderCustomStyleCards);
 }
 function openCustomStyles() {
-  if (!(state && state.user && state.user.tier === 'platinum')) {
+  if (!(state && state.user && (state.user.tier === 'gold' || state.user.tier === 'platinum'))) {
     platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.');
     return;
   }
@@ -12441,7 +12441,7 @@ function openTitleBuilder(target) {
     });
     return;
   }
-  if (!(state && state.user && state.user.tier === 'platinum')) {
+  if (!(state && state.user && (state.user.tier === 'gold' || state.user.tier === 'platinum'))) {
     // v3.4.01 -- from the Image Builder there are no title styles to fall back on (testers), and a real dash.
     platinumGate('The Title Builder', _tbIsIb() ? 'Drawing a title as artwork for your pictures needs your own Platinum plan.' : 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan \u2014 they set the title in a real typeface with your chosen color, size and placement.');
     return;
@@ -17849,7 +17849,7 @@ function renderArchiveGrid() {
     grid.innerHTML = '<div class="muted" style="padding:20px;">No archives match these filters.</div>';
     return;
   }
-  var canBuilder = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);   // v3.5.35 -- the Image Builder is Platinum (the server checks)
+  var canBuilder = !!(state.tierInfo && state.tierInfo.effective_rank >= 3);   // v3.8.10: Gold and up   // v3.5.35 -- the Image Builder is Platinum (the server checks)
   grid.innerHTML = rows.map(function(a){
     var canDelete = isDM || (meId && a.archived_by === meId);
     var when = a.created_at ? new Date(a.created_at).toLocaleDateString() : '';
@@ -20176,7 +20176,7 @@ function wtSaveBox(el) {
   if (typeof scheduleNarrativeSave === 'function') scheduleNarrativeSave();
 }
 
-function wtGoldOk() { return !!(state.tierInfo && state.tierInfo.effective_rank >= 3); }
+function wtGoldOk() { return !!(state.tierInfo && state.tierInfo.effective_rank >= 2); }   // v3.8.10: Silver and up (the name is old)
 
 // The row under each box. regenCall is the box's own Regen (which opens the coach on the Regen tab and runs it).
 function wtPillsHtml(box, ta, label, regenCall) {
@@ -24907,6 +24907,48 @@ function renderTiersConfig(data) {
   });
   box.innerHTML = html;
   (data.order || []).forEach(function (k) { tierDerived(k); });
+  tierShuffleLoad();   // v3.8.10
+}
+
+// v3.8.10 -- THE TIER SHUFFLE, ONCE (claude/TIER_SHUFFLE_SPEC.md). A panel above the tier editors: who is on which plan,
+// and one button that moves the accounts and these settings down a step (Gold to Silver, Platinum to Gold).
+function tierShuffleLoad() {
+  var box = document.getElementById('tiers-config-container');
+  if (!box) return;
+  var el = document.getElementById('tier-shuffle-panel');
+  if (!el) { el = document.createElement('div'); el.id = 'tier-shuffle-panel'; el.className = 'settings-section tier-config-panel panel-dark'; box.insertBefore(el, box.firstChild); }
+  el.innerHTML = '<div class="settings-section-title">Tier shuffle</div><div class="settings-section-desc">Loading...</div>';
+  fetch('/api/admin/tier-shuffle').then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || d.error) { el.innerHTML = '<div class="settings-section-title">Tier shuffle</div><div class="settings-section-desc">' + escapeHtml((d && d.error) || 'Could not load.') + '</div>'; return; }
+    var rows = (d.counts || []).map(function (c) { return escapeHtml((c.tier || '-') + (c.pass_tier ? ' (pass: ' + c.pass_tier + ')' : '')) + ': <b>' + c.n + '</b>'; }).join('<br>') || 'Nobody on a paid plan.';
+    var h = '<div class="settings-section-title">Tier shuffle</div>';
+    if (d.done) {
+      h += '<div class="settings-section-desc" style="font-size:14px;">Done on ' + escapeHtml(String(d.done_at).slice(0, 10)) + '. Accounts now:<br>' + rows + '</div>' +
+        '<div style="margin-top:10px;"><button class="btn btn-secondary btn-sm" onclick="tierShuffleRun(true)">Put everyone back as before</button> ' +
+        '<span class="settings-section-desc" style="margin:0;">Undoes the shuffle from the copy it made.</span></div>';
+    } else {
+      h += '<div class="settings-section-desc" style="font-size:14px;">Moves every account and these tier settings down one step: Gold to Silver, Platinum to Gold (passes too). Silver stays Silver. A copy is kept so it can be put back. Accounts now:<br>' + rows + '</div>' +
+        '<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="tierShuffleRun(false)">Move everyone down one tier</button></div>';
+    }
+    h += '<div class="settings-section-desc" id="tier-shuffle-msg" style="margin-top:8px;"></div>';
+    el.innerHTML = h;
+  }).catch(function (e) { el.innerHTML = '<div class="settings-section-title">Tier shuffle</div><div class="settings-section-desc">Could not load: ' + escapeHtml(e.message) + '</div>'; });
+}
+function tierShuffleRun(restore) {
+  var q = restore ? 'Put every account and the tier settings back as they were before the shuffle?' :
+    'Move every account and the tier settings down one tier now? Gold becomes Silver and Platinum becomes Gold, passes included. Update STRIPE_TIER_PRICES on Railway straight after.';
+  uiConfirm(q, { okText: restore ? 'Put back' : 'Move everyone', cancelText: 'Cancel' }).then(function (yes) {
+    if (!yes) return;
+    var msg = document.getElementById('tier-shuffle-msg');
+    if (msg) msg.textContent = 'Working...';
+    fetch(restore ? '/api/admin/tier-shuffle/restore' : '/api/admin/tier-shuffle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: restore ? 'RESTORE' : 'SHUFFLE' }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success) { if (msg) { msg.textContent = (d && d.error) || 'It did not work.'; msg.style.color = 'var(--error)'; } return; }
+        loadTiersConfig();
+      })
+      .catch(function (e) { if (msg) { msg.textContent = 'It did not work: ' + e.message; msg.style.color = 'var(--error)'; } });
+  });
 }
 
 // v3.0.922 -- A TIER'S MONTHLY TOKENS ARE UTLT + CO, AND IAN ASKED FOR IT THAT WAY:
@@ -25688,7 +25730,7 @@ function prepLayoutLoad(){
   CL_TOGGLES.forEach(function(k){ var el=document.getElementById('pcl-'+k); if(el) el.checked=!!o[k]; });
   prepSyncMarkerBreak();
   prepSyncCastNpc();
-  var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 4);
+  var _plat = !!(state.tierInfo && state.tierInfo.effective_rank >= 3);   // v3.8.10: Gold and up
   // Commit panel selections to the unified customOpts the moment any control changes, so a plain
   // Refresh (not just Apply) reflects the chosen arrangement. Programmatic .value sets above
   // don't fire 'change', so this never clobbers on load.
@@ -40152,7 +40194,7 @@ function openImageBuilder(keepBack) {
     .then(function (d) {
       if (!d || d.error) { showError((d && d.error) || 'Could not open the Image Builder.'); return; }
       var list = d.campaigns || [];
-      if (!list.length && !(state && state.user && state.user.tier === 'platinum')) {
+      if (!list.length && !(state && state.user && (state.user.tier === 'gold' || state.user.tier === 'platinum'))) {
         platinumGate('the Image Builder', 'The Image Builder makes posters, portraits, maps and handouts for a campaign from its characters and assets. It is open in your own Platinum campaigns, and in any campaign whose Story Master is on Platinum.');
         return;
       }

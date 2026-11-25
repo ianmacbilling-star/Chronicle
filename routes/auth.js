@@ -61,7 +61,7 @@ async function resolvePenName(db, raw, excludeUserId) {
 function pendingPlanValue(raw) {
   const v = (typeof raw === 'string') ? raw.trim().toLowerCase() : '';
   if (!v) return null;
-  if (v === 'silver' || v === 'gold' || v === 'platinum') return v;
+  if (v === 'silver' || v === 'gold') return v;   // v3.8.10: Platinum is coming soon, so it is not stashed for sign-up
   if (v.indexOf('pass:') === 0) {
     const id = v.slice(5);
     try { return getPass(id) ? ('pass:' + id) : null; } catch (e) { return null; }
@@ -230,7 +230,7 @@ router.post('/register', async function(req, res) {
           ).get(_tp.id);
           if (_claim && _claim.id) {
             await db.prepare(
-              "UPDATE users SET is_tester = TRUE, tester_source = ?, tester_since = ?, tier = 'platinum', subscription_status = 'active', pending_plan = NULL WHERE id = ?"
+              "UPDATE users SET is_tester = TRUE, tester_source = ?, tester_since = ?, tier = 'gold', subscription_status = 'active', pending_plan = NULL WHERE id = ?"   /* v3.8.10: testers are Gold (was Platinum) */
             ).run('code:' + _tc, now, newUserId);
             _madeTester = true;
             noteTester(email.toLowerCase().trim(), true);
@@ -269,7 +269,7 @@ router.post('/register', async function(req, res) {
         const _promo = await db.prepare('SELECT id FROM promo_codes WHERE code = ?').get(_pc);
         await db.prepare(
           'INSERT INTO promo_redemptions (promo_code_id, code, user_id, context, applied) VALUES (?, ?, ?, ?, ?)'
-        ).run(_promo ? _promo.id : null, _pc, newUserId, 'signup', _madeTester ? JSON.stringify({ tester: true, tier: 'platinum' }) : null);   // v3.3.50
+        ).run(_promo ? _promo.id : null, _pc, newUserId, 'signup', _madeTester ? JSON.stringify({ tester: true, tier: 'gold' }) : null);   // v3.3.50
       }
     } catch (promoErr) { console.error('Signup promo capture failed (non-fatal):', promoErr.message); }
 

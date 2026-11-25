@@ -34,9 +34,10 @@
 // ============================================================================
 
 const PASSES = {
-  p3:  { id: 'p3',  name: '3 Month Platinum Pass',  tier: 'platinum', months: 3,  tokens: 200, price_cents: 7900 },
-  p6:  { id: 'p6',  name: '6 Month Platinum Pass',  tier: 'platinum', months: 6,  tokens: 375, price_cents: 14900 },
-  p12: { id: 'p12', name: '12 Month Platinum Pass', tier: 'platinum', months: 12, tokens: 700, price_cents: 27900 }
+  // v3.8.10 -- THE TIER SHUFFLE: passes are Gold Passes (today's Gold is the old Platinum). Ids unchanged.
+  p3:  { id: 'p3',  name: '3 Month Gold Pass',  tier: 'gold', months: 3,  tokens: 200, price_cents: 7900 },
+  p6:  { id: 'p6',  name: '6 Month Gold Pass',  tier: 'gold', months: 6,  tokens: 375, price_cents: 14900 },
+  p12: { id: 'p12', name: '12 Month Gold Pass', tier: 'gold', months: 12, tokens: 700, price_cents: 27900 }
 };
 
 // Display order, top to bottom, in the admin tab and (later) on the pricing page.
