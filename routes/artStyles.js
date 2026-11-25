@@ -3,7 +3,7 @@ const router = express.Router();
 const { getDb } = require('../database/db');
 const { friendlyAnthropicError } = require('../middleware/friendlyErrors');
 const { requireAuth, getCampaignRole } = require('../middleware/auth');
-const { getEffectiveTier } = require('../middleware/tiers');
+const { getEffectiveTier, isGoldPlus } = require('../middleware/tiers');   // v3.8.10 isGoldPlus
 const { TEXT_MODEL } = require('../config/models');
 const { canAfford, spendTokens, recordGeneration } = require('./tokens');
 const { uploadFile, releaseImage } = require('../storage/storage');
@@ -20,8 +20,8 @@ const path = require('path');
 async function requireTruePlatinum(req, res, next) {
   try {
     const own = await getEffectiveTier(req.session.userId, null);
-    if (own !== 'platinum') {
-      return res.status(403).json({ error: 'NOT_PLATINUM', message: 'Building your own art style is a Platinum feature.' });
+    if (!isGoldPlus(own)) {   // v3.8.10 -- Gold and above (was Platinum only)
+      return res.status(403).json({ error: 'NOT_PLATINUM', message: 'Building your own art style is a Gold feature.' });
     }
     next();
   } catch (e) {
@@ -106,7 +106,7 @@ router.get('/custom/available/:campaignId', requireAuth, async function(req, res
 
     // Caller's own styles -- only if the caller is currently true Platinum.
     const ownTier = await getEffectiveTier(req.session.userId, null);
-    if (ownTier === 'platinum') {
+    if (isGoldPlus(ownTier)) {   // v3.8.10
       const mine = await db.prepare(
         'SELECT * FROM custom_art_styles WHERE owner_id = ? ORDER BY created_at ASC'
       ).all(req.session.userId);
@@ -124,7 +124,7 @@ router.get('/custom/available/:campaignId', requireAuth, async function(req, res
         ).get(campaignId);
         if (dm && String(dm.user_id) !== String(req.session.userId)) {
           const dmTier = await getEffectiveTier(dm.user_id, null);
-          if (dmTier === 'platinum') {
+          if (isGoldPlus(dmTier)) {   // v3.8.10
             const smStyles = await db.prepare(
               'SELECT * FROM custom_art_styles WHERE owner_id = ? ORDER BY created_at ASC'
             ).all(dm.user_id);

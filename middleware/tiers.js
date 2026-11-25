@@ -9,9 +9,9 @@ const TIERS = {
     bookshelf_limit: 0,
     signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 0,
-    access_rank: 4,    // bottom of hierarchy (lapses to copper) but TOP of creative access -- Platinum-equivalent art/narrative/layout
+    access_rank: 3,    // bottom of hierarchy (lapses to copper) but Gold-level creative access. v3.8.10 (Ian, 2026-11-24): Gold until Platinum is live, then 4
     price: 0,
-    monthly_utlt: 35,        // trial token grant (Platinum-level for now; tunable)
+    monthly_utlt: 35,        // trial token grant (Gold-level since v3.8.10, the old Platinum numbers; tunable)
     monthly_cot: 20,
     trial_days: 30,
     max_campaigns: 1,
@@ -84,55 +84,24 @@ const TIERS = {
     // v3.6.60 -- TD-1155: a lone Copper cannot buy tokens, so the card no longer promises that a Copper can buy them.
     description: 'Free · play in a paid Story Master\'s campaign · no monthly subscription'
   },
+  // v3.8.10 -- THE TIER SHUFFLE (Ian, 2026-11-23/24; claude/TIER_SHUFFLE_SPEC.md). Video will launch as its own,
+  // dearer Platinum. So every tier moved down one step: Silver now holds what Gold held, Gold holds what Platinum
+  // held (everything, at $22), the old Silver is retired (only old testers were on it; they move to the new Silver),
+  // and Platinum is Coming Soon: everything in Gold plus Animation, not buyable until it launches. The keys and
+  // ranks did not move (2 Silver, 3 Gold, 4 Platinum); the Dashboard's tier_config overrides and the accounts
+  // move with the one-time button on Dashboard > Tiers and Passes (POST /api/admin/tier-shuffle).
   silver: {
     name: 'Silver',
-    bookshelf_limit: 0,
+    bookshelf_limit: 10,
     signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
     rank: 2,
-    price: 10,
-    monthly_utlt: 20,        // UTOLT granted each cycle (expires)
-    monthly_cot: 10,         // CO granted each cycle (carries over)
-    max_campaigns: 1,
-    max_sessions: null,      // unlimited
-    max_archives_per_campaign: 10,
-    max_assets: null,
-    moment_algorithm: 'standard',
-    max_moments_short: 3,
-    max_moments_medium: 4,
-    max_moments_long: 6,
-    max_moments_epic: 8,
-    watermark: false,
-    can_export: true,
-    can_print: true,
-    can_edit_prompts: true,
-    // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
-    // Copper cannot: it is invite-only and makes its own version of somebody else's
-    // sessions. That was TWO hard-coded `user.tier === 'copper'` tests, inside
-    // checkCampaignLimit and checkSessionLimit, which meant a third reader -- the
-    // landing page's tier grid -- would have had to hard-code the same name a third
-    // time to DESCRIBE what those two ENFORCE. Code-only, like watermark and
-    // can_export: deliberately not in EDITABLE_TIER_FIELDS, because it is a product
-    // shape rather than a dial.
-    can_create: true,
-    max_characters: null,
-    session_reserve: 0,
-    // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
-    // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
-    max_free_members: 6,
-    description: '1 campaign · unlimited sessions · unlimited characters · free tokens · limited moments · limited styling options'
-  },
-  gold: {
-    name: 'Gold',
-    bookshelf_limit: 10,   // v3.0.981 -- TD-901. Books kept on the Bookshelf (own plan; a live pass counts). v3.1.3: Dashboard-editable; this is the default.
-    signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
-    rank: 3,
     price: 15,
     monthly_utlt: 30,        // UTOLT granted each cycle (expires)
     monthly_cot: 15,         // CO granted each cycle (carries over)
     max_campaigns: 3,
+    max_sessions: null,      // unlimited
     max_archives_per_campaign: 15,
     max_assets: null,
-    max_sessions: null,
     moment_algorithm: 'extended',
     max_moments_short: 5,
     max_moments_medium: 8,
@@ -142,21 +111,38 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
-    // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
-    // Copper cannot: it is invite-only and makes its own version of somebody else's
-    // sessions. That was TWO hard-coded `user.tier === 'copper'` tests, inside
-    // checkCampaignLimit and checkSessionLimit, which meant a third reader -- the
-    // landing page's tier grid -- would have had to hard-code the same name a third
-    // time to DESCRIBE what those two ENFORCE. Code-only, like watermark and
-    // can_export: deliberately not in EDITABLE_TIER_FIELDS, because it is a product
-    // shape rather than a dial.
-    can_create: true,
+    can_create: true,         // see trial/copper for what can_create means (TD-767)
     max_characters: null,
     session_reserve: 0,
-    // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
-    // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
-    max_free_members: 10,
+    max_free_members: 10,    // TD-1007: members who are not on a paid plan of their own; blank = unlimited
     description: '3 campaigns · unlimited sessions · unlimited characters · more free tokens · more moments · more styling options'
+  },
+  gold: {
+    name: 'Gold',
+    bookshelf_limit: 50,
+    signup_bonus: 0,        // one-time per-tier CO welcome bonus (Dashboard-editable)
+    rank: 3,
+    price: 22,
+    monthly_utlt: 35,        // UTOLT granted each cycle (expires)
+    monthly_cot: 20,         // CO granted each cycle (carries over)
+    max_campaigns: null,
+    max_sessions: null,      // unlimited
+    max_archives_per_campaign: 20,
+    max_assets: null,
+    moment_algorithm: 'extended',
+    max_moments_short: 5,
+    max_moments_medium: 8,
+    max_moments_long: 12,
+    max_moments_epic: 15,
+    watermark: false,
+    can_export: true,
+    can_print: true,
+    can_edit_prompts: true,
+    can_create: true,         // see trial/copper for what can_create means (TD-767)
+    max_characters: null,
+    session_reserve: 0,
+    max_free_members: 15,    // TD-1007: members who are not on a paid plan of their own; blank = unlimited
+    description: 'unlimited campaigns · unlimited sessions · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles'
   },
   platinum: {
     name: 'Platinum',
@@ -166,10 +152,10 @@ const TIERS = {
     price: 22,
     monthly_utlt: 35,        // UTOLT granted each cycle (expires)
     monthly_cot: 20,         // CO granted each cycle (carries over)
-    max_campaigns: null,     // unlimited
+    max_campaigns: null,
+    max_sessions: null,      // unlimited
     max_archives_per_campaign: 20,
     max_assets: null,
-    max_sessions: null,
     moment_algorithm: 'extended',
     max_moments_short: 5,
     max_moments_medium: 8,
@@ -179,21 +165,15 @@ const TIERS = {
     can_export: true,
     can_print: true,
     can_edit_prompts: true,
-    // v3.0.891 -- TD-767. MAY THIS TIER CREATE A CAMPAIGN OR A SESSION AT ALL?
-    // Copper cannot: it is invite-only and makes its own version of somebody else's
-    // sessions. That was TWO hard-coded `user.tier === 'copper'` tests, inside
-    // checkCampaignLimit and checkSessionLimit, which meant a third reader -- the
-    // landing page's tier grid -- would have had to hard-code the same name a third
-    // time to DESCRIBE what those two ENFORCE. Code-only, like watermark and
-    // can_export: deliberately not in EDITABLE_TIER_FIELDS, because it is a product
-    // shape rather than a dial.
-    can_create: true,
+    can_create: true,         // see trial/copper for what can_create means (TD-767)
     max_characters: null,
     session_reserve: 0,
-    // v3.2.45 -- TD-1007. Members a Story Master may have in ONE campaign who are not on a paid plan of their own
-    // (members with their own paid plan or live pass never count). Pending, unexpired invites count. Blank = unlimited.
-    max_free_members: 15,
-    description: 'unlimited campaigns · unlimited sessions · unlimited characters · even more free tokens · even more moments · all the styling options, including custom art styles'
+    max_free_members: 15,    // TD-1007: members who are not on a paid plan of their own; blank = unlimited
+    // v3.8.10 -- not buyable until video launches: /subscribe, /change-plan and sign-up refuse a coming_soon tier.
+    // Price and tokens are Ian's to set on the Dashboard when it launches. animation: the new grid line.
+    coming_soon: true,
+    animation: true,
+    description: 'Coming soon · everything in Gold, plus Animation'
   }
 };
 
@@ -700,10 +680,16 @@ async function getEffectiveTier(userId, campaignId) {
 // and the Title Builder needed it in six more places across two routers. Seven hand-written copies
 // of an entitlement check is how one of them ends up disagreeing, and the one that disagrees is the
 // one that lets a paid feature through for free.
+// v3.8.10 -- THE TIER SHUFFLE. These tools (custom art styles, the Title Builder, the Image Builder) moved from
+// Platinum to GOLD AND ABOVE, by rank, so the coming Platinum keeps them. The name is kept for its twelve callers;
+// isGoldPlus is the test by tier name. Free Trial is rank 0, so it stays out, as before.
+function isGoldPlus(tierName) { return tierRank(tierName) >= 3; }
 async function isTruePlatinum(userId) {
-  try { return (await getEffectiveTier(userId, null)) === 'platinum'; }
+  try { return isGoldPlus(await getEffectiveTier(userId, null)); }
   catch (e) { return false; }   // never fail OPEN on an entitlement question
 }
+// v3.8.10 -- a tier that is shown but cannot be bought yet (Platinum until video launches).
+function isComingSoon(tierName) { return !!(TIERS[tierName] && getTier(tierName).coming_soon); }
 
 // Convenience: the effective tier's feature set (a TIERS entry).
 async function getEffectiveTierFeatures(userId, campaignId) {
@@ -723,6 +709,8 @@ async function getEffectiveTierFeatures(userId, campaignId) {
 // (DB, admin-editable) when the Admin Dashboard lands -- callers read
 // through the helpers below, never these maps directly.
 // ============================================================
+// v3.8.10 -- THE TIER SHUFFLE moved every style down one tier: 3 (old Gold) is now 2 (Silver), 4 (old Platinum)
+// is now 3 (Gold). The old Silver styles stay at 2. The tier names in the trailing comments are the OLD ones.
 const ART_STYLE_MIN_RANK = {
   'High fantasy illustration': 1,   // base / floor
   'Everyday life illustration': 2,  // Silver -- v3.0.836, TD-681. The non-fantasy counterpart
@@ -732,12 +720,12 @@ const ART_STYLE_MIN_RANK = {
                                     // nobody who can OWN a Skill Story campaign is shut out.
   'Dark gritty comic book': 2,      // Silver   (was Gold)
   'Classic pen and ink': 2,         // Silver   (was Gold)
-  'Charcoal drawing': 3,            // Gold
-  'Watercolor painterly': 3,        // Gold     (was Platinum)
+  'Charcoal drawing': 2,            // Gold  [v3.8.10: was 3]
+  'Watercolor painterly': 2,        // Gold     (was Platinum)  [v3.8.10: was 3]
   'Anime manga style': 2,           // Silver   (was Platinum)
-  'Fantasy oil painting': 3,        // Gold     (was Platinum)
-  'Comic book cel-shaded': 3,       // Gold     (was Platinum)
-  'Fantasy pastel': 3,              // Gold     (was Platinum)
+  'Fantasy oil painting': 2,        // Gold     (was Platinum)  [v3.8.10: was 3]
+  'Comic book cel-shaded': 2,       // Gold     (was Platinum)  [v3.8.10: was 3]
+  'Fantasy pastel': 2,              // Gold     (was Platinum)  [v3.8.10: was 3]
   // v3.0.825 -- TD-659. DARK FANTASY DROPS TO GOLD. Ian: "Let's drop it to Gold.
   // Custom art styles are platinum." It was the ONLY style at rank 4, which made
   // Platinum's art advantage one preset -- and it is the style every improvement
@@ -747,24 +735,24 @@ const ART_STYLE_MIN_RANK = {
   // feature: they are gated somewhere else entirely, by a hard 'the OWNING party
   // must currently be true Platinum' check in resolveGenStyle (routes/images.js),
   // not by this map -- a 'custom:N' id is not a key here and never was.
-  'Dark Fantasy': 3                 // Gold -- v3.0.825, TD-659 (was Platinum, v3.0.815, TD-642)
+  'Dark Fantasy': 2                 // Gold -- v3.0.825, TD-659 (was Platinum, v3.0.815, TD-642)  [v3.8.10: was 3]
 };
 
 const NARRATIVE_STYLE_MIN_RANK = {
   classic: 1,      // base / floor
   calm: 2,         // Silver -- v3.0.836, TD-681. Same reasoning as Everyday life above.
-  epic: 3,         // Gold
-  journal: 3,      // Gold
-  cinematic: 3,    // Gold
+  epic: 2,         // Gold  [v3.8.10: was 3]
+  journal: 2,      // Gold  [v3.8.10: was 3]
+  cinematic: 2,    // Gold  [v3.8.10: was 3]
   dialogue: 2,     // Silver (Comic Dialogue; was Gold)
-  lorekeeper: 4,   // Platinum
-  noir: 4,         // Platinum
-  grim: 4,         // Platinum
-  storybook: 4,    // Platinum
+  lorekeeper: 3,   // Platinum  [v3.8.10: was 4]
+  noir: 3,         // Platinum  [v3.8.10: was 4]
+  grim: 3,         // Platinum  [v3.8.10: was 4]
+  storybook: 3,    // Platinum  [v3.8.10: was 4]
   anime: 2,        // Silver (High-Drama Anime; was Platinum)
   outline: 1,      // every plan -- v3.1.27, TD-920 (Outline / I'll write it). Ian: "Every Plan".
   written: 1,      // every plan -- v3.1.49, TD-941 (Already Written). Ian: "Every Plan".
-  howto: 3,        // Gold -- v3.2.80, TD-1015 (How To / Self Help / Instructional). Ian: "Gold".
+  howto: 2,        // Gold -- v3.2.80, TD-1015 (How To / Self Help / Instructional). Ian: "Gold".  [v3.8.10: was 3]
   news: 2          // Silver -- v3.2.80, TD-1015 (News Report). Ian: "Silver".
 };
 
@@ -955,4 +943,4 @@ async function frozenGate(req, res, next) {
   }
 }
 
-module.exports = { memberCapState, memberCapMessage, rowIsPaid, TIERS, getTier, canCreate, isTruePlatinum, ownTier, passIsLive, sqlLivePass, isOnFreeTrial, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, frozenIn, frozenGate, frozenRouteOf, FROZEN_SPEND_ROUTES, FROZEN_ACCOUNT_MSG, FROZEN_CAMPAIGN_MSG, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };
+module.exports = { memberCapState, memberCapMessage, rowIsPaid, TIERS, getTier, canCreate, isTruePlatinum, isGoldPlus, isComingSoon, ownTier, passIsLive, sqlLivePass, isOnFreeTrial, loadTierConfig, getTierOverrides, saveTierConfig, EDITABLE_TIER_FIELDS, getMomentRange, isTrialExpired, lapseTrialIfExpired, checkCampaignLimit, checkSessionLimit, checkCharacterLimit, attachTier, tierRank, accessRank, maxTier, getEffectiveTier, getEffectiveTierFeatures, isPaidTier, canPurchaseTokens, isLoneCopper, frozenIn, frozenGate, frozenRouteOf, FROZEN_SPEND_ROUTES, FROZEN_ACCOUNT_MSG, FROZEN_CAMPAIGN_MSG, ART_STYLE_MIN_RANK, NARRATIVE_STYLE_MIN_RANK, artStyleMinRank, narrativeStyleMinRank, artStyleAllowed, narrativeStyleAllowed };

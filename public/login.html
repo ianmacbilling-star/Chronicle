@@ -530,7 +530,7 @@ fetch('/api/auth/me').then(r=>r.json()).then(data => { if(data.authenticated){ v
   }
   var isPass = _signupPlan.indexOf('pass:') === 0, id = isPass ? _signupPlan.slice(5) : _signupPlan;
   if (!isPass) { if (NAMES[id]) show(NAMES[id]); return; }
-  show('Platinum Pass');
+  show('Gold Pass');
   fetch('/api/public/pricing').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
     var p = d && (d.passes || []).filter(function (x) { return x && x.id === id; })[0];
     if (p && p.name) show(p.name);

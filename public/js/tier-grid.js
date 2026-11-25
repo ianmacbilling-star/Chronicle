@@ -76,6 +76,7 @@
   // ---- the rows, top to bottom --------------------------------------------
   var ROWS = [
     { label: 'Monthly Price', cell: function (t) {
+        if (t.coming_soon) return val('Coming Soon');   // v3.8.11 -- THE TIER SHUFFLE: Platinum is not sold until video launches
         return t.price ? val('$' + esc(t.price)) : val('$0', 'no subscription');
       } },
     { label: 'Monthly Tokens', sub: 'expiring + carry-over', cell: function (t) {
@@ -140,7 +141,9 @@
     // v3.4.02 -- TD-1080 (Ian: under the Writing Coach, above Custom Art Styles). Inherited from a Platinum Story Master.
     { label: 'Image Builder', cell: function (t) { return mark(t.image_builder); } },
     { label: 'Custom Art Styles', sub: NOT_INHERITED, cell: function (t) { return mark(t.custom_art_styles); } },
-    { label: 'Title Builder', sub: NOT_INHERITED, cell: function (t) { return mark(t.title_builder); } }
+    { label: 'Title Builder', sub: NOT_INHERITED, cell: function (t) { return mark(t.title_builder); } },
+    // v3.8.11 -- THE TIER SHUFFLE (Ian, 2026-11-24): Platinum's new line. Video is not out yet, so it reads Coming Soon.
+    { label: 'Animation', cell: function (t) { return t.animation ? (t.coming_soon ? val('Coming Soon') : mark(true)) : mark(false); } }
   ];
 
   var COINS = {
@@ -159,7 +162,8 @@
       var coin = COINS[k];
       head += '<th class="tg-t-' + esc(k) + '" scope="col">' +
         (coin ? '<img class="tg-coin" src="' + esc(coin) + '" alt="" />' : '') +
-        '<span class="tg-tier-name">' + esc(t.label || k) + '</span></th>';
+        '<span class="tg-tier-name">' + esc(t.label || k) + '</span>' +
+        (t.coming_soon ? '<span class="tg-soon">Coming Soon</span>' : '') + '</th>';   // v3.8.11
     });
     head += '</tr>';
 
@@ -190,11 +194,11 @@
           '<span><b>Copper is invite only.</b> No monthly subscription. In a paid Story Master\u2019s campaign, buy tokens to ' +
           'make your own version of the story. Copper inherits its Story Master\u2019s tier features.' +   // v3.6.60 -- TD-1155
           '</span></div>' +
-        // v3.0.924 -- TD-780 Push 7. A PASS GETS A LINE, NOT A COLUMN. A Platinum Pass grants the
-        // Platinum column exactly as it reads; a fifth column would be a second copy of it.
+        // v3.0.924 -- TD-780 Push 7. A PASS GETS A LINE, NOT A COLUMN. v3.8.11: passes are Gold Passes and grant the
+        // Gold column exactly as it reads; a fifth column would be a second copy of it.
         '<div class="tg-note tg-note-coin">' +
-          '<img src="' + COINS.platinum + '" alt="" />' +
-          '<span><b>A Platinum Pass is Platinum.</b> Every feature in the Platinum column, for the ' +
+          '<img src="' + COINS.gold + '" alt="" />' +
+          '<span><b>A Gold Pass is Gold.</b> Every feature in the Gold column, for the ' +
           'months you buy, with the tokens granted up front. See the passes on the page behind this one.' +
           '</span></div>' +
       '</div>' +

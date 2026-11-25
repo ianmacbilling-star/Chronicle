@@ -48,6 +48,109 @@ router.get('/tier-config', requireAuth, requireAdmin, async function (req, res) 
   }
 });
 
+// ============================================================================
+// v3.8.10 -- THE TIER SHUFFLE, ONCE (Ian, 2026-11-23/24; claude/TIER_SHUFFLE_SPEC.md).
+// The code now describes the new ladder; this moves the ACCOUNTS and the Dashboard's settings to match, in one
+// transaction: gold -> silver and platinum -> gold (in one CASE, so nothing moves twice), on users.tier,
+// users.pass_tier and users.pending_plan; promo codes' sub:gold / sub:platinum; the tier_config overrides
+// (gold's become silver's, platinum's become gold's, Platinum keeps none); unredeemed gift names.
+// Old Silver stays Silver (only old testers). Everything it changes is copied first (tier_shuffle_backup and the
+// app_settings row 'tier_shuffle_backup'), and /tier-shuffle/restore puts it back.
+// ============================================================================
+const SHUFFLE_MAP_SQL = "CASE {c} WHEN 'gold' THEN 'silver' WHEN 'platinum' THEN 'gold' ELSE {c} END";
+function shuffleProducts(list) {
+  if (!Array.isArray(list)) return list;
+  const out = [];
+  list.forEach(function (k) {
+    const v = (k === 'sub:gold') ? 'sub:silver' : (k === 'sub:platinum') ? 'sub:gold' : k;
+    if (out.indexOf(v) < 0) out.push(v);
+  });
+  return out;
+}
+function shuffleTierConfig(cfg) {
+  const out = Object.assign({}, cfg || {});
+  delete out.silver; delete out.gold; delete out.platinum;
+  if (cfg && cfg.gold) out.silver = cfg.gold;
+  if (cfg && cfg.platinum) out.gold = cfg.platinum;
+  return out;
+}
+async function shuffleState(db) {
+  const done = await db.prepare("SELECT value FROM app_settings WHERE setting_key = 'tier_shuffle_done'").get();
+  const counts = await db.prepare(
+    "SELECT COALESCE(tier, '') AS tier, COALESCE(pass_tier, '') AS pass_tier, COUNT(*)::int AS n FROM users " +
+    "WHERE tier IN ('silver','gold','platinum') OR pass_tier IN ('silver','gold','platinum') GROUP BY 1, 2 ORDER BY 1, 2").all();
+  return { done: !!(done && done.value), done_at: (done && done.value) || null, counts: counts || [] };
+}
+router.get('/tier-shuffle', requireAuth, requireAdmin, async function (req, res) {
+  try { res.json(await shuffleState(await getDb())); }
+  catch (e) { console.error('tier-shuffle state error:', e.message); res.status(500).json({ error: 'Could not read the tier shuffle state' }); }
+});
+router.post('/tier-shuffle', requireAuth, requireAdmin, async function (req, res) {
+  if (!req.body || req.body.confirm !== 'SHUFFLE') return res.status(400).json({ error: 'Not confirmed' });
+  try {
+    const db = await getDb();
+    const result = await db.transaction(async function (tx) {
+      const doneRow = (await tx.query("SELECT value FROM app_settings WHERE setting_key = 'tier_shuffle_done' FOR UPDATE")).rows[0];
+      if (doneRow && doneRow.value) return { already: true };
+      await tx.query('CREATE TABLE IF NOT EXISTS tier_shuffle_backup (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, tier TEXT, pass_tier TEXT, pending_plan TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
+      await tx.query('DELETE FROM tier_shuffle_backup');
+      const bk = await tx.query(
+        "INSERT INTO tier_shuffle_backup (user_id, tier, pass_tier, pending_plan) SELECT id, tier, pass_tier, pending_plan FROM users " +
+        "WHERE tier IN ('gold','platinum') OR pass_tier IN ('gold','platinum') OR pending_plan IN ('gold','platinum')");
+      const cfgRow = (await tx.query("SELECT value FROM app_settings WHERE setting_key = 'tier_config'")).rows[0];
+      const cfg = cfgRow && cfgRow.value ? JSON.parse(cfgRow.value) : null;
+      const promos = (await tx.query('SELECT id, products FROM promo_codes WHERE products IS NOT NULL')).rows;
+      const gifts = (await tx.query("SELECT id, item_name FROM gift_certificates WHERE item_kind = 'pass' AND status <> 'redeemed' AND item_name LIKE '%Platinum%'")).rows;
+      const backup = JSON.stringify({ at: new Date().toISOString(), tier_config: cfgRow ? cfgRow.value : null, promos: promos, gifts: gifts });
+      await tx.query("DELETE FROM app_settings WHERE setting_key = 'tier_shuffle_backup'");
+      await tx.query("INSERT INTO app_settings (setting_key, value) VALUES ('tier_shuffle_backup', $1)", [backup]);
+      const u1 = await tx.query('UPDATE users SET tier = ' + SHUFFLE_MAP_SQL.split('{c}').join('tier') + " WHERE tier IN ('gold','platinum')");
+      const u2 = await tx.query('UPDATE users SET pass_tier = ' + SHUFFLE_MAP_SQL.split('{c}').join('pass_tier') + " WHERE pass_tier IN ('gold','platinum')");
+      const u3 = await tx.query('UPDATE users SET pending_plan = ' + SHUFFLE_MAP_SQL.split('{c}').join('pending_plan') + " WHERE pending_plan IN ('gold','platinum')");
+      let pc = 0;
+      for (const p of promos) {
+        const was = Array.isArray(p.products) ? p.products : null;
+        const now = shuffleProducts(was);
+        if (was && JSON.stringify(was) !== JSON.stringify(now)) { await tx.query('UPDATE promo_codes SET products = $1 WHERE id = $2', [JSON.stringify(now), p.id]); pc++; }
+      }
+      for (const g of gifts) await tx.query('UPDATE gift_certificates SET item_name = $1 WHERE id = $2', [String(g.item_name).split('Platinum').join('Gold'), g.id]);
+      if (cfgRow) await tx.query("UPDATE app_settings SET value = $1 WHERE setting_key = 'tier_config'", [JSON.stringify(shuffleTierConfig(cfg))]);
+      await tx.query("DELETE FROM app_settings WHERE setting_key = 'tier_shuffle_done'");
+      await tx.query("INSERT INTO app_settings (setting_key, value) VALUES ('tier_shuffle_done', $1)", [new Date().toISOString()]);
+      return { backed_up: bk.rowCount, tiers: u1.rowCount, passes: u2.rowCount, pending: u3.rowCount, promos: pc, gifts: gifts.length };
+    });
+    await tiers.loadTierConfig();   // the moved Dashboard settings take effect now
+    res.json(Object.assign({ success: true }, result, { state: await shuffleState(db) }));
+  } catch (e) {
+    console.error('tier-shuffle error:', e.message);
+    res.status(500).json({ error: 'The tier shuffle failed and nothing was changed: ' + e.message });
+  }
+});
+router.post('/tier-shuffle/restore', requireAuth, requireAdmin, async function (req, res) {
+  if (!req.body || req.body.confirm !== 'RESTORE') return res.status(400).json({ error: 'Not confirmed' });
+  try {
+    const db = await getDb();
+    const result = await db.transaction(async function (tx) {
+      const doneRow = (await tx.query("SELECT value FROM app_settings WHERE setting_key = 'tier_shuffle_done' FOR UPDATE")).rows[0];
+      if (!doneRow || !doneRow.value) return { not_done: true };
+      const bkRow = (await tx.query("SELECT value FROM app_settings WHERE setting_key = 'tier_shuffle_backup'")).rows[0];
+      if (!bkRow || !bkRow.value) throw new Error('no backup found');
+      const bk = JSON.parse(bkRow.value);
+      const u = await tx.query('UPDATE users SET tier = b.tier, pass_tier = b.pass_tier, pending_plan = b.pending_plan FROM tier_shuffle_backup b WHERE b.user_id = users.id');
+      for (const p of (bk.promos || [])) await tx.query('UPDATE promo_codes SET products = $1 WHERE id = $2', [p.products == null ? null : JSON.stringify(p.products), p.id]);
+      for (const g of (bk.gifts || [])) await tx.query('UPDATE gift_certificates SET item_name = $1 WHERE id = $2', [g.item_name, g.id]);
+      if (bk.tier_config != null) await tx.query("UPDATE app_settings SET value = $1 WHERE setting_key = 'tier_config'", [bk.tier_config]);
+      await tx.query("DELETE FROM app_settings WHERE setting_key = 'tier_shuffle_done'");
+      return { restored: u.rowCount };
+    });
+    await tiers.loadTierConfig();
+    res.json(Object.assign({ success: true }, result, { state: await shuffleState(db) }));
+  } catch (e) {
+    console.error('tier-shuffle restore error:', e.message);
+    res.status(500).json({ error: 'The restore failed and nothing was changed: ' + e.message });
+  }
+});
+
 // PUT /api/admin/tier-config
 // Body: { tier: 'gold', values: { max_archives_per_campaign: 20, ... } }
 // Saves overrides for one tier and returns its merged effective config.
@@ -1268,7 +1371,7 @@ async function setTester(db, userId, on, source) {
   if (on) {
     await db.prepare(
       "UPDATE users SET is_tester = TRUE, tester_source = COALESCE(tester_source, ?), tester_since = COALESCE(tester_since, ?), " +
-      "tier = CASE WHEN " + REAL_SUB_SQL + " THEN tier ELSE 'platinum' END, " +
+      "tier = CASE WHEN " + REAL_SUB_SQL + " THEN tier ELSE 'gold' END, " +   // v3.8.10: testers are Gold (was Platinum)
       "subscription_status = CASE WHEN " + REAL_SUB_SQL + " THEN subscription_status ELSE 'active' END WHERE id = ?"
     ).run(source || 'manual', now, userId);
   } else {

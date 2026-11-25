@@ -188,7 +188,7 @@ async function initPostgres() {
       fal_key TEXT,
       render_thinking INTEGER DEFAULT 0,
       pen_name TEXT,
-      tier TEXT DEFAULT 'platinum',
+      tier TEXT DEFAULT 'copper',
       trial_started_at TIMESTAMP,
       last_active_at TIMESTAMP,
       lone_since TIMESTAMP,
@@ -450,6 +450,9 @@ async function initPostgres() {
     'ALTER TABLE characters ADD COLUMN IF NOT EXISTS height_ft REAL',
     'ALTER TABLE novel_book_meta ADD COLUMN IF NOT EXISTS title_color TEXT',
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'platinum'",
+    // v3.8.13 -- THE TIER SHUFFLE: Platinum is Coming Soon, so the column's default is the free floor, Copper.
+    // Sign-up always writes the tier itself (routes/auth.js); this only catches a row inserted without one.
+    "ALTER TABLE users ALTER COLUMN tier SET DEFAULT 'copper'",
     'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMP',
     // Account-lifecycle idle clock (ACCOUNT_LIFECYCLE_SPEC Phase 0). Backfill
     // existing rows to now() ONCE so the clock starts today, never retroactively;

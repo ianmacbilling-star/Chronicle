@@ -1814,8 +1814,8 @@
         <!-- v3.0.929 -- the passes. Rendered from /api/public/pricing, which is the same catalog
              the checkout charges from, so this panel cannot quote a price Stripe will not honour. -->
         <div id="account-passes-wrap" style="display:none;margin-top:22px;">
-          <div class="settings-section-title" style="font-size:14px;">Platinum Passes</div>
-          <div class="settings-section-desc" id="account-passes-desc">Months of Platinum access and a block of tokens, paid once. Nothing to cancel.</div>
+          <div class="settings-section-title" style="font-size:14px;">Gold Passes</div>
+          <div class="settings-section-desc" id="account-passes-desc">Months of Gold access and a block of tokens, paid once. Nothing to cancel.</div>
           <div id="account-passes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px;"></div>
           <!-- v3.1.46 -- TD-934. Shown only while gifts are switched on. -->
           <div id="account-gift-link" class="settings-section-desc" style="display:none;margin-top:12px;">
@@ -2204,9 +2204,9 @@
              passes are really going to be bigger than subscriptions so lets put it up top."
              The tab id stays 'tiers' so the admin/tester gating in SETTINGS_TABS_ALL is
              untouched -- only the label and the contents move. -->
-        <div class="settings-section-title" style="margin-bottom:6px;">Platinum Passes</div>
+        <div class="settings-section-title" style="margin-bottom:6px;">Gold Passes</div>
         <div class="settings-section-desc" style="margin-bottom:14px;">
-          One-time purchases that grant Platinum for a fixed run of months. Set the token allotment and the price; the duration is fixed per pass and is not editable here. Blank a field to fall back to the code default.
+          One-time purchases that grant Gold for a fixed run of months. Set the token allotment and the price; the duration is fixed per pass and is not editable here. Blank a field to fall back to the code default.
         </div>
         <div id="passes-config-msg" class="settings-section-desc" style="margin-bottom:10px;"></div>
         <div id="passes-config-container">Loading passes...</div>
@@ -2298,7 +2298,7 @@
             <label style="color:var(--accent-bright);font-size:13px;">Type</label>
             <select class="form-input" id="promo-kind" onchange="promoFormRefresh()" style="width:260px;">
               <option value="std">Discount and/or bonus tokens</option>
-              <option value="tester">Make a Tester (Platinum)</option>
+              <option value="tester">Make a Tester (Gold)</option>
             </select>
 
             <label style="color:var(--accent-bright);font-size:13px;">Code</label>
@@ -2361,7 +2361,7 @@
               <span class="settings-section-desc" style="margin:0;">end of that day, Eastern</span>
             </div>
           </div>
-          <div id="promo-tester-note" class="settings-section-desc" style="display:none;margin-top:10px;">Anyone who signs up with this code becomes a tester on Platinum, and skips the payment page. It works at sign-up only. Set Total uses, so a shared code cannot be used without limit. Testers can give themselves up to 1000 tokens; tokens they buy are on top. Turn testers off in the Testers list below.</div>
+          <div id="promo-tester-note" class="settings-section-desc" style="display:none;margin-top:10px;">Anyone who signs up with this code becomes a tester on Gold, and skips the payment page. It works at sign-up only. Set Total uses, so a shared code cannot be used without limit. Testers can give themselves up to 1000 tokens; tokens they buy are on top. Turn testers off in the Testers list below.</div>
           <div id="promo-book-warn" class="settings-section-desc promo-std" style="display:none;margin-top:10px;color:var(--error);">Books are priced at Lulu's print cost plus our markup. A discount bigger than the markup sells the book for less than Lulu charges you.</div>
           <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
             <button class="btn btn-primary btn-sm" id="promo-submit-btn" onclick="createPromoCode()">Create code</button>
@@ -2376,7 +2376,7 @@
              and the TESTER_EMAILS list from Railway, read-only. -->
         <div class="settings-section">
           <div class="settings-section-title">Testers</div>
-          <div class="settings-section-desc" style="margin-bottom:8px;">Turning a tester off puts the account back to Copper (an account paying for a subscription keeps its tier). Turning one on makes it a tester on Platinum. Testers on the TESTER_EMAILS list in Railway are listed at the bottom; change those in Railway.</div>
+          <div class="settings-section-desc" style="margin-bottom:8px;">Turning a tester off puts the account back to Copper (an account paying for a subscription keeps its tier). Turning one on makes it a tester on Gold. Testers on the TESTER_EMAILS list in Railway are listed at the bottom; change those in Railway.</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
             <input class="form-input" id="tester-add-email" placeholder="email of an existing account" style="width:260px;" />
             <button class="btn btn-sm" onclick="addTesterByEmail()">Make tester</button>
@@ -2561,7 +2561,7 @@
       <!-- Pass expiry sweep (admin) -- v3.0.956 -->
       <div class="settings-section">
         <div class="settings-section-title">Pass expiry sweep</div>
-        <div class="settings-section-desc" style="margin-bottom:10px;">Warning and lapse emails for Platinum Passes. The scheduled job runs this once a day; use <strong>Dry run</strong> to see who it would mail right now, without sending anything. Both ignore the once-a-day flag &mdash; duplicate mail is prevented per person per milestone, not by that flag.</div>
+        <div class="settings-section-desc" style="margin-bottom:10px;">Warning and lapse emails for Gold Passes. The scheduled job runs this once a day; use <strong>Dry run</strong> to see who it would mail right now, without sending anything. Both ignore the once-a-day flag &mdash; duplicate mail is prevented per person per milestone, not by that flag.</div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm" id="pass-sweep-dry-btn" onclick="runPassSweepDry()">Dry run</button>
           <button class="btn btn-sm" id="pass-sweep-live-btn" onclick="runPassSweepLive()" style="background:var(--error);border-color:var(--error);color:#fff;">Send for real</button>
@@ -2585,7 +2585,7 @@
             <option value="order_confirmation">Print order confirmed</option>
             <option value="order_problem">Print order problem</option>
             <option value="receipt_pack">Receipt &mdash; token pack</option>
-            <option value="receipt_pass">Receipt &mdash; Platinum Pass</option>
+            <option value="receipt_pass">Receipt &mdash; Gold Pass</option>
             <option value="receipt_subscription">Receipt &mdash; subscription started</option>
             <option value="receipt_renewal">Receipt &mdash; subscription renewal</option>
             <option value="receipt_upgrade">Receipt &mdash; plan upgrade (mid-cycle)</option>
@@ -2748,7 +2748,7 @@
         <label class="form-label">Set your account to&hellip;</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
           <button class="btn btn-sm" id="asm-btn-subscription" onclick="acctStateMode('subscription')" title="Test a monthly plan: Copper, Silver, Gold or Platinum.">Subscription</button>
-          <button class="btn btn-sm" id="asm-btn-pass" onclick="acctStateMode('pass')" title="Test a Platinum Pass: Platinum for a set time, then back to Copper.">Pass</button>
+          <button class="btn btn-sm" id="asm-btn-pass" onclick="acctStateMode('pass')" title="Test a Gold Pass: Gold for a set time, then back to Copper.">Pass</button>
           <button class="btn btn-sm" id="asm-btn-trial" onclick="acctStateMode('trial')" title="Test the 30-day Free Trial, with its watermark and limits.">Free Trial</button>
         </div>
 
@@ -2791,7 +2791,7 @@
             <div style="flex:0 0 170px;">
               <label class="form-label">Pass</label>
               <select class="form-input" id="account-pass-override">
-                <option value="platinum">Platinum pass</option>
+                <option value="gold">Gold pass</option>
               </select>
             </div>
             <div style="flex:0 1 auto;">
@@ -3883,7 +3883,7 @@
     <!-- v3.3.70 -- TD-1079. Shown for the art window only (openStylePicker); the page gates Platinum. -->
     <div id="style-picker-cstyle" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 0;padding-top:12px;border-top:1px solid rgba(var(--accent-rgb),0.25);">
       <button type="button" class="btn btn-sm" onclick="cstyleFromPicker()">Go to Custom Art Styles</button>
-      <span style="font-size:11px;color:var(--gold-dim);line-height:1.4;">Make your own art style from reference pictures (Platinum).</span>
+      <span style="font-size:11px;color:var(--gold-dim);line-height:1.4;">Make your own art style from reference pictures (Gold).</span>
     </div>
   </div>
 </div>

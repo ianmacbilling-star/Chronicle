@@ -49,8 +49,8 @@ here — don't rebuild.
 - **Members and plans: who counts, and never promise free players a place you have not checked.**
   Before saying free players can join a campaign, read the Story Master's plan's live
   "non-paying members/campaign" figure. **Copper and Free Trial members count. The Free Trial is
-  NOT a paid plan**, even though it has Platinum-level features. Only a member's own Silver, Gold
-  or Platinum subscription, or a live pass, keeps them from counting. If the figure is **NONE**,
+  NOT a paid plan**, even though it has Gold-level features. Only a member's own Silver or Gold
+  subscription, or a live pass, keeps them from counting. If the figure is **NONE**,
   say plainly that free players (Copper or Free Trial) **cannot** join on that plan, only people
   with their own paid plan can, and that a higher plan allows some; do not open with "yes". **Nobody
   is ever removed** for being over the number, including a member whose trial ends or whose plan
@@ -142,11 +142,13 @@ campaign:** starting your own needs a plan, or join one when invited.
 
 ## 2. Tiers
 
-Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Platinum.
+Campaignia has a Free Trial plus three standing tiers you can join today: Copper, Silver and Gold.
+A fourth, **Platinum**, is **coming soon**: it will add **Animation** (video) on top of everything in Gold,
+and it cannot be bought yet.
 (Copper and Free Trial are **not** the same thing — see below.)
 
 - **Free Trial** — where new users start. Built to let you experience the full breadth
-  of Campaignia: Platinum-level creative access (all art, narrative, and layout
+  of Campaignia: Gold-level creative access (all art, narrative, and layout
   options), and you can create a campaign, characters, and sessions to see exactly how
   everything looks, backed by a generous starter batch of tokens. It runs ~30 days and
   is **limited in volume** (very few sessions/characters — enough to reach your first
@@ -170,28 +172,29 @@ Campaignia has a Free Trial plus four standing tiers: Copper, Silver, Gold, Plat
   they sign in); one who is a player under a paid Story Master works normally in that campaign
   and is frozen only in campaigns with no active Story Master (a bar in that campaign says so).
   A Story Master on the Free Trial does not count as active for Copper members. To unfreeze:
-  a paid plan or a Platinum Pass, or play in a paid Story Master's campaign.
-- **Silver** — 1 campaign, unlimited sessions, unlimited characters, monthly free
-  tokens, a capped number of moments per session, and more art styles than the floor.
-- **Gold** — 3 campaigns, unlimited sessions and characters, more free tokens than
-  Silver, more moments per session, more art *and* narrative style options,
-  **multiple versions of a book**, the full **Writing Coach** (Feedback, Rewrite and Word; see
-  10.9) and **Audio Transcription** (a recording turned into text; see 10.1). Platinum has both too;
-  the Free Trial has the Writing Coach and the first 20 minutes of a recording; Regen works on every plan.
-- **Platinum** — unlimited campaigns/sessions/characters, the largest monthly token
-  grant, the highest moment caps, all styling options, **multiple versions of a book**,
-  and the ability to build **custom art styles**.
+  a paid plan or a Gold Pass, or play in a paid Story Master's campaign.
+- **Silver** — 3 campaigns, unlimited sessions and characters, monthly free tokens, more moments
+  per session, more art *and* narrative style options, **multiple versions of a book**, the full
+  **Writing Coach** (Feedback, Rewrite and Word; see 10.9) and **Audio Transcription** (a recording
+  turned into text; see 10.1). Gold has all of that too; the Free Trial has the Writing Coach and
+  the first 20 minutes of a recording; Regen works on every plan.
+- **Gold** — unlimited campaigns/sessions/characters, the largest monthly token grant, the highest
+  moment caps, all styling options, **multiple versions of a book**, and the ability to build
+  **custom art styles**, draw titles with the **Title Builder** and use the **Image Builder**.
+- **Platinum (coming soon)** — everything in Gold, plus **Animation**. Not available to buy yet;
+  if someone asks, say it is coming and that Gold has everything else.
+- **Passes** are **Gold Passes**: months of Gold and a block of tokens, paid once.
 
 **Versions are the exception to what follows.** Multiple versions is an *account-level*
-allowance, not a creative one, so it is **not** inherited — a Copper member in a Gold Story
-Master's campaign gets Gold-level art styles but still only one version. Silver is one version
-per user as well; the second one needs Gold or higher on your own plan.
+allowance, not a creative one, so it is **not** inherited — a Copper member in a Silver Story
+Master's campaign gets Silver-level art styles but still only one version. The second version
+needs Silver or higher on your own plan.
 
 **Creative access is inherited within a campaign.** The art/narrative/layout options a
 member can use equal the **higher of their own tier and the Story Master's tier**.
-That's why a Copper member in a Gold Story Master's campaign can use Gold-level art
+That's why a Copper member in a Silver Story Master's campaign can use Silver-level art
 styles — they inherit the campaign's creative level. (Inheritance raises the creative
-toolset only, not account-level allowances: a Copper member under a Platinum Story
+toolset only, not account-level allowances: a Copper member under a Gold Story
 Master still can't create their *own* campaigns or sessions.)
 
 **Moments per session** are capped by tier. The cap is a **ceiling, not a target** —
@@ -333,12 +336,12 @@ this flow using the live numbers, and reassure that staying active keeps everyth
 
 **Before answering any gift question, read the person's account details first** (Plan/tier,
 Subscription and Pass). Say they are on the Free Trial only if their plan says so. Say they have a
-Platinum subscription only if their Subscription line says platinum. **A Platinum pass is not a
-Platinum subscription.** If a question assumes something that is not true for them (for example
+Gold subscription only if their Subscription line says gold. **A Gold pass is not a Gold
+subscription.** If a question assumes something that is not true for them (for example
 "why can't I take my gift as tokens?" from someone who can), say what their account actually shows
 and what the Redeem page will offer them.
 
-You can give Campaignia to someone else as a present: **months of Platinum** (a Platinum Pass,
+You can give Campaignia to someone else as a present: **months of Gold** (a Gold Pass,
 which comes with tokens) or **a pack of tokens**. A gift costs the same as buying the same thing
 for yourself, and the Gift page shows the current choices and prices. **Gifts never expire and
 carry no fees.**
@@ -381,31 +384,31 @@ carry no fees.**
   to that one first.
 - **Before you choose, the page shows where you stand and where you would end up:** a **Currently,
   your account** box (your plan, any pass and its end date, and your token balance), and a line
-  of small print on each button saying what you would have afterwards: the date your Platinum
+  of small print on each button saying what you would have afterwards: the date your Gold
   would run to and your new token total, or the token total if you take tokens.
 - **After redeeming,** the page says what was added, and the box shows **Your account now**.
 
-**WHAT A GIFTED PLATINUM PASS DOES, depending on what you have now**
+**WHAT A GIFTED GOLD PASS DOES, depending on what you have now**
 
-- **No subscription (Copper, or a lapsed pass):** Platinum starts today for the gift's months,
+- **No subscription (Copper, or a lapsed pass):** Gold starts today for the gift's months,
   plus its tokens. **Or** take tokens instead (see below).
 - **You already hold a pass:** the new months are **added on to the end** of the one you have.
   They never overlap or replace it.
-- **Silver or Gold subscription:** Platinum starts **today** (or after a pass you already hold),
-  plus the tokens, and your Silver or Gold subscription is **paused** while the pass runs, so you
-  are not charged for it. It **restarts by itself** when the pass ends, and you are back on Silver
-  or Gold. **Or** take tokens instead and your subscription is not affected.
-- **Platinum subscription:** you already have everything a pass gives, so the gift is offered **as
-  tokens only**. Your subscription is not affected. **This is only for a Platinum subscription.** If
-  you are Platinum through a **pass**, you get both choices, and the new months are added after the
+- **Silver subscription:** Gold starts **today** (or after a pass you already hold),
+  plus the tokens, and your Silver subscription is **paused** while the pass runs, so you
+  are not charged for it. It **restarts by itself** when the pass ends, and you are back on Silver.
+  **Or** take tokens instead and your subscription is not affected.
+- **Gold subscription:** you already have everything a pass gives, so the gift is offered **as
+  tokens only**. Your subscription is not affected. **This is only for a Gold subscription.** If
+  you are Gold through a **pass**, you get both choices, and the new months are added after the
   pass you already hold.
-- **Free Trial:** you can redeem the pass (Platinum starts today, tokens included), but **not**
+- **Free Trial:** you can redeem the pass (Gold starts today, tokens included), but **not**
   take it as tokens, because tokens cannot be added during the Free Trial.
 - **A subscription already set to cancel:** the pass starts when the paid-up period ends.
 
 **TAKING A PASS AS TOKENS INSTEAD**
 
-Any pass gift can be taken as a lump of tokens rather than months of Platinum, except on the Free
+Any pass gift can be taken as a lump of tokens rather than months of Gold, except on the Free
 Trial. The **Take tokens instead** button shows exactly how many. **It is one choice, and it
 cannot be changed afterwards.** The tokens are carry-over tokens: they never expire.
 
@@ -746,7 +749,7 @@ light voice.
 **How To / Self Help / Instructional**
 - *Writing:* Teach. Follow the source’s steps in its order, keep its numbered steps and bullet points as lists, and make every step clear enough to do. No drama; no invented steps, tips or advice.
 - *Pictures:* One step or technique per frame, shown clearly enough to copy: the hands, the tools and the result in view, evenly lit and uncluttered. Real places and objects exactly as they look; never fantasy, never costume.
-- For teaching a skill or a method to adults — a recipe, a craft, a workout, a class. It starts on the **How To / Self Help / Instructional** narrative style *(Gold)* and **Everyday life illustration**; you can change either. (For preparing a child for a dentist visit, use **Skill Story**.)
+- For teaching a skill or a method to adults — a recipe, a craft, a workout, a class. It starts on the **How To / Self Help / Instructional** narrative style *(Silver)* and **Everyday life illustration**; you can change either. (For preparing a child for a dentist visit, use **Skill Story**.)
 
 **News Report**
 - *Writing:* Report it as news: the most important facts first, then the rest in order of importance. Attribute what people said and never invent a quotation, a source or a figure. Neutral and factual.
@@ -852,7 +855,7 @@ Historical Fiction:**
   quality of rendering as the fantasy styles, but of the real world: ordinary places,
   ordinary clothes, ordinary objects, drawn as they actually look, with the period taken
   from your story rather than assumed. This is the one to pick.
-- **Classic pen and ink** *(Silver)* and **Watercolor painterly** *(Gold)* also work well
+- **Classic pen and ink** *(Silver)* and **Watercolor painterly** *(Silver)* also work well
   and carry no fantasy vocabulary of their own.
 
 **Narrative voices worth knowing for these stories:**
@@ -864,11 +867,11 @@ Historical Fiction:**
   gently and generally — *"some children feel a little nervous, and that is okay"* —
   rather than telling the reader what they felt. It will not use metaphor or simile, and
   it will not promise that something will not hurt.
-- **Cinematic Script** *(Gold)* — plain, punchy, technique only. A good neutral choice for
+- **Cinematic Script** *(Silver)* — plain, punchy, technique only. A good neutral choice for
   a Biography or a Nonfiction book.
-- **Children's Storybook** *(Platinum)* — warm and gentle, and lovely for a Family Story,
+- **Children's Storybook** *(Gold)* — warm and gentle, and lovely for a Family Story,
   though its own voice leans storybook-fantasy; pair it with a real-world art style.
-- **How To / Self Help / Instructional** *(Gold)* — clear, practical instruction that follows your
+- **How To / Self Help / Instructional** *(Silver)* — clear, practical instruction that follows your
   material closely: your steps in your order, spoken to the reader as *you*. Where your story box has
   numbered steps or bullet points, the narrative keeps them as numbered steps or bullets. It will not
   add steps, tips or advice you did not give it. On the screen each step sits on its own line; **in the
@@ -1065,7 +1068,7 @@ other name (a guest, an interviewer, a narrator). Then **Put it in the Story box
 has text it asks whether to add or replace). In a long recording one person can now and then show up
 as two speakers; give both the same name. **The recording goes to our transcription service and is
 deleted as soon as the words come back**; only the text is kept, and only until it is put in the box.
-**Who:** the Story Master, since the Story box is theirs, on Gold or Platinum: the whole recording.
+**Who:** the Story Master, since the Story box is theirs, on Silver or Gold: the whole recording.
 **On the Free Trial only the first 20 minutes** of a recording are transcribed (4 tokens at most), as a
 quick proof that it works: it is an expensive feature and trial tokens cannot be topped up, so they
 are better spent on the rest of Campaignia. The window says so before you start and again when the
@@ -1489,8 +1492,8 @@ Story Notes and Instructions, the campaign Lore, the previous session's Summary 
 boxes either side, your original story around that picture, and the box's own Prompt and Direction.
 
 **Plans and cost**
-- **Feedback, Show me, Rewrite and Word** come with **Gold**, **Platinum** and the **Free Trial**.
-  **Regen works on every plan.** On Copper and Silver the coach still opens, explains what it does,
+- **Feedback, Show me, Rewrite and Word** come with **Silver**, **Gold** and the **Free Trial**.
+  **Regen works on every plan.** On Copper the coach still opens, explains what it does,
   and offers Regen. Members follow the Story Master's plan and spend their own tokens.
 - **1 token buys 4 writing uses.** Each Regen, Feedback, Show me and Rewrite is one use (Story box
   Feedback is one use per 10,000 words). **Word is free.** A use is only taken when the answer
@@ -1606,7 +1609,7 @@ session instructions, all of it. **From that moment it never looks back.** Chang
 afterwards and your version does not move; clear a field in yours and it stays cleared rather
 than reverting to what you copied. That is what makes a version a printing rather than a draft.
 
-**Your first version is free on every plan. From the second onward you need Gold or higher on
+**Your first version is free on every plan. From the second onward you need Silver or higher on
 your own plan** — and then you can have as many as you want. It is an account-level
 allowance, so joining a higher-tier Story Master does not grant it; the tier has to be yours.
 Versions you already made are never taken away, whatever your plan does later.
@@ -1614,7 +1617,7 @@ Versions you already made are never taken away, whatever your plan does later.
 **That allowance is the point of versions.** A version holds a whole look — art style,
 narrative style, layout, cover, title — so having several means you can try a different art
 style, or a different layout, **without throwing away the one you already like**. Build one in
-Ironframe and one in Reverie and keep both. Every Gold-or-higher member on a campaign can do
+Ironframe and one in Reverie and keep both. Every Silver-or-higher member on a campaign can do
 the same, so a story can have several versions side by side.
 
 Branching copies the panels and their pictures, the narrative and its summaries, the
@@ -1792,7 +1795,7 @@ storyboard or from character creation. See each image full-size with details, an
   in any shape. Only the framed part becomes the asset; the archived picture is not changed, and it
   costs nothing.
 - **Edit in Image Builder** -- the button at the bottom left of an archived picture (anyone who can
-  use the Image Builder in the campaign: a Platinum campaign) opens a copy of it in the Image Builder
+  use the Image Builder in the campaign: a Gold campaign) opens a copy of it in the Image Builder
   as a new Draft of yours, with all the Builder's tools: Retouch, Regen, Edit Prompt, a title, Revert,
   Archive, Save as Asset. Its name, prompt, art style and shape come with it; Regen and Edit Prompt
   redraw from that prompt, so an archived story panel comes back close to the original, not the same.
@@ -1845,8 +1848,8 @@ on a paid plan of their own: 4 of 10"**.
   Revoke an invite you no longer need, or move to a higher plan if it allows more. Anyone with
   their own paid plan can still be invited.
 - **The Free Trial is not a paid plan.** A member on the Free Trial counts exactly like a Copper
-  member, even though the trial has Platinum-level features. Only a member's own Silver, Gold or
-  Platinum subscription, or a live pass, keeps them from counting.
+  member, even though the trial has Gold-level features. Only a member's own Silver or Gold
+  subscription, or a live pass, keeps them from counting.
 - **Nobody is ever removed.** A campaign that is over the number (for example after the Story
   Master changes plan, or a member's trial ends or plan lapses) keeps everyone, and they carry on
   as normal; it just cannot add more non-paying members until it is under. Never tell anyone a
@@ -1891,7 +1894,7 @@ try things out** — stylings, fonts, decorations and layouts — because previe
   campaign name and nothing; the title page and spine use them too), the cover picture, and the title's look.
 - **Author’s Note Page** — a note to your readers, printed on the page after the title page (PDF and print only).
 - **Draw your title** — opens the **Title Builder**, where your title is drawn as artwork
-  instead of set in type. Platinum; see 17a. **If you are not on Platinum, use the title
+  instead of set in type. Gold; see 17a. **If you are not on Gold, use the title
   styles we already have** — Chronicle, Engraved, Pulp, Manuscript and Quill, in the
   **Cover** panel on this same tab. They are on every plan and cost nothing.
 - **My Cover Picture has Title Included** — tick it (under the cover pictures) when your cover picture already has the
@@ -2057,9 +2060,9 @@ the new way.
 
 ---
 
-## 17. Custom Art Styles (Platinum)
+## 17. Custom Art Styles (Gold)
 
-On the **Platinum** tier you can build your own art styles, under **Custom Art Styles**
+On the **Gold** tier you can build your own art styles, under **Custom Art Styles**
 in the profile menu. Click **New style**, name it, and add **2–4 reference images that
 share the look you want** (style, not subject). You can choose several pictures at once:
 they fill the box you clicked and any empty boxes, and never replace a picture already
@@ -2138,7 +2141,7 @@ Ink Wash"), under **My Custom Styles** at the bottom of the **Art style** window
 Review, Storyboard, and Preview screens, with your first reference picture as its
 thumbnail. It is not one of the built-in styles and is never renamed after one (such as
 High fantasy illustration). Members of campaigns you run as Story Master can use it too,
-under **Campaign Styles (SM)**, while you stay on Platinum.
+under **Campaign Styles (SM)**, while you stay on Gold.
 
 **Closing the builder:** if you close it with changes that are not saved, it asks: **Save**,
 **Don't save** (the style stays as it was last saved), or **Keep editing**. Analyze, each
@@ -2159,16 +2162,16 @@ changes until you pick a winner and save.
 **Not yet:** a style cannot yet draw a picture as a comic page of several panels, or add
 speech bubbles. Each story picture is one image.
 
-Notes: creating a style requires a **true Platinum subscription** (inheriting Platinum
+Notes: creating a style requires **your own Gold plan** (inheriting Gold
 from a Story Master lets you *use* styles, not *build* them). **Analyze and each preview
 picture cost a token. Rewrite is free**, up to 20 a day. If you
-later drop from Platinum, your existing styles stay usable — you just can't make new ones.
+later drop below Gold, your existing styles stay usable — you just can't make new ones.
 
 ---
 
-## 17a. The Title Builder (Platinum)
+## 17a. The Title Builder (Gold)
 
-On the **Platinum** tier you can have your book or chapter title **drawn as artwork**
+On the **Gold** tier you can have your book or chapter title **drawn as artwork**
 instead of set in type. You can access the Title Builder under the title section of the
 **Prep & Preview** tab on the Publish page, or on the **Opening Panel** on the
 **Storyboard** and **Review** tabs on the Session page.
@@ -2192,19 +2195,19 @@ nothing. **Done & Use** puts it on the cover; **Done & Stash** keeps the drawing
 it off, and on a chapter puts the panel's picture back. Nothing reaches your book until
 you press Done & Use.
 
-Notes: the Title Builder needs a **true Platinum subscription**. **The five typed title
+Notes: the Title Builder needs **your own Gold plan**. **The five typed title
 styles are on every plan** — this is the drawn alternative to them.
 
 ---
-## 17b. The Image Builder (Platinum)
+## 17b. The Image Builder (Gold)
 
 The **Image Builder** makes stand-alone pictures for a campaign, outside any story: a movie poster of the party, a character sheet, a map, a wanted poster, a portrait, an item laid out on a table. It builds them from the campaign's **characters, assets and lore**, in any **art style**, including your custom styles. Each picture is kept in the campaign's **Gallery**, where the campaign's members can see it once it is marked Ready.
 
 **WHO CAN USE IT**
 
-- It is a **Platinum** feature. You can use it in **your own campaigns** if you are on Platinum, and in **any campaign whose Story Master is on Platinum**, even if you are not. A Gold player in a Platinum Story Master's campaign can make pictures there.
-- **The Title Builder inside it needs your own Platinum plan.** Without it, you can make pictures but not drawn titles.
-- If none of your campaigns qualify, opening it shows what Platinum gives instead.
+- It is a **Gold** feature. You can use it in **your own campaigns** if you are on Gold, and in **any campaign whose Story Master is on Gold**, even if you are not. A Silver player in a Gold Story Master's campaign can make pictures there.
+- **The Title Builder inside it needs your own Gold plan.** Without it, you can make pictures but not drawn titles.
+- If none of your campaigns qualify, opening it shows what Gold gives instead.
 
 **WHERE TO FIND IT**
 
@@ -2328,7 +2331,7 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   "like an oil painting," "watercolor," "noir comic").** Set it with the **Art style** button on
   the Review, Storyboard, or Preview screen — pick the closest preset (the live
   styles-by-tier block lists exactly which presets you have). For a specific look, the
-  painterly presets are usually closest. **If you're on Platinum, the best route is the
+  painterly presets are usually closest. **If you're on Gold, the best route is the
   Custom Art Style Builder** (profile menu → Custom Art Styles): upload 2–4 reference
   images in that look and click **Analyze style**. Campaignia answers 20 questions about
   how they are drawn and writes three descriptions (Faithful, Bolder, Softer); preview
@@ -2429,7 +2432,7 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
   word around the pictures; Campaignia adds nothing to it. See 10.3.
 - **"I want to give Campaignia to someone as a present."** Use **Give Campaignia as a gift**
   (below Compare the Tiers on the home page, or under the passes on the Account page). Choose
-  months of Platinum or a token pack, enter their name and email, add a message if you like, and
+  months of Gold or a token pack, enter their name and email, add a message if you like, and
   choose **now** or **a date** (it arrives at 9am Eastern that day). You do not need an account to
   buy one. The receipt has the gift code on it in case you would rather hand it over yourself.
 - **"Someone gave me a gift. How do I use it?"** Click **Redeem your gift** in the email (or the
@@ -2444,7 +2447,7 @@ Task-oriented answers. Match the user's goal to one of these and give the concre
 - **"I want a wanted poster / letter / scroll my players can read."** Choose **In-world Handout**, type the words exactly in **Handout text**, pick a font and ink, and Generate. The words are laid on the paper afterwards, so they are always spelled right.
 - **"I want to share a picture with my group."** Press **Mark Ready**. Every member of the campaign then sees it in the Image Builder's **Gallery**.
 - **"I like someone else's picture and want my own version."** Open it in the Image Builder's Gallery and press **Make My Copy** (free). Change anything and press Generate or Regen.
-- **"I want to change an archived picture with the Image Builder's tools."** Press **Edit in Image Builder** on it in the Archive (Platinum campaigns). It opens as your own Draft; the archived picture stays as it is.
+- **"I want to change an archived picture with the Image Builder's tools."** Press **Edit in Image Builder** on it in the Archive (Gold campaigns). It opens as your own Draft; the archived picture stays as it is.
 - **"I want to use an Image Builder picture as my book cover."** Press **Archive** on it, then choose it from the Archive on the Prep & Preview cover picker.
 
 ---
@@ -2463,7 +2466,7 @@ Friction points and what's actually going on.
   your own paid plan, you can join anyway.
 
 - **"The Writing Coach only offers Regen" / "Feedback says to see plans."** Feedback, Show me,
-  Rewrite and Word come with **Gold**, **Platinum** and the **Free Trial**; Regen works on every plan.
+  Rewrite and Word come with **Silver**, **Gold** and the **Free Trial**; Regen works on every plan.
   A member follows the Story Master's plan.
 - **"I don't see Writing Coach under a box."** It only appears where you can edit the box. On the
   Story tab, only the Story Master can edit the Story box, so only they get its coach.
@@ -2501,11 +2504,11 @@ Friction points and what's actually going on.
 - **"Why does it say my account is frozen?"** You're on Copper with no paid Story Master over
   that campaign (or anywhere). Nothing new can be made and tokens can't be spent or bought, but
   everything you made is kept: view, export, download, home print, and order prints of
-  finished books. Choose a plan or a Platinum Pass (See plans) to make things again.
+  finished books. Choose a plan or a Gold Pass (See plans) to make things again.
 - **"Why can't I buy tokens?"** Copper can buy tokens only while part of a **paid Story
   Master's** campaign. Otherwise, subscribe to a paid tier.
-- **"Why can't I build a custom art style?"** It requires a **true Platinum
-  subscription**. Inheriting Platinum from your Story Master lets you *use* styles, not
+- **"Why can't I build a custom art style?"** It requires **your own Gold
+  plan**. Inheriting Gold from your Story Master lets you *use* styles, not
   *build* them.
 - **"My custom style doesn't look like my samples."** Open the style and read the
   answers under **How the style is drawn**: find the one behind what looks wrong (for
@@ -2614,16 +2617,16 @@ Friction points and what's actually going on.
 - **"I can't take my gift as tokens" / "Why can't I take my gift as tokens?"** It depends on the
   account, so check theirs first. **On the Free Trial** tokens cannot be added, so a pass gift is
   offered as the pass only, and a token-pack gift waits until a plan is chosen (it never expires).
-  **On any other account** (Copper, Silver, Gold, or Platinum through a pass) the Redeem page offers
-  **Take tokens instead** next to the pass. **With a Platinum subscription** it offers only the tokens.
+  **On any other account** (Copper, Silver, or Gold through a pass) the Redeem page offers
+  **Take tokens instead** next to the pass. **With a Gold subscription** it offers only the tokens.
   If they do not see the option they expect, check they are signed in to the account they mean to
   use, and that the gift is a pass: a token-pack gift is already tokens.
-- **"I'm a Platinum subscriber and I can only take tokens."** Only for someone whose account shows
-  a Platinum **subscription**: a pass would give them nothing they do not already have, so the gift is
-  offered as tokens instead. Someone who is Platinum through a **pass** is not a Platinum subscriber
+- **"I'm a Gold subscriber and I can only take tokens."** Only for someone whose account shows
+  a Gold **subscription**: a pass would give them nothing they do not already have, so the gift is
+  offered as tokens instead. Someone who is Gold through a **pass** is not a Gold subscriber
   and gets both choices.
-- **"Will a gifted pass cancel my subscription?"** No. A Silver or Gold subscription is **paused**
-  while the pass runs and restarts by itself afterwards; a Platinum subscription is not touched at
+- **"Will a gifted pass cancel my subscription?"** No. A Silver subscription is **paused**
+  while the pass runs and restarts by itself afterwards; a Gold subscription is not touched at
   all.
 - **"The gift went to the wrong email address," or "they never got it."** Ask them to check their
   spam folder first. If the gift was dated, it is emailed at 9am Eastern on that day, not before.
@@ -2636,8 +2639,8 @@ Friction points and what's actually going on.
 - **"Can I get a refund on a gift?"** Payments are non-refundable under the Terms of Service except
   where the law requires. Contact support if something has gone wrong; a gift that is refunded is
   cancelled and its code stops working.
-- **"I can't find the Image Builder," or "it says Platinum."** It is under your name at the top right. It works in your own campaigns if you are on Platinum, and in campaigns whose Story Master is on Platinum. If neither applies, it shows what Platinum includes.
-- **"The Title Builder says I need Platinum, but I can use the Image Builder."** The Image Builder follows the **Story Master's** plan; the Title Builder needs **your own** Platinum plan.
+- **"I can't find the Image Builder," or "it says Gold."** It is under your name at the top right. It works in your own campaigns if you are on Gold, and in campaigns whose Story Master is on Gold. If neither applies, it shows what Gold includes.
+- **"The Title Builder says I need Gold, but I can use the Image Builder."** The Image Builder follows the **Story Master's** plan; the Title Builder needs **your own** Gold plan.
 - **"My title isn't on the picture."** A title typed in the Image Builder's Title panel is drawn only once it has been made in the **Title Builder** and placed with **Apply title here**. Check the Title panel shows the lettering, then place it.
 - **"My title is too big / too small."** Press **Place title on picture** again, drag the small yellow square in the bottom-right corner of the title's box to resize it, and press **Apply title here**.
 - **"A member can't see my Image Builder picture."** It is still a **Draft**. Press **Mark Ready**.
@@ -2661,7 +2664,7 @@ Friction points and what's actually going on.
   still waiting count; the Story Master does not. See §14.
 
 - **What is the Writing Coach?** A panel that helps with the words in any narrative box, and with the
-  whole story on the Story tab: **Feedback**, **Rewrite**, **Word** and **Regen**. Gold, Platinum and
+  whole story on the Story tab: **Feedback**, **Rewrite**, **Word** and **Regen**. Silver, Gold and
   the Free Trial; Regen on every plan. See 10.9.
 - **What does the Writing Coach cost?** **1 token buys 2 uses.** Each Feedback, Show me, Rewrite and
   Regen is one use; **Word is free**; a failed try costs nothing.
@@ -2735,7 +2738,7 @@ Friction points and what's actually going on.
   both, for all seventeen.
 - **Can Campaignia make a how-to guide or a news report?** Yes. Pick the **How To / Self Help /
   Instructional** or **News Report** genre on the campaign, and the matching narrative style is chosen
-  for you (How To is Gold, News Report is Silver; you can change it). Both follow your story box
+  for you (How To and News Report are both Silver; you can change it). Both follow your story box
   closely and keep its numbered steps and bullet points as lists. See 8b and 8d.
 - **What is a Skill Story?** A calm, literal, step-by-step story for showing someone what
   is about to happen — a dentist visit, a first day at school. First person, present tense,
@@ -2777,7 +2780,7 @@ Friction points and what's actually going on.
   from. Every plan.
 - **What does "Self Illustrated" mean on a picture?** Somebody uploaded it rather than Campaignia
   drawing it.
-- **Can I give Campaignia as a present?** Yes: months of Platinum or a token pack, emailed now or
+- **Can I give Campaignia as a present?** Yes: months of Gold or a token pack, emailed now or
   on a date you choose. See §4a.
 - **Do gifts expire?** No. Never, and there are no fees.
 - **Do I need an account to buy a gift?** No. You do need one to redeem it, and a free account is
@@ -2786,12 +2789,12 @@ Friction points and what's actually going on.
   and the choice cannot be undone.
 - **If I already have a pass, does a gifted one replace it?** No. The new months are added on to
   the end of the pass you already have.
-- **Does a gifted pass affect my subscription?** Silver and Gold are paused while the pass runs and
-  restart by themselves. Platinum subscribers take the gift as tokens, and the subscription is not
+- **Does a gifted pass affect my subscription?** Silver is paused while the pass runs and
+  restarts by itself. Gold subscribers take the gift as tokens, and the subscription is not
   affected.
 - **Can I use a promo code on a gift?** Not at the moment.
 - **What is the Image Builder?** A place to make stand-alone pictures for a campaign (posters, character sheets, maps, handouts, portraits) from its characters, assets and lore. See §17b.
-- **Who can use the Image Builder?** Platinum members in their own campaigns, and anyone in a campaign whose Story Master is on Platinum.
+- **Who can use the Image Builder?** Gold members in their own campaigns, and anyone in a campaign whose Story Master is on Gold.
 - **What does an Image Builder picture cost?** A token for each Generate, Regen or Retouch, taken only when the picture arrives. Naming, Ready, Revert, Archive, Save as Asset, Make My Copy and placing titles or writing are free.
 - **Who sees my Image Builder pictures?** Drafts: only you. Ready pictures: the campaign's members. Nobody outside the campaign.
 - **Can I use an Image Builder picture in my book?** Yes: Archive it, then use it as a cover, chapter title, replacement or campaign picture.

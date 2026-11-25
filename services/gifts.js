@@ -102,7 +102,7 @@ function catalog() {
   const packs = require('./billing/packs');
   const out = [];
   passes.listPasses().forEach(function (p) {
-    out.push({ kind: 'pass', id: p.id, name: p.name, months: p.months, tokens: p.tokens, price_cents: p.price_cents, tier: p.tier || 'platinum' });
+    out.push({ kind: 'pass', id: p.id, name: p.name, months: p.months, tokens: p.tokens, price_cents: p.price_cents, tier: p.tier || 'gold' });   // v3.8.10: passes are Gold
   });
   packs.listPacks().forEach(function (p) {
     out.push({ kind: 'pack', id: p.id, name: p.name + ' token pack', months: null, tokens: p.tokens, price_cents: p.price_cents, tier: null });
@@ -120,7 +120,7 @@ function quoteFor(kind, id) {
 function describeGift(row) {
   if (!row) return '';
   if (row.item_kind === 'pass') {
-    return row.months + ' months of Campaignia Platinum' + (row.tokens > 0 ? ' and ' + row.tokens + ' tokens' : '');
+    return row.months + ' months of Campaignia Gold' + (row.tokens > 0 ? ' and ' + row.tokens + ' tokens' : '');
   }
   return row.tokens + ' Campaignia tokens';
 }
@@ -385,7 +385,7 @@ function passRunsUntil(u, months, nowMs, tok) {
 // Platinum subscriber (who is sent to the tokens). It must never break the lookup.
 function passPreview(row, viewer, nowMs) {
   if (!viewer || !row || row.item_kind !== 'pass' || !(Number(row.months) > 0)) return null;
-  if (subscriptionState(viewer) === 'platinum') return null;
+  if (['gold', 'platinum'].indexOf(subscriptionState(viewer)) >= 0) return null;   // v3.8.10: a Gold subscriber takes the tokens
   try { return passRunsUntil(viewer, Number(row.months), nowMs || Date.now()).toISOString(); } catch (e) { return null; }
 }
 
@@ -488,7 +488,7 @@ async function redeem(db, userId, input, deps, opts) {
     const sub = subscriptionState(u);
     // EVERY REFUSAL COMES BEFORE THE FIRST WRITE. A Platinum subscriber keeping the pass would get
     // months they already have, so they are sent back to take the tokens; nothing is spent.
-    if (g.item_kind === 'pass' && !convert && sub === 'platinum') return { ok: false, reason: 'take_tokens' };
+    if (g.item_kind === 'pass' && !convert && (sub === 'gold' || sub === 'platinum')) return { ok: false, reason: 'take_tokens' };   // v3.8.10: passes are Gold
     // v3.1.45 -- TD-938. A Silver/Gold subscriber keeping the pass has their billing paused until it
     // ends (extended if already paused for an earlier pass). The Redeem page says so before they click.
     const plan = require('./billing/subscriptionPause').planForPass(u, '', { gift: true, nowMs: now.getTime() });
@@ -506,7 +506,7 @@ async function redeem(db, userId, input, deps, opts) {
       // v3.1.56 -- through passRunsUntil, the same function the Redeem page's preview uses.
       const until = passRunsUntil(u, g.months, now.getTime(), tok);
       runsUntil = until.toISOString();
-      await tx.query('UPDATE users SET pass_tier = $1, pass_expires_at = $2 WHERE id = $3', ['platinum', runsUntil, userId]);
+      await tx.query('UPDATE users SET pass_tier = $1, pass_expires_at = $2 WHERE id = $3', ['gold', runsUntil, userId]);   // v3.8.10: passes are Gold
     }
     if (grant > 0) {
       await tx.query(
@@ -514,7 +514,7 @@ async function redeem(db, userId, input, deps, opts) {
         [userId, grant, 'cot', 'gift_redeem', 'gift:' + g.id + (convert ? ':as-tokens' : '')]);
     }
     await tx.query('UPDATE users SET last_purchase_at = $1 WHERE id = $2', [now.toISOString(), userId]);
-    const subAction = (g.item_kind === 'pass' && !convert && (sub === 'silver' || sub === 'gold')) ? plan.action : 'none';
+    const subAction = (g.item_kind === 'pass' && !convert && sub === 'silver') ? plan.action : 'none';   // v3.8.10: only Silver pauses
     return { ok: true, id: g.id, kind: g.item_kind, converted: convert, months: convert ? null : g.months, tokens: grant,
              runsUntil: runsUntil, subscription: sub, subAction: subAction, _subId: u.stripe_subscription_id, description: describeGift(g) };
   });
@@ -530,7 +530,7 @@ async function redeem(db, userId, input, deps, opts) {
       try {
         const alert = deps.sendAlertEmail || require('../routes/email').sendAlertEmail;
         await alert('Gift redeemed, but the subscription could not be paused',
-          'User ' + userId + ' redeemed gift ' + result.id + ' (Platinum until ' + String(result.runsUntil).slice(0, 10) + '). Their ' +
+          'User ' + userId + ' redeemed gift ' + result.id + ' (Gold until ' + String(result.runsUntil).slice(0, 10) + '). Their ' +
           result.subscription + ' subscription ' + result._subId + ' could not be paused: ' + ((e && e.message) || 'unknown error') +
           String.fromCharCode(10) + 'They are still being billed. Pause it by hand in the Stripe dashboard until that date.');
       } catch (_) {}

@@ -262,7 +262,7 @@ async function cancelSubscriptionAtPeriodEnd(subId) {
 // holding it can redeem the gift, and Stripe's description can appear on Stripe's own receipts.
 function giftPaymentDescription(g, last4) {
   if (!g) return '';
-  const what = g.item_kind === 'pass' ? (g.months + ' months of Platinum') : ((g.tokens || 0) + ' tokens');
+  const what = g.item_kind === 'pass' ? (g.months + ' months of Gold') : ((g.tokens || 0) + ' tokens');
   const em = String(g.recipient_email || ''); const at = em.lastIndexOf('@');
   const who = g.recipient_name ? String(g.recipient_name) : (at > 0 ? em.charAt(0) + '***' + em.slice(at) : '');
   return 'Campaignia gift GIFT-' + g.id + ' \u00b7 ' + what + (who ? ' \u00b7 for ' + who : '') + (last4 ? ' \u00b7 code ending ' + String(last4).toUpperCase() : '');

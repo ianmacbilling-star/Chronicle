@@ -210,6 +210,8 @@
 .tg-t-silver .tg-tier-name   { color: var(--tg-silver); }
 .tg-t-gold .tg-tier-name     { color: var(--tg-gold); }
 .tg-t-platinum .tg-tier-name { color: var(--tg-platinum); }
+/* v3.8.11 -- THE TIER SHUFFLE: Platinum's Coming Soon mark under its name */
+.tg-soon { display: block; margin-top: 2px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.8; }
 
 /* cells */
 .tg-val {

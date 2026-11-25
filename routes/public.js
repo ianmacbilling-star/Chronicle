@@ -211,20 +211,23 @@ router.get('/tier-grid', function (req, res) {
         // An extra version is an ENTITLEMENT on your own plan, not a creative capability,
         // so the gate in routes/sessions.js reads tierRank and not accessRank. The
         // threshold is taken from the tier table rather than written as 3.
-        multi_version: tierRank(name) >= tierRank('gold'),
-        // Both of these ask isTruePlatinum(userId), which is defined as
-        // getEffectiveTier(uid, null) === 'platinum' -- your OWN plan, never inherited.
-        custom_art_styles: name === 'platinum',
-        title_builder: name === 'platinum',
+        multi_version: tierRank(name) >= tierRank('silver'),   // v3.8.10: Silver and up (sessions.js reads the same)
+        // Both of these ask isTruePlatinum(userId), which since v3.8.10 means your OWN plan is Gold or above
+        // (never inherited).
+        custom_art_styles: tierRank(name) >= 3,   // v3.8.10: Gold and up (isTruePlatinum is now rank 3+)
+        title_builder: tierRank(name) >= 3,
         // v3.2.43 -- TD-999. The Writing Coach's Feedback, Show me, Rewrite and Word: the SAME test as wtAccess in
         // routes/narrative.js (accessRank >= 3, Gold), so the grid says what the gate does. Regen is every plan.
         // It is a creative capability, so a member inherits it from the Story Master's plan like the styles.
-        writing_coach: accessRank(name) >= 3,
+        writing_coach: accessRank(name) >= 2,   // v3.8.10: Silver and up
         // v3.6.13 -- TD-1046. Audio Transcription: the SAME test as planAllows in routes/audio.js (Gold, inherited, like the Writing Coach).
-        audio_transcription: name === 'trial' ? 'first20' : accessRank(name) >= 3,   // v3.6.22: the Free Trial does the first 20 minutes
+        audio_transcription: name === 'trial' ? 'first20' : accessRank(name) >= 2,   // v3.8.10: Silver and up   // v3.6.22: the Free Trial does the first 20 minutes
         // v3.4.02 -- TD-1080. The Image Builder: the SAME test as ibAllowed in routes/images.js -- getEffectiveTier for
         // the campaign is Platinum -- so a member inherits it from a Platinum Story Master, like the Writing Coach.
-        image_builder: name === 'platinum',
+        image_builder: tierRank(name) >= 3,   // v3.8.10: Gold and up
+        // v3.8.10 -- Platinum is shown but cannot be bought until video launches; Animation is its new line.
+        coming_soon: !!t.coming_soon,
+        animation: !!t.animation,
         // v3.2.44 -- uploading your own pictures (I'll illustrate it myself) and the Outline / Already Written
         // narrative styles have no plan gate, so this is true for every column the grid draws.
         own_art_and_narrative: true,
