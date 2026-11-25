@@ -366,6 +366,8 @@ async function initPostgres() {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_extract_jobs_user ON extract_jobs(user_id, status)');
+  // v3.8.15 -- the step a Generate Story job is on, for its progress message (routes/extract.js).
+  try { await pool.query('ALTER TABLE extract_jobs ADD COLUMN IF NOT EXISTS stage TEXT'); } catch (e) { console.error('[db] extract_jobs.stage:', e.message); }
   // One-time (idempotent) relabel: the establishing/title-image moment used to be
   // stored with the literal title 'Title Image'. Show the session's own name instead,
   // everywhere the moment title renders. Matches nothing on later boots (no rows keep

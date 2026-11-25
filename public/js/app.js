@@ -7745,6 +7745,7 @@ function cancelExtract() {
   if (state.abortExtract) { try { state.abortExtract.abort(); } catch (e) {} }
   var w = document.getElementById('progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('extract-cancel-btn'); if (c) c.style.display = 'none';
+  _extractEta(false);   // v3.8.15
   var b = document.getElementById('extract-btn'); if (b) b.disabled = false;
 }
 
@@ -10517,6 +10518,25 @@ function applyLayoutStyle(layout) {
 // Async Generate Story: poll the extraction job until done/error. Resolves to the job
 // result ({moments, pendingChanges, ...}) or an {error,message} object, so the existing
 // success handler consumes it exactly like the old synchronous response did.
+// v3.8.15 -- GENERATE STORY PROGRESS (Ian, 25 Nov 2026). The job tells the poll which step it is on. The long
+// one is the AI writing (one call, usually about a minute), so while it runs the message steps through what
+// that call does. Only what Generate Story does: it draws no pictures. The note beside Cancel says how long.
+var _xStageT0 = 0;
+function _extractEta(on) {
+  var e = document.getElementById('extract-eta'); if (e) e.style.display = on ? 'inline' : 'none';
+  if (on) _xStageT0 = Date.now();
+}
+function _extractShowStage(stage) {
+  var msg = document.getElementById('progress-msg'); if (!msg || !stage) return;
+  var t = '';
+  if (stage === 'writing') {
+    var s = (Date.now() - (_xStageT0 || Date.now())) / 1000;
+    t = s < 15 ? 'Reading your story and your notes...' : s < 35 ? 'Finding the key moments...' : s < 55 ? 'Working out who is in each moment...'
+      : s < 85 ? 'Writing the outline for each moment...' : 'Still writing. Long stories take a little longer...';
+  } else if (stage === 'saving') t = 'Saving the moments to your storyboard...';
+  else if (stage === 'characters') t = 'Checking your characters for changes...';
+  if (t) msg.textContent = t;
+}
 function _pollExtractJob(jobId, signal) {
   return new Promise(function (resolve) {
     var tries = 0;
@@ -10527,6 +10547,7 @@ function _pollExtractJob(jobId, signal) {
         .then(function (j) {
           if (j && j.status === 'done') { resolve(j); return; }
           if (j && (j.status === 'error' || j.error)) { resolve({ error: j.error || 'generation_failed', message: j.error || 'Story generation failed.' }); return; }
+          if (j && j.stage) _extractShowStage(j.stage);   // v3.8.15
           tries++;
           if (tries > 300) { resolve({ error: 'timeout', message: 'Generation is taking longer than expected -- please check back in a moment.' }); return; }
           setTimeout(loop, 2000);
@@ -10625,7 +10646,7 @@ async function extractMoments() {
 
   var _xctl = new AbortController();
   state.abortExtract = _xctl;
-  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block';
+  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block'; _extractEta(true);
   fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -10641,7 +10662,7 @@ async function extractMoments() {
   .then(function(data) {
     clearInterval(ticker);
     clearGenLock();
-    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none'; _extractEta(false);
     if (data.error) {
       var _emsg = data.message || ('Error: ' + data.error);
       errorEl.textContent = _emsg;
@@ -10687,7 +10708,7 @@ async function extractMoments() {
   .catch(function(e) {
     clearInterval(ticker);
     clearGenLock();
-    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none'; _extractEta(false);
     if (e && e.name === 'AbortError') { wrap.style.display = 'none'; btn.disabled = false; return; }
     wrap.style.display = 'none';
     btn.disabled = false;
@@ -19937,7 +19958,7 @@ async function extractMoments() {
 
   var _xctl = new AbortController();
   state.abortExtract = _xctl;
-  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block';
+  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block'; _extractEta(true);
   fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -19953,7 +19974,7 @@ async function extractMoments() {
   .then(function(data) {
     clearInterval(ticker);
     clearGenLock();
-    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none'; _extractEta(false);
     if (data.error) {
       var _emsg = data.message || ('Error: ' + data.error);
       errorEl.textContent = _emsg;
@@ -19999,7 +20020,7 @@ async function extractMoments() {
   .catch(function(e) {
     clearInterval(ticker);
     clearGenLock();
-    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none'; _extractEta(false);
     if (e && e.name === 'AbortError') { wrap.style.display = 'none'; btn.disabled = false; return; }
     wrap.style.display = 'none';
     btn.disabled = false;

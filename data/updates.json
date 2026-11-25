@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.15",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3815-story-progress",
+        "kind": "change",
+        "public": false,
+        "summary": "Generate Story shows what it is doing.",
+        "detail": "While Generate Story runs, the message under the bar steps through reading the story, finding the moments, working out who is in them, writing the outline, saving and checking the characters. Usually takes 1 to 2 minutes now sits beside Cancel.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.14",
     "staged_on": "2026-11-25",
     "entries": [
