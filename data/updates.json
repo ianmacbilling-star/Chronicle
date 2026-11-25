@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.19",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3819-eta-beside-cancel",
+        "kind": "change",
+        "public": false,
+        "summary": "Generate Story progress text easier to read.",
+        "detail": "Usually takes 1 to 2 minutes now sits on the same line as Cancel, and the progress message under the bar is larger, lighter and has room around it.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.18",
     "staged_on": "2026-11-25",
     "entries": [

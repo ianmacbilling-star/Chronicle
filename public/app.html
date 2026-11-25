@@ -1215,8 +1215,10 @@
               <button class="btn btn-sm dm-only" id="story-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
               <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()" title="It begins here. We read your story and your instructions, pick the key moments, find the right characters and drop you into the outline to review. From there you work up the narrative and make the illustrations.">&#9998; Generate Story</button>
             </div>
-            <span id="extract-eta" style="display:none;font-size:12px;opacity:0.75;margin-right:6px;white-space:nowrap;">Usually takes 1 to 2 minutes</span>   <!-- v3.8.15 -->
-            <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;">&#10005; Cancel</button>
+            <div style="display:flex;align-items:center;gap:8px;">   <!-- v3.8.19: the note sits beside Cancel, readable (Ian) -->
+              <span id="extract-eta" style="display:none;font-size:12px;color:var(--accent-pale);white-space:nowrap;">Usually takes 1 to 2 minutes</span>
+              <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;">&#10005; Cancel</button>
+            </div>
           </div>
         </div>
 
@@ -1225,6 +1227,10 @@
           <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
           <div class="progress-msg" id="progress-msg">Analyzing your session...</div>
         </div>
+        <style>   /* v3.8.19 -- Generate Story's progress words: readable, with room around them (Ian) */
+          #progress-wrap { margin-bottom: 14px; }
+          #progress-msg { font-size: 14px; line-height: 1.4; color: var(--accent-pale); margin-top: 10px; padding: 2px 0 4px; }
+        </style>
 
         <!-- Transcript (left) and Notes (right), side by side -->
         <!-- v3.1.52 -- Ian: the lines under the two boxes were hardly readable, and the word counts could not be seen
