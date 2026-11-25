@@ -586,7 +586,9 @@ router.get('/me', async function(req, res) {
       // require(), which memoises, and defaulted to '' so a missing or malformed version-info
       // can only ever leave the footer reading 'Campaignia' -- never a number that is a lie.
       appVersion: (function () { try { return String((require('../version-info.json') || {}).version || ''); } catch (e) { return ''; } })(),
-      allTiers: TIERS
+      // v3.8.14 -- the tiers as the Dashboard has set them (getTier merges the tier_config overrides), not the code
+      // defaults, so the Account page's plan cards show the same prices and tokens as everything else.
+      allTiers: Object.keys(TIERS).reduce(function (o, k) { o[k] = getTier(k); return o; }, {})
     });
   } catch(e) {
     res.json({ authenticated: false });

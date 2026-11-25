@@ -166,10 +166,10 @@ function welcomeHTML(name) {
     <div class="body">
       <div class="title">Welcome to Campaignia, ${name}!</div>
       <div class="text">Thank you for signing up &mdash; we're absolutely thrilled to have you. Campaignia turns your imagination into illustrated comics and print-ready graphic novels, so the stories you tell become something you can hold, share, and keep forever.</div>
-      <div class="feature"><img src="${EMAIL_ASSET_BASE}/Campaignia_Favicon.png" alt="" width="16" height="16" style="vertical-align:middle;margin-right:8px;" />Turn your session transcripts into illustrated story panels</div>
-      <div class="feature"><img src="${EMAIL_ASSET_BASE}/Campaignia_Favicon.png" alt="" width="16" height="16" style="vertical-align:middle;margin-right:8px;" />AI-powered moment extraction that finds the scenes worth drawing</div>
-      <div class="feature"><img src="${EMAIL_ASSET_BASE}/Campaignia_Favicon.png" alt="" width="16" height="16" style="vertical-align:middle;margin-right:8px;" />Original AI art for every panel, in the style you choose</div>
-      <div class="feature"><img src="${EMAIL_ASSET_BASE}/Campaignia_Favicon.png" alt="" width="16" height="16" style="vertical-align:middle;margin-right:8px;" />Assemble it all into a graphic novel you can print and hold</div>
+      <div class="feature"><img src="${EMAIL_ASSET_BASE}/Campaignia_Mark.png" alt="" width="14" height="19" style="vertical-align:middle;margin-right:8px;" />Turn your session transcripts into illustrated story panels</div>
+      <div class="feature"><img src="${EMAIL_ASSET_BASE}/Campaignia_Mark.png" alt="" width="14" height="19" style="vertical-align:middle;margin-right:8px;" />AI-powered moment extraction that finds the scenes worth drawing</div>
+      <div class="feature"><img src="${EMAIL_ASSET_BASE}/Campaignia_Mark.png" alt="" width="14" height="19" style="vertical-align:middle;margin-right:8px;" />Original AI art for every panel, in the style you choose</div>
+      <div class="feature"><img src="${EMAIL_ASSET_BASE}/Campaignia_Mark.png" alt="" width="14" height="19" style="vertical-align:middle;margin-right:8px;" />Assemble it all into a graphic novel you can print and hold</div>
       <div class="text" style="margin-top:20px;">This is going to be good. Jump in and make something legendary &mdash; we can't wait to see what your heroes get up to. Enjoy the adventure!</div>
       <div style="text-align:center;margin:24px 0;">
         <a href="https://campaignia.com" class="btn">Start Your Campaign</a>

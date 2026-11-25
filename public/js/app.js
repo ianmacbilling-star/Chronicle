@@ -25024,6 +25024,13 @@ function saveTierPanel(tierKey) {
     .then(function (data) {
       if (data && data.success) {
         if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--accent-bright)'; }
+        // v3.8.14 -- show what the server actually stored (blank boxes fall back to the built-in numbers).
+        var _sv = data.values || {};
+        document.querySelectorAll('.tier-config-input[data-tier="' + tierKey + '"]').forEach(function (inp) {
+          var f = inp.getAttribute('data-field');
+          if (Object.prototype.hasOwnProperty.call(_sv, f)) inp.value = (_sv[f] === null || _sv[f] === undefined) ? '' : _sv[f];
+        });
+        tierDerived(tierKey);
       } else {
         if (msgEl) { msgEl.textContent = (data && (data.message || data.error)) || 'Save failed.'; msgEl.style.color = 'var(--error)'; }
       }

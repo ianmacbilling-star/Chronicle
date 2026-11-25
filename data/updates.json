@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.14",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3814-account-tiers-email-bullets",
+        "kind": "fix",
+        "public": false,
+        "summary": "Account page plan cards show the Dashboard's tier settings; welcome email bullets use the new sword-and-pen mark.",
+        "detail": "The plan cards on My Account read the built-in tier numbers instead of the ones set on the Dashboard; they now match. The Dashboard reads the tier settings fresh each time and shows what was stored after a save. The welcome email's bullets are the maroon sword-and-pen mark instead of the old icon.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.13",
     "staged_on": "2026-11-24",
     "entries": [
