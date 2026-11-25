@@ -10522,8 +10522,11 @@ function applyLayoutStyle(layout) {
 // one is the AI writing (one call, usually about a minute), so while it runs the message steps through what
 // that call does. Only what Generate Story does: it draws no pictures. The note beside Cancel says how long.
 var _xStageT0 = 0;
+var _X_ETA = ' (usually 1 to 2 minutes)';   // v3.8.20 -- the time note lives in the message now
 function _extractEta(on) {
-  var e = document.getElementById('extract-eta'); if (e) e.style.display = on ? 'inline' : 'none';
+  // v3.8.20 (Ian) -- Cancel takes Generate Story's place while it runs, so nothing below moves.
+  var g = document.getElementById('extract-btn'); if (g) g.classList.toggle('xs-running', !!on);
+  var m = document.getElementById('progress-msg'); if (on && m && m.textContent.indexOf(_X_ETA) < 0) m.textContent += _X_ETA;
   if (on) _xStageT0 = Date.now();
 }
 function _extractShowStage(stage) {
@@ -10535,7 +10538,7 @@ function _extractShowStage(stage) {
       : s < 85 ? 'Writing the outline for each moment...' : 'Still writing. Long stories take a little longer...';
   } else if (stage === 'saving') t = 'Saving the moments to your storyboard...';
   else if (stage === 'characters') t = 'Checking your characters for changes...';
-  if (t) msg.textContent = t;
+  if (t) msg.textContent = t + _X_ETA;   // v3.8.20
 }
 function _pollExtractJob(jobId, signal) {
   return new Promise(function (resolve) {

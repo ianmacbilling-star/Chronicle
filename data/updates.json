@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.20",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3820-cancel-in-place",
+        "kind": "change",
+        "public": false,
+        "summary": "Cancel stands in for Generate Story while it runs.",
+        "detail": "While Generate Story runs, its button becomes Cancel in the same spot, so nothing below moves. The time note joins the progress message under the bar.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.19",
     "staged_on": "2026-11-25",
     "entries": [
