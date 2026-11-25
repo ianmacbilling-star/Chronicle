@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.18",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3818-welcome-art-line",
+        "kind": "change",
+        "public": false,
+        "summary": "Welcome email art line; Get a Tour button restyled.",
+        "detail": "The welcome email says Original AI art for your panels rather than for every panel, which read as if pictures came free. The Get a Tour button loses its star and takes the usual button shape; it still wiggles.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.17",
     "staged_on": "2026-11-25",
     "entries": [
