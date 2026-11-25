@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.17",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3817-tours-offered",
+        "kind": "change",
+        "public": false,
+        "summary": "Tours wait to be asked for.",
+        "detail": "No tour starts by itself any more. A screen with an unseen tour shows a wiggling Get a Tour button at the right of the breadcrumb bar; watching or skipping the tour makes it go. In a modal the button floats above it. Turn tour buttons back on is in the Ask Us panel and on the Account page.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.16",
     "staged_on": "2026-11-25",
     "entries": [

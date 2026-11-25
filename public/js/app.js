@@ -31624,21 +31624,73 @@ function applyVocab(s) {
   });
 }
 
+// v3.8.17 -- TOURS ARE OFFERED, NOT STARTED (Ian, 25 Nov 2026, from a tester: too many tours, and they got in the
+// way). Every place that used to start a tour now calls maybeStartTour as before, and it shows a wiggling
+// "Get a Tour" button at the right of the breadcrumb bar (under the account button) while that screen's tour is
+// unseen. Watching or skipping it marks it seen, as before, so the button goes. The Help panel and the Account page
+// turn the buttons back on. A tour for a modal (the row is covered then) floats the button above the modal, and the
+// screen's own offer comes back when the modal closes.
+var _tourOfferKey = '';
+var _tourOfferBase = '';   // the tour of the screen under any modal ('' for none)
+var _tourOfferFloat = false;
+var _TOUR_MODAL_KEYS = { 'characters': 1, 'asset-modal': 1, 'title-builder': 1, 'title-builder-ib': 1 };
+function _tourRowCovered() {
+  var row = document.querySelector('.breadcrumb-row'); if (!row) return true;
+  var r = row.getBoundingClientRect(); if (!r.width || !r.height) return true;
+  var b = document.getElementById('tour-offer-btn'), pe = b ? b.style.pointerEvents : '';
+  if (b) b.style.pointerEvents = 'none';
+  var el = document.elementFromPoint(Math.max(1, r.right - 30), r.top + r.height / 2);
+  if (b) b.style.pointerEvents = pe;
+  return !(el && row.contains(el));
+}
+function _tourOffer(viewId, has) {
+  var cov = !!_TOUR_MODAL_KEYS[viewId] || _tourRowCovered();
+  if (!cov) _tourOfferBase = has ? viewId : '';
+  _tourOfferPaint(has ? viewId : '', cov);
+}
+function _tourOfferPaint(key, floating) {
+  _tourOfferKey = key || ''; _tourOfferFloat = !!floating;
+  var b = document.getElementById('tour-offer-btn'); if (!b) return;
+  var on = !!key && !_tourActive && !_tourSuppress && !(_tourProgress && _tourProgress[key]) && _tourStepsFor(key).length > 0;
+  b.classList.toggle('floating', on && !!floating);
+  b.style.display = on ? '' : 'none';
+}
+function tourOfferStart() {
+  var k = _tourOfferKey; if (!k) return;
+  var b = document.getElementById('tour-offer-btn'); if (b) b.style.display = 'none';
+  showTour(k);
+}
+// When a modal with its own offer closes, the screen's offer comes back (or none, if the screen has none).
+setInterval(function () {
+  if (_tourActive) return;
+  try { if ((_tourOfferFloat || _tourOfferKey !== _tourOfferBase) && !_tourRowCovered()) _tourOfferPaint(_tourOfferBase, false); } catch (e) {}
+}, 1500);
+// The Help panel's switch: same reset as the Account page's, with its own message.
+function turnTourButtonsOn() {
+  var msg = document.getElementById('help-tours-msg');
+  if (msg) msg.textContent = 'Turning them back on...';
+  fetch('/api/auth/tour-reset', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.success) { _tourProgress = {}; _tourOfferPaint(_tourOfferBase, false); if (msg) msg.textContent = 'Done. Look for Get a Tour under your name at the top of each screen.'; }
+      else if (msg) msg.textContent = (d && d.error) ? d.error : 'Could not turn them back on. Please try again.';
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not turn them back on. Please try again.'; });
+}
+
 function maybeStartTour(viewId) {
   if (_tourActive || !viewId) return;
   _tourEnsureData(function(){
     var _t = _toursData && _toursData[viewId];
-    if (!_t || !Array.isArray(_t.steps) || _t.steps.length === 0) return;
+    if (!_t || !Array.isArray(_t.steps) || _t.steps.length === 0) { _tourOffer(viewId, false); return; }
     var _go = function() {
       _tourEnsureProgress(function(){
-        if (_tourProgress[viewId]) return;
-        if (_tourSuppress) return;   // v3.1.21 -- no tour starts by itself inside a support session
-        startTour(viewId, false);
+        _tourOffer(viewId, true);   // v3.8.17 -- offered, not started (seen and support-session checks are in _tourOfferPaint)
       });
     };
     if (_t.requires) {
       // Data gate: wait (retry) for the required element; if it never appears, defer silently (do NOT mark seen).
-      _tourFindTarget(_t.requires, 8, function(rq){ if (_tourVisible(rq)) _go(); });
+      _tourFindTarget(_t.requires, 8, function(rq){ if (_tourVisible(rq)) _go(); else _tourOffer(viewId, false); });   // v3.8.17 else
     } else {
       _go();
     }
@@ -31839,6 +31891,7 @@ function _tourFinish() {
   var viewId = _tourViewId;
   _tourTeardown();
   _tourMarkComplete(viewId);
+  _tourOfferPaint(_tourOfferKey, _tourOfferFloat);   // v3.8.17 -- seen now, so its button goes
   // v3.0.726 -- TD-525. THE HAND-OFF. Ian: "Session detail should run first, before the tab tour
   // ... then when the session tour is done start the tab tour for whatever tab they are on."
   //
@@ -31963,7 +32016,8 @@ function replayTours() {
     .then(function(d){
       if (d && d.success) {
         _tourProgress = {};
-        if (msg) { msg.style.color = 'var(--accent-pale)'; msg.textContent = 'Guided tours are back on. Visit any screen to see its tour again.'; }
+        _tourOfferPaint(_tourOfferBase, false);   // v3.8.17
+        if (msg) { msg.style.color = 'var(--accent-pale)'; msg.textContent = 'Tour buttons are back on. Each screen shows Get a Tour until you watch or skip its tour.'; }
       } else {
         if (msg) { msg.style.color = 'var(--error)'; msg.textContent = (d && d.error) ? d.error : 'Could not turn tours back on. Please try again.'; }
       }
