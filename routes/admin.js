@@ -32,6 +32,8 @@ function emptyTierMap(init) {
 // can render generically as the field set grows.
 router.get('/tier-config', requireAuth, requireAdmin, async function (req, res) {
   try {
+    // v3.8.14 -- read the saved settings fresh, so the Dashboard always shows what is stored, never a stale copy.
+    await tiers.loadTierConfig();
     const out = {};
     TIER_ORDER.forEach(function (name) {
       const t = tiers.getTier(name);

@@ -7745,6 +7745,7 @@ function cancelExtract() {
   if (state.abortExtract) { try { state.abortExtract.abort(); } catch (e) {} }
   var w = document.getElementById('progress-wrap'); if (w) w.style.display = 'none';
   var c = document.getElementById('extract-cancel-btn'); if (c) c.style.display = 'none';
+  _extractEta(false);   // v3.8.15
   var b = document.getElementById('extract-btn'); if (b) b.disabled = false;
 }
 
@@ -10517,6 +10518,28 @@ function applyLayoutStyle(layout) {
 // Async Generate Story: poll the extraction job until done/error. Resolves to the job
 // result ({moments, pendingChanges, ...}) or an {error,message} object, so the existing
 // success handler consumes it exactly like the old synchronous response did.
+// v3.8.15 -- GENERATE STORY PROGRESS (Ian, 25 Nov 2026). The job tells the poll which step it is on. The long
+// one is the AI writing (one call, usually about a minute), so while it runs the message steps through what
+// that call does. Only what Generate Story does: it draws no pictures. The note beside Cancel says how long.
+var _xStageT0 = 0;
+var _X_ETA = ' (usually 1 to 2 minutes)';   // v3.8.20 -- the time note lives in the message now
+function _extractEta(on) {
+  // v3.8.20 (Ian) -- Cancel takes Generate Story's place while it runs, so nothing below moves.
+  var g = document.getElementById('extract-btn'); if (g) g.classList.toggle('xs-running', !!on);
+  var m = document.getElementById('progress-msg'); if (on && m && m.textContent.indexOf(_X_ETA) < 0) m.textContent += _X_ETA;
+  if (on) _xStageT0 = Date.now();
+}
+function _extractShowStage(stage) {
+  var msg = document.getElementById('progress-msg'); if (!msg || !stage) return;
+  var t = '';
+  if (stage === 'writing') {
+    var s = (Date.now() - (_xStageT0 || Date.now())) / 1000;
+    t = s < 15 ? 'Reading your story and your notes...' : s < 35 ? 'Finding the key moments...' : s < 55 ? 'Working out who is in each moment...'
+      : s < 85 ? 'Writing the outline for each moment...' : 'Still writing. Long stories take a little longer...';
+  } else if (stage === 'saving') t = 'Saving the moments to your storyboard...';
+  else if (stage === 'characters') t = 'Checking your characters for changes...';
+  if (t) msg.textContent = t + _X_ETA;   // v3.8.20
+}
 function _pollExtractJob(jobId, signal) {
   return new Promise(function (resolve) {
     var tries = 0;
@@ -10527,6 +10550,7 @@ function _pollExtractJob(jobId, signal) {
         .then(function (j) {
           if (j && j.status === 'done') { resolve(j); return; }
           if (j && (j.status === 'error' || j.error)) { resolve({ error: j.error || 'generation_failed', message: j.error || 'Story generation failed.' }); return; }
+          if (j && j.stage) _extractShowStage(j.stage);   // v3.8.15
           tries++;
           if (tries > 300) { resolve({ error: 'timeout', message: 'Generation is taking longer than expected -- please check back in a moment.' }); return; }
           setTimeout(loop, 2000);
@@ -10625,7 +10649,7 @@ async function extractMoments() {
 
   var _xctl = new AbortController();
   state.abortExtract = _xctl;
-  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block';
+  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block'; _extractEta(true);
   fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -10641,7 +10665,7 @@ async function extractMoments() {
   .then(function(data) {
     clearInterval(ticker);
     clearGenLock();
-    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none'; _extractEta(false);
     if (data.error) {
       var _emsg = data.message || ('Error: ' + data.error);
       errorEl.textContent = _emsg;
@@ -10687,7 +10711,7 @@ async function extractMoments() {
   .catch(function(e) {
     clearInterval(ticker);
     clearGenLock();
-    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none'; _extractEta(false);
     if (e && e.name === 'AbortError') { wrap.style.display = 'none'; btn.disabled = false; return; }
     wrap.style.display = 'none';
     btn.disabled = false;
@@ -19937,7 +19961,7 @@ async function extractMoments() {
 
   var _xctl = new AbortController();
   state.abortExtract = _xctl;
-  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block';
+  var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'inline-block'; _extractEta(true);
   fetch('/api/extract/' + state.currentCampaign.id + '/' + state.currentSession.id + forkQ(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -19953,7 +19977,7 @@ async function extractMoments() {
   .then(function(data) {
     clearInterval(ticker);
     clearGenLock();
-    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none'; _extractEta(false);
     if (data.error) {
       var _emsg = data.message || ('Error: ' + data.error);
       errorEl.textContent = _emsg;
@@ -19999,7 +20023,7 @@ async function extractMoments() {
   .catch(function(e) {
     clearInterval(ticker);
     clearGenLock();
-    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none';
+    var _xcb = document.getElementById('extract-cancel-btn'); if (_xcb) _xcb.style.display = 'none'; _extractEta(false);
     if (e && e.name === 'AbortError') { wrap.style.display = 'none'; btn.disabled = false; return; }
     wrap.style.display = 'none';
     btn.disabled = false;
@@ -23133,7 +23157,9 @@ function genEstSet(id, extra) {
 function genEstPaint() {
   var d = GEN_EST.d; if (!d) return;
   var tok = function (n) { return n + ' token' + (Number(n) === 1 ? '' : 's'); };
-  genEstSet('extract-btn', 'About ' + tok(d.story) + '.');
+  // v3.8.16 -- and roughly what the whole storyboard comes to: the story, the narrative and a picture per panel.
+  var _sbAll = (Number(d.panels) > 0) ? Math.round(Number(d.story) + Number(d.narrative) + Number(d.picture) * Number(d.panels)) : 0;
+  genEstSet('extract-btn', 'About ' + tok(d.story) + '.' + (_sbAll > 0 ? ' Roughly ' + tok(_sbAll) + ' to finish the storyboard.' : ''));
   genEstSet('sb-generate-narr-btn', 'About ' + tok(d.narrative) + '.');
   genEstSet('review-generate-btn', 'About ' + tok(d.narrative) + ' for the narrative, plus ' + tok(d.picture) + ' for each picture drawn.');
 }
@@ -25024,6 +25050,13 @@ function saveTierPanel(tierKey) {
     .then(function (data) {
       if (data && data.success) {
         if (msgEl) { msgEl.textContent = 'Saved.'; msgEl.style.color = 'var(--accent-bright)'; }
+        // v3.8.14 -- show what the server actually stored (blank boxes fall back to the built-in numbers).
+        var _sv = data.values || {};
+        document.querySelectorAll('.tier-config-input[data-tier="' + tierKey + '"]').forEach(function (inp) {
+          var f = inp.getAttribute('data-field');
+          if (Object.prototype.hasOwnProperty.call(_sv, f)) inp.value = (_sv[f] === null || _sv[f] === undefined) ? '' : _sv[f];
+        });
+        tierDerived(tierKey);
       } else {
         if (msgEl) { msgEl.textContent = (data && (data.message || data.error)) || 'Save failed.'; msgEl.style.color = 'var(--error)'; }
       }
@@ -31594,21 +31627,73 @@ function applyVocab(s) {
   });
 }
 
+// v3.8.17 -- TOURS ARE OFFERED, NOT STARTED (Ian, 25 Nov 2026, from a tester: too many tours, and they got in the
+// way). Every place that used to start a tour now calls maybeStartTour as before, and it shows a wiggling
+// "Get a Tour" button at the right of the breadcrumb bar (under the account button) while that screen's tour is
+// unseen. Watching or skipping it marks it seen, as before, so the button goes. The Help panel and the Account page
+// turn the buttons back on. A tour for a modal (the row is covered then) floats the button above the modal, and the
+// screen's own offer comes back when the modal closes.
+var _tourOfferKey = '';
+var _tourOfferBase = '';   // the tour of the screen under any modal ('' for none)
+var _tourOfferFloat = false;
+var _TOUR_MODAL_KEYS = { 'characters': 1, 'asset-modal': 1, 'title-builder': 1, 'title-builder-ib': 1 };
+function _tourRowCovered() {
+  var row = document.querySelector('.breadcrumb-row'); if (!row) return true;
+  var r = row.getBoundingClientRect(); if (!r.width || !r.height) return true;
+  var b = document.getElementById('tour-offer-btn'), pe = b ? b.style.pointerEvents : '';
+  if (b) b.style.pointerEvents = 'none';
+  var el = document.elementFromPoint(Math.max(1, r.right - 30), r.top + r.height / 2);
+  if (b) b.style.pointerEvents = pe;
+  return !(el && row.contains(el));
+}
+function _tourOffer(viewId, has) {
+  var cov = !!_TOUR_MODAL_KEYS[viewId] || _tourRowCovered();
+  if (!cov) _tourOfferBase = has ? viewId : '';
+  _tourOfferPaint(has ? viewId : '', cov);
+}
+function _tourOfferPaint(key, floating) {
+  _tourOfferKey = key || ''; _tourOfferFloat = !!floating;
+  var b = document.getElementById('tour-offer-btn'); if (!b) return;
+  var on = !!key && !_tourActive && !_tourSuppress && !(_tourProgress && _tourProgress[key]) && _tourStepsFor(key).length > 0;
+  b.classList.toggle('floating', on && !!floating);
+  b.style.display = on ? '' : 'none';
+}
+function tourOfferStart() {
+  var k = _tourOfferKey; if (!k) return;
+  var b = document.getElementById('tour-offer-btn'); if (b) b.style.display = 'none';
+  showTour(k);
+}
+// When a modal with its own offer closes, the screen's offer comes back (or none, if the screen has none).
+setInterval(function () {
+  if (_tourActive) return;
+  try { if ((_tourOfferFloat || _tourOfferKey !== _tourOfferBase) && !_tourRowCovered()) _tourOfferPaint(_tourOfferBase, false); } catch (e) {}
+}, 1500);
+// The Help panel's switch: same reset as the Account page's, with its own message.
+function turnTourButtonsOn() {
+  var msg = document.getElementById('help-tours-msg');
+  if (msg) msg.textContent = 'Turning them back on...';
+  fetch('/api/auth/tour-reset', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.success) { _tourProgress = {}; _tourOfferPaint(_tourOfferBase, false); if (msg) msg.textContent = 'Done. Look for Get a Tour under your name at the top of each screen.'; }
+      else if (msg) msg.textContent = (d && d.error) ? d.error : 'Could not turn them back on. Please try again.';
+    })
+    .catch(function () { if (msg) msg.textContent = 'Could not turn them back on. Please try again.'; });
+}
+
 function maybeStartTour(viewId) {
   if (_tourActive || !viewId) return;
   _tourEnsureData(function(){
     var _t = _toursData && _toursData[viewId];
-    if (!_t || !Array.isArray(_t.steps) || _t.steps.length === 0) return;
+    if (!_t || !Array.isArray(_t.steps) || _t.steps.length === 0) { _tourOffer(viewId, false); return; }
     var _go = function() {
       _tourEnsureProgress(function(){
-        if (_tourProgress[viewId]) return;
-        if (_tourSuppress) return;   // v3.1.21 -- no tour starts by itself inside a support session
-        startTour(viewId, false);
+        _tourOffer(viewId, true);   // v3.8.17 -- offered, not started (seen and support-session checks are in _tourOfferPaint)
       });
     };
     if (_t.requires) {
       // Data gate: wait (retry) for the required element; if it never appears, defer silently (do NOT mark seen).
-      _tourFindTarget(_t.requires, 8, function(rq){ if (_tourVisible(rq)) _go(); });
+      _tourFindTarget(_t.requires, 8, function(rq){ if (_tourVisible(rq)) _go(); else _tourOffer(viewId, false); });   // v3.8.17 else
     } else {
       _go();
     }
@@ -31809,6 +31894,7 @@ function _tourFinish() {
   var viewId = _tourViewId;
   _tourTeardown();
   _tourMarkComplete(viewId);
+  _tourOfferPaint(_tourOfferKey, _tourOfferFloat);   // v3.8.17 -- seen now, so its button goes
   // v3.0.726 -- TD-525. THE HAND-OFF. Ian: "Session detail should run first, before the tab tour
   // ... then when the session tour is done start the tab tour for whatever tab they are on."
   //
@@ -31933,7 +32019,8 @@ function replayTours() {
     .then(function(d){
       if (d && d.success) {
         _tourProgress = {};
-        if (msg) { msg.style.color = 'var(--accent-pale)'; msg.textContent = 'Guided tours are back on. Visit any screen to see its tour again.'; }
+        _tourOfferPaint(_tourOfferBase, false);   // v3.8.17
+        if (msg) { msg.style.color = 'var(--accent-pale)'; msg.textContent = 'Tour buttons are back on. Each screen shows Get a Tour until you watch or skip its tour.'; }
       } else {
         if (msg) { msg.style.color = 'var(--error)'; msg.textContent = (d && d.error) ? d.error : 'Could not turn tours back on. Please try again.'; }
       }

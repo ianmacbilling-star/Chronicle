@@ -157,7 +157,21 @@
   <div class="breadcrumb" id="breadcrumb">
     <span class="breadcrumb-link" onclick="showView('campaigns')">My Campaigns</span>
   </div>
+  <!-- v3.8.17 -- the screen's tour, offered rather than started (app.js _tourOffer) -->
+  <button type="button" id="tour-offer-btn" class="btn btn-sm tour-offer-btn" style="display:none;" onclick="tourOfferStart()" title="A short guided tour of this screen.">Get a Tour</button>   <!-- v3.8.18: no star, the usual button shape (Ian) -->
 </div>
+<style>
+  .tour-offer-btn { margin-left: auto; flex: 0 0 auto; transform-origin: 50% 60%; animation: tourOfferWiggle 4s ease-in-out infinite; }   /* v3.8.18 -- shape from .btn .btn-sm */
+  .tour-offer-btn:hover { animation-play-state: paused; }
+  .tour-offer-btn.floating { position: fixed; top: 12px; right: 16px; z-index: 9990; box-shadow: 0 2px 10px rgba(0,0,0,0.35); }
+  @keyframes tourOfferWiggle { 0%, 80%, 100% { transform: rotate(0deg); } 83% { transform: rotate(-7deg); } 86% { transform: rotate(7deg); }
+    89% { transform: rotate(-5deg); } 92% { transform: rotate(5deg); } 95% { transform: rotate(-2deg); } 98% { transform: rotate(0deg); } }
+  @media (prefers-reduced-motion: reduce) { .tour-offer-btn { animation: none; } }
+  .help-tours-on { padding: 6px 16px 0; font-size: 12px; }
+  .help-tours-on a { color: var(--accent-bright); }
+  #help-tours-msg { display: block; margin-top: 4px; opacity: 0.8; }
+  #help-tours-msg:empty { display: none; }
+</style>
 
 <!-- MAIN LAYOUT -->
 <div class="app-layout">
@@ -1200,8 +1214,8 @@
               <button class="btn btn-sm dm-only" id="story-narr-style-btn" onclick="openStylePicker('narrative')">Narrative: Classic</button>
               <button class="btn btn-sm dm-only" id="story-art-style-btn" onclick="openStylePicker('art')">Art: High fantasy</button>
               <button class="btn btn-primary dm-only" id="extract-btn" onclick="extractMoments()" title="It begins here. We read your story and your instructions, pick the key moments, find the right characters and drop you into the outline to review. From there you work up the narrative and make the illustrations.">&#9998; Generate Story</button>
+              <button class="btn" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;" title="Stop Generate Story.">&#10005; Cancel</button>   <!-- v3.8.20: takes Generate Story's place while it runs (Ian) -->
             </div>
-            <button class="btn btn-xs" id="extract-cancel-btn" onclick="cancelExtract()" style="display:none;">&#10005; Cancel</button>
           </div>
         </div>
 
@@ -1210,6 +1224,11 @@
           <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
           <div class="progress-msg" id="progress-msg">Analyzing your session...</div>
         </div>
+        <style>   /* v3.8.19 -- Generate Story's progress words: readable, with room around them (Ian) */
+          #progress-wrap { margin-bottom: 14px; }
+          #progress-msg { font-size: 14px; line-height: 1.4; color: var(--accent-pale); margin-top: 10px; padding: 2px 0 4px; }
+          body #story-style-row #extract-btn.xs-running { display: none !important; }   /* v3.8.20 -- Cancel stands in for it */
+        </style>
 
         <!-- Transcript (left) and Notes (right), side by side -->
         <!-- v3.1.52 -- Ian: the lines under the two boxes were hardly readable, and the word counts could not be seen
@@ -1858,9 +1877,9 @@
 
       <div class="settings-section" id="account-tours-section">
         <div class="settings-section-title">Guided tours</div>
-        <div class="settings-section-desc">Want a refresher? Turn the guided tours back on. Each screen's tour plays once as you visit it, then settles down again.</div>
+        <div class="settings-section-desc">Want a refresher? Turn the tour buttons back on. Each screen shows Get a Tour until you watch or skip its tour.</div>
         <div id="tours-replay-msg" style="display:none;margin-top:12px;font-size:12px;"></div>
-        <button class="btn btn-sm" style="margin-top:14px;" onclick="replayTours()">Show guided tours again</button>
+        <button class="btn btn-sm" style="margin-top:14px;" onclick="replayTours()">Turn tour buttons back on</button>
       </div>
 
       <!-- v3.0.980 -- TD-901. My Published Stories moved to its own tab on My Stuff. -->
@@ -3562,6 +3581,7 @@
   <div class="help-panel-body">
     <div id="help-gs-bar"></div>   <!-- v3.3.22 -- Getting started (app.js GS_STEPS) -->
     <div id="help-gs" class="help-gs" style="display:none;"></div>
+    <div class="help-tours-on" id="help-tours-on"><a href="#" onclick="turnTourButtonsOn(); return false;">Turn tour buttons back on</a><span id="help-tours-msg"></span></div>   <!-- v3.8.17 -->
     <div id="help-thread" class="help-thread"></div>
     <div class="help-compose">
       <textarea class="help-input" id="help-question" placeholder="What do you need help with?" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitHelp();}"></textarea>

@@ -444,6 +444,10 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
   ).run(req.session.userId, req.params.campaignId, req.params.sessionId, targetForkId, _ejNow, _ejNow);
   const extractJobId = _ejIns.lastInsertRowid;
   res.json({ job_id: extractJobId });
+  // v3.8.15 (Ian, 25 Nov 2026: a tester could not tell what Generate Story was doing). The job records the
+  // step it is on; the poll below returns it and the page words its progress from it. Never fails the job.
+  const _ejStage = async function (s) { try { await db.prepare('UPDATE extract_jobs SET stage=? WHERE id=?').run(s, extractJobId); } catch (e) {} };
+  await _ejStage('writing');
 
   // v3.2.56 -- TD-1010. One copy, so the change check below sends exactly the same start.
   const _storySystem = [transcriptCache.transcriptBlock(session.transcript), { type: 'text', text: systemPrompt }];
@@ -513,6 +517,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
       }
     }
     // Auto-save moments to database
+    await _ejStage('saving');   // v3.8.15
     if (parsed.moments && parsed.moments.length) {
       // Phase 4 — regenerate replaces only the CALLER's version's moments.
       const dmForkId = targetForkId;
@@ -603,6 +608,7 @@ router.post('/:campaignId/:sessionId', requireAuth, async function(req, res) {
         'edited_at = ?, edited_by = ? WHERE id = ?'
       ).run(outlineToStore, now, req.session.userId, dmForkId);
 
+      await _ejStage('characters');   // v3.8.15
       // Snapshot each character present in this session (self-contained).
       await snapshotSessionCharacters(db, session, req.params.campaignId, req.session.userId, now, dmForkId);
 
@@ -675,7 +681,7 @@ router.get('/job/:jobId', requireAuth, async function (req, res) {
     return res.json(Object.assign({ status: 'done' }, result));
   }
   if (job.status === 'error') return res.json({ status: 'error', error: job.error || 'Story generation failed' });
-  return res.json({ status: job.status || 'pending' });
+  return res.json({ status: job.status || 'pending', stage: job.stage || null });   // v3.8.15 stage
 });
 
 // ============================================================

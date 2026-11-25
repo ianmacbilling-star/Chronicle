@@ -13,7 +13,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database/db');
 const { friendlyError } = require('../middleware/friendlyErrors');
-const { getTier, saveTierConfig, canPurchaseTokens, isComingSoon } = require('../middleware/tiers');   // v3.8.10 isComingSoon
+const { getTier, saveTierConfig, canPurchaseTokens, isComingSoon, getMomentRange, getEffectiveTier } = require('../middleware/tiers');   // v3.8.10 isComingSoon; v3.8.16 the last two
 const { getPack, listPacks } = require('../services/billing/packs');
 const { getPass, listPasses } = require('../services/billing/passes');   // v3.0.923 -- TD-780
 const subscriptionPause = require('../services/billing/subscriptionPause');   // v3.1.45 -- TD-938
@@ -349,8 +349,20 @@ router.get('/estimate/:campaignId/:sessionId', async function (req, res) {
     const fid = parseInt(req.query.fork_id, 10);
     if (fid > 0) { const fk = await db.prepare('SELECT role, fork_notes FROM session_forks WHERE id = ? AND session_id = ?').get(fid, req.params.sessionId); if (fk && fk.role !== 'dm') notes = fk.fork_notes || ''; }
     const rs = await inOutRates('story'), rn = await inOutRates('narrative');
+    // v3.8.16 (Ian, 25 Nov 2026: Generate Story's price looked like the whole storyboard's). About how many pictures
+    // the storyboard will have: the panels already there if the story has been generated, else this tier's ceiling for
+    // a story this long; plus the title picture either way. The same ceiling routes/extract.js gives the AI. Best effort.
+    let panels = null;
+    try {
+      const pr = fid > 0
+        ? await db.prepare('SELECT COUNT(*) AS n FROM moments WHERE fork_id = ?').get(fid)
+        : await db.prepare("SELECT COUNT(*) AS n FROM moments m JOIN session_forks f ON f.id = m.fork_id WHERE f.session_id = ? AND f.role = 'dm'").get(req.params.sessionId);
+      const have = parseInt(pr && pr.n, 10) || 0;
+      const cap = have ? 0 : (parseInt(getMomentRange(await getEffectiveTier(req.session.userId, req.params.campaignId), wc(s.transcript)), 10) || 0);
+      panels = have ? have + 1 : (cap > 0 ? cap + 1 : null);   // + 1: the title picture lives on the session, not in moments
+    } catch (e) { panels = null; }
     res.json({ story: inOutTokens(rs, wc(s.transcript) + wc(s.session_notes) + wc(s.campaign_lore) + chW, rs.estOut) + 1,   // v3.6.97 (Ian, 2026-11-17: "just add a token to the estimate. They will be happy when it's 2")
-      narrative: inOutTokens(rn, wc(s.transcript) + wc(notes) + chW, rn.estOut), picture: await getTokenCost('nano2') });
+      narrative: inOutTokens(rn, wc(s.transcript) + wc(notes) + chW, rn.estOut), picture: await getTokenCost('nano2'), panels: panels });   // v3.8.16 panels
   } catch (e) { res.status(500).json({ error: 'Could not estimate' }); }
 });
 
