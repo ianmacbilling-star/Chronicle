@@ -149,7 +149,7 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
     'void': 'This gift has been cancelled and can no longer be redeemed.',
     needs_plan: 'Tokens cannot be added to a Free Trial account. Choose a plan in Campaignia, then come back to this link. Your gift never expires and will still be here.',
     cannot_convert: 'This gift cannot be taken as tokens. You can still redeem it as it is.',
-    take_tokens: 'You already have Platinum through your subscription, so this pass would add nothing. Take the tokens instead.',
+    take_tokens: 'You already have Gold through your subscription, so this pass would add nothing. Take the tokens instead.',
     not_mine: 'That gift is not waiting on this account. If you have the code from your gift email, enter it below.'
   };
   function cap(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''; }
@@ -226,7 +226,7 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
     var NO_TOKENS = 'Tokens cannot be added during the Free Trial';
     if (r.kind === 'pass') {
       var parts = [];
-      if (r.runsUntilIfRedeemed) parts.push('Platinum until ' + fmtDate(r.runsUntilIfRedeemed) + ((sub === 'silver' || sub === 'gold') ? ', then ' + cap(sub) + ' again' : ''));
+      if (r.runsUntilIfRedeemed) parts.push('Gold until ' + fmtDate(r.runsUntilIfRedeemed) + (sub === 'silver' ? ', then ' + cap(sub) + ' again' : ''));   // v3.8.11: passes are Gold
       var t = tokensAfter(r.tokens); if (t) parts.push(t);
       setSub(rb, parts.join(' \u00b7 '));
       if (!noTokens) { var c = tokensAfter(r.convertTokens); setSub(cb, c ? 'Bringing you to ' + c : ''); }   // on the trial it is not shown
@@ -270,26 +270,26 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
       if (canConvert) {
         cb.textContent = 'Take ' + r.convertTokens + ' tokens instead';
         var tokensPart = r.tokens > 0 ? ' + ' + r.tokens + ' tokens' : '';
-        if (sub === 'platinum') {
+        if (sub === 'gold' || sub === 'platinum') {   // v3.8.11: passes are Gold
           rb.classList.add('hidden');
           cb.textContent = 'Take ' + r.convertTokens + ' tokens';
           cb.style.background = ''; cb.style.color = '';
-          $('convert-note').textContent = 'You already have Platinum through your subscription, so the pass would add nothing. ' +
+          $('convert-note').textContent = 'You already have Gold through your subscription, so the pass would add nothing. ' +
             'Take the tokens instead. Your subscription is not affected.';
-        } else if ((sub === 'silver' || sub === 'gold') && r.subPausedUntil) {
+        } else if (sub === 'silver' && r.subPausedUntil) {
           // v3.1.45 -- already paused for an earlier pass: this one extends the pause, nothing to choose.
-          rb.textContent = 'Platinum now: ' + r.months + ' more months' + tokensPart;
+          rb.textContent = 'Gold now: ' + r.months + ' more months' + tokensPart;
           $('convert-note').textContent = 'Your ' + cap(sub) + ' subscription is already paused while your current pass runs. ' +
             'This pass is added on the end, and ' + cap(sub) + ' stays paused until it finishes, then restarts by itself. ' +
             'Or take the tokens instead. Choose one; it cannot be changed afterwards.';
-        } else if (sub === 'silver' || sub === 'gold') {
-          // v3.1.45 -- TD-938. Platinum now, and their subscription pauses until the pass ends.
-          rb.textContent = 'Platinum now: ' + r.months + ' months' + tokensPart;
-          $('convert-note').textContent = 'Platinum starts today and runs for ' + r.months + ' months. Your ' + cap(sub) +
+        } else if (sub === 'silver') {
+          // v3.1.45 -- TD-938. Gold now (v3.8.11), and their subscription pauses until the pass ends.
+          rb.textContent = 'Gold now: ' + r.months + ' months' + tokensPart;
+          $('convert-note').textContent = 'Gold starts today and runs for ' + r.months + ' months. Your ' + cap(sub) +
             ' subscription is paused while the pass runs, so you are not charged for it, and it restarts by itself when the pass ends. ' +
             'Or take the tokens instead. Choose one; it cannot be changed afterwards.';
         } else {
-          rb.textContent = 'Redeem: ' + r.months + ' months of Platinum' + tokensPart;
+          rb.textContent = 'Redeem: ' + r.months + ' months of Gold' + tokensPart;
           // v3.1.57 -- first half of this sentence dropped (Ian, 2026-10-12): it made no sense to someone already on a pass.
           $('convert-note').textContent = 'Choose one; it cannot be changed afterwards.';
         }
@@ -330,7 +330,7 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
       if (!r.ok) { error(r.error || REASON[r.reason] || REASON.not_found); return; }
       var lines = [];
       if (r.kind === 'pass' && !r.converted) {
-        lines.push(r.months + ' months of Campaignia Platinum added. It now runs until ' + fmtDate(r.runsUntil) + '.');
+        lines.push(r.months + ' months of Campaignia Gold added. It now runs until ' + fmtDate(r.runsUntil) + '.');
         if (r.subAction === 'pause' && !r.pauseFailed) {
           lines.push('Your ' + cap(r.subscription) + ' subscription is paused until ' + fmtDate(r.pausedUntil) + ' and restarts by itself.');
         } else if (r.subAction === 'pause' && r.pauseFailed) {

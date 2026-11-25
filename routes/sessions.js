@@ -780,7 +780,7 @@ router.put('/:id/characters/:characterId', requireAuth, verifyCampaignMember, as
     const user = await db.prepare('SELECT tier FROM users WHERE id = ?').get(req.session.userId);
     const tier = getTier(user ? user.tier : 'copper');
     if (!tier.can_edit_prompts) {
-      return res.status(403).json({ error: 'Editing session character prompts is a Platinum feature.' });
+      return res.status(403).json({ error: 'Editing session character prompts is a Gold feature.' });
     }
   }
   const { prompt } = req.body;

@@ -707,7 +707,7 @@ function renderTokenPacks() {
   if (!canBuy) {
     var _pmsg = document.getElementById('token-purchase-msg');
     if (_pmsg) {
-      _pmsg.innerHTML = 'Buying token packs requires a paid plan &mdash; either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver, Gold, or Platinum to purchase tokens.<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
+      _pmsg.innerHTML = 'Buying token packs requires a paid plan &mdash; either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver or Gold to purchase tokens.<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
       _pmsg.style.display = 'block';
     }
   }
@@ -721,7 +721,7 @@ function buyTokenPack(packId) {
   var label = pack ? pack.name + ' pack ($' + pack.price + ')' : 'this pack';
   function showUpgrade() {
     if (!msg) return;
-    msg.innerHTML = 'Buying token packs requires a paid plan &mdash; either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver, Gold, or Platinum to purchase tokens.<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
+    msg.innerHTML = 'Buying token packs requires a paid plan &mdash; either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver or Gold to purchase tokens.<div style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="goToPlans()">See plans</button></div>';
     msg.style.display = 'block';
     msg.scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
@@ -873,7 +873,7 @@ function startPassCheckout(passId) {
     uiConfirm(_pausedTo
       ? ('Your ' + _sName + ' subscription is paused while your current pass runs.\n\n' +
          'This pass is added on the end, and ' + _sName + ' stays paused until it finishes, then restarts by itself.')
-      : ('Platinum starts as soon as you pay.\n\n' +
+      : ('Gold starts as soon as you pay.\n\n' +
          'Your ' + _sName + ' subscription is paused while the pass runs, so you are not charged for it, ' +
          'and it restarts by itself the day the pass ends. You are back on ' + _sName + ' then.'),
       { title: _pausedTo ? 'Your subscription stays paused' : 'Your ' + _sName + ' subscription will be paused',
@@ -1454,7 +1454,7 @@ function handleBillingReturn() {
     // account, TWICE. The second pass is not belt-and-braces: the webhook that writes
     // pass_tier and pass_expires_at can land AFTER this page has loaded, and a single refresh
     // would then read the account exactly as it was before the money was taken.
-    billingToast('Your pass is active - welcome to Platinum!', 'success');
+    billingToast('Your pass is active - welcome to Gold!', 'success');
     setTimeout(refreshAccount, 1500);
     setTimeout(refreshAccount, 4500);
   } else if (pass === 'cancel') {
@@ -3532,12 +3532,12 @@ function renderAccountPasses(me, data) {
       var _acctL = (me && (me.accountTier || me.tier)) || '';
       var _subName = (_acctL.charAt(0).toUpperCase() + _acctL.slice(1)) || 'Your';
       if (me && me.cancelAtPeriodEnd) {
-        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Your subscription is already set to end, so a pass simply takes over.';
+        desc.textContent = 'Months of Gold access and a block of tokens, paid once. Your subscription is already set to end, so a pass simply takes over.';
       } else if (_acctL === 'gold' || _acctL === 'platinum') {   // v3.8.10
-        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Buying one stops your Platinum ' +
+        desc.textContent = 'Months of Gold access and a block of tokens, paid once. Buying one stops your ' + _subName + ' ' +
           'subscription renewing; the pass starts when the time you have already paid for runs out.';
       } else {
-        desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Buying one puts you on Platinum at once ' +
+        desc.textContent = 'Months of Gold access and a block of tokens, paid once. Buying one puts you on Gold at once ' +
           'and pauses your ' + _subName + ' subscription until the pass ends; it then restarts by itself.';
       }
     } else if (hasPass) {
@@ -3551,7 +3551,7 @@ function renderAccountPasses(me, data) {
            'the new months start when the current pass ends.')
         : 'Buying another pass extends the one you have rather than replacing it.';
     } else {
-      desc.textContent = 'Months of Platinum access and a block of tokens, paid once. Nothing to cancel.';
+      desc.textContent = 'Months of Gold access and a block of tokens, paid once. Nothing to cancel.';
     }
   }
 
@@ -3624,6 +3624,7 @@ function renderAccountPlans(me) {
     var markCurrent = isCurrent && !passOnly;
     var col = TIER_COLORS[key] || TIER_COLORS.copper;
     var priceText = t.price ? ('$' + t.price + '<span style="font-size:11px;color:var(--text-light);">/mo</span>') : 'Free';
+    if (t.coming_soon) priceText = 'Coming Soon';   // v3.8.11 -- THE TIER SHUFFLE: Platinum is shown, not sold, until video launches
     var action = '';
     if (key !== 'copper' && !isCurrent && !live) {
       action = '<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" onclick="subscribeTier(&#39;' + key + '&#39;)">Subscribe</button>';
@@ -3638,6 +3639,7 @@ function renderAccountPlans(me) {
     } else if (key !== 'copper' && isCurrent && live) {
       action = '<button class="btn btn-sm" style="margin-top:10px;width:100%;" onclick="openBillingPortal()">Manage</button>';
     }
+    if (t.coming_soon && !isCurrent) action = '';   // v3.8.11 -- nothing to buy yet
     return '<div style="border:1px solid ' + (markCurrent ? 'var(--accent-bright)' : 'rgba(var(--accent-rgb),0.2)') + ';' +
       'border-radius:var(--radius-lg);padding:16px;background:' +
       (markCurrent ? 'rgba(var(--accent-rgb),0.08)' : 'transparent') + ';display:flex;flex-direction:column;">' +
@@ -6547,7 +6549,7 @@ function resetCustomStyleForm() {
 }
 function openCustomStylesView(beforeUpgrade, beforeOpen) {   // v3.3.70 -- TD-1079: both optional (the art style window's button)
   if (!(state && state.user && (state.user.tier === 'gold' || state.user.tier === 'platinum'))) {
-    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.', beforeUpgrade);
+    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Gold. Every plan includes the built-in art styles.', beforeUpgrade);
     return;
   }
   if (typeof beforeOpen === 'function') beforeOpen();
@@ -6558,7 +6560,7 @@ function openCustomStylesView(beforeUpgrade, beforeOpen) {   // v3.3.70 -- TD-10
 }
 function openCustomStyles() {
   if (!(state && state.user && (state.user.tier === 'gold' || state.user.tier === 'platinum'))) {
-    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Platinum. Every plan includes the built-in art styles.');
+    platinumGate('Custom Art Styles', 'Building your own art styles from reference images is available on Gold. Every plan includes the built-in art styles.');
     return;
   }
   resetCustomStyleForm();
@@ -12392,7 +12394,7 @@ function _tbTargetKey() {
 // nowhere to put an Upgrade button.
 function platinumGate(what, why, beforeUpgrade) {   // v3.3.70 -- beforeUpgrade: optional, runs just before goToPlans
   appConfirm({
-    title: String(what || '').charAt(0).toUpperCase() + String(what || '').slice(1) + ' is a Platinum feature',   // v3.4.01 -- always a capital
+    title: String(what || '').charAt(0).toUpperCase() + String(what || '').slice(1) + ' is a Gold feature',   // v3.8.10 (was Platinum); v3.4.01 -- always a capital
     body: why,
     note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
     okLabel: 'Upgrade My Plan',
@@ -12443,7 +12445,7 @@ function openTitleBuilder(target) {
   }
   if (!(state && state.user && (state.user.tier === 'gold' || state.user.tier === 'platinum'))) {
     // v3.4.01 -- from the Image Builder there are no title styles to fall back on (testers), and a real dash.
-    platinumGate('The Title Builder', _tbIsIb() ? 'Drawing a title as artwork for your pictures needs your own Platinum plan.' : 'Drawing your title as artwork is available on Platinum. The five title styles are on every plan \u2014 they set the title in a real typeface with your chosen color, size and placement.');
+    platinumGate('The Title Builder', _tbIsIb() ? 'Drawing a title as artwork for your pictures needs your own Gold plan.' : 'Drawing your title as artwork is available on Gold. The five title styles are on every plan \u2014 they set the title in a real typeface with your chosen color, size and placement.');
     return;
   }
   _tbErr('');
@@ -20270,7 +20272,7 @@ function wtUsesLine(d) {
 function wtLockedHtml() {
   return '<p class="wc-text">The writing coach reads your text and helps you make it stronger: <b>Feedback</b> gives an honest verdict and tips where they help, each with a <b>Show me</b>; ' +
     '<b>Rewrite</b> offers new versions to choose from (clearer, more vivid, more dramatic, simpler, more detail, longer, shorter, or your own way); <b>Word</b> finds a better word. ' +
-    'It comes with <b>Gold</b> and <b>Platinum</b>, and with the Free Trial.</p>' +
+    'It comes with <b>Silver</b> and <b>Gold</b>, and with the Free Trial.</p>' +
     '<button type="button" class="btn btn-primary btn-sm" onclick="wtClose(); goToPlans();">See plans</button>' +
     '<p class="wc-note">Regen works on every plan.</p>';
 }
@@ -20336,7 +20338,7 @@ function wtToolsHtml() {
   return wtTabsHere().map(function (t) {
     var locked = t.gold && lock;
     return '<button type="button" role="tab" aria-selected="' + (WT_STATE.cur === t.id ? 'true' : 'false') + '" class="wc-tool' + (locked ? ' is-locked' : '') + (WT_STATE.cur === t.id ? ' is-on' : '') + '" onmousedown="event.preventDefault()" onclick="wtTab(\'' + t.id + '\')" title="' +
-      (locked ? 'Comes with Gold and Platinum' : t.tip) + '">' + t.name + (locked ? '<span class="wt-gold">Gold</span>' : '') + '</button>';
+      (locked ? 'Comes with Silver and Gold' : t.tip) + '">' + t.name + (locked ? '<span class="wt-gold">Silver</span>' : '') + '</button>';
   }).join('') +
   '<button type="button" class="wc-revert" id="wc-revert" style="display:none;" onmousedown="event.preventDefault()" onclick="wtUndo(WT_STATE.ta)" title="Put back the text this box had before Use this">&#8634; Revert</button>';   // v3.2.38 -- a link, not a tab
 }
@@ -24198,7 +24200,7 @@ function promoEasternDate(v) {
 }
 
 function promoDescribe(c) {
-  if (c.action_type === 'make_tester') return 'Make a Tester: Platinum, at sign-up';   // v3.3.50 -- TD-1063
+  if (c.action_type === 'make_tester') return 'Make a Tester: Gold, at sign-up';   // v3.3.50 -- TD-1063
   if (c.schema_v !== 2) {
     var val = (c.action_type === 'percent_off') ? (c.action_value + '% off (Stripe, set by hand)')
             : (c.action_type === 'amount_off') ? ('$' + c.action_value + ' off (Stripe, set by hand)')
@@ -24293,7 +24295,7 @@ function createPromoCode() {
       if (res.ok && res.j && res.j.ok) {
         var _wasTester = payload.kind === 'tester';
         resetPromoForm();
-        if (msg && _wasTester) { msg.textContent = 'Created. Anyone who signs up with it becomes a tester on Platinum.'; loadPromoCodes(); return; }
+        if (msg && _wasTester) { msg.textContent = 'Created. Anyone who signs up with it becomes a tester on Gold.'; loadPromoCodes(); return; }
         if (msg) msg.textContent = 'Created' + (res.j.stripe ? ', with its discount in Stripe (' + (res.j.stripe.livemode ? 'live' : 'sandbox') + ').' : ' (bonus tokens only, nothing in Stripe).');
         loadPromoCodes();
       } else {
@@ -24391,7 +24393,7 @@ function addTesterByEmail() {
   fetch('/api/admin/testers-add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email }) })
     .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
     .then(function (res) {
-      if (res.ok && res.j && res.j.ok) { if (inp) inp.value = ''; if (msg) msg.textContent = 'Done: that account is now a tester on Platinum.'; loadTesters(); }
+      if (res.ok && res.j && res.j.ok) { if (inp) inp.value = ''; if (msg) msg.textContent = 'Done: that account is now a tester on Gold.'; loadTesters(); }
       else if (msg) msg.textContent = (res.j && res.j.error) || 'Could not save.';
     })
     .catch(function () { if (msg) msg.textContent = 'Could not save.'; });
@@ -26603,7 +26605,7 @@ function audTOpen() {
     return fetch('/api/audio/config?campaign=' + cid, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (c) {
       if (!AUD_T) return;
       if (c) AUD_T_CFG = c;   // v3.6.22: this campaign's plan (the Free Trial's limit) for the quote
-      if (c && c.allowed === false) audTBody('<div style="font-size:14px;line-height:1.6;">' + escapeHtml(c.plan_message || 'Audio Transcription comes with Gold and Platinum.') + '</div>');
+      if (c && c.allowed === false) audTBody('<div style="font-size:14px;line-height:1.6;">' + escapeHtml(c.plan_message || 'Audio Transcription comes with Silver and Gold.') + '</div>');
       else audTPickView();
     });
   }).catch(function () { if (AUD_T) audTPickView(); });
@@ -26641,7 +26643,7 @@ function audTQuoteView() {
   var tooLong = secs > max;
   audTBody('<div style="font-size:14px;line-height:1.6;"><b>' + escapeHtml(f.name) + '</b><br>' + (Math.round(f.size / 104857.6) / 10) + ' MB &middot; ' + (AUD_T.exact ? '' : 'about ') + audTLen(secs) + '</div>' +
     (tooLong ? '<div style="color:#e8a85a;margin-top:8px;">That is longer than 6 hours. Split it and transcribe each part.</div>' :
-    (cap && secs > cap ? '<div style="margin-top:10px;font-size:13px;padding:8px 10px;border-radius:6px;background:rgba(var(--accent-rgb, 201,168,76),0.12);">On the Free Trial we transcribe just the first 20 minutes, as a quick proof it works. It is an expensive feature, so save your tokens for the rest of Campaignia. Gold and Platinum transcribe the whole recording, up to 6 hours.</div>' : '') +
+    (cap && secs > cap ? '<div style="margin-top:10px;font-size:13px;padding:8px 10px;border-radius:6px;background:rgba(var(--accent-rgb, 201,168,76),0.12);">On the Free Trial we transcribe just the first 20 minutes, as a quick proof it works. It is an expensive feature, so save your tokens for the rest of Campaignia. Silver and Gold transcribe the whole recording, up to 6 hours.</div>' : '') +
     '' +   // v3.6.93 (Ian, 2026-11-17): the cost is in the Transcribe button's tooltip (audTCostTip)
     '<label style="display:block;margin-top:10px;font-size:13px;">How many people are speaking? <input id="aud-t-spk" type="number" min="1" max="32" placeholder="not sure" style="width:90px;margin-left:6px;"></label>' +
     '<label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer;"><input type="checkbox" id="aud-t-ok" style="margin-top:3px;"> Everyone in this recording agreed to be recorded and transcribed.</label>' +
@@ -26718,7 +26720,7 @@ function audTShowJob(job) {
   var sp = job.speakers || [];
   if (typeof refreshTokenBalance === 'function') refreshTokenBalance();   // v3.6.18: the top bar shows the charge at once
   audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' token' + (Number(job.tokens_charged) === 1 ? '' : 's') + ')' : '') + '. Name each speaker, or leave them out:</div>' +
-    (job.cap_secs && Number(job.secs_est) > Number(job.cap_secs) ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Gold and Platinum transcribe the whole recording.</div>' : '') +   // v3.6.22
+    (job.cap_secs && Number(job.secs_est) > Number(job.cap_secs) ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Silver and Gold transcribe the whole recording.</div>' : '') +   // v3.6.22
     (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
     '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14
     (job.speakers_hint && sp.length < job.speakers_hint ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">You said ' + job.speakers_hint + ' people were speaking; we could tell ' + sp.length + ' apart. Voices that sound alike can come back as one.</div>' : '') +   // v3.6.18
@@ -39723,8 +39725,8 @@ function statsSplitEnd() {
 // =====================================================================================
 function versionTierGate(msg) {
   appConfirm({
-    title: 'More versions need Gold',
-    body: msg || 'Your first version is free. Making another one needs Gold or higher on your own plan.',
+    title: 'More versions need Silver',
+    body: msg || 'Your first version is free. Making another one needs Silver or higher on your own plan.',
     note: 'Upgrading takes you to the plans on your Account page. Nothing you have already made is affected.',
     okLabel: 'Upgrade My Plan',
     cancelLabel: 'Not now',
@@ -40195,7 +40197,7 @@ function openImageBuilder(keepBack) {
       if (!d || d.error) { showError((d && d.error) || 'Could not open the Image Builder.'); return; }
       var list = d.campaigns || [];
       if (!list.length && !(state && state.user && (state.user.tier === 'gold' || state.user.tier === 'platinum'))) {
-        platinumGate('the Image Builder', 'The Image Builder makes posters, portraits, maps and handouts for a campaign from its characters and assets. It is open in your own Platinum campaigns, and in any campaign whose Story Master is on Platinum.');
+        platinumGate('the Image Builder', 'The Image Builder makes posters, portraits, maps and handouts for a campaign from its characters and assets. It is open in your own Gold campaigns, and in any campaign whose Story Master is on Gold or higher.');
         return;
       }
       IB.campaigns = list; IB.types = d.types || []; IB.maxRefs = d.max_refs || 14; IB.cost = (d.cost == null ? 1 : d.cost);
@@ -41323,7 +41325,7 @@ function archEditInBuilder(archiveId) {
   fetch('/api/images/builder/campaigns/' + encodeURIComponent(c.id) + '/from-archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archive_id: archiveId }) })
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (d && d.error === 'NOT_PLATINUM') { platinumGate('the Image Builder', d.message || 'The Image Builder is a Platinum feature.'); return; }
+      if (d && d.error === 'NOT_PLATINUM') { platinumGate('the Image Builder', d.message || 'The Image Builder is a Gold feature.'); return; }
       if (!d || !d.image) { showError((d && (d.message || d.error)) || 'Could not open the picture in the Image Builder.'); return; }
       if (String(IB.cid) !== String(c.id)) { ibClearCampaign(); ibClearForm(true); IB.cid = c.id; IB.cname = c.name || ''; }
       IB.openAfter = d.image.id;
@@ -47454,7 +47456,7 @@ function printOrderForgetForCampaignSwitch() {
   try { up = (new URLSearchParams(window.location.search).get('upgrade') || '').toLowerCase(); } catch (e) {}
   if (!/^(silver|gold|platinum|pass:[a-z0-9_-]{1,20})$/.test(up)) return;
   try { var u = new URL(window.location.href); u.searchParams.delete('upgrade'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) {}
-  var names = { silver: 'Silver plan', gold: 'Gold plan', platinum: 'Platinum plan', 'pass:p3': '3 Month Platinum Pass', 'pass:p6': '6 Month Platinum Pass', 'pass:p12': '12 Month Platinum Pass' };
+  var names = { silver: 'Silver plan', gold: 'Gold plan', platinum: 'Platinum plan', 'pass:p3': '3 Month Gold Pass', 'pass:p6': '6 Month Gold Pass', 'pass:p12': '12 Month Gold Pass' };
   window.addEventListener('load', function () {
     setTimeout(function () {
       try { if (typeof goToPlans === 'function') goToPlans(); else if (typeof showView === 'function') showView('account'); } catch (e) {}

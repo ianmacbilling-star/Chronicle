@@ -1428,9 +1428,9 @@ function buildEmailPreview(type, name) {
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
     case 'receipt_pass':
       return receiptEmail(who, { kind: 'pass', reference: 'cs_test_c2PLmQdXvRtYuIoPaSdFgHjKlZxCvBnM4qWeRtYuIoP7aSdF', purchaseNo: 'tp-00043',
-        itemName: '3 Month Platinum Pass', amountCents: 7900, currency: 'usd',
+        itemName: '3 Month Gold Pass', amountCents: 7900, currency: 'usd',
         tokensGranted: 200, balanceAfter: 243, tierLabel: 'platinum',
-        runsUntil: '2026-12-21T00:00:00.000Z', subscriptionNote: 'Gold paused until December 21, 2026, then it restarts by itself',
+        runsUntil: '2026-12-21T00:00:00.000Z', subscriptionNote: 'Silver paused until December 21, 2026, then it restarts by itself',
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-09-21T15:25:00.000Z' });
     case 'receipt_subscription':
       return receiptEmail(who, { kind: 'subscription', reference: 'in_1UIE4oFtFqbShreeDSZhnl3p',
@@ -1446,8 +1446,8 @@ function buildEmailPreview(type, name) {
       // A mid-cycle upgrade charges the DIFFERENCE and grants no new month of tokens, so this
       // sample deliberately carries no tokens row -- that is what the real one looks like.
       return receiptEmail(who, { kind: 'proration', reference: 'in_1WKG6qHvHsdUjttgFUBjnp5r',
-        itemName: 'Platinum subscription', amountCents: 640, currency: 'usd',
-        balanceAfter: 412, tierLabel: 'Platinum',
+        itemName: 'Gold subscription', amountCents: 640, currency: 'usd',
+        balanceAfter: 412, tierLabel: 'Gold',
         cardBrand: 'Visa', cardLast4: '4242', paidAt: '2026-10-05T15:25:00.000Z' });
     case 'receipt_upgrade':
       // v3.0.966 -- TD-842. NO amountCents AND NO CARD, because nothing is charged on the day
@@ -1540,7 +1540,7 @@ function disputeAlertText(info) {
   const meta = (det && det.metadata) || {};
   const smeta = (det && det.sessionMetadata) || {};
   const kind = meta.kind || smeta.kind || (smeta.pack_id ? 'pack' : '');
-  const WHAT = { gift: 'a gift certificate', pass: 'a Platinum Pass', print_order: 'a printed book order', pack: 'a token pack', upgrade: 'a plan upgrade' };
+  const WHAT = { gift: 'a gift certificate', pass: 'a Gold Pass', print_order: 'a printed book order', pack: 'a token pack', upgrade: 'a plan upgrade' };
   const what = WHAT[kind] || (det && det.description) || 'not recorded on the payment (most likely a subscription payment); see Stripe';
   const g = info.gift;
   let giftLine = '';

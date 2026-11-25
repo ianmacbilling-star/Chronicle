@@ -1601,7 +1601,7 @@ router.post('/generate-moment', requireAuth, async function(req, res) {
     const momentDirsS = await loadMomentDirections(db, moment.fork_id);
     const _campPromptS = await loadCampaignPrompt(db, moment.campaign_id);
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
-    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
+    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Gold plan. Pick another, or upgrade for custom styles." });
     if (process.env.DEBUG_PROMPT) {
       try {
         var _md = momentDirsS[moment.id];
@@ -1859,7 +1859,7 @@ router.post('/retouch-moment', requireAuth, async function(req, res) {
       }
     }
     const _rs = await resolveGenStyle(db, style, req.session.userId, moment.campaign_id);
-    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
+    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Gold plan. Pick another, or upgrade for custom styles." });
     var _markedUrl = String(req.body.marked_url || '').trim();
     if (_markedUrl && !isOurPublicUrl(_markedUrl)) _markedUrl = '';   // v3.1.85 -- TD-954, any of our addresses
     // v3.0.773 -- CROP. When the reader marked a spot and asked for the change
@@ -2236,7 +2236,7 @@ router.post('/generate-all', requireAuth, async function(req, res) {
   // Whole batch shares one art style: resolve + lapse-check once, before the
   // concurrent map (a return inside the map would not abort the batch).
   const _rsAll = await resolveGenStyle(db, style, req.session.userId, campaign_id);
-  if (_rsAll.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Platinum plan. Pick another, or upgrade for custom styles." });
+  if (_rsAll.locked) return res.json({ error: 'STYLE_LOCKED', message: "That custom art style isn't available right now. It needs an active Gold plan. Pick another, or upgrade for custom styles." });
   const submitResults = await Promise.allSettled(
     toGenerate.map(async function(m) {
       const panelSeed = (baseSeed + sessionOffset + (m.panel_order || 0)) % 2147483647;
@@ -2959,7 +2959,7 @@ router.post('/title-build', requireAuth, async function (req, res) {
     // v3.0.634 -- PLATINUM ONLY, AND CHECKED HERE AS WELL AS ON THE BUTTON. The modal refuses to
     // open for anyone else, but a button is a courtesy and a route is the rule.
     if (!(await isTruePlatinum(req.session.userId))) {
-      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+      return res.status(403).json({ error: 'The Title Builder is a Gold feature. Upgrade to Gold to draw your title as artwork.' });
     }
     const campaignId = req.body && req.body.campaignId;
     if (!campaignId) return res.json({ error: 'No campaign.' });
@@ -2973,7 +2973,7 @@ router.post('/title-build', requireAuth, async function (req, res) {
     // lets a chapter draw its session name instead (TD-422).
     // v3.3.83 -- target kind 'ib': the Image Builder's Title section. Its words are the ones typed there.
     const _ibTgt = !!(req.body && req.body.target && req.body.target.kind === 'ib');
-    if (_ibTgt && !(await ibAllowed(req.session.userId, campaignId))) return res.status(403).json({ error: 'The Image Builder is a Platinum feature.' });
+    if (_ibTgt && !(await ibAllowed(req.session.userId, campaignId))) return res.status(403).json({ error: 'The Image Builder is a Gold feature.' });
     const tgt = _ibTgt ? { current: { words: { title: ibClip(req.body.ibTitle, 100), subtitle: ibClip(req.body.ibSubtitle, 140) } } }
       : await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
     if (tgt.error) return res.status(403).json({ error: tgt.error });
@@ -3117,7 +3117,7 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
     // v3.0.634 -- PLATINUM ONLY, AND CHECKED HERE AS WELL AS ON THE BUTTON. The modal refuses to
     // open for anyone else, but a button is a courtesy and a route is the rule.
     if (!(await isTruePlatinum(req.session.userId))) {
-      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+      return res.status(403).json({ error: 'The Title Builder is a Gold feature. Upgrade to Gold to draw your title as artwork.' });
     }
     const campaignId = req.body && req.body.campaignId;
     if (!campaignId) return res.json({ error: 'No campaign.' });
@@ -3130,7 +3130,7 @@ router.post('/title-retouch', requireAuth, async function (req, res) {
 
     // v3.3.87 -- target kind 'ib': the Image Builder's lettering, sent by the window (our own files only).
     const _ibRt = !!(req.body && req.body.target && req.body.target.kind === 'ib');
-    if (_ibRt && !(await ibAllowed(req.session.userId, campaignId))) return res.status(403).json({ error: 'The Image Builder is a Platinum feature.' });
+    if (_ibRt && !(await ibAllowed(req.session.userId, campaignId))) return res.status(403).json({ error: 'The Image Builder is a Gold feature.' });
     const _ibCur = (req.body && req.body.ibCur) || {};
     const own = _ibRt ? { current: { url: isOurPublicUrl(String(_ibCur.url || '')) ? String(_ibCur.url) : '', src: isOurPublicUrl(String(_ibCur.src || '')) ? String(_ibCur.src) : '' } }
       : await resolveTitleTarget(db, req, targetFromRequest(req, campaignId));
@@ -3276,7 +3276,7 @@ router.post('/title-ref', requireAuth, guardUpload(titleRefUpload, 'title-ref'),
     // v3.0.634 -- PLATINUM ONLY, AND CHECKED HERE AS WELL AS ON THE BUTTON. The modal refuses to
     // open for anyone else, but a button is a courtesy and a route is the rule.
     if (!(await isTruePlatinum(req.session.userId))) {
-      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+      return res.status(403).json({ error: 'The Title Builder is a Gold feature. Upgrade to Gold to draw your title as artwork.' });
     }
     if (!req.file || !req.file.buffer) return res.json({ error: 'No image received.' });
     const ct = req.file.mimetype || 'image/png';
@@ -3489,7 +3489,7 @@ async function ibGateView(req, res) {
 }
 async function ibGate(req, res) {
   if (await ibAllowed(req.session.userId, req.params.cid)) return true;
-  res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature. It is open in your own Platinum campaigns, and in campaigns whose Story Master is on Platinum.' });
+  res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Gold feature. It is open in your own Gold campaigns, and in campaigns whose Story Master is on Gold or higher.' });
   return false;
 }
 function ibRow(r) {
@@ -3913,7 +3913,7 @@ async function ibBuildAndSubmit(req, res, db, uid, cid, recipe, words) {
   const effRank = accessRank(await getEffectiveTier(uid, cid));
   if (style.indexOf('custom:') !== 0 && !artStyleAllowed(effRank, style)) { res.json({ error: 'STYLE_LOCKED', message: 'That art style isn\u2019t available on your current plan.' }); return null; }
   const _rs = await resolveGenStyle(db, style, uid, cid);
-  if (_rs.locked) { res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' }); return null; }
+  if (_rs.locked) { res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Gold plan.' }); return null; }
 
   const refsIn = (recipe.refs && typeof recipe.refs === 'object') ? recipe.refs : {};
   const rc = await ibResolveCharacters(db, cid, uid, refsIn.characters);
@@ -3991,7 +3991,7 @@ async function ibOwnIdle(req, res, db) {
   const r = await db.prepare('SELECT * FROM builder_images WHERE id = ?').get(req.params.id);
   if (!r) { res.status(404).json({ error: 'That picture is no longer in the gallery.' }); return null; }
   if (String(r.user_id) !== String(req.session.userId)) { res.status(403).json({ error: 'Only the person who made a picture can change it. Make your own copy to work on it.' }); return null; }
-  if (!(await ibAllowed(req.session.userId, r.campaign_id))) { res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' }); return null; }
+  if (!(await ibAllowed(req.session.userId, r.campaign_id))) { res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Gold feature.' }); return null; }
   const busy = await db.prepare("SELECT id FROM image_jobs WHERE builder_image_id = ? AND status IN ('queued', 'processing') AND created_at > ? LIMIT 1").get(r.id, new Date(Date.now() - IB_JOB_WINDOW_MS).toISOString());
   if (busy) { res.json({ error: 'That picture is still being drawn. Try again once it has finished.' }); return null; }
   return r;
@@ -4046,7 +4046,7 @@ router.post('/builder/campaigns/:cid/generate', requireAuth, async function (req
 // the campaign's Archive as a title, exactly as archive-title does for a cover, so it can be reused anywhere.
 router.post('/builder/campaigns/:cid/title-archive', requireAuth, async function (req, res) {
   try {
-    if (!(await isTruePlatinum(req.session.userId))) return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+    if (!(await isTruePlatinum(req.session.userId))) return res.status(403).json({ error: 'The Title Builder is a Gold feature. Upgrade to Gold to draw your title as artwork.' });
     if (!(await ibGate(req, res))) return;
     const cid = parseInt(req.params.cid, 10), b = req.body || {};
     const url = String(b.url || '').trim(), src = String(b.src || '').trim();
@@ -4193,7 +4193,7 @@ router.post('/builder/images/:id/name', requireAuth, async function (req, res) {
     const r = await db.prepare('SELECT id, user_id, campaign_id FROM builder_images WHERE id = ?').get(req.params.id);
     if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
     if (String(r.user_id) !== String(req.session.userId)) return res.status(403).json({ error: 'Only the person who made a picture can rename it.' });
-    if (!(await ibAllowed(req.session.userId, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    if (!(await ibAllowed(req.session.userId, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Gold feature.' });
     const name = String((req.body && req.body.name) || '').trim().slice(0, IB_NAME_MAX);
     if (!name) return res.json({ error: 'Give the picture a name.' });
     await db.prepare('UPDATE builder_images SET name = ?, updated_at = ? WHERE id = ?').run(name, new Date().toISOString(), r.id);
@@ -4338,7 +4338,7 @@ router.post('/builder/images/:id/copy', requireAuth, async function (req, res) {
     const uid = req.session.userId;
     const r = await db.prepare('SELECT * FROM builder_images WHERE id = ?').get(req.params.id);
     if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
-    if (!(await ibAllowed(uid, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    if (!(await ibAllowed(uid, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Gold feature.' });
     if (r.is_ready === false && String(r.user_id) !== String(uid)) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
     if (!r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be copied.' });
     const now = new Date().toISOString();
@@ -4404,7 +4404,7 @@ router.post('/builder/images/:id/retouch', requireAuth, async function (req, res
     const webhookUrl = falWebhookUrl();
     if (!webhookUrl) return res.json({ error: 'Image service is not fully configured (PUBLIC_BASE_URL is unset).' });
     const _rs = await resolveGenStyle(db, r.art_style, uid, cid);
-    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' });
+    if (_rs.locked) return res.json({ error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Gold plan.' });
     // The references this picture was drawn with, resolved again from the database (a removed one is left out
     // rather than refusing the retouch: the picture itself is what is being changed).
     const recipe = ibRecipeOf(r);
@@ -4468,7 +4468,7 @@ router.post('/builder/images/:id/ready', requireAuth, async function (req, res) 
     const r = await db.prepare('SELECT id, user_id, campaign_id, image_url FROM builder_images WHERE id = ?').get(req.params.id);
     if (!r) return res.status(404).json({ error: 'That picture is no longer in the gallery.' });
     if (String(r.user_id) !== String(req.session.userId)) return res.status(403).json({ error: 'Only the person who made a picture can change whether it is ready.' });
-    if (!(await ibAllowed(req.session.userId, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Platinum feature.' });
+    if (!(await ibAllowed(req.session.userId, r.campaign_id))) return res.status(403).json({ error: 'NOT_PLATINUM', message: 'The Image Builder is a Gold feature.' });
     const ready = !!(req.body && req.body.ready === true);
     if (ready && !r.image_url) return res.json({ error: 'The picture has to finish drawing before it can be marked Ready.' });
     await db.prepare('UPDATE builder_images SET is_ready = ?, updated_at = ? WHERE id = ?').run(ready, new Date().toISOString(), r.id);
@@ -4557,7 +4557,7 @@ async function startKeyframeRetouch(db, o) {
       ', and it is the only one supplied. Apply the change to ' + hit.name + ' and to no one else.\n\n' + instr;
   }
   const _rs = await resolveGenStyle(db, style, o.userId, o.campaignId);
-  if (_rs.locked) return { error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Platinum plan.' };
+  if (_rs.locked) return { error: 'STYLE_LOCKED', message: 'That custom art style isn\u2019t available right now. It needs an active Gold plan.' };
   let marked = String(o.markedUrl || '').trim();
   if (marked && !isOurPublicUrl(marked)) marked = '';
   const sub = await submitRetouch(o.imageUrl, instr, _rs.styleForGen, fal_key, webhookUrl, { refs: refs, text: charText }, shape, marked || null, (pick && refs.some(function (x) { return x && x.name && String(x.name).trim().toLowerCase() === pick.toLowerCase(); })) ? pick : null, false, null);

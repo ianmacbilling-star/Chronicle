@@ -806,7 +806,7 @@ router.post('/:campaignId/title-read', requireAuth, verifyCampaignMember, async 
 router.post('/:campaignId/title-write', requireAuth, verifyCampaignMember, async function (req, res) {
   try {
     if (!(await isTruePlatinum(req.session.userId))) {
-      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+      return res.status(403).json({ error: 'The Title Builder is a Gold feature. Upgrade to Gold to draw your title as artwork.' });
     }
     const db = await getDb();
     const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
@@ -855,7 +855,7 @@ router.post('/:campaignId/my-book-meta/archive-title', requireAuth, verifyCampai
     // v3.0.634 -- Platinum only, same as the Title Builder itself. Reached only from that modal,
     // but a route may not rely on which button opened it.
     if (!(await isTruePlatinum(req.session.userId))) {
-      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+      return res.status(403).json({ error: 'The Title Builder is a Gold feature. Upgrade to Gold to draw your title as artwork.' });
     }
     const db = await getDb();
     const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
@@ -918,7 +918,7 @@ router.post('/:campaignId/my-book-meta/restore-title', requireAuth, verifyCampai
     // v3.0.634 -- Platinum only, same as the Title Builder itself. Reached only from that modal,
     // but a route may not rely on which button opened it.
     if (!(await isTruePlatinum(req.session.userId))) {
-      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+      return res.status(403).json({ error: 'The Title Builder is a Gold feature. Upgrade to Gold to draw your title as artwork.' });
     }
     const db = await getDb();
     const t = await resolveTitleTarget(db, req, targetFromRequest(req, req.params.campaignId));
@@ -989,7 +989,7 @@ router.post('/:campaignId/my-book-meta/title-ref-from-archive', requireAuth, ver
     // v3.0.634 -- Platinum only, same as the Title Builder itself. Reached only from that modal,
     // but a route may not rely on which button opened it.
     if (!(await isTruePlatinum(req.session.userId))) {
-      return res.status(403).json({ error: 'The Title Builder is a Platinum feature. Upgrade to Platinum to draw your title as artwork.' });
+      return res.status(403).json({ error: 'The Title Builder is a Gold feature. Upgrade to Gold to draw your title as artwork.' });
     }
     const db = await getDb();
     const arch = await db.prepare('SELECT * FROM campaign_archives WHERE id = ? AND campaign_id = ?').get(req.body && req.body.archiveId, req.params.campaignId);

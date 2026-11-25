@@ -199,7 +199,7 @@ async function runPassMilestone(db, prefix, offset, opts) {
   for (let i = 0; i < rows.length; i++) {
     const u = rows[i];
     const type = prefix + ':' + u.key_date;
-    const tierName = (TIERS[u.pass_tier] && TIERS[u.pass_tier].name) || u.pass_tier || 'Platinum';
+    const tierName = (TIERS[u.pass_tier] && TIERS[u.pass_tier].name) || u.pass_tier || 'Gold';
     // WHAT THE DRY RUN SHOWS is the same identifying detail the send would use, so a reader can
     // tell whether the right person matched for the right date.
     const who = { id: u.id, name: u.name || '', email: u.email, pass_tier: u.pass_tier,

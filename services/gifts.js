@@ -530,7 +530,7 @@ async function redeem(db, userId, input, deps, opts) {
       try {
         const alert = deps.sendAlertEmail || require('../routes/email').sendAlertEmail;
         await alert('Gift redeemed, but the subscription could not be paused',
-          'User ' + userId + ' redeemed gift ' + result.id + ' (Platinum until ' + String(result.runsUntil).slice(0, 10) + '). Their ' +
+          'User ' + userId + ' redeemed gift ' + result.id + ' (Gold until ' + String(result.runsUntil).slice(0, 10) + '). Their ' +
           result.subscription + ' subscription ' + result._subId + ' could not be paused: ' + ((e && e.message) || 'unknown error') +
           String.fromCharCode(10) + 'They are still being billed. Pause it by hand in the Stripe dashboard until that date.');
       } catch (_) {}

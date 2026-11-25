@@ -577,7 +577,7 @@ router.post('/checkout', async function(req, res) {
   // TF-03: only subscribers (or Copper members under a paid SM) may buy token
   // packs. Authoritative gate -- the UI mirrors this but cannot be trusted.
   if (!(await canPurchaseTokens(req.session.userId))) {
-    return res.status(403).json({ error: 'Buying token packs requires a paid plan - either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver, Gold, or Platinum to purchase tokens.', code: 'TIER_REQUIRED' });
+    return res.status(403).json({ error: 'Buying token packs requires a paid plan - either your own, or being part of a campaign run by someone on a paid plan. Upgrade to Silver or Gold to purchase tokens.', code: 'TIER_REQUIRED' });
   }
   if (!stripeProvider.isConfigured()) {
     return res.status(503).json({ error: 'billing_unconfigured' });
@@ -1254,7 +1254,7 @@ async function fulfillPassCheckout(session, eventId) {
     const _pu = await db.prepare('SELECT pass_tier, pass_expires_at FROM users WHERE id = ?').get(existing.user_id);
     return { kind: 'pass', userId: existing.user_id, reference: sessionId,
              purchaseNo: purchaseNo(existing.id),
-             itemName: 'Platinum Pass', amountCents: existing.price_paid_cents,
+             itemName: 'Gold Pass', amountCents: existing.price_paid_cents,
              currency: session.currency, tokensGranted: existing.tokens_granted,
              tierLabel: _pu && _pu.pass_tier ? _pu.pass_tier : null,
              runsUntil: _pu && _pu.pass_expires_at ? _pu.pass_expires_at : null };
@@ -1369,7 +1369,7 @@ async function fulfillPassCheckout(session, eventId) {
   // above, not months-from-today -- buying a second pass extends the first.
   return { kind: 'pass', userId: userId, reference: sessionId,
            purchaseNo: purchaseNo(purchaseId),
-           itemName: pass.name || 'Platinum Pass',
+           itemName: pass.name || 'Gold Pass',
            amountCents: paid, currency: session.currency,
            tokensGranted: tokens, tierLabel: passTier,
            runsUntil: until.toISOString(),

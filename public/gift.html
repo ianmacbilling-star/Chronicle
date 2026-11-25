@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Campaignia &mdash; Give a Gift</title>
-<meta name="description" content="Give Campaignia as a gift: months of Platinum or a block of tokens, emailed now or on the day you choose." />
+<meta name="description" content="Give Campaignia as a gift: months of Gold or a block of tokens, emailed now or on the day you choose." />
 <meta name="robots" content="noindex" />
 <link rel="icon" type="image/png" href="/images/Campaignia_Tab_Icon.png" />
 <link rel="stylesheet" href="/css/fonts.css">
@@ -122,7 +122,7 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
     <a href="/" class="back-btn" id="back-btn">&larr; Back</a>
     <img class="logo cmp-logo-old" src="/images/Campaignia_Logo.png" alt="Campaignia logo" /><img class="cmp-logo-new" src="/images/Campaignia_Wordmark_White.png" alt="Campaignia" style="display:block;height:44px;width:auto;max-width:90%;margin:0 auto;margin-bottom:14px;" />
     <h1>Give Campaignia as a Gift</h1>
-    <p class="sub" id="sub">Months of Platinum or a block of tokens, emailed to them now or on the day you choose. Gifts never expire.</p>
+    <p class="sub" id="sub">Months of Gold or a block of tokens, emailed to them now or on the day you choose. Gifts never expire.</p>
 
     <div id="off" class="hidden"><p class="note" style="text-align:center;">Gifts are not available right now. Please check back soon.</p></div>
     <div id="done" class="ok hidden" role="status"></div>
@@ -218,8 +218,8 @@ html:not([data-brand]) .cmp-logo-old, html:not([data-brand]) .cmp-logo-label { d
       var lab = document.createElement('label'); lab.className = 'item'; lab.setAttribute('data-key', key);
       var inp = document.createElement('input'); inp.type = 'radio'; inp.name = 'item'; inp.value = key;
       inp.addEventListener('change', function () { pick(key); });
-      var k = document.createElement('div'); k.className = 'item-kicker'; k.textContent = it.kind === 'pass' ? 'Platinum Pass' : 'Token pack';
-      var n = document.createElement('div'); n.className = 'item-name'; n.textContent = it.kind === 'pass' ? (it.months + ' months of Platinum') : (it.tokens + ' tokens');
+      var k = document.createElement('div'); k.className = 'item-kicker'; k.textContent = it.kind === 'pass' ? 'Gold Pass' : 'Token pack';
+      var n = document.createElement('div'); n.className = 'item-name'; n.textContent = it.kind === 'pass' ? (it.months + ' months of Gold') : (it.tokens + ' tokens');
       var d = document.createElement('div'); d.className = 'item-detail'; d.textContent = it.kind === 'pass' ? ('plus ' + it.tokens + ' tokens') : 'to spend on anything';
       var p = document.createElement('div'); p.className = 'item-price'; p.textContent = money(it.price_cents);
       lab.appendChild(inp); lab.appendChild(k); lab.appendChild(n); lab.appendChild(d); lab.appendChild(p);

@@ -93,7 +93,7 @@ async function promoSignupProblem(db, _pcCheck, plan) {
           const _key = (_planNow.indexOf('pass:') === 0) ? 'pass' : ('sub:' + _planNow);
           if (_prods.indexOf(_key) < 0) {
             const _name = function (k) {
-              if (k === 'pass') return 'a Platinum Pass';
+              if (k === 'pass') return 'a Gold Pass';
               if (k === 'token_pack') return 'token packs';
               if (k === 'book') return 'printed books';
               if (k.indexOf('sub:') === 0) return 'the ' + k.charAt(4).toUpperCase() + k.slice(5) + ' plan';
