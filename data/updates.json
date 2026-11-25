@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.12",
+    "staged_on": "2026-11-24",
+    "entries": [
+      {
+        "id": "3812-tier-shuffle-help",
+        "kind": "change",
+        "public": false,
+        "summary": "Tier shuffle, stage 3: the help assistant knows the new tiers.",
+        "detail": "The help assistant's knowledge and its gift answers follow the new ladder: Silver holds what Gold held, Gold holds what Platinum held, passes are Gold Passes, and Platinum is coming soon with Animation.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.11",
     "staged_on": "2026-11-24",
     "entries": [

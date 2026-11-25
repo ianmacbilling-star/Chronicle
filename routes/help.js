@@ -24,12 +24,13 @@ const { HELP_MODEL } = require('../config/models');
 function giftChoicesLine(u, inFreeTrial, passUntil, nowMs) {
   let sub = 'none';
   try { sub = require('../services/gifts').subscriptionState(u); } catch (e) { return null; }
-  if (sub === 'platinum') return 'a pass gift is offered as TOKENS ONLY (their Platinum subscription already includes everything a pass gives); a token-pack gift adds its tokens.';
-  if (inFreeTrial) return 'a pass gift is offered as the PASS ONLY (Platinum starting today, its tokens included); tokens cannot be added on the Free Trial, so there is NO Take tokens instead, and a token-pack gift waits until they choose a plan.';
-  if (sub === 'silver' || sub === 'gold') return 'a pass gift offers BOTH choices: Platinum now (starting ' + (passUntil ? 'after their current pass ends on ' + passUntil : 'today') + '; their ' + sub + ' subscription is PAUSED until the new pass ends, then restarts by itself) OR Take tokens instead (their subscription is not affected); a token-pack gift adds its tokens.';
+  // v3.8.12 -- THE TIER SHUFFLE: passes are Gold, so a Gold (or Platinum) subscription takes tokens and only Silver pauses.
+  if (sub === 'gold' || sub === 'platinum') return 'a pass gift is offered as TOKENS ONLY (their ' + (sub === 'gold' ? 'Gold' : 'Platinum') + ' subscription already includes everything a pass gives); a token-pack gift adds its tokens.';
+  if (inFreeTrial) return 'a pass gift is offered as the PASS ONLY (Gold starting today, its tokens included); tokens cannot be added on the Free Trial, so there is NO Take tokens instead, and a token-pack gift waits until they choose a plan.';
+  if (sub === 'silver') return 'a pass gift offers BOTH choices: Gold now (starting ' + (passUntil ? 'after their current pass ends on ' + passUntil : 'today') + '; their ' + sub + ' subscription is PAUSED until the new pass ends, then restarts by itself) OR Take tokens instead (their subscription is not affected); a token-pack gift adds its tokens.';
   const pe = u && u.current_period_end ? new Date(u.current_period_end) : null;
   const paidUntil = (u && u.cancel_at_period_end === true && pe && isFinite(pe.getTime()) && pe.getTime() > (nowMs || Date.now())) ? pe.toISOString().slice(0, 10) : null;
-  const start = passUntil ? ('added after their current pass ends on ' + passUntil) : (paidUntil ? ('starting when their paid period ends on ' + paidUntil) : 'Platinum starting today');
+  const start = passUntil ? ('added after their current pass ends on ' + passUntil) : (paidUntil ? ('starting when their paid period ends on ' + paidUntil) : 'Gold starting today');
   return 'a pass gift offers BOTH choices: the pass (' + start + ') OR Take tokens instead; a token-pack gift adds its tokens.';
 }
 const MAX_TURNS = 12;   // cap conversation history sent to the model
@@ -48,12 +49,12 @@ const BRAIN = (function () {
 // pack catalog (editing those + a restart updates these).
 const STYLE_REF = (function () {
   function byTier(map, platinumExtra) {
-    const labels = { 1: 'all tiers', 2: 'Silver and up', 3: 'Gold and up', 4: 'Platinum' };
+    const labels = { 1: 'all tiers', 2: 'Silver and up', 3: 'Gold and up', 4: 'Platinum (coming soon)' };   // v3.8.12
     const buckets = { 1: [], 2: [], 3: [], 4: [] };
     Object.keys(map || {}).forEach(function (k) { const r = map[k] || 1; (buckets[r] || (buckets[r] = [])).push(k); });
     const parts = [];
     [1, 2, 3, 4].forEach(function (r) { if (buckets[r] && buckets[r].length) parts.push(labels[r] + ': ' + buckets[r].join(', ')); });
-    if (platinumExtra) parts.push('Platinum: ' + platinumExtra);
+    if (platinumExtra) parts.push('Gold and up: ' + platinumExtra);   // v3.8.12 -- custom art styles are Gold since the tier shuffle
     return parts.join('. ');
   }
   try {
@@ -331,7 +332,7 @@ router.post('/ask', requireAuth, async function(req, res) {
   // 0 means that plan cannot add members who are not on a paid plan of their own; blank (null) means unlimited.
   // v3.2.49 -- the bots (2026-10-23) got Help calling the Free Trial "a paid plan" and promising free players could join a
   // plan set to none. Say who counts on the line itself, where the model reads the number.
-  function _members(t){ var v = t && t.max_free_members; var who = ' (Copper and Free Trial members count; the Free Trial is NOT a paid plan; only members with their own Silver, Gold or Platinum subscription or a live pass do not count)'; if (v === null || v === undefined) return 'non-paying members/campaign unlimited'; var n = Number(v); return (Number.isFinite(n) && n > 0) ? ('non-paying members/campaign ' + Math.floor(n) + who) : ('non-paying members/campaign NONE: this plan cannot add any Copper or Free Trial member; only people with their own paid plan (Silver or higher, or a live pass) can join' + who); }
+  function _members(t){ var v = t && t.max_free_members; var who = ' (Copper and Free Trial members count; the Free Trial is NOT a paid plan; only members with their own Silver or Gold subscription or a live pass do not count)'; if (v === null || v === undefined) return 'non-paying members/campaign unlimited'; var n = Number(v); return (Number.isFinite(n) && n > 0) ? ('non-paying members/campaign ' + Math.floor(n) + who) : ('non-paying members/campaign NONE: this plan cannot add any Copper or Free Trial member; only people with their own paid plan (Silver or higher, or a live pass) can join' + who); }
   const _tierMatrix = ['trial','copper','silver','gold','platinum'].map(function (nm) {
     const t = getTier(nm) || {};
     if (nm === 'copper') {
