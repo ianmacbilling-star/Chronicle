@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.13",
+    "staged_on": "2026-11-24",
+    "entries": [
+      {
+        "id": "3813-tier-default-copper",
+        "kind": "fix",
+        "public": false,
+        "summary": "Tier shuffle: an account row made without a tier now defaults to Copper, not Platinum.",
+        "detail": "The users table's tier column defaulted to platinum. Sign-up always sets the tier itself, so this only matters for a row inserted some other way; it now gets the free Copper tier.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.12",
     "staged_on": "2026-11-24",
     "entries": [
