@@ -23154,7 +23154,9 @@ function genEstSet(id, extra) {
 function genEstPaint() {
   var d = GEN_EST.d; if (!d) return;
   var tok = function (n) { return n + ' token' + (Number(n) === 1 ? '' : 's'); };
-  genEstSet('extract-btn', 'About ' + tok(d.story) + '.');
+  // v3.8.16 -- and roughly what the whole storyboard comes to: the story, the narrative and a picture per panel.
+  var _sbAll = (Number(d.panels) > 0) ? Math.round(Number(d.story) + Number(d.narrative) + Number(d.picture) * Number(d.panels)) : 0;
+  genEstSet('extract-btn', 'About ' + tok(d.story) + '.' + (_sbAll > 0 ? ' Roughly ' + tok(_sbAll) + ' to finish the storyboard.' : ''));
   genEstSet('sb-generate-narr-btn', 'About ' + tok(d.narrative) + '.');
   genEstSet('review-generate-btn', 'About ' + tok(d.narrative) + ' for the narrative, plus ' + tok(d.picture) + ' for each picture drawn.');
 }

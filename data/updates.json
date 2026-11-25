@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.16",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3816-storyboard-estimate",
+        "kind": "change",
+        "public": false,
+        "summary": "Generate Story tooltip gives the whole storyboard too.",
+        "detail": "The Generate Story tooltip still gives its own price, and adds roughly what finishing the storyboard comes to: the story, the narrative and a picture for each panel. The panel count is the panels already made, or the tier ceiling for a story that long plus the title picture.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.15",
     "staged_on": "2026-11-25",
     "entries": [
