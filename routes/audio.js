@@ -354,6 +354,13 @@ async function withPlayers(db, job) {
       .filter(function (n) { const k = n.toLowerCase(); if (!n || seen[k]) return false; seen[k] = true; return true; })
       .sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
   } catch (e) { v.players = []; }
+  // v3.8.22 (Ian, 26 Nov 2026: "Include the Story Master ... Even if they don't have a character they do a lot of the
+  // talking"). The campaign owner, by pen name or else account name, heads the list.
+  try {
+    const sm = await db.prepare('SELECT u.pen_name, u.name FROM campaigns c JOIN users u ON u.id = c.user_id WHERE c.id = ?').get(job.campaign_id);
+    const smName = String((sm && (sm.pen_name || sm.name)) || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (smName) { v.players = (v.players || []).filter(function (n) { return n.toLowerCase() !== smName.toLowerCase(); }); v.players.unshift(smName); }
+  } catch (e) { console.error('audio: Story Master name:', e.message); }
   return v;
 }
 

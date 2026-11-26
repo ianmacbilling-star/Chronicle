@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.22",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3822-audio-story-master",
+        "kind": "change",
+        "public": false,
+        "summary": "Transcription speaker names include the Story Master.",
+        "detail": "When naming speakers after a recording is transcribed, the Story Master (pen name, or else account name) is first in the drop-down, with the Player Names after.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.21",
     "staged_on": "2026-11-25",
     "entries": [

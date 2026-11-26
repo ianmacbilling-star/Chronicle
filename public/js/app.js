@@ -26755,7 +26755,7 @@ function audTShowJob(job) {
   audTBody('<div style="font-size:14px;margin-bottom:8px;">The words are back' + (job.tokens_charged != null ? ' (' + job.tokens_charged + ' token' + (Number(job.tokens_charged) === 1 ? '' : 's') + ')' : '') + '. Name each speaker, or leave them out:</div>' +
     (job.cap_secs && Number(job.secs_est) > Number(job.cap_secs) ? '<div style="font-size:12px;opacity:0.85;margin:-4px 0 8px;">On the Free Trial we transcribed the first 20 minutes, as a quick proof it works. Silver and Gold transcribe the whole recording.</div>' : '') +   // v3.6.22
     (job.parts > 1 ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">In a long recording one person can show up twice. Give both the same name.</div>' : '') +
-    '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character.</div>' +   // v3.6.14
+    '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">For a game session, use each player\'s Player Name from their character. The Story Master is first in the list.</div>' +   // v3.6.14
     (job.speakers_hint && sp.length < job.speakers_hint ? '<div style="font-size:12px;opacity:0.8;margin:-4px 0 8px;">You said ' + job.speakers_hint + ' people were speaking; we could tell ' + sp.length + ' apart. Voices that sound alike can come back as one.</div>' : '') +   // v3.6.18
     '<datalist id="aud-t-players">' + (job.players || []).map(function (p) { return '<option value="' + escapeHtml(p) + '"></option>'; }).join('') + '</datalist>' +
     sp.map(function (s, i) {
