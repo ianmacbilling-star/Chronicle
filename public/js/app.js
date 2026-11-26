@@ -23308,6 +23308,9 @@ function loadSessionForks(sessionId) {
         if (selId) sel.value = String(selId);
         // Only worth showing once there's more than the canonical to pick.
         sel.style.display = forks.length > 1 ? '' : 'none';
+        // v3.8.24 (Ian, 26 Nov 2026) -- also shown when you have versions that are not in this session yet, so they can be
+        // added from the list (v3.8.23); before, a session holding only the Canonical had no list at all.
+        if (forks.length <= 1) _vpickFetchMissing('session-fork-select', function (n) { if (n && state.currentSession && String(state.currentSession.id) === String(sessionId)) sel.style.display = ''; });
         // Rebuilding the options resets disabled, so re-apply the lock. loadSessionForks runs on
         // fork create, delete and rename -- all of which can happen while a run is in flight.
         paintForkLock();
@@ -38730,7 +38733,7 @@ function _newSessionIntoPin(sessionId) {
   }).then(function (r) { return r.json(); }).catch(function () { return null; }).then(function () {});   // a Canonical pin is refused; nothing to do
 }
 var _vpickMissing = { sid: null, list: [] };
-function _vpickFetchMissing(selId) {
+function _vpickFetchMissing(selId, cb) {   // v3.8.24 cb(count)
   var c = state.currentCampaign, s = state.currentSession;
   if (!c || !s) return;
   var sid = String(s.id);
@@ -38738,6 +38741,7 @@ function _vpickFetchMissing(selId) {
     .then(function (r) { return r.ok ? r.json() : []; })
     .then(function (all) {
       _vpickMissing = { sid: sid, list: (Array.isArray(all) ? all : []).filter(function (v) { return v.is_mine && !v.is_canonical && v.here === 'canonical'; }) };
+      if (typeof cb === 'function') cb(_vpickMissing.list.length);
       if (_vpickOpenId === selId && state.currentSession && String(state.currentSession.id) === sid) { _vpickRender(selId); _vpickPlace(selId); }
     })
     .catch(function () {});
