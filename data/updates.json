@@ -1,5 +1,33 @@
 [
   {
+    "version": "3.8.23",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3823-versions-follow-sessions",
+        "kind": "change",
+        "public": false,
+        "summary": "New sessions join your pinned version; missing versions can be added from the list.",
+        "detail": "A session you create is added to your pinned version straight away. The version list on a session also shows your versions that are not in it yet, greyed, each with Add this session.",
+        "td": []
+      }
+    ]
+  },
+  {
+    "version": "3.8.22",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3822-audio-story-master",
+        "kind": "change",
+        "public": false,
+        "summary": "Transcription speaker names include the Story Master.",
+        "detail": "When naming speakers after a recording is transcribed, the Story Master (pen name, or else account name) is first in the drop-down, with the Player Names after.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.21",
     "staged_on": "2026-11-25",
     "entries": [
