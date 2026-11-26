@@ -25160,7 +25160,7 @@ function renderUserLastActive(d) {
 // whatever their case; a view column not listed here still shows, after these, under its own name; a listed one the view
 // does not have is skipped.
 var ULA_ORDER = [['days_since_activity', 'Days'], ['name', 'Name'], ['email', 'Email'], ['last_action_est', 'Last Action DT'],
-  ['last_action', 'Last Action'], ['tier', 'Tier'], ['pass', 'Pass'], ['pass_ends', 'Expires'], ['status', 'Status']];
+  ['last_action', 'Last Action'], ['tier', 'Tier'], ['pass', 'Pass'], ['pass_ends', 'Expires'], ['status', 'Status'], ['tester', 'Tester'], ['signup_code', 'Sign-up Code']];   // v3.8.21 last two
 function _ulaOrder(cols) {
   var byLower = {}, used = {}, out = [];
   (cols || []).forEach(function (c) { byLower[String(c).toLowerCase()] = c; });

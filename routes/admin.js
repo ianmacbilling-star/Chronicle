@@ -328,6 +328,13 @@ router.get('/user-last-active', requireAuth, requireAdmin, async function (req, 
     const db = await getDb();
     const rows = await db.prepare('SELECT * FROM vuuserlastactive LIMIT 500').all();
     const list = Array.isArray(rows) ? rows : [];
+    // v3.8.21 (Ian, 26 Nov 2026) -- two more columns from users, matched on email: Tester, and the code typed at sign-up.
+    try {
+      const us = await db.prepare('SELECT lower(email) AS e, is_tester, signup_promo_code FROM users').all();
+      const by = {}; (Array.isArray(us) ? us : []).forEach(function (u) { by[u.e] = u; });
+      const ek = list.length ? Object.keys(list[0]).find(function (k) { return k.toLowerCase() === 'email'; }) : null;
+      if (ek) list.forEach(function (r) { const u = by[String(r[ek] || '').toLowerCase()]; r.tester = (u && u.is_tester) ? 'Yes' : ''; r.signup_code = (u && u.signup_promo_code) || ''; });
+    } catch (e) { console.error('user-last-active extra columns:', e.message); }
     res.json({ columns: list.length ? Object.keys(list[0]) : [], rows: list, capped: list.length >= 500 });
   } catch (e) {
     const msg = String((e && e.message) || '');
