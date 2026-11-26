@@ -4138,7 +4138,7 @@ function saveSession() {
     // Drop the user straight into the newly created session (the backend
     // returns the full session row, so data.id is the new id). Fall back to
     // just refreshing the list if no id came back.
-    if (data && data.id) { selectSession(data.id); }
+    if (data && data.id) { _newSessionIntoPin(data.id).then(function () { selectSession(data.id); }); }   // v3.8.23 pinned version first
     else { loadSessions(); }
   });
 }
@@ -19486,7 +19486,7 @@ function saveSession() {
     // Drop the user straight into the newly created session (the backend
     // returns the full session row, so data.id is the new id). Fall back to
     // just refreshing the list if no id came back.
-    if (data && data.id) { selectSession(data.id); }
+    if (data && data.id) { _newSessionIntoPin(data.id).then(function () { selectSession(data.id); }); }   // v3.8.23 pinned version first
     else { loadSessions(); }
   });
 }
@@ -38716,6 +38716,59 @@ function _outlineBulletsCheck() {
 // "not while something is running" refusals are untouched. Choosing a row sets sel.value and fires a
 // real change event. The drawn button follows the select through a per-element value hook and a
 // MutationObserver (options, disabled, style, title), so no caller had to learn it exists.
+// v3.8.23 (Ian, 26 Nov 2026: a new session showed only the Canonical, and each of his versions had to be added to it
+// by hand). Two changes, both through the same POST .../fork { version_id } that New Version's "Add to one of your
+// versions" uses, so its rules (own named versions only, Ready for members) are unchanged:
+//   1. A session you create joins your pinned version at once, so the pinned version opens with it.
+//   2. The session's version list also shows your versions that do not hold this session yet, greyed, each with
+//      "Add this session": copied from the Canonical, styled from the version, then opened.
+function _newSessionIntoPin(sessionId) {
+  var vid = starredVersionId();
+  if (!vid || !state.currentCampaign || !sessionId) return Promise.resolve();
+  return fetch('/api/campaigns/' + state.currentCampaign.id + '/sessions/' + sessionId + '/fork', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version_id: Number(vid) })
+  }).then(function (r) { return r.json(); }).catch(function () { return null; }).then(function () {});   // a Canonical pin is refused; nothing to do
+}
+var _vpickMissing = { sid: null, list: [] };
+function _vpickFetchMissing(selId) {
+  var c = state.currentCampaign, s = state.currentSession;
+  if (!c || !s) return;
+  var sid = String(s.id);
+  fetch('/api/campaigns/' + c.id + '/sessions/' + s.id + '/versions')
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (all) {
+      _vpickMissing = { sid: sid, list: (Array.isArray(all) ? all : []).filter(function (v) { return v.is_mine && !v.is_canonical && v.here === 'canonical'; }) };
+      if (_vpickOpenId === selId && state.currentSession && String(state.currentSession.id) === sid) { _vpickRender(selId); _vpickPlace(selId); }
+    })
+    .catch(function () {});
+}
+function _vpickMissingRows() {
+  if (!state.currentSession || _vpickMissing.sid !== String(state.currentSession.id) || !_vpickMissing.list.length) return '';
+  return '<div class="vpick-miss-head">Your versions not in this session yet</div>' + _vpickMissing.list.map(function (v) {
+    return '<div class="vpick-row vpick-missing"><span class="vpick-miss-name">' + escapeHtml(v.label || ('You — ' + v.name)) + '</span>' +
+      '<button type="button" class="vpick-addbtn" data-addv="' + escapeHtml(String(v.version_id)) + '">Add this session</button></div>';
+  }).join('');
+}
+function _vpickAddSession(vid, btn) {
+  var c = state.currentCampaign, s = state.currentSession;
+  if (!c || !s || !vid) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+  function undoBtn() { if (btn) { btn.disabled = false; btn.textContent = 'Add this session'; } }
+  fetch('/api/campaigns/' + c.id + '/sessions/' + s.id + '/fork', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version_id: Number(vid) })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || data.error || !data.fork_id) { undoBtn(); showError((data && data.error) || 'Could not add this session to that version.'); return; }
+      _vpickClose();
+      _vpickMissing = { sid: null, list: [] };
+      state.currentForkId = data.fork_id;
+      loadSessionForks(s.id);
+      reloadSessionForFork();
+      if (typeof refreshNovelVersionOptions === 'function') refreshNovelVersionOptions();
+    })
+    .catch(function (e) { undoBtn(); showError('Could not add this session to that version: ' + e.message); });
+}
 function starredVersionId() {
   var c = state.currentCampaign;
   if (!c) return null;
@@ -38755,6 +38808,12 @@ function _vpickCss() {
     '.vpick-pinbtn:hover{background:rgba(var(--accent-rgb),0.18);color:var(--accent);}' +
     '.vpick-pinbtn.on{color:var(--accent);}' +
     '.vpick-pinbtn.off svg{transform:rotate(45deg);}' +
+    '.vpick-miss-head{font-size:11px;letter-spacing:0.04em;color:rgba(var(--on-panel-rgb),0.62);padding:8px 12px 2px;border-top:1px solid rgba(var(--accent-rgb),0.2);margin-top:4px;}' +   // v3.8.23
+    '.vpick-row.vpick-missing:hover{background:none;}' +
+    '.vpick-miss-name{flex:1 1 auto;min-width:0;padding:9px 0;opacity:0.5;white-space:normal;overflow-wrap:anywhere;line-height:1.35;}' +
+    '.vpick-addbtn{flex:0 0 auto;background:none;border:1px solid rgba(var(--accent-rgb),0.5);color:var(--accent);border-radius:4px;font:inherit;font-size:12px;padding:4px 9px;margin-right:4px;cursor:pointer;white-space:nowrap;}' +
+    '.vpick-addbtn:hover{background:rgba(var(--accent-rgb),0.18);}' +
+    '.vpick-addbtn:disabled{opacity:0.6;cursor:wait;}' +
     '.vpick-foot{font-size:11px;color:rgba(var(--on-panel-rgb),0.62);padding:7px 12px 5px;border-top:1px solid rgba(var(--accent-rgb),0.2);margin-top:4px;line-height:1.4;white-space:normal;}';
   document.head.appendChild(s);
 }
@@ -38826,6 +38885,7 @@ function _vpickRender(selId) {
         (on ? 'Pinned: this version opens first for you. Click to unpin.' : 'Pin: open this version first whenever you come to this campaign.') + '">' + _vpickPinSvg(on) + '</button>' : '') +
       '</div>';
   }
+  if (where === 'session') html += _vpickMissingRows();   // v3.8.23
   html += '<div class="vpick-foot">Pin a version and it opens first for you whenever you come to this campaign.</div>';
   list.innerHTML = html;
 }
@@ -38859,6 +38919,8 @@ function _vpickOpen(selId) {
     e.stopPropagation();
     var pb = e.target.closest ? e.target.closest('.vpick-pinbtn') : null;
     if (pb) { toggleVersionPin(pb.getAttribute('data-pin')); return; }
+    var ab = e.target.closest ? e.target.closest('.vpick-addbtn') : null;   // v3.8.23
+    if (ab) { _vpickAddSession(ab.getAttribute('data-addv'), ab); return; }
     var cb = e.target.closest ? e.target.closest('.vpick-choose') : null;
     if (cb) _vpickChoose(selId, Number(cb.getAttribute('data-i')));
   });
@@ -38873,6 +38935,7 @@ function _vpickOpen(selId) {
   sel._vpick.trigger.setAttribute('aria-expanded', 'true');
   _vpickRender(selId);
   _vpickPlace(selId);
+  if (sel._vpick.where === 'session') _vpickFetchMissing(selId);   // v3.8.23
   var curB = list.querySelector('.vpick-row.is-cur .vpick-choose') || list.querySelector('.vpick-choose');
   if (curB) { try { curB.focus({ preventScroll: true }); } catch (e) { curB.focus(); } }
 }
