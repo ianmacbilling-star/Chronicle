@@ -1,5 +1,19 @@
 [
   {
+    "version": "3.8.24",
+    "staged_on": "2026-11-25",
+    "entries": [
+      {
+        "id": "3824-version-list-shows",
+        "kind": "change",
+        "public": false,
+        "summary": "The version list shows when you have versions to add.",
+        "detail": "A session holding only the Canonical now shows the version list when you have versions not in it yet, so they can be added from there.",
+        "td": []
+      }
+    ]
+  },
+  {
     "version": "3.8.23",
     "staged_on": "2026-11-25",
     "entries": [
